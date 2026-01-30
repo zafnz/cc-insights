@@ -348,11 +348,15 @@ export class SessionManager {
         totalMessages: messageCount,
       });
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
+      const error = err as Error;
+      const isAbort = error.name === "AbortError" ||
+                      error.message?.includes("aborted by user");
+
+      if (!isAbort) {
         logger.error("SDK error during message processing", {
           sessionId: session.id,
           error: String(err),
-          stack: (err as Error).stack,
+          stack: error.stack,
         });
         this.send({
           type: "error",
