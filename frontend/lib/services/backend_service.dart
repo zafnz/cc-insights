@@ -120,9 +120,9 @@ class BackendService extends ChangeNotifier {
     // Get the directory where the app is running from
     final currentDir = Directory.current.path;
 
-    // Check if we're in the flutter_app_v2 directory
-    if (path.basename(currentDir) == 'flutter_app_v2') {
-      // Development: relative to flutter_app_v2
+    // Check if we're in the frontend directory
+    if (path.basename(currentDir) == 'frontend') {
+      // Development: relative to frontend
       return path.join(currentDir, '..', 'backend-node', 'dist', 'index.js');
     }
 

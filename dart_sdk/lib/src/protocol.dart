@@ -402,6 +402,9 @@ class Protocol {
     yield* _stderrController.stream;
   }
 
+  /// Get buffered stderr lines (for error reporting on startup failure).
+  List<String> getBufferedStderr() => List.unmodifiable(_stderrBuffer);
+
   /// Path to the log file, if file logging is enabled.
   String? get logFilePath => _logFilePath;
 

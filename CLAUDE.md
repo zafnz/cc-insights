@@ -31,7 +31,7 @@ CC-Insights is a desktop application for monitoring and interacting with Claude 
 **Architecture:**
 - **Backend** (`backend-node/`): Thin Node.js subprocess using `@anthropic-ai/agent-sdk` (TypeScript)
 - **Dart SDK** (`dart_sdk/`): Flutter/Dart SDK wrapper providing native API and subprocess management
-- **Frontend** (`flutter_app/`): Flutter desktop app (macOS) with Provider state management
+- **Frontend** (`frontend/`): Flutter desktop app (macOS) with Provider state management
 
 **Communication:** Dart SDK spawns Node.js backend as subprocess, communicates via stdin/stdout JSON lines.
 
@@ -100,7 +100,7 @@ claude-project/
 │           ├── session.dart    # Session API (createSession, send, etc.)
 │           ├── protocol.dart   # Protocol implementation (stdin/stdout)
 │           └── types/          # Type definitions
-├── flutter_app/
+├── frontend/
 │   └── lib/
 │       ├── main.dart
 │       ├── models/
@@ -291,7 +291,7 @@ The SDK evaluates tool permissions in this order (first match wins):
 2. **Always clean up resources in `tearDown()`** - Use `TestResources` to track them
 3. **Prefer `pumpUntil()` over arbitrary delays** - Wait for conditions, not time
 
-### Test Helpers (flutter_app_v2/test/test_helpers.dart)
+### Test Helpers (frontend/test/test_helpers.dart)
 
 ```dart
 // Safe pump with 3s default timeout
@@ -311,7 +311,7 @@ final controller = resources.trackStream<String>();
 
 ### Test Organization
 ```
-flutter_app_v2/test/
+frontend/test/
 ├── test_helpers.dart          # Shared helpers - USE THESE
 ├── widget/                    # Widget tests (fast, no device)
 ├── models/                    # Unit tests for models

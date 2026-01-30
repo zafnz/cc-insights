@@ -1,7 +1,10 @@
 import 'package:drag_split_layout/drag_split_layout.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../panels/panels.dart';
+import '../services/backend_service.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
@@ -27,6 +30,9 @@ class _MainScreenState extends State<MainScreen> {
   // Navigation rail selection (0 = main view, others are panel toggles)
   int _selectedNavIndex = 0;
 
+  // Track last error shown to avoid duplicate snackbars
+  String? _lastShownError;
+
   @override
   void initState() {
     super.initState();
@@ -36,10 +42,67 @@ class _MainScreenState extends State<MainScreen> {
     );
     // Enable drag-and-drop (editMode is a setter, not constructor param)
     _controller.editMode = true;
+
+    // Listen for backend errors after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupBackendErrorListener();
+    });
+  }
+
+  void _setupBackendErrorListener() {
+    final backend = context.read<BackendService>();
+    backend.addListener(_onBackendChanged);
+
+    // Check if there's already an error
+    if (backend.error != null) {
+      _showBackendError(backend.error!);
+    }
+  }
+
+  void _onBackendChanged() {
+    final backend = context.read<BackendService>();
+    if (backend.error != null && backend.error != _lastShownError) {
+      _showBackendError(backend.error!);
+    }
+  }
+
+  void _showBackendError(String error) {
+    _lastShownError = error;
+
+    // Log to console
+    debugPrint('Backend error: $error');
+
+    // Show snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Backend error: $error',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 10),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            textColor: Theme.of(context).colorScheme.onError,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
+    // Remove listener before dispose
+    try {
+      context.read<BackendService>().removeListener(_onBackendChanged);
+    } catch (_) {
+      // Context may not be valid during dispose
+    }
     _controller.dispose();
     super.dispose();
   }

@@ -813,7 +813,7 @@ Don't implement these now, but don't preclude them.
 ## Directory Structure (New Shell)
 
 ```
-flutter_app/
+frontend/
 ├── lib/
 │   ├── main.dart
 │   │

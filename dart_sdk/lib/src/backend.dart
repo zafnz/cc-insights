@@ -63,10 +63,40 @@ class ClaudeBackend {
       protocol: protocol,
     );
 
-    // Wait for process to be ready (it logs to stderr on startup)
-    await Future.delayed(const Duration(milliseconds: 100));
+    // Monitor for early process exit (e.g., module not found)
+    backend._setupProcessExitHandler();
+
+    // Wait for process to be ready and check if it crashed
+    final exitCode = await Future.any([
+      process.exitCode,
+      Future.delayed(const Duration(milliseconds: 200), () => -1),
+    ]);
+
+    // If process exited during startup, it failed
+    if (exitCode != -1) {
+      // Give stderr a moment to flush
+      await Future.delayed(const Duration(milliseconds: 50));
+      final stderrLines = protocol.getBufferedStderr();
+      final errorMessage = stderrLines.isNotEmpty
+          ? 'Backend process failed to start:\n${stderrLines.join('\n')}'
+          : 'Backend process exited with code $exitCode';
+      await backend.dispose();
+      throw BackendProcessError(errorMessage);
+    }
 
     return backend;
+  }
+
+  /// Sets up handler for unexpected process exit after spawn.
+  void _setupProcessExitHandler() {
+    _process.exitCode.then((exitCode) {
+      if (!_disposed && exitCode != 0) {
+        _errorsController.add(BackendError(
+          'Backend process exited unexpectedly with code $exitCode',
+          code: 'PROCESS_EXIT',
+        ));
+      }
+    });
   }
 
   /// Create a new Claude session.

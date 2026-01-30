@@ -1,7 +1,9 @@
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
+import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:checks/checks.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
@@ -16,10 +18,12 @@ void main() {
   group('Panel Merge/Separate Tests', () {
     late ProjectState project;
     late SelectionState selection;
+    late MockBackendService mockBackend;
 
     Widget createTestApp() {
       return MultiProvider(
         providers: [
+          ChangeNotifierProvider<BackendService>.value(value: mockBackend),
           ChangeNotifierProvider<ProjectState>.value(value: project),
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
             create: (_) => selection,
@@ -35,6 +39,12 @@ void main() {
     setUp(() {
       project = MockDataFactory.createMockProject();
       selection = SelectionState(project);
+      mockBackend = MockBackendService();
+      mockBackend.start();
+    });
+
+    tearDown(() {
+      mockBackend.dispose();
     });
 
     group('Initial State', () {
