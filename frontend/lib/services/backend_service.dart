@@ -115,8 +115,19 @@ class BackendService extends ChangeNotifier {
   /// Gets the path to the backend Node.js entry point.
   ///
   /// In development, this returns the path to the compiled JavaScript.
-  /// In production, this would return the path to a bundled executable.
+  /// In production (macOS app bundle), this returns the bundled backend.
   String _getBackendPath() {
+    // macOS app bundle: look in Resources first (production)
+    if (Platform.isMacOS) {
+      final executablePath = Platform.resolvedExecutable;
+      final appDir = path.dirname(path.dirname(executablePath));
+      final bundledPath =
+          path.join(appDir, 'Resources', 'backend', 'bundle.js');
+      if (File(bundledPath).existsSync()) {
+        return bundledPath;
+      }
+    }
+
     // Get the directory where the app is running from
     final currentDir = Directory.current.path;
 
@@ -131,17 +142,6 @@ class BackendService extends ChangeNotifier {
         path.join(currentDir, 'backend-node', 'dist', 'index.js');
     if (File(backendPath).existsSync()) {
       return backendPath;
-    }
-
-    // macOS app bundle: look in Resources
-    if (Platform.isMacOS) {
-      final executablePath = Platform.resolvedExecutable;
-      final appDir = path.dirname(path.dirname(executablePath));
-      final resourcesPath =
-          path.join(appDir, 'Resources', 'backend', 'index.js');
-      if (File(resourcesPath).existsSync()) {
-        return resourcesPath;
-      }
     }
 
     // Fallback: assume we're in project root
