@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dart": {
+      "type": "stdio",
+      "command": "flutter-test",
+      "args": [
+      ],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,499 @@
+import 'dart:async';
+
+import 'package:cc_insights_v2/models/chat.dart';
+import 'package:cc_insights_v2/models/conversation.dart';
+import 'package:cc_insights_v2/models/project.dart';
+import 'package:cc_insights_v2/models/worktree.dart';
+import 'package:cc_insights_v2/panels/conversation_panel.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/sdk_message_handler.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
+import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
+import 'package:cc_insights_v2/widgets/permission_dialog.dart';
+import 'package:checks/checks.dart';
+import 'package:claude_sdk/claude_sdk.dart' as sdk;
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+
+import '../test_helpers.dart';
+
+// =============================================================================
+// FAKE IMPLEMENTATIONS
+// =============================================================================
+
+/// Fake implementation of BackendService for testing.
+///
+/// Tracks calls to createSession and allows controlling the returned session.
+class FakeBackendService extends ChangeNotifier implements BackendService {
+  /// The session to return from createSession.
+  FakeClaudeSession? sessionToReturn;
+
+  /// If set, createSession will throw this error.
+  Object? createSessionError;
+
+  /// Records of createSession calls.
+  final List<_CreateSessionCall> createSessionCalls = [];
+
+  /// Whether the backend is ready.
+  bool _isReady = true;
+
+  @override
+  bool get isReady => _isReady;
+
+  @override
+  bool get isStarting => false;
+
+  @override
+  String? get error => null;
+
+  @override
+  Future<void> start() async {
+    _isReady = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<sdk.ClaudeSession> createSession({
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+  }) async {
+    createSessionCalls.add(_CreateSessionCall(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+    ));
+
+    if (createSessionError != null) {
+      throw createSessionError!;
+    }
+
+    return sessionToReturn ?? FakeClaudeSession();
+  }
+
+  void reset() {
+    createSessionCalls.clear();
+    sessionToReturn = null;
+    createSessionError = null;
+  }
+}
+
+/// Record of a createSession call.
+class _CreateSessionCall {
+  _CreateSessionCall({
+    required this.prompt,
+    required this.cwd,
+    this.options,
+  });
+
+  final String prompt;
+  final String cwd;
+  final sdk.SessionOptions? options;
+}
+
+/// Minimal fake ClaudeSession for testing.
+class FakeClaudeSession implements sdk.ClaudeSession {
+  final _messagesController = StreamController<sdk.SDKMessage>.broadcast();
+  final _permissionsController =
+      StreamController<sdk.PermissionRequest>.broadcast();
+  final _hooksController = StreamController<sdk.HookRequest>.broadcast();
+
+  /// Records of send calls.
+  final List<String> sendCalls = [];
+
+  @override
+  String get sessionId => 'fake-session-id';
+
+  @override
+  String? sdkSessionId = 'fake-sdk-session-id';
+
+  @override
+  Stream<sdk.SDKMessage> get messages => _messagesController.stream;
+
+  @override
+  Stream<sdk.PermissionRequest> get permissionRequests =>
+      _permissionsController.stream;
+
+  @override
+  Stream<sdk.HookRequest> get hookRequests => _hooksController.stream;
+
+  @override
+  Future<void> send(String message) async {
+    sendCalls.add(message);
+  }
+
+  @override
+  Future<void> sendWithContent(List<sdk.ContentBlock> content) async {}
+
+  @override
+  Future<void> interrupt() async {}
+
+  @override
+  Future<void> kill() async {}
+
+  @override
+  Future<List<sdk.ModelInfo>> supportedModels() async => [];
+
+  @override
+  Future<List<sdk.SlashCommand>> supportedCommands() async => [];
+
+  @override
+  Future<List<sdk.McpServerStatus>> mcpServerStatus() async => [];
+
+  @override
+  Future<void> setModel(String? model) async {}
+
+  @override
+  Future<void> setPermissionMode(sdk.PermissionMode mode) async {}
+
+  // Test-only members
+  @override
+  final List<String> testSentMessages = [];
+
+  @override
+  Future<void> Function(String message)? onTestSend;
+
+  @override
+  void emitTestMessage(sdk.SDKMessage message) {
+    _messagesController.add(message);
+  }
+
+  @override
+  Future<sdk.PermissionResponse> emitTestPermissionRequest({
+    required String id,
+    required String toolName,
+    required Map<String, dynamic> toolInput,
+    String? toolUseId,
+  }) async =>
+      sdk.PermissionDenyResponse(message: 'Test deny');
+
+  void dispose() {
+    _messagesController.close();
+    _permissionsController.close();
+    _hooksController.close();
+  }
+}
+
+/// Fake SdkMessageHandler that tracks calls but doesn't do anything.
+class FakeSdkMessageHandler extends SdkMessageHandler {
+  final List<_HandleMessageCall> handleMessageCalls = [];
+
+  @override
+  void handleMessage(ChatState chat, Map<String, dynamic> rawMessage) {
+    handleMessageCalls.add(_HandleMessageCall(
+      chat: chat,
+      rawMessage: rawMessage,
+    ));
+    // Don't call super to avoid side effects
+  }
+
+  void reset() {
+    handleMessageCalls.clear();
+    clear();
+  }
+}
+
+class _HandleMessageCall {
+  _HandleMessageCall({
+    required this.chat,
+    required this.rawMessage,
+  });
+
+  final ChatState chat;
+  final Map<String, dynamic> rawMessage;
+}
+
+// =============================================================================
+// TEST HELPERS
+// =============================================================================
+
+/// Creates a fake PermissionRequest for testing.
+sdk.PermissionRequest createFakePermissionRequest({
+  String id = 'test-permission-id',
+  String sessionId = 'test-session',
+  String toolName = 'Bash',
+  Map<String, dynamic> toolInput = const {'command': 'ls -la'},
+  String? decisionReason,
+}) {
+  final completer = Completer<sdk.PermissionResponse>();
+  return sdk.PermissionRequest(
+    id: id,
+    sessionId: sessionId,
+    toolName: toolName,
+    toolInput: toolInput,
+    decisionReason: decisionReason,
+    completer: completer,
+  );
+}
+
+// =============================================================================
+// TESTS
+// =============================================================================
+
+void main() {
+  group('ConversationPanel MessageInput wiring', () {
+    final resources = TestResources();
+    late ProjectState project;
+    late SelectionState selectionState;
+    late FakeBackendService fakeBackend;
+    late FakeSdkMessageHandler fakeMessageHandler;
+    late ChatState testChat;
+
+    setUp(() {
+      fakeBackend = FakeBackendService();
+      fakeMessageHandler = FakeSdkMessageHandler();
+
+      // Create a chat for testing (NOT tracked separately - owned by worktree)
+      testChat = ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path');
+
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/path',
+          isPrimary: true,
+          branch: 'main',
+          uncommittedFiles: 0,
+          stagedFiles: 0,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          hasMergeConflict: false,
+        ),
+        chats: [testChat],
+      );
+
+      // ProjectState owns the worktree which owns the chat - only track project
+      project = resources.track(ProjectState(
+        const ProjectData(
+          name: 'Test Project',
+          repoRoot: '/test/path',
+        ),
+        worktree,
+        linkedWorktrees: [],
+      ));
+
+      selectionState = resources.track(SelectionState(project));
+      // Select the chat so the conversation panel shows it
+      selectionState.selectChat(testChat);
+    });
+
+    tearDown(() async {
+      fakeMessageHandler.dispose();
+      await resources.disposeAll();
+    });
+
+    Widget buildTestWidget() {
+      return MaterialApp(
+        home: MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: project),
+            ChangeNotifierProvider.value(value: selectionState),
+            ChangeNotifierProvider<BackendService>.value(value: fakeBackend),
+            Provider<SdkMessageHandler>.value(value: fakeMessageHandler),
+          ],
+          child: const Scaffold(
+            body: KeyboardFocusManager(
+              child: SizedBox(
+                width: 600,
+                height: 800,
+                child: ConversationPanel(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    group('First message starts session', () {
+      testWidgets('submitting when no active session calls startSession',
+          (tester) async {
+        // Setup: session will be created successfully
+        final fakeSession = FakeClaudeSession();
+        fakeBackend.sessionToReturn = fakeSession;
+
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Verify no active session initially
+        check(testChat.hasActiveSession).isFalse();
+        check(fakeBackend.createSessionCalls).isEmpty();
+
+        // Type a message and submit
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'Hello Claude!');
+        await tester.pump();
+
+        // Find and tap the send button
+        final sendButton = find.byIcon(Icons.send);
+        await tester.tap(sendButton);
+        await safePumpAndSettle(tester);
+
+        // Verify startSession was called via backend.createSession
+        check(fakeBackend.createSessionCalls.length).equals(1);
+        check(fakeBackend.createSessionCalls.first.prompt).equals(
+          'Hello Claude!',
+        );
+        check(fakeBackend.createSessionCalls.first.cwd).equals('/test/path');
+
+        // Verify user entry was added
+        check(testChat.data.primaryConversation.entries.length).equals(1);
+        check(testChat.data.primaryConversation.entries.first.runtimeType.toString())
+            .equals('UserInputEntry');
+      });
+
+      testWidgets('startSession failure shows error entry', (tester) async {
+        // Setup: session creation will fail
+        fakeBackend.createSessionError = Exception('Backend not available');
+
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Type a message and submit
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'Hello Claude!');
+        await tester.pump();
+
+        final sendButton = find.byIcon(Icons.send);
+        await tester.tap(sendButton);
+        await safePumpAndSettle(tester);
+
+        // Verify error entry was added (user entry + error entry = 2)
+        check(testChat.data.primaryConversation.entries.length).equals(2);
+
+        // The second entry should be an error
+        final errorEntry = testChat.data.primaryConversation.entries[1];
+        check(errorEntry.runtimeType.toString()).equals('TextOutputEntry');
+      });
+    });
+
+    group('Subsequent messages sent to session', () {
+      testWidgets('submitting with active session calls sendMessage',
+          (tester) async {
+        // Setup: create a fake session and mark chat as having active session
+        final fakeSession = FakeClaudeSession();
+        fakeBackend.sessionToReturn = fakeSession;
+
+        // Start a session first by sending the first message
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // First message starts the session
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'First message');
+        await tester.pump();
+        final sendButton = find.byIcon(Icons.send);
+        await tester.tap(sendButton);
+        await safePumpAndSettle(tester);
+
+        // Verify session was started
+        check(fakeBackend.createSessionCalls.length).equals(1);
+        check(testChat.hasActiveSession).isTrue();
+
+        // Now send a second message
+        await tester.enterText(textField, 'Second message');
+        await tester.pump();
+        await tester.tap(sendButton);
+        await safePumpAndSettle(tester);
+
+        // Verify createSession was NOT called again
+        check(fakeBackend.createSessionCalls.length).equals(1);
+
+        // Verify sendMessage was called via the session
+        check(fakeSession.sendCalls.length).equals(1);
+        check(fakeSession.sendCalls.first).equals('Second message');
+      });
+    });
+
+    group('Permission dialog', () {
+      testWidgets('shows when pendingPermission is set', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Initially no permission dialog
+        expect(find.byKey(PermissionDialogKeys.dialog), findsNothing);
+
+        // Set a pending permission
+        final permissionRequest = createFakePermissionRequest(
+          toolName: 'Bash',
+          toolInput: {'command': 'rm -rf /'},
+        );
+        testChat.setPendingPermission(permissionRequest);
+        await safePumpAndSettle(tester);
+
+        // Now permission dialog should be visible using Keys
+        expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
+        expect(find.byKey(PermissionDialogKeys.header), findsOneWidget);
+        expect(find.byKey(PermissionDialogKeys.bashCommand), findsOneWidget);
+      });
+
+      testWidgets('clicking Allow calls allowPermission', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Set a pending permission
+        final permissionRequest = createFakePermissionRequest();
+        testChat.setPendingPermission(permissionRequest);
+        await safePumpAndSettle(tester);
+
+        // Verify dialog is shown using Key
+        expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
+        check(testChat.pendingPermission).isNotNull();
+
+        // Click Allow button using Key
+        await tester.tap(find.byKey(PermissionDialogKeys.allowButton));
+        await safePumpAndSettle(tester);
+
+        // Verify permission was cleared (allowPermission clears pendingPermission)
+        check(testChat.pendingPermission).isNull();
+
+        // Dialog should be gone
+        expect(find.byKey(PermissionDialogKeys.dialog), findsNothing);
+      });
+
+      testWidgets('clicking Deny calls denyPermission', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Set a pending permission
+        final permissionRequest = createFakePermissionRequest();
+        testChat.setPendingPermission(permissionRequest);
+        await safePumpAndSettle(tester);
+
+        // Verify dialog is shown using Key
+        expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
+        check(testChat.pendingPermission).isNotNull();
+
+        // Click Deny button using Key
+        await tester.tap(find.byKey(PermissionDialogKeys.denyButton));
+        await safePumpAndSettle(tester);
+
+        // Verify permission was cleared (denyPermission clears pendingPermission)
+        check(testChat.pendingPermission).isNull();
+
+        // Dialog should be gone
+        expect(find.byKey(PermissionDialogKeys.dialog), findsNothing);
+      });
+
+      testWidgets('permission dialog displays tool name and input',
+          (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Set a pending permission with specific tool info
+        final permissionRequest = createFakePermissionRequest(
+          toolName: 'Read',
+          toolInput: {'file_path': '/secret/file.txt'},
+        );
+        testChat.setPendingPermission(permissionRequest);
+        await safePumpAndSettle(tester);
+
+        // Verify dialog is visible and has content
+        expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
+        expect(find.byKey(PermissionDialogKeys.header), findsOneWidget);
+
+        // Verify tool input is displayed (generic tool shows key-value pairs)
+        expect(find.textContaining('file_path'), findsOneWidget);
+        expect(find.textContaining('/secret/file.txt'), findsOneWidget);
+      });
+    });
+  });
+}

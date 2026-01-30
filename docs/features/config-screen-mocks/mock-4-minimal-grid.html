@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Mock 4: Minimal Grid</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #1e1e2e;
+      --bg-elevated: #232334;
+      --bg-input: #181825;
+      --text-primary: #cdd6f4;
+      --text-secondary: #a6adc8;
+      --text-muted: #585b70;
+      --accent: #cba6f7;
+      --accent-hover: #b491e0;
+      --border: #313244;
+      --border-focus: #45475a;
+      --switch-bg: #45475a;
+      --switch-on: #cba6f7;
+      --success: #a6e3a1;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--text-primary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Collapsible sections */
+    .section {
+      margin-bottom: 8px;
+    }
+
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border: none;
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .section-toggle:hover {
+      background: var(--border);
+    }
+
+    .section-toggle .chevron {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .section.open .chevron {
+      transform: rotate(90deg);
+    }
+
+    .section-toggle .count {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: normal;
+    }
+
+    .section-content {
+      display: none;
+      padding: 16px;
+      background: var(--bg-elevated);
+      border-radius: 0 0 8px 8px;
+      margin-top: -8px;
+      padding-top: 24px;
+    }
+
+    .section.open .section-content {
+      display: block;
+    }
+
+    .section.open .section-toggle {
+      border-radius: 8px 8px 0 0;
+    }
+
+    /* Grid layout for settings */
+    .settings-grid {
+      display: grid;
+      gap: 20px;
+    }
+
+    .setting {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 16px;
+      align-items: start;
+    }
+
+    .setting-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .setting-control {
+      grid-row: span 2;
+      align-self: center;
+    }
+
+    .setting-help {
+      font-size: 12px;
+      color: var(--text-muted);
+      grid-column: 1;
+    }
+
+    /* Pill dropdown */
+    .pill-select {
+      display: flex;
+      background: var(--bg-input);
+      border-radius: 20px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .pill-option {
+      padding: 6px 12px;
+      border-radius: 18px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+    }
+
+    .pill-option:hover {
+      color: var(--text-primary);
+    }
+
+    .pill-option.active {
+      background: var(--accent);
+      color: var(--bg-primary);
+      font-weight: 500;
+    }
+
+    /* Minimal toggle */
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-track {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: var(--switch-bg);
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+
+    .toggle-track::before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-muted);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle input:checked + .toggle-track {
+      background-color: var(--switch-on);
+    }
+
+    .toggle input:checked + .toggle-track::before {
+      transform: translateX(16px);
+      background-color: var(--bg-primary);
+    }
+
+    /* Inline number */
+    .inline-number {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .inline-number input {
+      width: 48px;
+      padding: 4px 8px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .inline-number input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .inline-number span {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Standard dropdown for model */
+    .select-dropdown {
+      appearance: none;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 28px 6px 10px;
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%236c7086' d='M1 3l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+    }
+
+    .select-dropdown:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 32px;
+      text-align: center;
+    }
+
+    .reset-link {
+      font-size: 12px;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+
+    .reset-link:hover {
+      color: var(--accent);
+      background: var(--bg-elevated);
+    }
+
+    /* Modified indicator dot */
+    .modified::after {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Settings</h1>
+      <p>Customize your experience</p>
+    </div>
+
+    <div class="section open">
+      <button class="section-toggle">
+        <svg class="chevron" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4"/></svg>
+        Appearance
+        <span class="count">5 settings</span>
+      </button>
+      <div class="section-content">
+        <div class="settings-grid">
+          <div class="setting">
+            <div class="setting-label modified">Agents Location</div>
+            <div class="setting-control">
+              <div class="pill-select">
+                <button class="pill-option">Vertical</button>
+                <button class="pill-option active">Toolbar</button>
+                <button class="pill-option">Stacked</button>
+              </div>
+            </div>
+            <div class="setting-help">Where to show the agents panel</div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">Bash Summary</div>
+            <div class="setting-control">
+              <div class="pill-select">
+                <button class="pill-option active">Description</button>
+                <button class="pill-option">Command</button>
+              </div>
+            </div>
+            <div class="setting-help">How bash commands appear in chat</div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label modified">Relative Paths</div>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox" checked>
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-help">Show paths relative to project root</div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">Timestamps</div>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-help">Show when messages were sent</div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">Idle Threshold</div>
+            <div class="setting-control">
+              <div class="inline-number">
+                <input type="number" value="5">
+                <span>min</span>
+              </div>
+            </div>
+            <div class="setting-help">Minutes before showing timestamp</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="section-toggle">
+        <svg class="chevron" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4"/></svg>
+        Behavior
+        <span class="count">2 settings</span>
+      </button>
+      <div class="section-content">
+        <div class="settings-grid">
+          <div class="setting">
+            <div class="setting-label modified">Auto-scroll</div>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox" checked>
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-help">Scroll to new messages automatically</div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">Notify on Prompt</div>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-help">System notification when input needed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="section-toggle">
+        <svg class="chevron" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4"/></svg>
+        Session
+        <span class="count">1 setting</span>
+      </button>
+      <div class="section-content">
+        <div class="settings-grid">
+          <div class="setting">
+            <div class="setting-label">Default Model</div>
+            <div class="setting-control">
+              <select class="select-dropdown">
+                <option selected>Claude Sonnet</option>
+                <option>Claude Opus</option>
+                <option>Claude Haiku</option>
+              </select>
+            </div>
+            <div class="setting-help">Model for new sessions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="section-toggle">
+        <svg class="chevron" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4"/></svg>
+        Developer
+        <span class="count">2 settings</span>
+      </button>
+      <div class="section-content">
+        <div class="settings-grid">
+          <div class="setting">
+            <div class="setting-label">Debug Logging</div>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-help">Write debug info to console</div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-label">Raw Messages</div>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-help">Inspect SDK JSON on messages</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="reset-link">Reset all to defaults</button>
+    </div>
+  </div>
+
+  <script>
+    // Toggle sections
+    document.querySelectorAll('.section-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.parentElement.classList.toggle('open');
+      });
+    });
+
+    // Pill selection
+    document.querySelectorAll('.pill-select').forEach(select => {
+      select.querySelectorAll('.pill-option').forEach(option => {
+        option.addEventListener('click', () => {
+          select.querySelectorAll('.pill-option').forEach(o => o.classList.remove('active'));
+          option.classList.add('active');
+        });
+      });
+    });
+  </script>
+</body>
+</html>

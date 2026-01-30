@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Mock 1: VSCode Classic</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #1e1e2e;
+      --bg-secondary: #181825;
+      --bg-tertiary: #313244;
+      --bg-hover: #45475a;
+      --text-primary: #cdd6f4;
+      --text-secondary: #a6adc8;
+      --text-muted: #6c7086;
+      --accent: #cba6f7;
+      --accent-dim: #9d7cd8;
+      --border: #45475a;
+      --input-bg: #313244;
+      --switch-bg: #45475a;
+      --switch-on: #cba6f7;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 32px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header h1 {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .search-box {
+      flex: 1;
+      max-width: 400px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 6px 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .section {
+      margin-bottom: 32px;
+    }
+
+    .section-header {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting {
+      margin-bottom: 20px;
+      padding-left: 0;
+    }
+
+    .setting-label {
+      margin-bottom: 4px;
+    }
+
+    .setting-category {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .setting-name {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .setting-description {
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin-bottom: 8px;
+      max-width: 600px;
+    }
+
+    .setting-description code {
+      background: var(--bg-tertiary);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 11px;
+    }
+
+    /* Dropdown */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown select {
+      appearance: none;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 28px 5px 10px;
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      min-width: 200px;
+    }
+
+    .dropdown::after {
+      content: '';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--text-secondary);
+      pointer-events: none;
+    }
+
+    .dropdown select:hover {
+      border-color: var(--accent-dim);
+    }
+
+    .dropdown select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--switch-bg);
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+
+    .toggle-slider::before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-secondary);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background-color: var(--switch-on);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(16px);
+      background-color: var(--bg-primary);
+    }
+
+    .toggle-content {
+      flex: 1;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    .toggle-description {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Number input */
+    .number-input {
+      width: 80px;
+      padding: 5px 10px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .number-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Reset button */
+    .reset-section {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .reset-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .reset-btn:hover {
+      border-color: var(--accent-dim);
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Settings</h1>
+      <div class="search-box">
+        <input type="text" placeholder="Search settings...">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Appearance</div>
+
+      <div class="setting">
+        <div class="setting-label">
+          <span class="setting-category">Appearance:</span>
+          <span class="setting-name">Agents List Location</span>
+        </div>
+        <div class="setting-description">
+          Controls where the agents panel is displayed. Use <code>Stacked</code> to show both sessions and agents in the sidebar.
+        </div>
+        <div class="dropdown">
+          <select>
+            <option>Vertical Panel</option>
+            <option selected>Horizontal Toolbar</option>
+            <option>Stacked Panel</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="setting-label">
+          <span class="setting-category">Appearance:</span>
+          <span class="setting-name">Bash Tool Summary</span>
+        </div>
+        <div class="setting-description">
+          How to display bash commands in the conversation. <code>Description</code> shows what the command does, <code>Command</code> shows the actual command text.
+        </div>
+        <div class="dropdown">
+          <select>
+            <option selected>Description</option>
+            <option>Command</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="toggle-content">
+            <div class="toggle-label">Appearance: <span style="color: var(--accent)">Relative File Paths</span></div>
+            <div class="toggle-description">Show file paths relative to the project directory instead of absolute paths. Makes tool output more readable.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="toggle-content">
+            <div class="toggle-label">Appearance: <span style="color: var(--accent)">Show Timestamps</span></div>
+            <div class="toggle-description">Display timestamps in the conversation view. Helps track when messages were sent during long sessions.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="setting-label">
+          <span class="setting-category">Appearance:</span>
+          <span class="setting-name">Timestamp Idle Threshold</span>
+        </div>
+        <div class="setting-description">
+          Only show timestamps after this many minutes of inactivity. Set to <code>0</code> to show timestamps on every message.
+        </div>
+        <input type="number" class="number-input" value="5">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Behavior</div>
+
+      <div class="setting">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="toggle-content">
+            <div class="toggle-label">Behavior: <span style="color: var(--accent)">Auto-scroll on Message</span></div>
+            <div class="toggle-description">Automatically scroll to the bottom when new messages arrive. Disable to stay at your current scroll position while reviewing output.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="toggle-content">
+            <div class="toggle-label">Behavior: <span style="color: var(--accent)">Notify on Prompt</span></div>
+            <div class="toggle-description">Show a system notification when Claude asks for input. Useful when running long tasks in the background.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Session Defaults</div>
+
+      <div class="setting">
+        <div class="setting-label">
+          <span class="setting-category">Session:</span>
+          <span class="setting-name">Default Model</span>
+        </div>
+        <div class="setting-description">
+          The model to use for new sessions. <code>Sonnet</code> is faster and cheaper. <code>Opus</code> is more capable for complex tasks.
+        </div>
+        <div class="dropdown">
+          <select>
+            <option selected>Claude Sonnet</option>
+            <option>Claude Opus</option>
+            <option>Claude Haiku</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">Developer</div>
+
+      <div class="setting">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="toggle-content">
+            <div class="toggle-label">Developer: <span style="color: var(--accent)">Debug Logging</span></div>
+            <div class="toggle-description">Write debug information to the console. Enable when troubleshooting issues with the app.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="toggle-content">
+            <div class="toggle-label">Developer: <span style="color: var(--accent)">Show Raw Messages</span></div>
+            <div class="toggle-description">Show a debug button on messages to inspect the raw JSON from the SDK. Useful for understanding the protocol.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reset-section">
+      <button class="reset-btn">Reset all settings to defaults</button>
+    </div>
+  </div>
+</body>
+</html>

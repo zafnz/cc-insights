@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Config Screen Mockups</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #1e1e2e;
+      --card-bg: #232334;
+      --text: #cdd6f4;
+      --text-muted: #6c7086;
+      --accent: #cba6f7;
+      --border: #313244;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      margin-bottom: 40px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+    }
+
+    .card a {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .preview {
+      height: 200px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .preview iframe {
+      width: 200%;
+      height: 200%;
+      border: none;
+      transform: scale(0.5);
+      pointer-events: none;
+    }
+
+    .card-content {
+      padding: 16px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-description {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(203, 166, 247, 0.15);
+      color: var(--accent);
+      font-size: 11px;
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Config Screen Mockups</h1>
+  <p class="subtitle">4 design approaches for a desktop-native settings experience</p>
+
+  <div class="grid">
+    <div class="card">
+      <a href="mock-1-vscode-classic.html">
+        <div class="preview">
+          <iframe src="mock-1-vscode-classic.html" loading="lazy"></iframe>
+        </div>
+        <div class="card-content">
+          <div class="card-title">1. VSCode Classic</div>
+          <div class="card-description">
+            Faithful to VSCode's settings layout. Category:Name format, inline dropdowns,
+            toggles with descriptions on the left. Search bar at top. Maximum information density.
+          </div>
+          <span class="tag">Familiar</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="mock-2-compact-cards.html">
+        <div class="preview">
+          <iframe src="mock-2-compact-cards.html" loading="lazy"></iframe>
+        </div>
+        <div class="card-content">
+          <div class="card-title">2. Compact Cards</div>
+          <div class="card-description">
+            Card-based sections with compact rows. Controls on the right, descriptions
+            truncated to single line. Modified indicator bar. Very scannable.
+          </div>
+          <span class="tag">Clean</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="mock-3-sidebar-nav.html">
+        <div class="preview">
+          <iframe src="mock-3-sidebar-nav.html" loading="lazy"></iframe>
+        </div>
+        <div class="card-content">
+          <div class="card-title">3. Sidebar Navigation</div>
+          <div class="card-description">
+            Categories in left sidebar, settings in main area. More room for descriptions.
+            Good for many categories. System Preferences style.
+          </div>
+          <span class="tag">Spacious</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="mock-4-minimal-grid.html">
+        <div class="preview">
+          <iframe src="mock-4-minimal-grid.html" loading="lazy"></iframe>
+        </div>
+        <div class="card-content">
+          <div class="card-title">4. Minimal Grid</div>
+          <div class="card-description">
+            Collapsible sections with pill selectors for enums. Centered layout with
+            gradient header. Modern, playful feel. Interactive collapse.
+          </div>
+          <span class="tag">Modern</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

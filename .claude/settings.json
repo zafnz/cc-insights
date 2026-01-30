@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__dart__dart_format",
+      "mcp__flutter-test__run_tests",
+      "mcp__flutter-test__get_test_result",
+      "Bash(flutter pub:*)"
+    ]
+  }
+}

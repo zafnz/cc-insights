@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drag-and-Drop Panel System Mock</title>
+    <style>
+        /* ============================================
+           THEME COLORS - Material 3 Dark Theme
+           Based on ColorScheme.fromSeed(seedColor: deepPurple)
+           ============================================ */
+        :root {
+            /* Surface colors */
+            --surface: #141218;
+            --surface-container: #1d1b20;
+            --surface-container-high: #2b2930;
+            --surface-container-highest: #36343b;
+
+            /* On surface */
+            --on-surface: #e6e1e5;
+            --on-surface-variant: #cac4d0;
+
+            /* Primary */
+            --primary: #d0bcff;
+            --primary-container: #4f378b;
+            --on-primary-container: #eaddff;
+
+            /* Accent for drop targets */
+            --accent: #d0bcff;
+            --accent-glow: rgba(208, 188, 255, 0.3);
+            --drop-target-bg: rgba(208, 188, 255, 0.15);
+            --drop-target-bg-hover: rgba(208, 188, 255, 0.35);
+
+            /* Dividers */
+            --divider: #49454f;
+            --divider-hover: #938f99;
+
+            /* Misc */
+            --border-radius: 0px;
+            --panel-header-height: 36px;
+            --divider-size: 4px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--surface);
+            color: var(--on-surface);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ============================================
+           LAYOUT STRUCTURE
+           ============================================ */
+        .app-container {
+            display: flex;
+            height: calc(100vh - 28px); /* Account for status bar */
+            width: 100vw;
+            position: relative;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+            position: relative;
+        }
+
+        .column.main {
+            flex: 1;
+        }
+
+        .column.sidebar {
+            width: 220px;
+        }
+
+        /* ============================================
+           PANEL STYLES
+           ============================================ */
+        .panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--surface-container);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel.flex-1 {
+            flex: 1;
+        }
+
+        .panel-header {
+            height: var(--panel-header-height);
+            padding: 0 12px;
+            background: var(--surface-container-highest);
+            display: flex;
+            align-items: center;
+            cursor: grab;
+            user-select: none;
+            border-bottom: 1px solid var(--divider);
+            position: relative;
+            z-index: 2;
+        }
+
+        .panel-header:active {
+            cursor: grabbing;
+        }
+
+        .panel-header .title {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--on-surface);
+        }
+
+        .panel-header .icon {
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 12px;
+            overflow: auto;
+            font-size: 13px;
+            color: var(--on-surface-variant);
+        }
+
+        /* ============================================
+           DIVIDERS
+           ============================================ */
+        .divider {
+            background: var(--divider);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10;
+        }
+
+        .divider.vertical {
+            width: var(--divider-size);
+            cursor: col-resize;
+        }
+
+        .divider.horizontal {
+            height: var(--divider-size);
+            cursor: row-resize;
+        }
+
+        .divider:hover {
+            background: var(--divider-hover);
+        }
+
+        .divider:active {
+            background: var(--accent);
+        }
+
+        /* ============================================
+           GHOST PANEL (DRAG PREVIEW)
+           ============================================ */
+        .ghost-panel {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.85;
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .ghost-panel .panel-header {
+            background: var(--primary-container);
+        }
+
+        .ghost-panel .panel-content {
+            background: var(--surface-container);
+            max-height: 100px;
+        }
+
+        /* ============================================
+           DROP TARGET ZONES - Always visible during drag
+           ============================================ */
+
+        /* Base drop target styling */
+        .drop-target {
+            position: absolute;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed transparent;
+            background: transparent;
+        }
+
+        /* When dragging, all targets become visible */
+        body.dragging .drop-target {
+            opacity: 1;
+            pointer-events: auto;
+            background: var(--drop-target-bg);
+            border-color: var(--accent);
+        }
+
+        /* Hover state - target expands and glows */
+        body.dragging .drop-target:hover,
+        body.dragging .drop-target.active {
+            background: var(--drop-target-bg-hover);
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow), inset 0 0 20px var(--accent-glow);
+        }
+
+        /* Drop target label */
+        .drop-target-label {
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            text-shadow: 0 0 10px var(--accent);
+        }
+
+        body.dragging .drop-target:hover .drop-target-label,
+        body.dragging .drop-target.active .drop-target-label {
+            opacity: 1;
+        }
+
+        /* Horizontal drop targets (above/below panels) */
+        .drop-target.horizontal {
+            left: 4px;
+            right: 4px;
+            height: 24px;
+        }
+
+        .drop-target.horizontal.top {
+            top: 0;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .drop-target.horizontal.bottom {
+            bottom: 0;
+            border-radius: 8px 8px 0 0;
+        }
+
+        body.dragging .drop-target.horizontal:hover,
+        body.dragging .drop-target.horizontal.active {
+            height: 48px;
+        }
+
+        body.dragging .drop-target.horizontal.top:hover,
+        body.dragging .drop-target.horizontal.top.active {
+            top: 0;
+        }
+
+        body.dragging .drop-target.horizontal.bottom:hover,
+        body.dragging .drop-target.horizontal.bottom.active {
+            bottom: 0;
+        }
+
+        /* Vertical drop targets (column edges) */
+        .drop-target.vertical {
+            top: 4px;
+            bottom: 4px;
+            width: 24px;
+        }
+
+        .drop-target.vertical.left {
+            left: 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .drop-target.vertical.right {
+            right: 0;
+            border-radius: 8px 0 0 8px;
+        }
+
+        body.dragging .drop-target.vertical:hover,
+        body.dragging .drop-target.vertical.active {
+            width: 60px;
+        }
+
+        /* New column drop zones (at app edges) */
+        .drop-target.new-column {
+            position: fixed;
+            top: 4px;
+            bottom: 32px; /* Account for status bar */
+            width: 40px;
+            z-index: 100;
+        }
+
+        .drop-target.new-column.left {
+            left: 0;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .drop-target.new-column.right {
+            right: 0;
+            border-radius: 12px 0 0 12px;
+        }
+
+        body.dragging .drop-target.new-column:hover,
+        body.dragging .drop-target.new-column.active {
+            width: 80px;
+        }
+
+        /* Tab merge zone (panel header) */
+        .drop-target.tab-merge {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            height: var(--panel-header-height);
+            z-index: 60;
+            border-radius: 0;
+            border: none;
+        }
+
+        body.dragging .drop-target.tab-merge {
+            border: 2px dashed var(--accent);
+        }
+
+        body.dragging .drop-target.tab-merge:hover,
+        body.dragging .drop-target.tab-merge.active {
+            background: var(--primary-container);
+        }
+
+        /* ============================================
+           SAMPLE CONTENT STYLES
+           ============================================ */
+        .session-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+        }
+
+        .session-item:hover {
+            background: var(--surface-container-high);
+        }
+
+        .session-item.selected {
+            background: rgba(208, 188, 255, 0.15);
+        }
+
+        .session-item .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .session-item .dot.active {
+            background: #4ade80;
+        }
+
+        .session-item .dot.inactive {
+            background: #6b7280;
+        }
+
+        .agent-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+        }
+
+        .agent-item:hover {
+            background: var(--surface-container-high);
+        }
+
+        .agent-item .status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .agent-item .status.working {
+            background: #4ade80;
+        }
+
+        .agent-item .status.waiting {
+            background: #fb923c;
+        }
+
+        .agent-item.subagent {
+            margin-left: 16px;
+        }
+
+        .conversation-message {
+            margin-bottom: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--surface-container-high);
+        }
+
+        .conversation-message.user {
+            background: var(--primary-container);
+            margin-left: 40px;
+        }
+
+        .conversation-message.assistant {
+            margin-right: 40px;
+        }
+
+        .conversation-message .role {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            opacity: 0.7;
+        }
+
+        /* ============================================
+           STATUS BAR
+           ============================================ */
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: var(--surface-container-high);
+            border-top: 1px solid var(--divider);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            color: var(--on-surface-variant);
+            z-index: 500;
+        }
+
+        .status-bar .hint {
+            opacity: 0.7;
+        }
+
+        /* ============================================
+           DRAGGING STATE
+           ============================================ */
+        body.dragging {
+            cursor: grabbing !important;
+        }
+
+        body.dragging * {
+            cursor: grabbing !important;
+        }
+
+        body.dragging .panel-header {
+            cursor: grabbing !important;
+        }
+
+        /* Dim panels during drag to make drop targets more visible */
+        body.dragging .panel {
+            opacity: 0.7;
+        }
+
+        body.dragging .panel.drag-source {
+            opacity: 0.4;
+        }
+
+        /* ============================================
+           INSTRUCTIONS OVERLAY
+           ============================================ */
+        .instructions {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            background: var(--surface-container-highest);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--divider);
+            max-width: 300px;
+            z-index: 1001;
+            font-size: 13px;
+        }
+
+        .instructions h3 {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--primary);
+        }
+
+        .instructions ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+            padding-left: 16px;
+            position: relative;
+            color: var(--on-surface-variant);
+        }
+
+        .instructions li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+        }
+
+        .instructions .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: var(--on-surface-variant);
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .instructions .close-btn:hover {
+            color: var(--on-surface);
+        }
+
+        .instructions .highlight {
+            color: var(--accent);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- Instructions Overlay -->
+    <div class="instructions" id="instructions">
+        <button class="close-btn" onclick="this.parentElement.style.display='none'">&times;</button>
+        <h3>Drag-and-Drop Panel Demo</h3>
+        <ul>
+            <li>Drag panel headers to start</li>
+            <li><span class="highlight">Drop targets appear and grow</span> when you hover over them</li>
+            <li>Drop between panels to stack</li>
+            <li>Drop on edges for new columns</li>
+            <li>Drop on header to merge as tabs</li>
+            <li>Press ESC to cancel drag</li>
+        </ul>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="app-container" id="appContainer">
+        <!-- Will be populated by JavaScript -->
+    </div>
+
+    <!-- Global drop targets for new columns at edges -->
+    <div class="drop-target new-column left" id="newColumnLeft">
+        <span class="drop-target-label">+ Column</span>
+    </div>
+    <div class="drop-target new-column right" id="newColumnRight">
+        <span class="drop-target-label">+ Column</span>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <span class="hint" id="statusHint">Drag a panel header to rearrange the layout</span>
+    </div>
+
+    <!-- Ghost Panel Template (hidden) -->
+    <div class="ghost-panel" id="ghostPanel" style="display: none;">
+        <div class="panel-header">
+            <span class="title" id="ghostTitle">Panel</span>
+        </div>
+        <div class="panel-content" id="ghostContent"></div>
+    </div>
+
+    <script>
+        // ============================================
+        // STATE MANAGEMENT
+        // ============================================
+
+        // Layout state - defines the structure
+        let layoutState = {
+            columns: [
+                {
+                    id: 'sidebar',
+                    width: 220,
+                    stacks: [
+                        { id: 'sessions', panels: ['sessions'] },
+                        { id: 'agents', panels: ['agents'] }
+                    ]
+                },
+                {
+                    id: 'main',
+                    width: -1, // -1 means flex
+                    stacks: [
+                        { id: 'conversation', panels: ['conversation'] }
+                    ]
+                }
+            ]
+        };
+
+        // Panel definitions with content
+        const panelDefinitions = {
+            sessions: {
+                title: 'Sessions',
+                icon: '&#128193;',
+                content: `
+                    <div class="session-item selected">
+                        <div class="dot active"></div>
+                        <div>Implement drag-drop panels</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="dot active"></div>
+                        <div>Fix authentication bug</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="dot inactive"></div>
+                        <div>Refactor API client</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="dot inactive"></div>
+                        <div>Update documentation</div>
+                    </div>
+                `
+            },
+            agents: {
+                title: 'Agents',
+                icon: '&#129302;',
+                content: `
+                    <div class="agent-item">
+                        <div class="status working"></div>
+                        <div>Main Agent</div>
+                    </div>
+                    <div class="agent-item subagent">
+                        <div class="status waiting"></div>
+                        <div>File Search</div>
+                    </div>
+                    <div class="agent-item subagent">
+                        <div class="status working"></div>
+                        <div>Code Analysis</div>
+                    </div>
+                `
+            },
+            conversation: {
+                title: 'Conversation',
+                icon: '&#128172;',
+                content: `
+                    <div class="conversation-message user">
+                        <div class="role">USER</div>
+                        <div>Create a drag-and-drop panel system for the app</div>
+                    </div>
+                    <div class="conversation-message assistant">
+                        <div class="role">ASSISTANT</div>
+                        <div>I'll implement a flexible drag-and-drop panel system. This will allow users to:
+                        <br><br>
+                        1. Drag panel headers to rearrange
+                        <br>2. Drop between panels to create stacks
+                        <br>3. Drop on column edges to create new columns
+                        <br><br>
+                        Let me start by reading the existing layout code...</div>
+                    </div>
+                    <div class="conversation-message user">
+                        <div class="role">USER</div>
+                        <div>Sounds good! Make sure it persists across restarts</div>
+                    </div>
+                `
+            },
+            logs: {
+                title: 'Logs',
+                icon: '&#128220;',
+                content: `
+                    <div style="font-family: monospace; font-size: 11px; opacity: 0.7;">
+                        [12:34:56] Session created: abc123<br>
+                        [12:34:57] Backend connected<br>
+                        [12:34:58] Agent spawned: main<br>
+                        [12:35:01] Tool: Read file.dart<br>
+                        [12:35:03] Tool: Edit file.dart<br>
+                    </div>
+                `
+            }
+        };
+
+        // Drag state
+        let dragState = {
+            isDragging: false,
+            panelId: null,
+            sourceColumn: null,
+            sourceStack: null,
+            startX: 0,
+            startY: 0,
+            ghostOffsetX: 0,
+            ghostOffsetY: 0,
+            activeDropTarget: null
+        };
+
+        // Resize state
+        let resizeState = {
+            isResizing: false,
+            dividerType: null,
+            targetIndex: null,
+            startPos: 0,
+            startSize: 0
+        };
+
+        // ============================================
+        // RENDER FUNCTIONS
+        // ============================================
+
+        function renderLayout() {
+            const container = document.getElementById('appContainer');
+            container.innerHTML = '';
+
+            layoutState.columns.forEach((column, colIndex) => {
+                // Render column
+                const columnEl = document.createElement('div');
+                columnEl.className = `column ${column.width === -1 ? 'main' : 'sidebar'}`;
+                columnEl.dataset.columnId = column.id;
+                columnEl.dataset.columnIndex = colIndex;
+
+                if (column.width > 0) {
+                    columnEl.style.width = column.width + 'px';
+                }
+
+                // Render stacks in column
+                column.stacks.forEach((stack, stackIndex) => {
+                    // Render each panel in the stack
+                    stack.panels.forEach((panelId, panelIndex) => {
+                        const panel = createPanel(panelId, colIndex, stackIndex, panelIndex);
+                        columnEl.appendChild(panel);
+
+                        // Add horizontal divider between panels in same stack
+                        if (panelIndex < stack.panels.length - 1) {
+                            columnEl.appendChild(createDivider('horizontal', colIndex, stackIndex, panelIndex));
+                        }
+                    });
+
+                    // Add horizontal divider between stacks
+                    if (stackIndex < column.stacks.length - 1) {
+                        columnEl.appendChild(createDivider('horizontal', colIndex, stackIndex, -1));
+                    }
+                });
+
+                container.appendChild(columnEl);
+
+                // Add vertical divider between columns
+                if (colIndex < layoutState.columns.length - 1) {
+                    container.appendChild(createDivider('vertical', colIndex, -1, -1));
+                }
+            });
+
+            // Setup drop target event listeners
+            setupDropTargets();
+        }
+
+        function createPanel(panelId, colIndex, stackIndex, panelIndex) {
+            const def = panelDefinitions[panelId];
+
+            const panel = document.createElement('div');
+            panel.className = 'panel flex-1';
+            panel.dataset.panelId = panelId;
+            panel.dataset.columnIndex = colIndex;
+            panel.dataset.stackIndex = stackIndex;
+            panel.dataset.panelIndex = panelIndex;
+
+            // Header (draggable)
+            const header = document.createElement('div');
+            header.className = 'panel-header';
+            header.dataset.panelId = panelId;
+            header.innerHTML = `
+                <span class="icon">${def.icon}</span>
+                <span class="title">${def.title}</span>
+            `;
+
+            // Make header draggable
+            header.addEventListener('mousedown', onDragStart);
+
+            // Content
+            const content = document.createElement('div');
+            content.className = 'panel-content';
+            content.innerHTML = def.content;
+
+            panel.appendChild(header);
+            panel.appendChild(content);
+
+            // Add drop targets within the panel
+
+            // Top drop target (insert above)
+            const topTarget = document.createElement('div');
+            topTarget.className = 'drop-target horizontal top';
+            topTarget.dataset.dropType = 'stack-above';
+            topTarget.dataset.targetPanel = panelId;
+            topTarget.dataset.columnIndex = colIndex;
+            topTarget.dataset.stackIndex = stackIndex;
+            topTarget.dataset.panelIndex = panelIndex;
+            topTarget.innerHTML = '<span class="drop-target-label">Insert Above</span>';
+            panel.appendChild(topTarget);
+
+            // Bottom drop target (insert below)
+            const bottomTarget = document.createElement('div');
+            bottomTarget.className = 'drop-target horizontal bottom';
+            bottomTarget.dataset.dropType = 'stack-below';
+            bottomTarget.dataset.targetPanel = panelId;
+            bottomTarget.dataset.columnIndex = colIndex;
+            bottomTarget.dataset.stackIndex = stackIndex;
+            bottomTarget.dataset.panelIndex = panelIndex;
+            bottomTarget.innerHTML = '<span class="drop-target-label">Insert Below</span>';
+            panel.appendChild(bottomTarget);
+
+            // Tab merge target (on header)
+            const tabTarget = document.createElement('div');
+            tabTarget.className = 'drop-target tab-merge';
+            tabTarget.dataset.dropType = 'tab-merge';
+            tabTarget.dataset.targetPanel = panelId;
+            tabTarget.dataset.columnIndex = colIndex;
+            tabTarget.dataset.stackIndex = stackIndex;
+            tabTarget.dataset.panelIndex = panelIndex;
+            tabTarget.innerHTML = '<span class="drop-target-label">Merge as Tab</span>';
+            panel.appendChild(tabTarget);
+
+            return panel;
+        }
+
+        function createDivider(type, colIndex, stackIndex, panelIndex) {
+            const divider = document.createElement('div');
+            divider.className = `divider ${type}`;
+            divider.dataset.type = type;
+            divider.dataset.columnIndex = colIndex;
+            divider.dataset.stackIndex = stackIndex;
+            divider.dataset.panelIndex = panelIndex;
+
+            divider.addEventListener('mousedown', onResizeStart);
+
+            return divider;
+        }
+
+        function setupDropTargets() {
+            // Setup event listeners for all drop targets
+            document.querySelectorAll('.drop-target').forEach(target => {
+                target.addEventListener('mouseenter', onDropTargetEnter);
+                target.addEventListener('mouseleave', onDropTargetLeave);
+                target.addEventListener('mouseup', onDropTargetDrop);
+            });
+
+            // Setup new column drop targets
+            const newColLeft = document.getElementById('newColumnLeft');
+            const newColRight = document.getElementById('newColumnRight');
+
+            [newColLeft, newColRight].forEach(target => {
+                target.addEventListener('mouseenter', onDropTargetEnter);
+                target.addEventListener('mouseleave', onDropTargetLeave);
+                target.addEventListener('mouseup', onDropTargetDrop);
+            });
+
+            newColLeft.dataset.dropType = 'new-column-left';
+            newColRight.dataset.dropType = 'new-column-right';
+        }
+
+        // ============================================
+        // DRAG AND DROP HANDLERS
+        // ============================================
+
+        function onDragStart(e) {
+            e.preventDefault();
+
+            const header = e.target.closest('.panel-header');
+            if (!header) return;
+
+            const panel = header.closest('.panel');
+            const panelId = header.dataset.panelId;
+
+            // Don't allow dragging if it's the only panel
+            if (getTotalPanelCount() <= 1) {
+                return;
+            }
+
+            dragState = {
+                isDragging: true,
+                panelId: panelId,
+                sourceColumn: parseInt(panel.dataset.columnIndex),
+                sourceStack: parseInt(panel.dataset.stackIndex),
+                sourcePanelIndex: parseInt(panel.dataset.panelIndex),
+                startX: e.clientX,
+                startY: e.clientY,
+                ghostOffsetX: e.clientX - header.getBoundingClientRect().left,
+                ghostOffsetY: e.clientY - header.getBoundingClientRect().top,
+                activeDropTarget: null
+            };
+
+            // Mark source panel
+            panel.classList.add('drag-source');
+
+            // Show ghost panel
+            const ghost = document.getElementById('ghostPanel');
+            const def = panelDefinitions[panelId];
+            document.getElementById('ghostTitle').innerHTML = `<span class="icon">${def.icon}</span> ${def.title}`;
+            document.getElementById('ghostContent').innerHTML = def.content;
+            ghost.style.width = Math.min(300, panel.getBoundingClientRect().width) + 'px';
+            ghost.style.display = 'block';
+            updateGhostPosition(e.clientX, e.clientY);
+
+            document.body.classList.add('dragging');
+            updateStatus(`Dragging "${def.title}" - hover over purple drop zones`);
+
+            // Add listeners
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEnd);
+            document.addEventListener('keydown', onKeyDown);
+        }
+
+        function onDragMove(e) {
+            if (!dragState.isDragging) return;
+            updateGhostPosition(e.clientX, e.clientY);
+        }
+
+        function onDragEnd(e) {
+            if (!dragState.isDragging) return;
+
+            // If we have an active drop target, execute the drop
+            if (dragState.activeDropTarget) {
+                executeDropOperation(dragState.activeDropTarget);
+            }
+
+            cleanupDrag();
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'Escape' && dragState.isDragging) {
+                cleanupDrag();
+                updateStatus('Drag cancelled');
+            }
+        }
+
+        function onDropTargetEnter(e) {
+            if (!dragState.isDragging) return;
+
+            const target = e.currentTarget;
+            const dropType = target.dataset.dropType;
+            const targetPanel = target.dataset.targetPanel;
+
+            // Don't allow dropping on self
+            if (targetPanel === dragState.panelId) return;
+
+            // Activate this target
+            target.classList.add('active');
+            dragState.activeDropTarget = target;
+
+            // Update status
+            const def = targetPanel ? panelDefinitions[targetPanel] : null;
+            switch (dropType) {
+                case 'stack-above':
+                    updateStatus(`Drop above "${def.title}"`);
+                    break;
+                case 'stack-below':
+                    updateStatus(`Drop below "${def.title}"`);
+                    break;
+                case 'tab-merge':
+                    updateStatus(`Merge with "${def.title}" as tabs`);
+                    break;
+                case 'new-column-left':
+                    updateStatus('Drop to create new column on the left');
+                    break;
+                case 'new-column-right':
+                    updateStatus('Drop to create new column on the right');
+                    break;
+            }
+        }
+
+        function onDropTargetLeave(e) {
+            if (!dragState.isDragging) return;
+
+            const target = e.currentTarget;
+            target.classList.remove('active');
+
+            if (dragState.activeDropTarget === target) {
+                dragState.activeDropTarget = null;
+                updateStatus(`Dragging "${panelDefinitions[dragState.panelId].title}" - hover over purple drop zones`);
+            }
+        }
+
+        function onDropTargetDrop(e) {
+            if (!dragState.isDragging) return;
+
+            const target = e.currentTarget;
+            if (target.classList.contains('active')) {
+                executeDropOperation(target);
+            }
+
+            cleanupDrag();
+        }
+
+        function cleanupDrag() {
+            dragState.isDragging = false;
+            dragState.activeDropTarget = null;
+
+            document.getElementById('ghostPanel').style.display = 'none';
+            document.body.classList.remove('dragging');
+
+            // Remove drag-source class
+            document.querySelectorAll('.drag-source').forEach(el => {
+                el.classList.remove('drag-source');
+            });
+
+            // Deactivate all drop targets
+            document.querySelectorAll('.drop-target').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragEnd);
+            document.removeEventListener('keydown', onKeyDown);
+
+            updateStatus('Drag a panel header to rearrange the layout');
+        }
+
+        function updateGhostPosition(x, y) {
+            const ghost = document.getElementById('ghostPanel');
+            ghost.style.left = (x - dragState.ghostOffsetX) + 'px';
+            ghost.style.top = (y - dragState.ghostOffsetY) + 'px';
+        }
+
+        function executeDropOperation(target) {
+            const dropType = target.dataset.dropType;
+            const panelId = dragState.panelId;
+            const targetColIndex = parseInt(target.dataset.columnIndex);
+            const targetStackIndex = parseInt(target.dataset.stackIndex);
+            const targetPanelIndex = parseInt(target.dataset.panelIndex);
+
+            // First, remove panel from source location
+            removePanel(panelId);
+
+            // Then add to new location based on drop type
+            switch (dropType) {
+                case 'new-column-left':
+                    layoutState.columns.unshift({
+                        id: 'col-' + Date.now(),
+                        width: 200,
+                        stacks: [{ id: 'stack-' + Date.now(), panels: [panelId] }]
+                    });
+                    break;
+
+                case 'new-column-right':
+                    layoutState.columns.push({
+                        id: 'col-' + Date.now(),
+                        width: 200,
+                        stacks: [{ id: 'stack-' + Date.now(), panels: [panelId] }]
+                    });
+                    break;
+
+                case 'stack-above':
+                    insertPanelAt(targetColIndex, targetStackIndex, targetPanelIndex, panelId);
+                    break;
+
+                case 'stack-below':
+                    insertPanelAt(targetColIndex, targetStackIndex, targetPanelIndex + 1, panelId);
+                    break;
+
+                case 'tab-merge':
+                    // Insert right after the target panel in the same stack
+                    insertPanelAt(targetColIndex, targetStackIndex, targetPanelIndex + 1, panelId);
+                    break;
+            }
+
+            // Clean up empty containers
+            cleanupEmptyContainers();
+
+            // Re-render
+            renderLayout();
+
+            updateStatus(`Moved "${panelDefinitions[panelId].title}" successfully`);
+        }
+
+        function removePanel(panelId) {
+            for (const column of layoutState.columns) {
+                for (const stack of column.stacks) {
+                    const index = stack.panels.indexOf(panelId);
+                    if (index !== -1) {
+                        stack.panels.splice(index, 1);
+                        return;
+                    }
+                }
+            }
+        }
+
+        function insertPanelAt(colIndex, stackIndex, panelIndex, panelId) {
+            // Adjust indices if source was removed from earlier position
+            const col = layoutState.columns[colIndex];
+            if (!col) return;
+
+            const stack = col.stacks[stackIndex];
+            if (!stack) return;
+
+            // Clamp panel index to valid range
+            const clampedIndex = Math.min(panelIndex, stack.panels.length);
+            stack.panels.splice(clampedIndex, 0, panelId);
+        }
+
+        function cleanupEmptyContainers() {
+            // Remove empty stacks
+            for (const column of layoutState.columns) {
+                column.stacks = column.stacks.filter(stack => stack.panels.length > 0);
+            }
+
+            // Remove empty columns
+            layoutState.columns = layoutState.columns.filter(col => col.stacks.length > 0);
+
+            // Ensure at least one column exists
+            if (layoutState.columns.length === 0) {
+                layoutState.columns.push({
+                    id: 'main',
+                    width: -1,
+                    stacks: [{ id: 'default', panels: ['conversation'] }]
+                });
+            }
+
+            // Ensure there's a flex column
+            const hasFlexColumn = layoutState.columns.some(col => col.width === -1);
+            if (!hasFlexColumn && layoutState.columns.length > 0) {
+                layoutState.columns[layoutState.columns.length - 1].width = -1;
+            }
+        }
+
+        function getTotalPanelCount() {
+            let count = 0;
+            for (const column of layoutState.columns) {
+                for (const stack of column.stacks) {
+                    count += stack.panels.length;
+                }
+            }
+            return count;
+        }
+
+        // ============================================
+        // RESIZE HANDLERS
+        // ============================================
+
+        function onResizeStart(e) {
+            if (dragState.isDragging) return;
+
+            const divider = e.target;
+            const type = divider.dataset.type;
+            const colIndex = parseInt(divider.dataset.columnIndex);
+
+            resizeState = {
+                isResizing: true,
+                dividerType: type,
+                columnIndex: colIndex,
+                startPos: type === 'vertical' ? e.clientX : e.clientY
+            };
+
+            if (type === 'vertical') {
+                resizeState.startWidth = layoutState.columns[colIndex].width;
+            }
+
+            document.addEventListener('mousemove', onResizeMove);
+            document.addEventListener('mouseup', onResizeEnd);
+
+            e.preventDefault();
+        }
+
+        function onResizeMove(e) {
+            if (!resizeState.isResizing) return;
+
+            if (resizeState.dividerType === 'vertical') {
+                const delta = e.clientX - resizeState.startPos;
+                const newWidth = Math.max(150, resizeState.startWidth + delta);
+
+                const column = layoutState.columns[resizeState.columnIndex];
+                if (column && column.width > 0) {
+                    column.width = newWidth;
+                    renderLayout();
+                }
+            }
+        }
+
+        function onResizeEnd() {
+            resizeState.isResizing = false;
+            document.removeEventListener('mousemove', onResizeMove);
+            document.removeEventListener('mouseup', onResizeEnd);
+        }
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+
+        function updateStatus(message) {
+            document.getElementById('statusHint').textContent = message;
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderLayout();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Mock 3: Sidebar Navigation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #1e1e2e;
+      --bg-sidebar: #181825;
+      --bg-content: #1e1e2e;
+      --bg-hover: #313244;
+      --bg-active: rgba(203, 166, 247, 0.1);
+      --bg-input: #313244;
+      --text-primary: #cdd6f4;
+      --text-secondary: #a6adc8;
+      --text-muted: #6c7086;
+      --accent: #cba6f7;
+      --border: #313244;
+      --switch-bg: #45475a;
+      --switch-on: #cba6f7;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 200px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      padding: 16px 0;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 0 16px 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .sidebar-header h1 {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      border-left: 2px solid transparent;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--bg-active);
+      color: var(--accent);
+      border-left-color: var(--accent);
+    }
+
+    .nav-icon {
+      width: 16px;
+      height: 16px;
+      opacity: 0.7;
+    }
+
+    .nav-item.active .nav-icon {
+      opacity: 1;
+    }
+
+    /* Content area */
+    .content {
+      flex: 1;
+      padding: 24px 32px;
+      max-width: 700px;
+    }
+
+    .content-header {
+      margin-bottom: 24px;
+    }
+
+    .content-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .content-header p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Settings */
+    .setting {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting:last-child {
+      border-bottom: none;
+    }
+
+    .setting-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 6px;
+    }
+
+    .setting-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .setting-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 480px;
+    }
+
+    .setting-description code {
+      background: var(--bg-input);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    /* Dropdown */
+    .dropdown select {
+      appearance: none;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 36px 8px 12px;
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      min-width: 180px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c7086' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    .dropdown select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Toggle */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: var(--switch-bg);
+      border-radius: 24px;
+      transition: 0.2s;
+    }
+
+    .toggle-slider::before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-muted);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background-color: var(--switch-on);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+      background-color: var(--bg-primary);
+    }
+
+    /* Number input */
+    .number-input {
+      width: 80px;
+      padding: 8px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .number-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Footer */
+    .sidebar-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 200px;
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-sidebar);
+    }
+
+    .reset-btn {
+      width: 100%;
+      padding: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .reset-btn:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+
+    /* SVG icons */
+    svg {
+      fill: currentColor;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h1>Settings</h1>
+      </div>
+
+      <div class="nav-item active">
+        <svg class="nav-icon" viewBox="0 0 16 16"><path d="M2 3h5v5H2V3zm7 0h5v5H9V3zM2 10h5v3H2v-3zm7 0h5v3H9v-3z"/></svg>
+        Appearance
+      </div>
+      <div class="nav-item">
+        <svg class="nav-icon" viewBox="0 0 16 16"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7 4h2v5H7V4zm0 6h2v2H7v-2z"/></svg>
+        Behavior
+      </div>
+      <div class="nav-item">
+        <svg class="nav-icon" viewBox="0 0 16 16"><path d="M14 3H2a1 1 0 00-1 1v8a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1zM2 4h12v8H2V4z"/></svg>
+        Session
+      </div>
+      <div class="nav-item">
+        <svg class="nav-icon" viewBox="0 0 16 16"><path d="M5 1h6l4 4v9a1 1 0 01-1 1H2a1 1 0 01-1-1V2a1 1 0 011-1h3zm1 1v3h4V2H6z"/></svg>
+        Developer
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="reset-btn">Reset to Defaults</button>
+      </div>
+    </nav>
+
+    <main class="content">
+      <div class="content-header">
+        <h2>Appearance</h2>
+        <p>Customize how CC Insights looks and displays information</p>
+      </div>
+
+      <div class="setting">
+        <div class="setting-header">
+          <div class="setting-name">Agents List Location</div>
+          <div class="dropdown">
+            <select>
+              <option>Vertical Panel</option>
+              <option selected>Horizontal Toolbar</option>
+              <option>Stacked Panel</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-description">
+          Controls where the agents panel is displayed. <code>Vertical Panel</code> shows agents in a dedicated sidebar column. <code>Stacked</code> shares the sidebar between sessions and agents. <code>Horizontal Toolbar</code> shows agents above the conversation.
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="setting-header">
+          <div class="setting-name">Bash Tool Summary</div>
+          <div class="dropdown">
+            <select>
+              <option selected>Description</option>
+              <option>Command</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-description">
+          How to display bash commands in the conversation. <code>Description</code> shows a human-readable summary of what the command does. <code>Command</code> shows the actual command text.
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="setting-header">
+          <div class="setting-name">Relative File Paths</div>
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-description">
+          Show file paths relative to the project directory instead of absolute paths. Makes tool output more compact and readable when working within a project.
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="setting-header">
+          <div class="setting-name">Show Timestamps</div>
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-description">
+          Display timestamps next to messages in the conversation view. Helps track timing during long debugging sessions.
+        </div>
+      </div>
+
+      <div class="setting">
+        <div class="setting-header">
+          <div class="setting-name">Timestamp Idle Threshold</div>
+          <input type="number" class="number-input" value="5">
+        </div>
+        <div class="setting-description">
+          Only show timestamps after this many minutes of inactivity. Set to <code>0</code> to show timestamps on every message regardless of timing.
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

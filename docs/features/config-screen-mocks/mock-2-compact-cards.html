@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings Mock 2: Compact Cards</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #1e1e2e;
+      --bg-card: #232334;
+      --bg-card-hover: #2a2a3d;
+      --bg-input: #181825;
+      --text-primary: #cdd6f4;
+      --text-secondary: #a6adc8;
+      --text-muted: #6c7086;
+      --accent: #cba6f7;
+      --accent-subtle: rgba(203, 166, 247, 0.1);
+      --border: #313244;
+      --switch-bg: #45475a;
+      --switch-on: #cba6f7;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, var(--accent-subtle), transparent);
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+
+    .setting-row:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .setting-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .setting-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    .setting-description {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Compact dropdown */
+    .dropdown {
+      position: relative;
+    }
+
+    .dropdown select {
+      appearance: none;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 30px 6px 12px;
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
+      min-width: 160px;
+    }
+
+    .dropdown::after {
+      content: '';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .dropdown select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Mini toggle */
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: var(--switch-bg);
+      border-radius: 22px;
+      transition: 0.2s;
+    }
+
+    .toggle-slider::before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-muted);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background-color: var(--switch-on);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(18px);
+      background-color: var(--bg-primary);
+    }
+
+    /* Compact number input */
+    .number-input {
+      width: 60px;
+      padding: 6px 8px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .number-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .number-unit {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+    }
+
+    /* Reset footer */
+    .footer {
+      display: flex;
+      justify-content: center;
+      margin-top: 32px;
+    }
+
+    .reset-link {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .reset-link:hover {
+      color: var(--accent);
+    }
+
+    /* Indicator for non-default values */
+    .modified {
+      position: relative;
+    }
+
+    .modified::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 60%;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Settings</h1>
+      <p>Configure your CC Insights preferences</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Appearance</div>
+      <div class="card">
+        <div class="setting-row modified">
+          <div class="setting-info">
+            <div class="setting-name">Agents List Location</div>
+            <div class="setting-description">Where to display the agents panel</div>
+          </div>
+          <div class="dropdown">
+            <select>
+              <option>Vertical Panel</option>
+              <option selected>Horizontal Toolbar</option>
+              <option>Stacked Panel</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Bash Tool Summary</div>
+            <div class="setting-description">Description or actual command text</div>
+          </div>
+          <div class="dropdown">
+            <select>
+              <option selected>Description</option>
+              <option>Command</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row modified">
+          <div class="setting-info">
+            <div class="setting-name">Relative File Paths</div>
+            <div class="setting-description">Show paths relative to project directory</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Show Timestamps</div>
+            <div class="setting-description">Display timestamps in conversation</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Timestamp Idle Threshold</div>
+            <div class="setting-description">Minutes before showing timestamp</div>
+          </div>
+          <div class="input-group">
+            <input type="number" class="number-input" value="5">
+            <span class="number-unit">min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Behavior</div>
+      <div class="card">
+        <div class="setting-row modified">
+          <div class="setting-info">
+            <div class="setting-name">Auto-scroll on Message</div>
+            <div class="setting-description">Scroll to bottom on new messages</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Notify on Prompt</div>
+            <div class="setting-description">System notification when input needed</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Session Defaults</div>
+      <div class="card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Default Model</div>
+            <div class="setting-description">Model for new sessions</div>
+          </div>
+          <div class="dropdown">
+            <select>
+              <option selected>Claude Sonnet</option>
+              <option>Claude Opus</option>
+              <option>Claude Haiku</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Developer</div>
+      <div class="card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Debug Logging</div>
+            <div class="setting-description">Write debug info to console</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Show Raw Messages</div>
+            <div class="setting-description">Inspect raw JSON from SDK</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <a class="reset-link">Reset all settings to defaults</a>
+    </div>
+  </div>
+</body>
+</html>

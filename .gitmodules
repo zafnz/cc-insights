@@ -1,0 +1,6 @@
+[submodule "cc-insights-test-repo"]
+	path = cc-insights-test-repo
+	url = https://github.com/zafnz/cc-insights-test-repo.git
+[submodule "packages/drag_split_layout"]
+	path = packages/drag_split_layout
+	url = https://github.com/zafnz/drag_split_layout.git

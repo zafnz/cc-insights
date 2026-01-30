@@ -1,0 +1,1308 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:claude_sdk/claude_sdk.dart' as sdk;
+import 'package:flutter/foundation.dart';
+
+import '../services/backend_service.dart';
+import '../services/persistence_models.dart';
+import '../services/persistence_service.dart';
+import '../services/sdk_message_handler.dart';
+import 'agent.dart';
+import 'context_tracker.dart';
+import 'conversation.dart';
+import 'output_entry.dart';
+
+/// Available Claude models.
+enum ClaudeModel {
+  haiku('Haiku', 'haiku'),
+  sonnet('Sonnet', 'sonnet'),
+  opus('Opus', 'opus');
+
+  const ClaudeModel(this.label, this.apiName);
+
+  /// Display label for the model.
+  final String label;
+
+  /// API name sent to the backend.
+  final String apiName;
+}
+
+/// Permission modes for tool execution.
+enum PermissionMode {
+  /// Requires permission for most operations.
+  defaultMode('Default', 'default'),
+
+  /// Auto-approves file operations within project directory.
+  acceptEdits('Accept Edits', 'acceptEdits'),
+
+  /// Planning mode with restricted tool access.
+  plan('Plan Only', 'plan'),
+
+  /// Dangerous: approves everything without asking.
+  bypass('Bypass All', 'bypassPermissions');
+
+  const PermissionMode(this.label, this.apiName);
+
+  /// Display label for the mode.
+  final String label;
+
+  /// API name sent to the backend.
+  final String apiName;
+}
+
+/// Immutable data class representing a chat.
+///
+/// A chat is a user-facing conversation unit that belongs to a worktree.
+/// It contains a primary conversation for user interaction and zero or more
+/// subagent conversations that are read-only.
+///
+/// Use [copyWith] to create modified copies of this immutable class.
+@immutable
+class ChatData {
+  /// Unique identifier for this chat.
+  final String id;
+
+  /// User-visible name for this chat.
+  final String name;
+
+  /// The path to the worktree this chat belongs to.
+  ///
+  /// This references the parent worktree's root directory.
+  /// May be null for testing or standalone chats.
+  final String? worktreeRoot;
+
+  /// When this chat was created.
+  /// May be null for testing chats.
+  final DateTime? createdAt;
+
+  /// The primary conversation for this chat.
+  ///
+  /// Users interact with this conversation via the input box. It is always
+  /// present and allows user input.
+  final ConversationData primaryConversation;
+
+  /// Subagent conversations keyed by conversation ID.
+  ///
+  /// These are created when the SDK spawns subagents via the Task tool.
+  /// Subagent conversations are read-only - users cannot send input to them.
+  final Map<String, ConversationData> subagentConversations;
+
+  /// Creates a [ChatData] instance.
+  const ChatData({
+    required this.id,
+    required this.name,
+    this.worktreeRoot,
+    this.createdAt,
+    required this.primaryConversation,
+    this.subagentConversations = const {},
+  });
+
+  /// Creates a new chat with default values.
+  ///
+  /// Generates a unique ID and creates an empty primary conversation.
+  factory ChatData.create({
+    required String name,
+    required String worktreeRoot,
+  }) {
+    final id = 'chat-${DateTime.now().millisecondsSinceEpoch}';
+    return ChatData(
+      id: id,
+      name: name,
+      worktreeRoot: worktreeRoot,
+      createdAt: DateTime.now(),
+      primaryConversation: ConversationData.primary(id: 'conv-primary-$id'),
+      subagentConversations: const {},
+    );
+  }
+
+  /// Returns all conversations in this chat.
+  ///
+  /// The primary conversation is always first, followed by subagent
+  /// conversations in no particular order.
+  List<ConversationData> get allConversations => [
+    primaryConversation,
+    ...subagentConversations.values,
+  ];
+
+  /// Creates a copy with the given fields replaced.
+  ChatData copyWith({
+    String? id,
+    String? name,
+    String? worktreeRoot,
+    DateTime? createdAt,
+    ConversationData? primaryConversation,
+    Map<String, ConversationData>? subagentConversations,
+  }) {
+    return ChatData(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      worktreeRoot: worktreeRoot ?? this.worktreeRoot,
+      createdAt: createdAt ?? this.createdAt,
+      primaryConversation: primaryConversation ?? this.primaryConversation,
+      subagentConversations:
+          subagentConversations ?? this.subagentConversations,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ChatData &&
+        other.id == id &&
+        other.name == name &&
+        other.worktreeRoot == worktreeRoot &&
+        other.createdAt == createdAt &&
+        other.primaryConversation == primaryConversation &&
+        mapEquals(other.subagentConversations, subagentConversations);
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      id,
+      name,
+      worktreeRoot,
+      createdAt,
+      primaryConversation,
+      Object.hashAll(subagentConversations.entries),
+    );
+  }
+
+  @override
+  String toString() {
+    return 'ChatData(id: $id, name: $name, worktreeRoot: $worktreeRoot, '
+        'createdAt: $createdAt, '
+        'subagentConversations: ${subagentConversations.length})';
+  }
+}
+
+/// Mutable state holder for a chat.
+///
+/// Extends [ChangeNotifier] to notify listeners when state changes.
+/// Manages both persistent data ([ChatData]) and runtime ephemeral state
+/// like the active SDK session and agents.
+///
+/// Key responsibilities:
+/// - Holding the immutable [ChatData] and providing mutation methods
+/// - Managing the SDK session lifecycle
+/// - Tracking active agents (runtime-only, not persisted)
+/// - Managing conversation selection within this chat
+class ChatState extends ChangeNotifier {
+  ChatData _data;
+
+  /// The SDK session for this chat.
+  ///
+  /// Null when no session is active.
+  sdk.ClaudeSession? _session;
+
+  /// Subscription to the session's message stream.
+  StreamSubscription<sdk.SDKMessage>? _messageSubscription;
+
+  /// Subscription to the session's permission request stream.
+  StreamSubscription<sdk.PermissionRequest>? _permissionSubscription;
+
+  /// Queue of pending permission requests.
+  ///
+  /// Multiple permission requests can arrive concurrently (e.g., when Claude
+  /// is working on parallel tasks). This queue ensures all requests are
+  /// displayed to the user in order, rather than only showing the most recent.
+  final List<sdk.PermissionRequest> _pendingPermissions = [];
+
+  /// Whether Claude is currently working (processing a request).
+  ///
+  /// True when a session is active and Claude is generating a response.
+  /// Set to true when a message is sent, set to false when a result or
+  /// error is received.
+  bool _isWorking = false;
+
+  /// Whether the context is currently being compacted.
+  ///
+  /// True when compaction has started (status: "compacting" received),
+  /// false when compaction ends (status: null received).
+  bool _isCompacting = false;
+
+  /// Active agents keyed by SDK agent ID.
+  ///
+  /// Agents are runtime-only and are discarded when the session ends.
+  /// Maps SDK agent IDs to [Agent] instances.
+  final Map<String, Agent> _activeAgents = {};
+
+  /// The ID of the currently selected conversation.
+  ///
+  /// Null means the primary conversation is selected.
+  String? _selectedConversationId;
+
+  /// The selected Claude model for this chat.
+  ClaudeModel _model = ClaudeModel.sonnet;
+
+  /// The permission mode for this chat.
+  PermissionMode _permissionMode = PermissionMode.defaultMode;
+
+  /// The last SDK session ID for this chat, used for session resume.
+  ///
+  /// Set when a session is created successfully.
+  /// Cleared when a session ends or errors out.
+  /// Persisted to projects.json for resume across app restarts.
+  String? _lastSessionId;
+
+  /// The project root path for persistence updates.
+  ///
+  /// Set when the chat is associated with a project via [initPersistence].
+  /// Required for updating lastSessionId in projects.json.
+  String? _projectRoot;
+
+  /// The worktree path for this chat.
+  ///
+  /// Comes from ChatData.worktreeRoot but stored separately for persistence.
+  String? get _worktreePath => _data.worktreeRoot;
+
+  /// The project ID for persistence.
+  ///
+  /// Set when the chat is associated with a project via [initPersistence].
+  /// When null, persistence is disabled (e.g., in tests).
+  String? _projectId;
+
+  /// Timer for debouncing meta saves.
+  ///
+  /// Prevents excessive file writes when model/permissions change rapidly.
+  Timer? _metaSaveTimer;
+
+  /// Context window tracking for this chat.
+  final ContextTracker _contextTracker = ContextTracker();
+
+  /// Cumulative usage for this chat across all sessions.
+  UsageInfo _cumulativeUsage = const UsageInfo.zero();
+
+  /// Per-model usage breakdown for this chat.
+  List<ModelUsageInfo> _modelUsage = [];
+
+  /// Base usage from previous sessions (for resume support).
+  ///
+  /// When a chat resumes from a previous session, we need to add the
+  /// previous session's final usage to the new session's cumulative values.
+  /// This is set by [restoreFromMeta] and cleared when a new session starts
+  /// without resuming.
+  UsageInfo _baseUsage = const UsageInfo.zero();
+
+  /// Base per-model usage from previous sessions (for resume support).
+  List<ModelUsageInfo> _baseModelUsage = [];
+
+  /// The persistence service instance.
+  ///
+  /// Can be overridden for testing.
+  @visibleForTesting
+  PersistenceService persistenceService = PersistenceService();
+
+  /// Creates a [ChatState] with the given data.
+  ChatState(this._data);
+
+  /// Creates a new [ChatState] with a newly created chat.
+  factory ChatState.create({
+    required String name,
+    required String worktreeRoot,
+  }) {
+    return ChatState(ChatData.create(name: name, worktreeRoot: worktreeRoot));
+  }
+
+  /// Initializes persistence for this chat.
+  ///
+  /// Must be called after the chat is associated with a project.
+  /// Creates the necessary directories for persistence.
+  ///
+  /// The [projectId] is used to locate the persistence directory.
+  /// The [projectRoot] is the absolute path to the project root, used for
+  /// updating lastSessionId in projects.json.
+  ///
+  /// When persistence is initialized:
+  /// - New entries are automatically appended to the JSONL file
+  /// - Model/permission changes trigger debounced meta saves
+  /// - Session ID changes update projects.json
+  Future<void> initPersistence(String projectId, {String? projectRoot}) async {
+    _projectId = projectId;
+    _projectRoot = projectRoot;
+    await persistenceService.ensureDirectories(projectId);
+  }
+
+  /// The project ID for persistence, if initialized.
+  ///
+  /// Returns null if persistence has not been initialized.
+  String? get projectId => _projectId;
+
+  /// Context window tracking for this chat.
+  ContextTracker get contextTracker => _contextTracker;
+
+  /// Cumulative usage for this chat across all sessions.
+  UsageInfo get cumulativeUsage => _cumulativeUsage;
+
+  /// Per-model usage breakdown from the last result message.
+  List<ModelUsageInfo> get modelUsage => List.unmodifiable(_modelUsage);
+
+  /// The immutable chat data.
+  ChatData get data => _data;
+
+  /// Whether there is an active SDK session.
+  bool get hasActiveSession => _session != null || _testHasActiveSession;
+
+  /// Whether the chat is waiting for a permission response from the user.
+  bool get isWaitingForPermission => _pendingPermissions.isNotEmpty;
+
+  /// The currently pending permission request, if any.
+  ///
+  /// Returns the first request in the queue (FIFO order).
+  sdk.PermissionRequest? get pendingPermission =>
+      _pendingPermissions.isNotEmpty ? _pendingPermissions.first : null;
+
+  /// The number of pending permission requests in the queue.
+  int get pendingPermissionCount => _pendingPermissions.length;
+
+  /// Whether Claude is currently working (processing a request).
+  ///
+  /// True when a session is active and Claude is generating a response.
+  bool get isWorking => _isWorking;
+
+  /// Whether the context is currently being compacted.
+  ///
+  /// When true, the UI should show "Compacting context..." instead of
+  /// the regular "Claude is working" indicator.
+  bool get isCompacting => _isCompacting;
+
+  /// The currently active agents.
+  ///
+  /// Returns an unmodifiable view of the active agents map.
+  Map<String, Agent> get activeAgents => Map.unmodifiable(_activeAgents);
+
+  /// The currently selected conversation.
+  ///
+  /// Returns the primary conversation if [_selectedConversationId] is null,
+  /// otherwise returns the subagent conversation with that ID.
+  ConversationData get selectedConversation {
+    if (_selectedConversationId == null) {
+      return _data.primaryConversation;
+    }
+    return _data.subagentConversations[_selectedConversationId] ??
+        _data.primaryConversation;
+  }
+
+  /// Whether user input is enabled for the current selection.
+  ///
+  /// Input is only enabled when viewing the primary conversation.
+  /// Subagent conversations are read-only.
+  bool get isInputEnabled => _selectedConversationId == null;
+
+  /// The selected Claude model for this chat.
+  ClaudeModel get model => _model;
+
+  /// The permission mode for this chat.
+  PermissionMode get permissionMode => _permissionMode;
+
+  /// The last SDK session ID for this chat, used for session resume.
+  ///
+  /// Null if no session has been started, or if the last session ended.
+  String? get lastSessionId => _lastSessionId;
+
+  /// Sets the last session ID for this chat.
+  ///
+  /// Called by [ProjectRestoreService] when restoring a chat from persistence.
+  /// This allows the session ID to be restored without triggering a persistence
+  /// save (since it's already persisted).
+  void setLastSessionIdFromRestore(String? sessionId) {
+    _lastSessionId = sessionId;
+  }
+
+  /// Sets the Claude model for this chat.
+  ///
+  /// If a session is active, this also updates the model on the running session.
+  void setModel(ClaudeModel model) {
+    if (_model != model) {
+      _model = model;
+      _scheduleMetaSave();
+      // Update the model on the active session if one exists
+      _session?.setModel(model.apiName);
+      notifyListeners();
+    }
+  }
+
+  /// Sets the permission mode for this chat.
+  ///
+  /// If a session is active, this also updates the permission mode on the
+  /// running session.
+  void setPermissionMode(PermissionMode mode) {
+    if (_permissionMode != mode) {
+      _permissionMode = mode;
+      _scheduleMetaSave();
+      // Update the permission mode on the active session if one exists
+      _session?.setPermissionMode(_sdkPermissionMode);
+      notifyListeners();
+    }
+  }
+
+  /// Renames this chat.
+  ///
+  /// Updates the in-memory state and persists the new name to projects.json.
+  void rename(String newName) {
+    _data = _data.copyWith(name: newName);
+    notifyListeners();
+    _persistRename(newName);
+  }
+
+  /// Persists the chat rename to projects.json.
+  ///
+  /// Does nothing if persistence is not properly initialized.
+  void _persistRename(String newName) {
+    if (_projectRoot == null || _worktreePath == null) {
+      return;
+    }
+    // Fire and forget - persistence errors are logged but don't block UI
+    persistenceService.renameChatInIndex(
+      projectRoot: _projectRoot!,
+      worktreePath: _worktreePath!,
+      chatId: _data.id,
+      newName: newName,
+    );
+  }
+
+  /// Selects a conversation within this chat.
+  ///
+  /// Pass null to select the primary conversation.
+  /// Pass a conversation ID to select a subagent conversation.
+  void selectConversation(String? conversationId) {
+    if (_selectedConversationId != conversationId) {
+      _selectedConversationId = conversationId;
+      notifyListeners();
+    }
+  }
+
+  /// Resets conversation selection to the primary conversation.
+  ///
+  /// Called when this chat is selected to ensure the user sees
+  /// the main conversation first.
+  void resetToMainConversation() {
+    if (_selectedConversationId != null) {
+      _selectedConversationId = null;
+      notifyListeners();
+    }
+  }
+
+  /// Adds a new subagent conversation.
+  ///
+  /// Creates a new conversation with the given label and task description,
+  /// and creates a corresponding [Agent] linked to it.
+  ///
+  /// The [sdkAgentId] is the SDK's internal agent identifier used to route
+  /// messages to the correct agent.
+  void addSubagentConversation(
+    String sdkAgentId,
+    String label,
+    String? taskDescription,
+  ) {
+    final conversationId = 'conv-${DateTime.now().millisecondsSinceEpoch}';
+    final conversation = ConversationData.subagent(
+      id: conversationId,
+      label: label,
+      taskDescription: taskDescription,
+    );
+
+    _data = _data.copyWith(
+      subagentConversations: {
+        ..._data.subagentConversations,
+        conversationId: conversation,
+      },
+    );
+
+    _activeAgents[sdkAgentId] = Agent.working(
+      sdkAgentId: sdkAgentId,
+      conversationId: conversationId,
+    );
+
+    notifyListeners();
+  }
+
+  /// Updates an agent's status.
+  ///
+  /// The [sdkAgentId] identifies which agent to update.
+  /// The [status] is the new status for the agent.
+  /// The optional [result] is set when the agent completes or errors.
+  /// The optional [resumeId] is the SDK's short agent ID for resuming.
+  void updateAgent(
+    AgentStatus status,
+    String sdkAgentId, {
+    String? result,
+    String? resumeId,
+  }) {
+    final agent = _activeAgents[sdkAgentId];
+    if (agent != null) {
+      _activeAgents[sdkAgentId] = agent.copyWith(
+        status: status,
+        result: result,
+        resumeId: resumeId ?? agent.resumeId,
+      );
+      notifyListeners();
+    }
+  }
+
+  /// Finds an agent by its SDK resume ID.
+  ///
+  /// The [resumeId] is the short agent ID returned by the SDK (e.g., "adba350")
+  /// that can be used with the Task tool's `resume` parameter.
+  ///
+  /// Returns null if no agent with that resume ID exists.
+  Agent? findAgentByResumeId(String resumeId) {
+    for (final agent in _activeAgents.values) {
+      if (agent.resumeId == resumeId) {
+        return agent;
+      }
+    }
+    return null;
+  }
+
+  /// Adds an output entry to the primary conversation.
+  ///
+  /// Convenience method for adding entries to the main conversation.
+  void addEntry(OutputEntry entry) {
+    addOutputEntry(_data.primaryConversation.id, entry);
+  }
+
+  /// Adds an output entry to a conversation.
+  ///
+  /// The [conversationId] identifies which conversation to add to.
+  /// The [entry] is the output entry to append.
+  ///
+  /// If persistence is initialized, the entry is also appended to the
+  /// chat's JSONL file. Only primary conversation entries are persisted.
+  void addOutputEntry(String conversationId, OutputEntry entry) {
+    if (conversationId == _data.primaryConversation.id) {
+      _data = _data.copyWith(
+        primaryConversation: _data.primaryConversation.copyWith(
+          entries: [..._data.primaryConversation.entries, entry],
+        ),
+      );
+      // Persist entry to JSONL file (only for primary conversation)
+      _persistEntry(entry);
+    } else {
+      final conversation = _data.subagentConversations[conversationId];
+      if (conversation != null) {
+        _data = _data.copyWith(
+          subagentConversations: {
+            ..._data.subagentConversations,
+            conversationId: conversation.copyWith(
+              entries: [...conversation.entries, entry],
+            ),
+          },
+        );
+      }
+    }
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Session Lifecycle Methods
+  // ---------------------------------------------------------------------------
+
+  /// Starts a new SDK session for this chat.
+  ///
+  /// Creates a session via [BackendService] and subscribes to message and
+  /// permission request streams. The [messageHandler] is used to route
+  /// incoming messages to the appropriate conversation.
+  ///
+  /// If [lastSessionId] is set, attempts to resume that session instead of
+  /// creating a fresh one. This allows conversations to continue across app
+  /// restarts.
+  ///
+  /// Throws [StateError] if a session is already active.
+  /// Throws [StateError] if the chat has no worktree root.
+  Future<void> startSession({
+    required BackendService backend,
+    required SdkMessageHandler messageHandler,
+    required String prompt,
+  }) async {
+    if (_session != null) {
+      throw StateError('Session already active');
+    }
+
+    final worktreeRoot = _data.worktreeRoot;
+    if (worktreeRoot == null) {
+      throw StateError('Chat has no worktree root');
+    }
+
+    // Log if we're attempting to resume and add a session marker
+    final isResumingSession = _lastSessionId != null;
+    if (isResumingSession) {
+      developer.log(
+        'Attempting to resume session: $_lastSessionId',
+        name: 'ChatState',
+      );
+    }
+
+    // Create session with current settings, including resume if available
+    _session = await backend.createSession(
+      prompt: prompt,
+      cwd: worktreeRoot,
+      options: sdk.SessionOptions(
+        model: model.apiName,
+        permissionMode: _sdkPermissionMode,
+        resume: _lastSessionId,
+        // Load permission rules and MCP servers from user, project, and local settings files
+        settingSources: const ['user', 'project', 'local'],
+        // Use Claude Code's system prompt (includes CLAUDE.md support)
+        systemPrompt: const sdk.PresetSystemPrompt(),
+      ),
+    );
+
+    // Store the new session ID for future resume
+    final newSessionId = _session!.sdkSessionId;
+    if (newSessionId != null && newSessionId != _lastSessionId) {
+      developer.log(
+        'Session created with ID: $newSessionId',
+        name: 'ChatState',
+      );
+      _lastSessionId = newSessionId;
+      // Persist the session ID to projects.json (fire-and-forget)
+      _persistSessionId(newSessionId);
+    }
+
+    // Add a session resumed marker if we successfully resumed
+    if (isResumingSession && newSessionId != null) {
+      developer.log(
+        'Session resumed successfully, adding marker',
+        name: 'ChatState',
+      );
+      addEntry(SessionMarkerEntry(
+        timestamp: DateTime.now(),
+        markerType: SessionMarkerType.resumed,
+      ));
+    }
+
+    // Subscribe to message stream - handler takes ChatState as parameter
+    _messageSubscription = _session!.messages.listen(
+      (msg) {
+        // Update session ID if it changes during the session
+        final msgSessionId = msg.sessionId;
+        if (msgSessionId.isNotEmpty && msgSessionId != _lastSessionId) {
+          developer.log(
+            'Session ID updated from message: $msgSessionId',
+            name: 'ChatState',
+          );
+          _lastSessionId = msgSessionId;
+          _persistSessionId(msgSessionId);
+        }
+        messageHandler.handleMessage(this, msg.rawJson ?? {});
+      },
+      onError: _handleError,
+      onDone: _handleSessionEnd,
+    );
+
+    // Subscribe to permission requests
+    _permissionSubscription = _session!.permissionRequests.listen(
+      (req) {
+        setPendingPermission(req);
+      },
+    );
+
+    // Mark as working since we're starting with a prompt
+    _isWorking = true;
+
+    notifyListeners();
+  }
+
+  /// Sends a message to the active session.
+  ///
+  /// Adds a user input entry to the conversation and sends the message
+  /// to the SDK session. Sets the working state to true.
+  ///
+  /// If [images] is provided and non-empty, the message is sent with
+  /// content blocks including the images.
+  ///
+  /// Throws [StateError] if no session is active.
+  Future<void> sendMessage(
+    String text, {
+    List<AttachedImage> images = const [],
+  }) async {
+    if (_session == null) {
+      throw StateError('No active session');
+    }
+
+    // Add user message to conversation
+    addEntry(UserInputEntry(
+      timestamp: DateTime.now(),
+      text: text,
+      images: images,
+    ));
+
+    // Mark as working
+    setWorking(true);
+
+    // Send to SDK - use content blocks if images are attached
+    if (images.isNotEmpty) {
+      final content = <sdk.ContentBlock>[
+        sdk.TextBlock(text: text),
+        ...images.map((img) => sdk.ImageBlock(
+              source: sdk.ImageSource(
+                type: 'base64',
+                mediaType: img.mediaType,
+                data: img.base64,
+              ),
+            )),
+      ];
+      await _session!.sendWithContent(content);
+    } else {
+      await _session!.send(text);
+    }
+  }
+
+  /// Stops the current session.
+  ///
+  /// Cancels stream subscriptions, kills the session, and clears
+  /// session-related state. Active agents are also cleared.
+  Future<void> stopSession() async {
+    await _messageSubscription?.cancel();
+    await _permissionSubscription?.cancel();
+    await _session?.kill();
+
+    _session = null;
+    _messageSubscription = null;
+    _permissionSubscription = null;
+    _pendingPermissions.clear();
+    _activeAgents.clear();
+
+    notifyListeners();
+  }
+
+  /// Interrupts the current session without killing it.
+  ///
+  /// This preserves the conversation context and allows Claude to continue
+  /// after the interruption. Use this when the user wants to stop the current
+  /// response but may want to continue the conversation.
+  ///
+  /// Does nothing if no session is active.
+  Future<void> interrupt() async {
+    // Check if we have an active session (either real or test)
+    if (!hasActiveSession) return;
+
+    developer.log('Interrupting session', name: 'ChatState');
+
+    // Only call SDK interrupt if we have a real session
+    if (_session != null) {
+      await _session!.interrupt();
+    }
+
+    // Clear the working/compacting state - Claude will stop generating
+    _isWorking = false;
+    _isCompacting = false;
+
+    // Update all active agents to error state since they were interrupted
+    for (final sdkAgentId in _activeAgents.keys.toList()) {
+      final agent = _activeAgents[sdkAgentId];
+      if (agent != null && agent.status == AgentStatus.working) {
+        _activeAgents[sdkAgentId] = agent.copyWith(
+          status: AgentStatus.error,
+          result: 'Interrupted by user',
+        );
+      }
+    }
+
+    notifyListeners();
+  }
+
+  /// Adds a permission request to the queue.
+  ///
+  /// Permission requests are processed in FIFO order. When multiple requests
+  /// arrive concurrently, they are all queued and displayed to the user
+  /// one at a time.
+  void addPendingPermission(sdk.PermissionRequest request) {
+    _pendingPermissions.add(request);
+    notifyListeners();
+  }
+
+  /// @deprecated Use [addPendingPermission] instead.
+  ///
+  /// This method is kept for backwards compatibility but ignores null values.
+  void setPendingPermission(sdk.PermissionRequest? request) {
+    if (request != null) {
+      addPendingPermission(request);
+    }
+  }
+
+  /// Sets the working state.
+  ///
+  /// Called by [SdkMessageHandler] when starting/stopping work.
+  void setWorking(bool working) {
+    if (_isWorking != working) {
+      _isWorking = working;
+      notifyListeners();
+    }
+  }
+
+  /// Sets the compacting state.
+  ///
+  /// Called by [SdkMessageHandler] when receiving system status messages
+  /// for context compaction. The UI can use [isCompacting] to show a
+  /// different indicator during compaction.
+  void setCompacting(bool compacting) {
+    if (_isCompacting != compacting) {
+      _isCompacting = compacting;
+      notifyListeners();
+    }
+  }
+
+  /// Responds to the current pending permission request with allow.
+  ///
+  /// If [updatedInput] is provided, it will be sent with the allow response.
+  /// If [updatedPermissions] is provided, it will update the permission rules.
+  ///
+  /// After allowing, the next request in the queue (if any) becomes current.
+  void allowPermission({
+    Map<String, dynamic>? updatedInput,
+    List<dynamic>? updatedPermissions,
+  }) {
+    if (_pendingPermissions.isEmpty) return;
+
+    final request = _pendingPermissions.removeAt(0);
+    request.allow(
+      updatedInput: updatedInput,
+      updatedPermissions: updatedPermissions,
+    );
+    notifyListeners();
+  }
+
+  /// Responds to the current pending permission request with deny.
+  ///
+  /// The [message] explains why the permission was denied.
+  /// If [interrupt] is true, the session will be interrupted.
+  ///
+  /// After denying, the next request in the queue (if any) becomes current.
+  void denyPermission(String message, {bool interrupt = false}) {
+    if (_pendingPermissions.isEmpty) return;
+
+    final request = _pendingPermissions.removeAt(0);
+    request.deny(message, interrupt: interrupt);
+    notifyListeners();
+  }
+
+  /// Removes a pending permission request by tool use ID.
+  ///
+  /// This handles the timeout case: when the SDK times out waiting for
+  /// permission, it sends a tool result (denied), and we should dismiss
+  /// the stale permission widget.
+  ///
+  /// This is safe for parallel tool calls because we match by toolUseId,
+  /// so only the specific tool's permission is cleared, not others.
+  void removePendingPermissionByToolUseId(String toolUseId) {
+    final before = _pendingPermissions.length;
+    _pendingPermissions.removeWhere((req) => req.toolUseId == toolUseId);
+    if (_pendingPermissions.length != before) {
+      notifyListeners();
+    }
+  }
+
+  /// Handles errors from the session message stream.
+  void _handleError(Object error) {
+    developer.log(
+      'Session error: $error',
+      name: 'ChatState',
+      error: error,
+    );
+
+    // Add error entry to conversation
+    addEntry(TextOutputEntry(
+      timestamp: DateTime.now(),
+      text: 'Error: $error',
+      contentType: 'error',
+    ));
+
+    // Clear session ID on error - the session may be in an invalid state
+    // and cannot be resumed
+    _lastSessionId = null;
+    _persistSessionId(null);
+  }
+
+  /// Handles session end (when the message stream closes).
+  void _handleSessionEnd() {
+    developer.log(
+      'Session ended',
+      name: 'ChatState',
+    );
+
+    _session = null;
+    _isWorking = false;
+    _isCompacting = false;
+    _messageSubscription = null;
+    _permissionSubscription = null;
+    _pendingPermissions.clear();
+    _activeAgents.clear();
+
+    // Note: We intentionally do NOT clear _lastSessionId here.
+    // The session ID can still be used to resume a conversation even after
+    // the stream closes. Only clear it on explicit errors or user action.
+
+    notifyListeners();
+  }
+
+  /// Converts the chat's permission mode to SDK permission mode.
+  sdk.PermissionMode get _sdkPermissionMode {
+    return switch (_permissionMode) {
+      PermissionMode.defaultMode => sdk.PermissionMode.defaultMode,
+      PermissionMode.acceptEdits => sdk.PermissionMode.acceptEdits,
+      PermissionMode.plan => sdk.PermissionMode.plan,
+      PermissionMode.bypass => sdk.PermissionMode.bypassPermissions,
+    };
+  }
+
+  /// Sets the SDK session for this chat.
+  ///
+  /// This is a low-level method for testing. Prefer [startSession] for
+  /// creating sessions in production code.
+  @visibleForTesting
+  void setSession(sdk.ClaudeSession? session) {
+    _session = session;
+    notifyListeners();
+  }
+
+  /// Marks the chat as having an active session for testing purposes.
+  ///
+  /// This is used in tests where we need to simulate an active session
+  /// without having an actual [ClaudeSession] instance.
+  @visibleForTesting
+  void setHasActiveSessionForTesting(bool hasSession) {
+    if (hasSession) {
+      // We can't create a real ClaudeSession, but for testing hasActiveSession
+      // we need _session to be non-null. Since ClaudeSession has a private
+      // constructor, we use a sentinel approach with a test-only field.
+      _testHasActiveSession = true;
+    } else {
+      _testHasActiveSession = false;
+      _session = null;
+    }
+    notifyListeners();
+  }
+
+  /// Test-only flag to override hasActiveSession.
+  ///
+  /// When true, hasActiveSession returns true even if _session is null.
+  /// This is only for testing purposes.
+  // ignore: invalid_visibility_annotation
+  bool _testHasActiveSession = false;
+
+  /// Clears the SDK session and active agents.
+  ///
+  /// Call this when the session ends (e.g., after `/clear` command).
+  /// Agents are discarded but conversations persist.
+  void clearSession() {
+    _session = null;
+    _testHasActiveSession = false;
+    _isWorking = false;
+    _isCompacting = false;
+    _messageSubscription?.cancel();
+    _permissionSubscription?.cancel();
+    _messageSubscription = null;
+    _permissionSubscription = null;
+    _pendingPermissions.clear();
+    _activeAgents.clear();
+    notifyListeners();
+  }
+
+  /// Clears all entries from the primary conversation.
+  ///
+  /// Useful for testing/replay scenarios where we want to reset state.
+  void clearEntries() {
+    _data = _data.copyWith(
+      primaryConversation: _data.primaryConversation.copyWith(
+        entries: const [],
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// Loads entries from persistence without triggering persistence writes.
+  ///
+  /// This is used when restoring chat history from disk. The entries are
+  /// already persisted, so we don't want to re-write them.
+  ///
+  /// Replaces any existing entries in the primary conversation.
+  void loadEntriesFromPersistence(List<OutputEntry> entries) {
+    _data = _data.copyWith(
+      primaryConversation: _data.primaryConversation.copyWith(
+        entries: List.unmodifiable(entries),
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// Whether the chat history has been loaded from persistence.
+  ///
+  /// Returns true if the primary conversation has any entries.
+  /// Used to determine if lazy-loading is needed when a chat is selected.
+  bool get hasLoadedHistory => _data.primaryConversation.entries.isNotEmpty;
+
+  // ---------------------------------------------------------------------------
+  // Context and Usage Tracking Methods
+  // ---------------------------------------------------------------------------
+
+  /// Updates context tracking from an assistant message's usage data.
+  void updateContextFromUsage(Map<String, dynamic> usage) {
+    _contextTracker.updateFromUsage(usage);
+    // No need to notifyListeners - ContextTracker is a ChangeNotifier itself
+  }
+
+  /// Updates usage from a result message.
+  ///
+  /// The SDK provides session-cumulative values in `modelUsage` and
+  /// `total_cost_usd`. We add the base offset from previous sessions
+  /// to get the chat-wide total.
+  ///
+  /// For multi-session chats (e.g., after resume), [_baseUsage] and
+  /// [_baseModelUsage] contain the totals from previous sessions.
+  void updateCumulativeUsage({
+    required UsageInfo usage,
+    required double totalCostUsd,
+    List<ModelUsageInfo>? modelUsage,
+    int? contextWindow,
+  }) {
+    // The SDK's modelUsage is session-cumulative (running total).
+    // Add base from previous sessions to get chat-wide totals.
+    if (modelUsage != null && modelUsage.isNotEmpty) {
+      // Merge session modelUsage with base modelUsage
+      _modelUsage = _mergeModelUsage(_baseModelUsage, modelUsage);
+
+      // Derive aggregate UsageInfo from merged modelUsage
+      int totalInput = 0;
+      int totalOutput = 0;
+      int totalCacheRead = 0;
+      int totalCacheCreation = 0;
+      double totalCost = 0;
+
+      for (final model in _modelUsage) {
+        totalInput += model.inputTokens;
+        totalOutput += model.outputTokens;
+        totalCacheRead += model.cacheReadTokens;
+        totalCacheCreation += model.cacheCreationTokens;
+        totalCost += model.costUsd;
+      }
+
+      _cumulativeUsage = UsageInfo(
+        inputTokens: totalInput,
+        outputTokens: totalOutput,
+        cacheReadTokens: totalCacheRead,
+        cacheCreationTokens: totalCacheCreation,
+        costUsd: totalCost,
+      );
+    }
+
+    // Update context window max if provided
+    if (contextWindow != null) {
+      _contextTracker.updateMaxTokens(contextWindow);
+    }
+
+    _scheduleMetaSave();
+    notifyListeners();
+  }
+
+  /// Merges base model usage with new session model usage.
+  ///
+  /// For each model, adds the base values to the session values.
+  /// Models only in base or only in session are included as-is.
+  List<ModelUsageInfo> _mergeModelUsage(
+    List<ModelUsageInfo> base,
+    List<ModelUsageInfo> session,
+  ) {
+    final result = <String, ModelUsageInfo>{};
+
+    // Start with base values
+    for (final model in base) {
+      result[model.modelName] = model;
+    }
+
+    // Add session values
+    for (final model in session) {
+      final existing = result[model.modelName];
+      if (existing != null) {
+        // Add session values to base
+        result[model.modelName] = ModelUsageInfo(
+          modelName: model.modelName,
+          inputTokens: existing.inputTokens + model.inputTokens,
+          outputTokens: existing.outputTokens + model.outputTokens,
+          cacheReadTokens: existing.cacheReadTokens + model.cacheReadTokens,
+          cacheCreationTokens:
+              existing.cacheCreationTokens + model.cacheCreationTokens,
+          costUsd: existing.costUsd + model.costUsd,
+          contextWindow: model.contextWindow, // Use latest
+        );
+      } else {
+        // New model in this session
+        result[model.modelName] = model;
+      }
+    }
+
+    return result.values.toList();
+  }
+
+  /// Resets context tracker (e.g., after /clear command).
+  void resetContext() {
+    _contextTracker.reset();
+  }
+
+  /// Restores context and usage from persisted ChatMeta.
+  ///
+  /// Called by ProjectRestoreService when loading a chat.
+  /// Sets up base usage for resume support - when a new session starts,
+  /// the base values are added to the session's cumulative values.
+  void restoreFromMeta(
+    ContextInfo context,
+    UsageInfo usage, {
+    List<ModelUsageInfo> modelUsage = const [],
+  }) {
+    _contextTracker.updateFromUsage({
+      'input_tokens': context.currentTokens,
+      'cache_creation_input_tokens': 0,
+      'cache_read_input_tokens': 0,
+    });
+    _contextTracker.updateMaxTokens(context.maxTokens);
+
+    // Set both current and base values from persisted state.
+    // The base values are used when a new session provides cumulative data -
+    // we add the base to get the chat-wide total.
+    _cumulativeUsage = usage;
+    _baseUsage = usage;
+    _modelUsage = List.from(modelUsage);
+    _baseModelUsage = List.from(modelUsage);
+
+    // Don't notify - this is called during initialization
+  }
+
+  // ---------------------------------------------------------------------------
+  // Persistence Methods
+  // ---------------------------------------------------------------------------
+
+  /// Persists an entry to the chat's JSONL file.
+  ///
+  /// Does nothing if persistence is not initialized ([_projectId] is null).
+  /// Errors are logged but do not throw to avoid breaking the UI.
+  Future<void> _persistEntry(OutputEntry entry) async {
+    if (_projectId == null) return;
+    try {
+      await persistenceService.appendChatEntry(_projectId!, _data.id, entry);
+    } catch (e) {
+      // Log error but don't throw - persistence failures shouldn't break UI
+      debugPrint('Failed to persist entry: $e');
+    }
+  }
+
+  /// Persists a tool result to the chat's JSONL file.
+  ///
+  /// This is called by [SdkMessageHandler] when a tool result arrives.
+  /// The result is stored as a separate [ToolResultEntry] which will be
+  /// merged with the corresponding [ToolUseOutputEntry] when the history
+  /// is loaded.
+  ///
+  /// Does nothing if persistence is not initialized.
+  void persistToolResult(String toolUseId, dynamic result, bool isError) {
+    if (_projectId == null) return;
+
+    final entry = ToolResultEntry(
+      timestamp: DateTime.now(),
+      toolUseId: toolUseId,
+      result: result,
+      isError: isError,
+    );
+
+    // Fire-and-forget
+    persistenceService
+        .appendChatEntry(_projectId!, _data.id, entry)
+        .catchError((e) {
+      debugPrint('Failed to persist tool result: $e');
+    });
+  }
+
+  /// Schedules a debounced save of the chat metadata.
+  ///
+  /// Cancels any pending save and schedules a new one for 1 second later.
+  /// This prevents excessive file writes when settings change rapidly.
+  void _scheduleMetaSave() {
+    if (_projectId == null) return;
+    _metaSaveTimer?.cancel();
+    _metaSaveTimer = Timer(const Duration(seconds: 1), _saveMeta);
+  }
+
+  /// Saves the chat metadata to disk.
+  ///
+  /// Creates a [ChatMeta] from the current state and persists it.
+  /// Errors are logged but do not throw to avoid breaking the UI.
+  Future<void> _saveMeta() async {
+    if (_projectId == null) return;
+    try {
+      final meta = ChatMeta(
+        model: _model.apiName,
+        permissionMode: _permissionMode.apiName,
+        createdAt: _data.createdAt ?? DateTime.now(),
+        lastActiveAt: DateTime.now(),
+        context: ContextInfo(
+          currentTokens: _contextTracker.currentTokens,
+          maxTokens: _contextTracker.maxTokens,
+        ),
+        usage: _cumulativeUsage,
+        modelUsage: _modelUsage,
+      );
+      await persistenceService.saveChatMeta(_projectId!, _data.id, meta);
+    } catch (e) {
+      // Log error but don't throw - persistence failures shouldn't break UI
+      debugPrint('Failed to save chat meta: $e');
+    }
+  }
+
+  /// Persists the session ID to projects.json.
+  ///
+  /// This is a fire-and-forget operation - errors are logged but don't block
+  /// the UI. The session ID is stored in the ChatReference within projects.json
+  /// to enable session resume across app restarts.
+  ///
+  /// Does nothing if persistence is not properly initialized (missing projectRoot
+  /// or worktreePath).
+  void _persistSessionId(String? sessionId) {
+    if (_projectRoot == null || _worktreePath == null) {
+      developer.log(
+        'Cannot persist session ID: projectRoot or worktreePath is null',
+        name: 'ChatState',
+        level: 900, // Warning
+      );
+      return;
+    }
+
+    // Fire-and-forget - don't await
+    persistenceService.updateChatSessionId(
+      projectRoot: _projectRoot!,
+      worktreePath: _worktreePath!,
+      chatId: _data.id,
+      sessionId: sessionId,
+    );
+  }
+
+  /// Notifies listeners that the state has changed.
+  ///
+  /// This is exposed for use by [SdkMessageHandler] when updating
+  /// entries in-place (e.g., tool result pairing).
+  // ignore: unnecessary_override - purposely exposed for external use
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    // Cancel any pending meta save.
+    _metaSaveTimer?.cancel();
+    // Cancel stream subscriptions.
+    _messageSubscription?.cancel();
+    _permissionSubscription?.cancel();
+    // Kill the session if active.
+    _session?.kill();
+    _session = null;
+    _testHasActiveSession = false;
+    _messageSubscription = null;
+    _permissionSubscription = null;
+    _pendingPermissions.clear();
+    _activeAgents.clear();
+    // Dispose the context tracker.
+    _contextTracker.dispose();
+    super.dispose();
+  }
+}
