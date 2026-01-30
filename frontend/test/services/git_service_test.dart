@@ -378,14 +378,14 @@ branch refs/heads/main''';
 
       // Use the current project as a real git repo for testing
       // This assumes tests are run from within a git repository
-      // Try from current directory first, then fall back to the flutter_app_v2 path
+      // Try from current directory first, then fall back to the frontend path
       var result = await Process.run('git', ['rev-parse', '--show-toplevel']);
       if (result.exitCode != 0) {
         // Try with explicit path to the project (for sandboxed test environments)
         result = await Process.run(
           'git',
           ['rev-parse', '--show-toplevel'],
-          workingDirectory: '/Users/zaf/projects/claude-project/flutter_app_v2',
+          workingDirectory: '/Users/zaf/projects/cc-insights/frontend',
         );
       }
       if (result.exitCode != 0) {

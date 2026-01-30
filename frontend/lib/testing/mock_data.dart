@@ -183,25 +183,25 @@ class MockDataFactory {
 
     // Try absolute path first (most reliable for this project)
     const absolutePath =
-        '/tmp/cc-insights/flutter_app_v2/$fileName';
+        '/tmp/cc-insights/frontend/$fileName';
     var file = tryPath(absolutePath);
     if (file.existsSync()) return file;
 
-    // Try current directory (works when running from flutter_app_v2)
+    // Try current directory (works when running from frontend)
     file = tryPath('${Directory.current.path}/$fileName');
     if (file.existsSync()) return file;
 
-    // Try current directory with flutter_app_v2 subdirectory
-    file = tryPath('${Directory.current.path}/flutter_app_v2/$fileName');
+    // Try current directory with frontend subdirectory
+    file = tryPath('${Directory.current.path}/frontend/$fileName');
     if (file.existsSync()) return file;
 
     // Try based on Platform.script (works in some contexts)
     try {
       final scriptPath = Platform.script.toFilePath();
-      if (scriptPath.contains('flutter_app_v2')) {
-        final idx = scriptPath.indexOf('flutter_app_v2');
+      if (scriptPath.contains('frontend')) {
+        final idx = scriptPath.indexOf('frontend');
         final projectRoot =
-            scriptPath.substring(0, idx + 'flutter_app_v2'.length);
+            scriptPath.substring(0, idx + 'frontend'.length);
         file = tryPath('$projectRoot/$fileName');
         if (file.existsSync()) return file;
       }
@@ -212,9 +212,9 @@ class MockDataFactory {
     // Try based on Platform.resolvedExecutable (works for compiled apps)
     try {
       final exePath = Platform.resolvedExecutable;
-      if (exePath.contains('flutter_app_v2')) {
-        final idx = exePath.indexOf('flutter_app_v2');
-        final projectRoot = exePath.substring(0, idx + 'flutter_app_v2'.length);
+      if (exePath.contains('frontend')) {
+        final idx = exePath.indexOf('frontend');
+        final projectRoot = exePath.substring(0, idx + 'frontend'.length);
         file = tryPath('$projectRoot/$fileName');
         if (file.existsSync()) return file;
       }
@@ -222,14 +222,14 @@ class MockDataFactory {
       // May not be available in all contexts
     }
 
-    // Try walking up from current directory looking for flutter_app_v2
+    // Try walking up from current directory looking for frontend
     var dir = Directory.current;
     for (var i = 0; i < 5; i++) {
-      file = tryPath('${dir.path}/flutter_app_v2/$fileName');
+      file = tryPath('${dir.path}/frontend/$fileName');
       if (file.existsSync()) return file;
 
-      // Check if we're already in flutter_app_v2
-      if (dir.path.endsWith('flutter_app_v2')) {
+      // Check if we're already in frontend
+      if (dir.path.endsWith('frontend')) {
         file = tryPath('${dir.path}/$fileName');
         if (file.existsSync()) return file;
       }

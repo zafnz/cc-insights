@@ -1076,7 +1076,7 @@ void main() {
   });
 }
 
-// Relative path to screenshots directory (relative to flutter_app_v2/)
+// Relative path to screenshots directory (relative to frontend/)
 const _screenshotsDir = 'screenshots';
 
 /// Takes a screenshot of the current widget tree and saves it to screenshots/.
