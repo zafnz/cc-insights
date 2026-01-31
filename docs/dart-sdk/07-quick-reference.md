@@ -53,6 +53,8 @@ A condensed reference for the Dart SDK architecture.
 
 ## Dart SDK API
 
+### Interactive Sessions
+
 ```dart
 // Spawn backend
 final backend = await ClaudeBackend.spawn();
@@ -84,6 +86,28 @@ await session.setModel('opus');
 
 // Cleanup
 await backend.dispose();
+```
+
+### One-Shot Requests
+
+```dart
+// Create client (no backend needed)
+final claude = ClaudeSingleRequest();
+
+// Make a single request
+final result = await claude.request(
+  prompt: 'Generate a commit message for staged changes',
+  workingDirectory: '/path/to/repo',
+  options: SingleRequestOptions(
+    model: 'haiku',
+    allowedTools: ['Bash(git:*)', 'Read'],
+  ),
+);
+
+if (result != null && !result.isError) {
+  print(result.result);
+  print('Cost: \$${result.totalCostUsd}');
+}
 ```
 
 ## SDK Message Types
@@ -156,11 +180,12 @@ backend-node/src/
 └── protocol.ts        # Message types
 
 dart_sdk/lib/
-├── claude_sdk.dart    # Exports
+├── claude_sdk.dart       # Exports
 └── src/
-    ├── backend.dart   # ClaudeBackend
-    ├── session.dart   # ClaudeSession
-    ├── protocol.dart  # JSON line I/O
+    ├── backend.dart      # ClaudeBackend
+    ├── session.dart      # ClaudeSession
+    ├── single_request.dart # ClaudeSingleRequest (one-shot)
+    ├── protocol.dart     # JSON line I/O
     └── types/
         ├── sdk_messages.dart
         ├── session_options.dart

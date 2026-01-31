@@ -7,6 +7,9 @@ library claude_sdk;
 // Core classes
 export 'src/core.dart' show ClaudeBackend, ClaudeSession;
 
+// Single request (one-shot CLI)
+export 'src/single_request.dart';
+
 // Types
 export 'src/types/sdk_messages.dart';
 export 'src/types/content_blocks.dart';

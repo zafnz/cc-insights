@@ -8,6 +8,7 @@ import 'models/project.dart';
 import 'models/worktree.dart';
 import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
+import 'services/ask_ai_service.dart';
 import 'services/backend_service.dart';
 import 'services/git_service.dart';
 import 'services/persistence_service.dart';
@@ -102,6 +103,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The project restore service - shared for persistence operations.
   ProjectRestoreService? _restoreService;
 
+  /// The AskAI service for one-shot AI queries.
+  AskAiService? _askAiService;
+
   /// Future for project restoration.
   Future<ProjectState>? _projectFuture;
 
@@ -158,6 +162,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Create the project restore service for persistence operations
     _restoreService = ProjectRestoreService();
+
+    // Create the AskAI service for one-shot AI queries
+    _askAiService = AskAiService();
 
     // Initialize project (sync for mock, async for real)
     if (shouldUseMock) {
@@ -287,7 +294,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Builds the loading screen shown while restoring project.
   Widget _buildLoadingScreen() {
     return MaterialApp(
-      title: 'CC-Insights V2',
+      title: 'CC Insights',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
@@ -319,6 +326,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         Provider<ProjectRestoreService>.value(value: _restoreService!),
         // Git service for git operations (stateless)
         Provider<GitService>.value(value: const RealGitService()),
+        // AskAI service for one-shot AI queries
+        Provider<AskAiService>.value(value: _askAiService!),
         // Project state
         ChangeNotifierProvider<ProjectState>.value(value: project),
         // Selection state depends on project
@@ -329,7 +338,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ),
       ],
       child: MaterialApp(
-        title: 'CC-Insights V2',
+        title: 'CC Insights',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),

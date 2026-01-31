@@ -11,6 +11,7 @@ dart_sdk/
 │   └── src/
 │       ├── backend.dart             # ClaudeBackend
 │       ├── session.dart             # ClaudeSession
+│       ├── single_request.dart      # ClaudeSingleRequest (one-shot CLI)
 │       ├── protocol.dart            # JSON line I/O
 │       └── types/
 │           ├── sdk_messages.dart    # All SDK message types
@@ -32,6 +33,9 @@ library claude_sdk;
 // Core classes
 export 'src/backend.dart' show ClaudeBackend;
 export 'src/session.dart' show ClaudeSession;
+
+// Single request (one-shot CLI)
+export 'src/single_request.dart';
 
 // Types
 export 'src/types/sdk_messages.dart';
@@ -258,6 +262,159 @@ await session.resultMessages.first;
 // Send follow-up
 await session.send('Now add error handling');
 ```
+
+---
+
+## ClaudeSingleRequest
+
+Makes one-shot requests to Claude via the CLI. This is useful for quick utility tasks
+like generating commit messages or summarizing content, where you don't need an
+interactive session.
+
+```dart
+/// Makes single one-shot requests to Claude via the CLI.
+class ClaudeSingleRequest {
+  /// Creates a ClaudeSingleRequest instance.
+  ///
+  /// [claudePath] is the path to the claude CLI executable.
+  /// If not provided, defaults to 'claude' (assuming it's in PATH).
+  ///
+  /// [onLog] is an optional callback for logging messages.
+  ClaudeSingleRequest({
+    String? claudePath,
+    void Function(String message, {bool isError})? onLog,
+  });
+
+  /// Makes a single request to Claude and returns the result.
+  ///
+  /// Returns [SingleRequestResult] or null if the process failed to start.
+  Future<SingleRequestResult?> request({
+    required String prompt,
+    required String workingDirectory,
+    SingleRequestOptions options = const SingleRequestOptions(),
+  });
+}
+
+/// Result from a single Claude CLI request.
+class SingleRequestResult {
+  /// The text result from Claude.
+  final String result;
+
+  /// Whether the request resulted in an error.
+  final bool isError;
+
+  /// Total duration in milliseconds.
+  final int durationMs;
+
+  /// API duration in milliseconds.
+  final int durationApiMs;
+
+  /// Number of conversation turns.
+  final int numTurns;
+
+  /// Total cost in USD.
+  final double totalCostUsd;
+
+  /// Token usage statistics.
+  final Usage usage;
+
+  /// Per-model usage breakdown.
+  final Map<String, ModelUsage>? modelUsage;
+
+  /// The session ID (for reference).
+  final String? sessionId;
+
+  /// Error messages if [isError] is true.
+  final List<String>? errors;
+}
+
+/// Options for a single Claude CLI request.
+class SingleRequestOptions {
+  const SingleRequestOptions({
+    this.model = 'haiku',
+    this.allowedTools,
+    this.disallowedTools,
+    this.permissionMode,
+    this.maxTurns,
+    this.systemPrompt,
+    this.timeoutSeconds = 60,
+  });
+
+  /// The model to use (default: 'haiku').
+  final String model;
+
+  /// List of allowed tools (e.g., ['Bash(git:*)', 'Read']).
+  final List<String>? allowedTools;
+
+  /// List of disallowed tools.
+  final List<String>? disallowedTools;
+
+  /// Permission mode ('default', 'acceptEdits', 'bypassPermissions', 'plan').
+  final String? permissionMode;
+
+  /// Maximum number of turns.
+  final int? maxTurns;
+
+  /// Custom system prompt.
+  final String? systemPrompt;
+
+  /// Timeout in seconds (default: 60).
+  final int timeoutSeconds;
+}
+```
+
+### Usage Example
+
+```dart
+import 'package:claude_sdk/claude_sdk.dart';
+
+// Create the client
+final claude = ClaudeSingleRequest(
+  onLog: (message, {isError = false}) {
+    print('${isError ? "ERROR: " : ""}$message');
+  },
+);
+
+// Make a request
+final result = await claude.request(
+  prompt: 'Provide a good commit message for the uncommitted files',
+  workingDirectory: '/path/to/repo',
+  options: SingleRequestOptions(
+    model: 'haiku',
+    allowedTools: ['Bash(git:*)', 'Bash(gh:*)', 'Read'],
+  ),
+);
+
+if (result != null && !result.isError) {
+  print('Commit message: ${result.result}');
+  print('Cost: \$${result.totalCostUsd.toStringAsFixed(6)}');
+  print('Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out');
+}
+```
+
+### How It Works
+
+`ClaudeSingleRequest` runs the Claude CLI in one-shot mode:
+
+```bash
+claude --model haiku \
+       --output-format json \
+       --allowedTools "Bash(git:*) Bash(gh:*) Read" \
+       --print "your prompt here"
+```
+
+The JSON output is parsed into a `SingleRequestResult` containing:
+- The text result
+- Usage statistics (tokens, cost)
+- Duration information
+- Error details (if any)
+
+### Use Cases
+
+- **Commit message generation**: Ask Claude to suggest a commit message based on staged changes
+- **Chat summarization**: Generate a brief title for a chat after the first message
+- **Code review snippets**: Quick analysis of a code snippet
+- **Documentation generation**: Generate docstrings or comments
 
 ---
 
