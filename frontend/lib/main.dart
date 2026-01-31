@@ -11,6 +11,7 @@ import 'screens/replay_demo_screen.dart';
 import 'services/ask_ai_service.dart';
 import 'services/backend_service.dart';
 import 'services/git_service.dart';
+import 'services/notification_service.dart';
 import 'services/persistence_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
@@ -25,12 +26,18 @@ import 'testing/mock_data.dart';
 /// Set this to true before running integration tests that need mock data.
 bool useMockData = false;
 
-void main(List<String> args) {
+void main(List<String> args) async {
+  // Ensure Flutter bindings are initialized before any async work
+  WidgetsFlutterBinding.ensureInitialized();
+
   // Initialize runtime config from command line arguments.
   // First positional arg is the working directory.
   debugPrint('main() args: $args');
   RuntimeConfig.initialize(args);
   debugPrint('RuntimeConfig.useMockData: ${RuntimeConfig.instance.useMockData}');
+
+  // Initialize the notification service for desktop notifications
+  await NotificationService.instance.initialize();
 
   runApp(const CCInsightsApp());
 }

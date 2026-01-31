@@ -5,6 +5,7 @@ import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/foundation.dart';
 
 import '../services/backend_service.dart';
+import '../services/notification_service.dart';
 import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
 import '../services/sdk_message_handler.dart';
@@ -914,9 +915,17 @@ class ChatState extends ChangeNotifier {
   /// Permission requests are processed in FIFO order. When multiple requests
   /// arrive concurrently, they are all queued and displayed to the user
   /// one at a time.
+  ///
+  /// Also sends a desktop notification to alert the user.
   void addPendingPermission(sdk.PermissionRequest request) {
     _pendingPermissions.add(request);
     notifyListeners();
+
+    // Send desktop notification
+    NotificationService.instance.notifyPermissionRequest(
+      toolName: request.toolName,
+      chatName: _data.name,
+    );
   }
 
   /// @deprecated Use [addPendingPermission] instead.
