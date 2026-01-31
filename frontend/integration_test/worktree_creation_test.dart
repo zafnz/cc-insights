@@ -356,7 +356,7 @@ void main() {
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Existing worktrees should still be listed
-      expect(find.text('main'), findsOneWidget);
+      expect(find.text('main'), findsWidgets);
       expect(find.text('feat-dark-mode'), findsOneWidget);
     });
   });

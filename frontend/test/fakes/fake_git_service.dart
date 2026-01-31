@@ -167,6 +167,41 @@ class FakeGitService implements GitService {
     // No-op by default
   }
 
+  /// Map of path -> upstream branch for [getUpstream].
+  final Map<String, String?> upstreams = {};
+
+  /// Map of (path, branch, targetBranch) -> comparison for [getBranchComparison].
+  final Map<String, ({int ahead, int behind})?> branchComparisons = {};
+
+  /// Map of repo root -> main branch for [getMainBranch].
+  final Map<String, String?> mainBranches = {};
+
+  @override
+  Future<String?> getUpstream(String path) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return upstreams[path];
+  }
+
+  @override
+  Future<({int ahead, int behind})?> getBranchComparison(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    final key = '$path:$branch:$targetBranch';
+    return branchComparisons[key];
+  }
+
+  @override
+  Future<String?> getMainBranch(String repoRoot) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return mainBranches[repoRoot] ?? 'main';
+  }
+
   // =========================================================================
   // Convenience methods for test setup
   // =========================================================================

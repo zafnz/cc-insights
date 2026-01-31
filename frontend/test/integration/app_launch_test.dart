@@ -48,14 +48,19 @@ void main() {
 
       // Verify the primary worktree is visible with 'main' branch
       // (default branch when no git info is available)
-      expect(find.text('main'), findsOneWidget);
+      // May appear multiple times: in worktree list and information panel
+      expect(find.text('main'), findsWidgets);
 
-      // Verify the "New Worktree" ghost card is visible
-      expect(find.text('New Worktree'), findsOneWidget);
+      // Verify the "New Worktree" ghost card exists (may need to scroll)
+      // Use skipOffstage: false to find it even if scrolled out of view
+      expect(
+        find.text('New Worktree', skipOffstage: false),
+        findsOneWidget,
+      );
 
-      // Verify the "New Chat" ghost card is visible in the Chats panel
+      // Verify the "New Chat" ghost card exists in the Chats panel
       // (also appears in WelcomeCard header, so we expect at least one)
-      expect(find.text('New Chat'), findsWidgets);
+      expect(find.text('New Chat', skipOffstage: false), findsWidgets);
     });
   });
 }

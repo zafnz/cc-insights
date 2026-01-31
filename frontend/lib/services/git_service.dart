@@ -144,6 +144,30 @@ abstract class GitService {
     required String branch,
     required bool newBranch,
   });
+
+  /// Gets the upstream branch for the current branch.
+  ///
+  /// Returns the upstream branch name (e.g., "origin/main") or null if none.
+  Future<String?> getUpstream(String path);
+
+  /// Compares two branches and returns ahead/behind counts.
+  ///
+  /// Returns a record with (ahead, behind) counts where:
+  /// - ahead = commits in [branch] not in [targetBranch]
+  /// - behind = commits in [targetBranch] not in [branch]
+  ///
+  /// Returns null if comparison fails (e.g., branches don't exist).
+  Future<({int ahead, int behind})?> getBranchComparison(
+    String path,
+    String branch,
+    String targetBranch,
+  );
+
+  /// Detects the main branch for the repository.
+  ///
+  /// Checks for "main", then "master", then returns the first branch found.
+  /// Returns null if no branches exist.
+  Future<String?> getMainBranch(String repoRoot);
 }
 
 /// Real implementation of [GitService] that spawns git processes.
@@ -284,6 +308,70 @@ class RealGitService implements GitService {
       args.addAll([worktreePath, branch]);
     }
     await _runGit(args, workingDirectory: repoRoot);
+  }
+
+  @override
+  Future<String?> getUpstream(String path) async {
+    try {
+      final output = await _runGit(
+        ['rev-parse', '--abbrev-ref', '@{upstream}'],
+        workingDirectory: path,
+      );
+      final upstream = output.trim();
+      return upstream.isEmpty ? null : upstream;
+    } on GitException {
+      // No upstream configured
+      return null;
+    }
+  }
+
+  @override
+  Future<({int ahead, int behind})?> getBranchComparison(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    try {
+      final output = await _runGit(
+        ['rev-list', '--left-right', '--count', '$branch...$targetBranch'],
+        workingDirectory: path,
+      );
+      // Output format: "3\t2" (ahead\tbehind)
+      final parts = output.trim().split('\t');
+      if (parts.length == 2) {
+        return (
+          ahead: int.tryParse(parts[0]) ?? 0,
+          behind: int.tryParse(parts[1]) ?? 0,
+        );
+      }
+      return null;
+    } on GitException {
+      return null;
+    }
+  }
+
+  @override
+  Future<String?> getMainBranch(String repoRoot) async {
+    // First try to get the default branch from origin
+    try {
+      final output = await _runGit(
+        ['symbolic-ref', 'refs/remotes/origin/HEAD'],
+        workingDirectory: repoRoot,
+      );
+      // Output: refs/remotes/origin/main
+      final ref = output.trim();
+      if (ref.startsWith('refs/remotes/origin/')) {
+        return ref.substring('refs/remotes/origin/'.length);
+      }
+    } on GitException {
+      // Fall through to manual detection
+    }
+
+    // Check for common main branch names
+    final branches = await listBranches(repoRoot);
+    if (branches.contains('main')) return 'main';
+    if (branches.contains('master')) return 'master';
+    return branches.isNotEmpty ? branches.first : null;
   }
 }
 

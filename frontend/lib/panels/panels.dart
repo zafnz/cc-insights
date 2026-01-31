@@ -8,6 +8,7 @@ export 'chats_panel.dart';
 export 'combined_panels.dart';
 export 'content_panel.dart';
 export 'conversation_panel.dart';
+export 'information_panel.dart';
 export 'panel_wrapper.dart';
 export 'shared_tree_widgets.dart';
 export 'worktree_panel.dart';

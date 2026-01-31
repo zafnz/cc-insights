@@ -104,6 +104,28 @@ class TestGitService implements GitService {
     if (createWorktreeError != null) throw createWorktreeError!;
   }
 
+  @override
+  Future<String?> getUpstream(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return null;
+  }
+
+  @override
+  Future<({int ahead, int behind})?> getBranchComparison(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return null;
+  }
+
+  @override
+  Future<String?> getMainBranch(String repoRoot) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return 'main';
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;

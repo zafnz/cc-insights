@@ -42,6 +42,15 @@ class WorktreeData {
   /// Whether this worktree has unresolved merge conflicts.
   final bool hasMergeConflict;
 
+  /// The upstream branch name (e.g., "origin/main"), or null if none.
+  final String? upstreamBranch;
+
+  /// Number of commits this branch has that are not in the main branch.
+  final int commitsAheadOfMain;
+
+  /// Number of commits the main branch has that are not in this branch.
+  final int commitsBehindMain;
+
   /// Creates a new [WorktreeData] instance.
   const WorktreeData({
     required this.worktreeRoot,
@@ -52,6 +61,9 @@ class WorktreeData {
     this.commitsAhead = 0,
     this.commitsBehind = 0,
     this.hasMergeConflict = false,
+    this.upstreamBranch,
+    this.commitsAheadOfMain = 0,
+    this.commitsBehindMain = 0,
   });
 
   /// Creates a copy with the given mutable fields replaced.
@@ -64,6 +76,10 @@ class WorktreeData {
     int? commitsAhead,
     int? commitsBehind,
     bool? hasMergeConflict,
+    String? upstreamBranch,
+    bool clearUpstreamBranch = false,
+    int? commitsAheadOfMain,
+    int? commitsBehindMain,
   }) {
     return WorktreeData(
       worktreeRoot: worktreeRoot,
@@ -74,6 +90,10 @@ class WorktreeData {
       commitsAhead: commitsAhead ?? this.commitsAhead,
       commitsBehind: commitsBehind ?? this.commitsBehind,
       hasMergeConflict: hasMergeConflict ?? this.hasMergeConflict,
+      upstreamBranch:
+          clearUpstreamBranch ? null : (upstreamBranch ?? this.upstreamBranch),
+      commitsAheadOfMain: commitsAheadOfMain ?? this.commitsAheadOfMain,
+      commitsBehindMain: commitsBehindMain ?? this.commitsBehindMain,
     );
   }
 
@@ -88,7 +108,10 @@ class WorktreeData {
         other.stagedFiles == stagedFiles &&
         other.commitsAhead == commitsAhead &&
         other.commitsBehind == commitsBehind &&
-        other.hasMergeConflict == hasMergeConflict;
+        other.hasMergeConflict == hasMergeConflict &&
+        other.upstreamBranch == upstreamBranch &&
+        other.commitsAheadOfMain == commitsAheadOfMain &&
+        other.commitsBehindMain == commitsBehindMain;
   }
 
   @override
@@ -102,6 +125,9 @@ class WorktreeData {
       commitsAhead,
       commitsBehind,
       hasMergeConflict,
+      upstreamBranch,
+      commitsAheadOfMain,
+      commitsBehindMain,
     );
   }
 
@@ -110,7 +136,10 @@ class WorktreeData {
     return 'WorktreeData(worktreeRoot: $worktreeRoot, isPrimary: $isPrimary, '
         'branch: $branch, uncommittedFiles: $uncommittedFiles, '
         'stagedFiles: $stagedFiles, commitsAhead: $commitsAhead, '
-        'commitsBehind: $commitsBehind, hasMergeConflict: $hasMergeConflict)';
+        'commitsBehind: $commitsBehind, hasMergeConflict: $hasMergeConflict, '
+        'upstreamBranch: $upstreamBranch, '
+        'commitsAheadOfMain: $commitsAheadOfMain, '
+        'commitsBehindMain: $commitsBehindMain)';
   }
 }
 

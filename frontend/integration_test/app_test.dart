@@ -50,7 +50,8 @@ void main() {
       expect(find.text('Conversation'), findsOneWidget);
 
       // Verify worktree branches are displayed (from mock data)
-      expect(find.text('main'), findsOneWidget);
+      // "main" appears in worktree list and possibly information panel
+      expect(find.text('main'), findsWidgets);
       expect(find.text('feat-dark-mode'), findsOneWidget);
       expect(find.text('fix-auth-bug'), findsOneWidget);
 
@@ -367,7 +368,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Step 1: Verify we're on the main worktree (should be selected by default)
-      expect(find.text('main'), findsOneWidget);
+      expect(find.text('main'), findsWidgets);
 
       // Step 2: Select the first chat ("Log Replay")
       await tester.tap(find.text('Log Replay'));

@@ -298,7 +298,7 @@ class _MainScreenState extends State<MainScreen> {
       id: 'root',
       axis: SplitAxis.horizontal,
       children: [
-        // Left sidebar: Worktrees + Chats + Agents stacked vertically
+        // Left sidebar: Worktrees + Information + Chats + Agents stacked
         SplitNode.branch(
           id: 'sidebar',
           axis: SplitAxis.vertical,
@@ -309,6 +309,12 @@ class _MainScreenState extends State<MainScreen> {
               id: 'worktrees',
               flex: 1.0,
               widgetBuilder: (context) => const WorktreePanel(),
+            ),
+            // Information panel (between worktrees and chats)
+            SplitNode.leaf(
+              id: 'information',
+              flex: 1.0,
+              widgetBuilder: (context) => const InformationPanel(),
             ),
             // Chats panel (middle)
             SplitNode.leaf(

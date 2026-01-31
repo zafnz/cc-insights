@@ -11,11 +11,11 @@ const supportedImageTypes = {
   'image/webp',
 };
 
-/// Maximum file size before compression (1 MB).
-const _compressionThreshold = 1024 * 1024;
+/// Maximum file size before compression (500 KB).
+const _compressionThreshold = 500 * 1024;
 
-/// Maximum file size after compression (5 MB).
-const _maxCompressedSize = 5 * 1024 * 1024;
+/// Maximum file size after compression (3 MB).
+const _maxCompressedSize = 3 * 1024 * 1024;
 
 /// Maximum dimension for resized images.
 const _maxDimension = 2048;

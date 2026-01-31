@@ -54,13 +54,19 @@ class PanelWrapper extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 6),
-          Text(title, style: textTheme.titleSmall),
-          const Spacer(),
+          Expanded(
+            child: Text(
+              title,
+              style: textTheme.titleSmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           // Optional trailing widget(s)
           if (trailing != null) ...[
-            trailing!,
             const SizedBox(width: 8),
+            trailing!,
           ],
+          const SizedBox(width: 8),
           // Use the provided drag handle, or fallback to a static icon
           dragHandle ??
               Icon(
