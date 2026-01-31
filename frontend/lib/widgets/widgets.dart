@@ -4,6 +4,8 @@
 /// multiple screens and panels.
 library;
 
+export 'agent_selector.dart';
+export 'agent_settings_panel.dart';
 export 'conversation_panel.dart';
 export 'diff_view.dart';
 export 'editable_label.dart';

@@ -1535,14 +1535,14 @@ Phase 5 (depends on Phase 4) ─────────────────
 ## Success Criteria
 
 Phase 1 is complete when:
-- [ ] `acp_dart` package compiles and tests pass
-- [ ] All wrapper classes implemented and tested
-- [ ] File system and terminal handlers working
+- [x] `acp_dart` package compiles and tests pass ✓ (Task 1.1 completed)
+- [x] All wrapper classes implemented and tested ✓ (Tasks 1.3, 1.7, 1.8 completed)
+- [x] File system and terminal handlers working ✓ (Tasks 1.5, 1.6 completed)
 
 Phase 2 is complete when:
-- [ ] Agent discovery works for Claude Code
-- [ ] Custom agents can be added/removed
-- [ ] Agent configuration persists
+- [x] Agent discovery works for Claude Code ✓ (Task 2.3 completed)
+- [x] Custom agents can be added/removed ✓ (Tasks 2.2, 2.5, 2.6 completed)
+- [x] Agent configuration persists ✓ (Task 2.4 completed)
 
 Phase 3 is complete when:
 - [ ] Chats work with `AgentService` instead of `BackendService`

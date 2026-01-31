@@ -9,6 +9,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "91.0.0"
+  acp_dart:
+    dependency: "direct main"
+    description:
+      name: acp_dart
+      sha256: "2486c45dbd77713447488df4786e8de10873bff76665309e7a3985740d2005c4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
   analyzer:
     dependency: transitive
     description:
