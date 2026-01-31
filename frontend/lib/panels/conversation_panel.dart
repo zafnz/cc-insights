@@ -11,6 +11,7 @@ import '../models/chat.dart';
 import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
+import '../services/agent_registry.dart';
 import '../services/agent_service.dart';
 import '../services/project_restore_service.dart';
 import '../state/selection_state.dart';
@@ -505,6 +506,12 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     if (!chat.hasActiveSession) {
       // First message - start a new ACP session with the prompt
+      // Check if agent is connected before trying to start session
+      if (!agentService.isConnected) {
+        _showNotConnectedDialog(context, agentService);
+        return;
+      }
+
       // Create a session update handler for this chat
       final updateHandler = _createUpdateHandler(chat);
 
@@ -577,6 +584,77 @@ class _ConversationPanelState extends State<ConversationPanel>
       },
     );
   }
+}
+
+/// Shows a dialog prompting the user to connect to an agent.
+///
+/// Displays available agents and allows the user to select and connect.
+/// If agents are available, it also offers to auto-connect to the first one.
+void _showNotConnectedDialog(BuildContext context, AgentService agentService) {
+  final registry = context.read<AgentRegistry>();
+  final agents = registry.agents;
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('No Agent Connected'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'You need to connect to an agent before sending messages.',
+            ),
+            if (agents.isEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'No agents are available. Please ensure an ACP-compatible '
+                'agent (like Claude Code) is installed and configured.',
+                style: TextStyle(
+                  color: Theme.of(dialogContext).colorScheme.error,
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 16),
+              Text(
+                'Available agents: ${agents.map((a) => a.name).join(", ")}',
+                style: TextStyle(
+                  color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          if (agents.isNotEmpty)
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                // Connect to the first available agent
+                try {
+                  await agentService.connect(agents.first);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to connect: $e'),
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: Text('Connect to ${agents.first.name}'),
+            ),
+        ],
+      );
+    },
+  );
 }
 
 /// Header showing conversation context with model/permission selectors and usage.
@@ -1186,6 +1264,12 @@ class _WelcomeCardState extends State<WelcomeCard> {
     final project = context.read<ProjectState>();
     final agentService = context.read<AgentService>();
     final restoreService = context.read<ProjectRestoreService>();
+
+    // Check if agent is connected before trying to start session
+    if (!agentService.isConnected) {
+      _showNotConnectedDialog(context, agentService);
+      return;
+    }
 
     // Generate a chat name from the first message (truncated)
     final chatName = _generateChatName(text);
