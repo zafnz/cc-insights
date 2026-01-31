@@ -862,8 +862,8 @@ class _SubagentStatusHeader extends StatelessWidget {
   }
 }
 
-/// Compact dropdown using DropdownButton for minimal width.
-class _CompactDropdown extends StatelessWidget {
+/// Compact dropdown using PopupMenuButton for styled menu.
+class _CompactDropdown extends StatefulWidget {
   const _CompactDropdown({
     required this.value,
     required this.items,
@@ -875,35 +875,78 @@ class _CompactDropdown extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
+  State<_CompactDropdown> createState() => _CompactDropdownState();
+}
+
+class _CompactDropdownState extends State<_CompactDropdown> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: DropdownButton<String>(
-        value: value,
-        isDense: true,
-        underline: const SizedBox.shrink(),
-        style: TextStyle(
-          fontSize: 11,
-          color: colorScheme.onSurface,
-          fontWeight: FontWeight.w500,
+    return PopupMenuButton<String>(
+      initialValue: widget.value,
+      onSelected: widget.onChanged,
+      offset: const Offset(0, 28),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: BorderSide(
+          color: colorScheme.primary.withOpacity(0.5),
+          width: 1,
         ),
-        items: items.map((item) {
-          return DropdownMenuItem(
-            value: item,
-            child: Text(item),
-          );
-        }).toList(),
-        onChanged: (newValue) {
-          if (newValue != null) {
-            onChanged(newValue);
-          }
-        },
+      ),
+      color: colorScheme.surfaceContainerHigh,
+      itemBuilder: (context) => widget.items.map((item) {
+        final isSelected = item == widget.value;
+        return PopupMenuItem<String>(
+          value: item,
+          height: 32,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Text(
+              item,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? colorScheme.primary.withOpacity(0.1)
+                : colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.value,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_drop_down,
+                size: 16,
+                color: colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
