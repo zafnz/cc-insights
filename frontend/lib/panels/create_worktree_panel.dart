@@ -201,14 +201,12 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
 
     return Column(
       children: [
-        // Help text explaining what a worktree is
-        const _WorktreeHelpCard(),
         // Form fields
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Branch name field with autocomplete
                 _BranchNameField(
@@ -216,12 +214,16 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                   availableBranches: _availableBranches,
                   existingWorktreeBranches: _existingWorktreeBranches,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                // Action buttons
+                _ActionBar(
+                  isCreating: _isCreating,
+                  onCancel: _handleCancel,
+                  onCreate: _handleCreate,
+                ),
+                const SizedBox(height: 24),
                 // Worktree root directory
                 _WorktreeRootField(controller: _rootController),
-                const SizedBox(height: 8),
-                // Note about directory location
-                const _DirectoryNote(),
                 const SizedBox(height: 8),
                 // Preview of full path
                 _PathPreview(
@@ -236,15 +238,12 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                     suggestions: _errorSuggestions,
                   ),
                 ],
+                const SizedBox(height: 24),
+                // Help text explaining what a worktree is
+                const _WorktreeHelpCard(),
               ],
             ),
           ),
-        ),
-        // Action buttons
-        _ActionBar(
-          isCreating: _isCreating,
-          onCancel: _handleCancel,
-          onCreate: _handleCreate,
         ),
       ],
     );
@@ -268,7 +267,6 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.primaryContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
@@ -284,19 +282,19 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
             onTap: () => setState(() => _isExpanded = !_isExpanded),
             borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Row(
                 children: [
                   Icon(
                     Icons.info_outline,
-                    size: 18,
+                    size: 16,
                     color: colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'What is a Git Worktree?',
-                      style: textTheme.titleSmall?.copyWith(
+                      style: textTheme.labelMedium?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),
@@ -306,6 +304,7 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
                     _isExpanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
+                    size: 16,
                     color: colorScheme.primary,
                   ),
                 ],
@@ -319,7 +318,7 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
               color: colorScheme.primary.withValues(alpha: 0.2),
             ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -328,14 +327,14 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
                     'without switching. Each worktree is a separate directory '
                     'with its own branch checked out, sharing the same '
                     'repository history.',
-                    style: textTheme.bodyMedium?.copyWith(
+                    style: textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Text(
                     'This is useful for:',
-                    style: textTheme.bodyMedium?.copyWith(
+                    style: textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w500,
                       color: colorScheme.onSurface,
                     ),
@@ -372,20 +371,20 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
     TextTheme textTheme,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(left: 8, top: 4),
+      padding: const EdgeInsets.only(left: 8, top: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '\u2022 ',
-            style: textTheme.bodyMedium?.copyWith(
+            style: textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
           ),
           Expanded(
             child: Text(
               text,
-              style: textTheme.bodyMedium?.copyWith(
+              style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
@@ -418,7 +417,7 @@ class _BranchNameField extends StatelessWidget {
       children: [
         Text(
           'Branch Name',
-          style: textTheme.titleSmall?.copyWith(
+          style: textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -451,11 +450,14 @@ class _BranchNameField extends StatelessWidget {
             return TextField(
               controller: textEditingController,
               focusNode: focusNode,
+              style: textTheme.bodyMedium,
               decoration: InputDecoration(
-                hintText: 'Enter branch name or select from existing',
                 border: const OutlineInputBorder(),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 prefixIcon: Icon(
                   Icons.call_split,
+                  size: 20,
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -477,7 +479,10 @@ class _BranchNameField extends StatelessWidget {
                       final option = options.elementAt(index);
                       return ListTile(
                         dense: true,
-                        title: Text(option),
+                        title: Text(
+                          option,
+                          style: textTheme.bodySmall,
+                        ),
                         onTap: () => onSelected(option),
                       );
                     },
@@ -519,18 +524,21 @@ class _WorktreeRootField extends StatelessWidget {
       children: [
         Text(
           'Worktree Root Directory',
-          style: textTheme.titleSmall?.copyWith(
+          style: textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
+          style: textTheme.bodyMedium,
           decoration: InputDecoration(
-            hintText: 'Enter directory path',
             border: const OutlineInputBorder(),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             prefixIcon: Icon(
               Icons.folder_outlined,
+              size: 20,
               color: colorScheme.onSurfaceVariant,
             ),
           ),
@@ -540,35 +548,6 @@ class _WorktreeRootField extends StatelessWidget {
   }
 }
 
-/// Warning note about directory location.
-class _DirectoryNote extends StatelessWidget {
-  const _DirectoryNote();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Row(
-      children: [
-        Icon(
-          Icons.warning_amber_outlined,
-          size: 16,
-          color: colorScheme.error.withValues(alpha: 0.8),
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            'This directory must be outside the project repository',
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.error.withValues(alpha: 0.8),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 /// Shows the computed full path for the worktree.
 class _PathPreview extends StatelessWidget {
@@ -602,7 +581,7 @@ class _PathPreview extends StatelessWidget {
     final fullPath = path.join(root, 'cci', sanitizedBranch);
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(6),
@@ -614,7 +593,7 @@ class _PathPreview extends StatelessWidget {
         children: [
           Icon(
             Icons.folder_open_outlined,
-            size: 16,
+            size: 14,
             color: colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 8),
@@ -661,7 +640,7 @@ class _ErrorCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: colorScheme.errorContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
@@ -677,14 +656,14 @@ class _ErrorCard extends StatelessWidget {
             children: [
               Icon(
                 Icons.error_outline,
-                size: 18,
+                size: 16,
                 color: colorScheme.error,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   message,
-                  style: textTheme.bodyMedium?.copyWith(
+                  style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.error,
                   ),
                 ),
@@ -692,14 +671,14 @@ class _ErrorCard extends StatelessWidget {
             ],
           ),
           if (suggestions != null && suggestions!.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Padding(
-              padding: const EdgeInsets.only(left: 26),
+              padding: const EdgeInsets.only(left: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: suggestions!.map((suggestion) {
                   return Padding(
-                    padding: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.only(top: 3),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -744,42 +723,29 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        border: Border(
-          top: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-          ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton(
+          onPressed: isCreating ? null : onCancel,
+          child: const Text('Cancel'),
         ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: isCreating ? null : onCancel,
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: isCreating ? null : onCreate,
-            icon: isCreating
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.add, size: 18),
-            label: Text(isCreating ? 'Creating...' : 'Create Worktree'),
-          ),
-        ],
-      ),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+          onPressed: isCreating ? null : onCreate,
+          icon: isCreating
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.add, size: 18),
+          label: Text(isCreating ? 'Creating...' : 'Create Worktree'),
+        ),
+      ],
     );
   }
 }

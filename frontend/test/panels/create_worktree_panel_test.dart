@@ -204,25 +204,27 @@ void main() {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         expect(find.text('Branch Name'), findsOneWidget);
-        expect(
-          find.text('Enter branch name or select from existing'),
-          findsOneWidget,
-        );
+        // Hint text has been removed per design requirements
+        expect(find.byType(TextField), findsWidgets);
       });
 
       testWidgets('shows worktree root directory field', (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         expect(find.text('Worktree Root Directory'), findsOneWidget);
-        expect(find.text('Enter directory path'), findsOneWidget);
+        // Hint text has been removed per design requirements
+        expect(find.byType(TextField), findsWidgets);
       });
 
-      testWidgets('shows directory warning note', (tester) async {
+      testWidgets('does not show directory warning note by default',
+          (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
+        // Warning note should not be shown unless user tries to select
+        // inside worktree
         expect(
           find.text('This directory must be outside the project repository'),
-          findsOneWidget,
+          findsNothing,
         );
       });
 

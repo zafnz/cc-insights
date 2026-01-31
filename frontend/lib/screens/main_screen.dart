@@ -60,6 +60,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onBackendChanged() {
+    if (!mounted) return;
     final backend = context.read<BackendService>();
     if (backend.error != null && backend.error != _lastShownError) {
       _showBackendError(backend.error!);
