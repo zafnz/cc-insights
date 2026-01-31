@@ -489,7 +489,10 @@ class Protocol {
   /// Send a message to the backend.
   void send(OutgoingMessage message) {
     final messageJson = message.toJson();
-    final json = jsonEncode(messageJson);
+    var json = jsonEncode(messageJson);
+    // Escape U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR).
+    // Node's readline splits on these Unicode line terminators, breaking JSON parsing.
+    json = json.replaceAll('\u2028', r'\u2028').replaceAll('\u2029', r'\u2029');
     process.stdin.writeln(json);
   }
 
