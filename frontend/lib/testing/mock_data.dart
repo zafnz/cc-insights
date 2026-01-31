@@ -47,7 +47,13 @@ class MockDataFactory {
   /// ```
   ///
   /// Returns a [ProjectState] with the primary worktree selected by default.
-  static ProjectState createMockProject() {
+  ///
+  /// [watchFilesystem] defaults to false for tests to avoid pending timers.
+  /// [autoValidate] defaults to false for tests to avoid filesystem checks.
+  static ProjectState createMockProject({
+    bool watchFilesystem = false,
+    bool autoValidate = false,
+  }) {
     // Create the primary worktree with 2 chats.
     final primaryWorktree = createMockWorktree(
       worktreeRoot: '/tmp/cc-insights',
@@ -99,6 +105,8 @@ class MockDataFactory {
       ),
       primaryWorktree,
       linkedWorktrees: [darkModeWorktree, authBugWorktree],
+      autoValidate: autoValidate,
+      watchFilesystem: watchFilesystem,
       // Primary worktree selected by default.
     );
   }

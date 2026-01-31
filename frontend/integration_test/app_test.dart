@@ -137,6 +137,9 @@ void main() {
       await _takeScreenshot(tester, '04_after_selection');
 
       // Tap on fix-auth-bug worktree (has no chats)
+      // First ensure it's visible - it may be scrolled out of view
+      await tester.ensureVisible(find.text('fix-auth-bug'));
+      await safePumpAndSettle(tester);
       await tester.tap(find.text('fix-auth-bug'));
       await safePumpAndSettle(tester);
 

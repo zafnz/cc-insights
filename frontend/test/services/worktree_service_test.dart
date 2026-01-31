@@ -701,7 +701,12 @@ ProjectState _createProject(String repoRoot) {
     branch: 'main',
   );
   final primaryWorktree = WorktreeState(worktreeData);
-  return ProjectState(projectData, primaryWorktree);
+  return ProjectState(
+    projectData,
+    primaryWorktree,
+    autoValidate: false,
+    watchFilesystem: false,
+  );
 }
 
 Future<void> _setupPersistence(

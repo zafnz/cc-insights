@@ -15,6 +15,7 @@ import 'services/persistence_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
 import 'services/sdk_message_handler.dart';
+import 'services/worktree_watcher_service.dart';
 import 'state/selection_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
@@ -335,6 +336,20 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           create: (context) => SelectionState(context.read<ProjectState>()),
           update: (context, project, previous) =>
               previous ?? SelectionState(project),
+        ),
+        // Worktree watcher service for monitoring git status changes
+        ChangeNotifierProxyProvider2<GitService, ProjectState,
+            WorktreeWatcherService>(
+          create: (context) => WorktreeWatcherService(
+            gitService: context.read<GitService>(),
+            project: context.read<ProjectState>(),
+          ),
+          update: (context, gitService, project, previous) =>
+              previous ??
+              WorktreeWatcherService(
+                gitService: gitService,
+                project: project,
+              ),
         ),
       ],
       child: MaterialApp(

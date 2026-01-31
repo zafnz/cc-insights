@@ -43,9 +43,15 @@ class ProjectRestoreService {
   /// If the project doesn't exist:
   /// - Creates a new project with a primary worktree
   /// - Saves the new project to `projects.json`
+  ///
+  /// [autoValidate] controls whether worktrees are validated on creation.
+  /// [watchFilesystem] controls whether filesystem watchers are enabled.
+  /// Both default to true for production use; set to false for tests.
   Future<(ProjectState, bool isNew)> restoreOrCreateProject(
-    String projectRoot,
-  ) async {
+    String projectRoot, {
+    bool autoValidate = true,
+    bool watchFilesystem = true,
+  }) async {
     final projectsIndex = await _persistence.loadProjectsIndex();
     final projectId = PersistenceService.generateProjectId(projectRoot);
 
@@ -55,7 +61,12 @@ class ProjectRestoreService {
         'Restoring existing project: ${existingProject.name}',
         name: 'ProjectRestoreService',
       );
-      final project = await _restoreProject(projectRoot, existingProject);
+      final project = await _restoreProject(
+        projectRoot,
+        existingProject,
+        autoValidate: autoValidate,
+        watchFilesystem: watchFilesystem,
+      );
       return (project, false);
     } else {
       developer.log(
@@ -66,6 +77,8 @@ class ProjectRestoreService {
         projectRoot,
         projectId,
         projectsIndex,
+        autoValidate: autoValidate,
+        watchFilesystem: watchFilesystem,
       );
       return (project, true);
     }
@@ -79,8 +92,10 @@ class ProjectRestoreService {
   /// - Linked worktrees with persisted chats
   Future<ProjectState> _restoreProject(
     String projectRoot,
-    ProjectInfo projectInfo,
-  ) async {
+    ProjectInfo projectInfo, {
+    required bool autoValidate,
+    required bool watchFilesystem,
+  }) async {
     // Find the primary worktree and linked worktrees
     WorktreeState? primaryWorktree;
     final linkedWorktrees = <WorktreeState>[];
@@ -122,6 +137,8 @@ class ProjectRestoreService {
       ProjectData(name: projectInfo.name, repoRoot: projectRoot),
       primaryWorktree,
       linkedWorktrees: linkedWorktrees,
+      autoValidate: autoValidate,
+      watchFilesystem: watchFilesystem,
     );
   }
 
@@ -240,8 +257,10 @@ class ProjectRestoreService {
   Future<ProjectState> _createNewProject(
     String projectRoot,
     String projectId,
-    ProjectsIndex currentIndex,
-  ) async {
+    ProjectsIndex currentIndex, {
+    required bool autoValidate,
+    required bool watchFilesystem,
+  }) async {
     // Extract project name from the directory path using path package
     // This handles trailing slashes and other edge cases correctly
     final projectName = p.basename(projectRoot);
@@ -259,6 +278,8 @@ class ProjectRestoreService {
     final project = ProjectState(
       ProjectData(name: projectName, repoRoot: projectRoot),
       primaryWorktree,
+      autoValidate: autoValidate,
+      watchFilesystem: watchFilesystem,
     );
 
     // Save to persistence
