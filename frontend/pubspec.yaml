@@ -49,7 +49,7 @@ dependencies:
   # Image paste and drag-drop support
   super_clipboard: ^0.8.0
   desktop_drop: ^0.4.0
-  file_picker: ^6.0.0
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:

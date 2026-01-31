@@ -54,9 +54,8 @@ class _InformationContentState extends State<_InformationContent> {
     try {
       final watcherService = context.read<WorktreeWatcherService>();
       watcherService.watchWorktree(worktree);
-    } catch (e) {
-      // Provider not available (e.g., in tests)
-      debugPrint('WorktreeWatcherService not available: $e');
+    } catch (_) {
+      // Provider not available (e.g., in tests) - silently ignore
     }
   }
 

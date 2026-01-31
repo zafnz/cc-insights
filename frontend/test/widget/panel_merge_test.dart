@@ -36,11 +36,11 @@ void main() {
       );
     }
 
-    setUp(() {
+    setUp(() async {
       project = MockDataFactory.createMockProject();
       selection = SelectionState(project);
       mockBackend = MockBackendService();
-      mockBackend.start();
+      await mockBackend.start();
     });
 
     tearDown(() {

@@ -73,19 +73,19 @@ class WorktreeWatcherService extends ChangeNotifier {
     try {
       final dir = Directory(path);
       if (!dir.existsSync()) {
-        debugPrint('WorktreeWatcherService: Directory does not exist: $path');
+        // Directory doesn't exist (e.g., in tests) - silently skip
         return;
       }
 
       // Watch recursively for all file changes
       _watcherSubscription = dir.watch(recursive: true).listen(
         _handleFileSystemEvent,
-        onError: (error) {
-          debugPrint('WorktreeWatcherService: Watcher error: $error');
+        onError: (_) {
+          // Watcher errors are expected in tests - silently ignore
         },
       );
-    } catch (e) {
-      debugPrint('WorktreeWatcherService: Failed to start watcher: $e');
+    } catch (_) {
+      // Failed to start watcher (e.g., in tests) - silently ignore
     }
   }
 
@@ -174,8 +174,8 @@ class WorktreeWatcherService extends ChangeNotifier {
         // Notify listeners that status has been updated
         notifyListeners();
       }
-    } catch (e) {
-      debugPrint('WorktreeWatcherService: Failed to poll git status: $e');
+    } catch (_) {
+      // Git status poll failed (e.g., in tests) - silently ignore
     }
   }
 
