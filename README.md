@@ -260,4 +260,6 @@ Available models:
 
 ## License
 
-Private project - not for distribution.
+GNU GPL v3 
+Copyright Nick Clifford
+nick@nickclifford.com
