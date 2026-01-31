@@ -138,30 +138,72 @@ cc-insights/
 
 ## ACP (Agent Client Protocol)
 
-ACP is a standardized protocol for communicating with AI coding agents. CC-Insights uses ACP to support multiple agents (Claude Code, Gemini CLI, etc.) through a unified interface.
+ACP is a standardized JSON-RPC 2.0 protocol for communicating with AI coding agents. CC-Insights uses ACP to support multiple agents (Claude Code, Gemini CLI, etc.) through a unified interface.
+
+**Important:** The standard `claude` CLI is NOT ACP-compatible. We use `claude-code-acp` which is an ACP adapter that wraps Claude Code.
+
+### How It Works
+
+1. **Agent Discovery**: On startup, `AgentRegistry` discovers available ACP agents:
+   - Looks for `claude-code-acp` in PATH (globally installed)
+   - Falls back to local package at `packages/claude-code-acp/dist/index.js`
+   - Also discovers `gemini --acp` and `codex` if available
+
+2. **Auto-Connect**: The app automatically connects to Claude Code on startup:
+   - `main.dart` calls `_initializeAgentRegistry()` which discovers agents
+   - If `claude-code` agent is found, it auto-connects via `AgentService.connect()`
+   - Users can start chatting immediately without manual connection
+
+3. **Session Creation**: When user sends first message:
+   - `ChatState.startAcpSession()` creates a session via `AgentService.createSession()`
+   - Session is configured with working directory and optional MCP servers
+   - Partial messages can be disabled via `includePartialMessages: false`
+
+4. **Communication**: All messages flow through NDJSON streams:
+   - Agent process spawned with stdin/stdout for communication
+   - `ACPClientWrapper` manages process lifecycle
+   - `ACPSessionWrapper` filters updates for specific sessions
 
 ### Key ACP Components
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `ACPClientWrapper` | `frontend/lib/acp/` | Manages agent process lifecycle |
-| `ACPSessionWrapper` | `frontend/lib/acp/` | Wraps session with filtered streams |
-| `CCInsightsACPClient` | `frontend/lib/acp/` | Implements ACP Client interface |
-| `AgentService` | `frontend/lib/services/` | Provider-based agent management |
-| `AgentRegistry` | `frontend/lib/services/` | Agent discovery and configuration |
+| `ACPClientWrapper` | `frontend/lib/acp/` | Manages agent process lifecycle, spawns process, handles NDJSON |
+| `ACPSessionWrapper` | `frontend/lib/acp/` | Wraps session with filtered streams for a specific session ID |
+| `CCInsightsACPClient` | `frontend/lib/acp/` | Implements ACP Client interface, bridges callbacks to streams |
+| `AgentService` | `frontend/lib/services/` | Provider-based agent management, exposes connection state |
+| `AgentRegistry` | `frontend/lib/services/` | Agent discovery and configuration persistence |
+| `claude-code-acp` | `packages/claude-code-acp/` | Node.js ACP adapter for Claude Code |
 
 ### Message Flow
 
-Communication uses ACP over NDJSON streams:
-
 ```
-ACP Agent (Claude Code, etc.)
-        ↕ NDJSON (stdin/stdout)
-ACPClientWrapper
-        ↕ Dart Streams
-ACPSessionWrapper → SessionUpdateHandler → ChatState
-        ↕
-      UI
+┌─────────────────────────────────────────────────────────────┐
+│                     Claude Code ACP                          │
+│  (packages/claude-code-acp - wraps Claude Agent SDK)        │
+└─────────────────────────────────────────────────────────────┘
+                    ↕ NDJSON (stdin/stdout)
+┌─────────────────────────────────────────────────────────────┐
+│                   ACPClientWrapper                           │
+│  - Spawns agent process                                      │
+│  - Creates NDJSON stream                                     │
+│  - Handles initialization handshake                          │
+│  - Manages connection state                                  │
+└─────────────────────────────────────────────────────────────┘
+                    ↕ Dart Streams
+┌─────────────────────────────────────────────────────────────┐
+│                   ACPSessionWrapper                          │
+│  - Filters updates by session ID                            │
+│  - Provides session-specific streams                         │
+└─────────────────────────────────────────────────────────────┘
+                    ↕
+┌─────────────────────────────────────────────────────────────┐
+│              SessionUpdateHandler → ChatState                │
+│  - Routes updates to appropriate conversations               │
+│  - Handles tool calls, messages, permissions                 │
+└─────────────────────────────────────────────────────────────┘
+                    ↕
+                   UI
 ```
 
 User input flows through the ACP session:
@@ -181,6 +223,33 @@ Permission options can include:
 - Allow for session
 - Deny
 - Custom options provided by agent
+
+### Claude Code ACP Adapter
+
+The `claude-code-acp` package (`packages/claude-code-acp/`) is a Node.js adapter that:
+- Implements ACP Agent interface
+- Wraps the Claude Agent SDK
+- Translates between ACP protocol and Claude Code SDK
+
+**Building the adapter:**
+```bash
+cd packages/claude-code-acp
+npm install
+npm run build
+```
+
+**Custom session options via `_meta`:**
+```dart
+// In ACPClientWrapper.createSession()
+NewSessionRequest(
+  cwd: cwd,
+  meta: {
+    'claudeCode': {
+      'includePartialMessages': false,  // Disable streaming text
+    },
+  },
+)
+```
 
 ---
 

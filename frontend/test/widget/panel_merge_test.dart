@@ -71,7 +71,7 @@ class FakeAgentService extends ChangeNotifier implements AgentService {
   @override
   Future<void> connect(AgentConfig config) async {}
   @override
-  Future<ACPSessionWrapper> createSession({required String cwd, List<McpServerBase>? mcpServers}) async => throw UnimplementedError();
+  Future<ACPSessionWrapper> createSession({required String cwd, List<McpServerBase>? mcpServers, bool includePartialMessages = true}) async => throw UnimplementedError();
   @override
   Future<void> disconnect() async {}
   @override

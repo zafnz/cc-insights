@@ -288,8 +288,12 @@ class AgentRegistry extends ChangeNotifier {
 
   /// Discovers the Claude Code ACP agent.
   ///
-  /// Checks for the `claude` command first (the standard Claude Code CLI),
-  /// then falls back to `claude-code-acp` (explicit ACP adapter).
+  /// Checks for `claude-code-acp` first (the ACP adapter), then falls back
+  /// to using Node.js to run the local package if available.
+  ///
+  /// Note: The standard `claude` CLI is NOT ACP-compatible. We specifically
+  /// look for the `claude-code-acp` adapter which wraps Claude Code to provide
+  /// ACP support.
   ///
   /// Uses the system's `which` command to locate the executable in PATH.
   /// The agent is configured with no arguments and relies on the
@@ -298,10 +302,11 @@ class AgentRegistry extends ChangeNotifier {
   /// Returns an [AgentConfig] if found, `null` otherwise.
   Future<AgentConfig?> _discoverClaudeCode() async {
     try {
-      // Check if 'claude' is installed (standard Claude Code CLI)
-      var result = await Process.run('which', ['claude']);
+      // First, check for globally installed 'claude-code-acp' (the ACP adapter)
+      var result = await Process.run('which', ['claude-code-acp']);
       if (result.exitCode == 0) {
         final path = (result.stdout as String).trim();
+        debugPrint('Found claude-code-acp at: $path');
         return AgentConfig(
           id: 'claude-code',
           name: 'Claude Code',
@@ -311,21 +316,48 @@ class AgentRegistry extends ChangeNotifier {
         );
       }
 
-      // Try alternate name 'claude-code-acp' (explicit ACP adapter)
-      result = await Process.run('which', ['claude-code-acp']);
-      if (result.exitCode == 0) {
-        final path = (result.stdout as String).trim();
+      // Second, check for the local package in packages/claude-code-acp
+      // This is useful during development
+      final localPackagePath = await _findLocalClaudeCodeAcp();
+      if (localPackagePath != null) {
+        debugPrint('Found local claude-code-acp at: $localPackagePath');
+        // Run via node
         return AgentConfig(
           id: 'claude-code',
-          name: 'Claude Code',
-          command: path,
-          args: const [],
+          name: 'Claude Code (local)',
+          command: 'node',
+          args: [localPackagePath],
           env: const {},
         );
       }
+
+      debugPrint('claude-code-acp not found');
     } catch (e) {
-      // Ignore errors - agent not found or 'which' not available
+      debugPrint('Error discovering Claude Code: $e');
     }
+    return null;
+  }
+
+  /// Finds the local claude-code-acp package if it exists and is built.
+  ///
+  /// Returns the path to the built index.js file, or null if not found.
+  Future<String?> _findLocalClaudeCodeAcp() async {
+    // Try to find the packages directory relative to the app
+    // During development, this would be in the project root
+    final possiblePaths = [
+      // Relative to current working directory
+      'packages/claude-code-acp/dist/index.js',
+      '../packages/claude-code-acp/dist/index.js',
+      '../../packages/claude-code-acp/dist/index.js',
+    ];
+
+    for (final relativePath in possiblePaths) {
+      final file = File(relativePath);
+      if (await file.exists()) {
+        return file.absolute.path;
+      }
+    }
+
     return null;
   }
 

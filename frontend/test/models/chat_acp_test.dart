@@ -876,8 +876,13 @@ class FakeAgentService extends AgentService {
   Future<ACPSessionWrapper> createSession({
     required String cwd,
     List<acp.McpServerBase>? mcpServers,
+    bool includePartialMessages = true,
   }) async {
-    createSessionCalls.add(_CreateSessionCall(cwd: cwd, mcpServers: mcpServers));
+    createSessionCalls.add(_CreateSessionCall(
+      cwd: cwd,
+      mcpServers: mcpServers,
+      includePartialMessages: includePartialMessages,
+    ));
 
     lastCreatedSession = FakeACPSessionWrapper(sessionId: 'fake-session-${createSessionCalls.length}');
     return lastCreatedSession!;
@@ -888,8 +893,13 @@ class FakeAgentService extends AgentService {
 class _CreateSessionCall {
   final String cwd;
   final List<acp.McpServerBase>? mcpServers;
+  final bool includePartialMessages;
 
-  _CreateSessionCall({required this.cwd, this.mcpServers});
+  _CreateSessionCall({
+    required this.cwd,
+    this.mcpServers,
+    this.includePartialMessages = true,
+  });
 }
 
 /// Fake AgentRegistry for testing.

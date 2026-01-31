@@ -121,8 +121,13 @@ class AgentService extends ChangeNotifier {
   /// }
   /// ```
   Future<void> connect(AgentConfig config) async {
+    debugPrint('[AgentService] connect() called for: ${config.name}');
+    debugPrint('[AgentService] command: ${config.command}, args: ${config.args}');
+
     // Disconnect from any existing agent first
+    debugPrint('[AgentService] Disconnecting from any existing agent...');
     await disconnect();
+    debugPrint('[AgentService] Disconnected. Creating new client wrapper...');
 
     _currentAgent = config;
     _client = ACPClientWrapper(agentConfig: config);
@@ -131,9 +136,13 @@ class AgentService extends ChangeNotifier {
     _client!.addListener(_onClientStateChanged);
 
     try {
+      debugPrint('[AgentService] Calling _client.connect()...');
       await _client!.connect();
+      debugPrint('[AgentService] Connection successful!');
       notifyListeners();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[AgentService] Connection failed: $e');
+      debugPrint('[AgentService] Stack trace: $stackTrace');
       // Notify listeners about the failed connection
       notifyListeners();
       rethrow;
@@ -151,6 +160,10 @@ class AgentService extends ChangeNotifier {
   /// The [cwd] specifies the working directory for the session, typically
   /// the project or worktree root. Optional [mcpServers] can be provided
   /// to connect to Model Context Protocol servers.
+  ///
+  /// Set [includePartialMessages] to `false` to disable streaming text updates.
+  /// When disabled, only complete messages are sent instead of character-by-character
+  /// streaming. Defaults to `true`.
   ///
   /// Returns an [ACPSessionWrapper] that provides session-specific streams
   /// and methods for interacting with the agent.
@@ -175,6 +188,7 @@ class AgentService extends ChangeNotifier {
   Future<ACPSessionWrapper> createSession({
     required String cwd,
     List<McpServerBase>? mcpServers,
+    bool includePartialMessages = true,
   }) async {
     if (_client == null || !_client!.isConnected) {
       throw ACPStateError.notConnected();
@@ -183,6 +197,7 @@ class AgentService extends ChangeNotifier {
     return _client!.createSession(
       cwd: cwd,
       mcpServers: mcpServers,
+      includePartialMessages: includePartialMessages,
     );
   }
 

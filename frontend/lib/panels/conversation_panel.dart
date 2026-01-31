@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
+import '../acp/acp_client_wrapper.dart';
 import '../acp/pending_permission.dart';
 import '../acp/session_update_handler.dart';
 import '../models/agent.dart';
@@ -594,67 +595,139 @@ void _showNotConnectedDialog(BuildContext context, AgentService agentService) {
   final registry = context.read<AgentRegistry>();
   final agents = registry.agents;
 
+  debugPrint('[ConnectDialog] Showing dialog. Agents available: '
+      '${agents.map((a) => a.name).join(", ")}');
+
   showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('No Agent Connected'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'You need to connect to an agent before sending messages.',
-            ),
-            if (agents.isEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'No agents are available. Please ensure an ACP-compatible '
-                'agent (like Claude Code) is installed and configured.',
-                style: TextStyle(
-                  color: Theme.of(dialogContext).colorScheme.error,
-                ),
-              ),
-            ] else ...[
-              const SizedBox(height: 16),
-              Text(
-                'Available agents: ${agents.map((a) => a.name).join(", ")}',
-                style: TextStyle(
-                  color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          if (agents.isNotEmpty)
-            FilledButton(
-              onPressed: () async {
-                Navigator.of(dialogContext).pop();
-                // Connect to the first available agent
-                try {
-                  await agentService.connect(agents.first);
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to connect: $e'),
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: Text('Connect to ${agents.first.name}'),
-            ),
-        ],
+      return _ConnectAgentDialog(
+        agents: agents,
+        agentService: agentService,
       );
     },
   );
+}
+
+/// Stateful dialog for connecting to an agent.
+///
+/// Handles the async connection flow with loading state and error handling.
+class _ConnectAgentDialog extends StatefulWidget {
+  const _ConnectAgentDialog({
+    required this.agents,
+    required this.agentService,
+  });
+
+  final List<AgentConfig> agents;
+  final AgentService agentService;
+
+  @override
+  State<_ConnectAgentDialog> createState() => _ConnectAgentDialogState();
+}
+
+class _ConnectAgentDialogState extends State<_ConnectAgentDialog> {
+  bool _isConnecting = false;
+  String? _error;
+
+  Future<void> _connect(AgentConfig agent) async {
+    debugPrint('[ConnectDialog] Connect button pressed for: ${agent.name}');
+    debugPrint('[ConnectDialog] Agent config: command=${agent.command}, '
+        'args=${agent.args}');
+
+    setState(() {
+      _isConnecting = true;
+      _error = null;
+    });
+
+    try {
+      debugPrint('[ConnectDialog] Calling agentService.connect()...');
+      await widget.agentService.connect(agent);
+      debugPrint('[ConnectDialog] Connection successful!');
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[ConnectDialog] Connection failed: $e');
+      debugPrint('[ConnectDialog] Stack trace: $stackTrace');
+
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final agents = widget.agents;
+
+    return AlertDialog(
+      title: const Text('No Agent Connected'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'You need to connect to an agent before sending messages.',
+          ),
+          if (agents.isEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'No agents are available. Please ensure an ACP-compatible '
+              'agent (like Claude Code) is installed and configured.',
+              style: TextStyle(
+                color: colorScheme.error,
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 16),
+            Text(
+              'Available agents: ${agents.map((a) => a.name).join(", ")}',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Error: $_error',
+              style: TextStyle(color: colorScheme.error),
+            ),
+          ],
+          if (_isConnecting) ...[
+            const SizedBox(height: 16),
+            const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Text('Connecting...'),
+              ],
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isConnecting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (agents.isNotEmpty)
+          FilledButton(
+            onPressed: _isConnecting ? null : () => _connect(agents.first),
+            child: Text('Connect to ${agents.first.name}'),
+          ),
+      ],
+    );
+  }
 }
 
 /// Header showing conversation context with model/permission selectors and usage.

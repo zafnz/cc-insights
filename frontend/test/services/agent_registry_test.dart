@@ -211,7 +211,8 @@ void main() {
         final claude = registry.getAgent('claude-code');
         if (claude != null) {
           expect(claude.id, equals('claude-code'));
-          expect(claude.name, equals('Claude Code'));
+          // Name varies based on whether it's the global install or local dev package
+          expect(claude.name, anyOf(equals('Claude Code'), equals('Claude Code (local)')));
         }
       });
 

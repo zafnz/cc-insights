@@ -316,10 +316,15 @@ class ACPClientWrapper extends ChangeNotifier {
   /// Throws [ACPConnectionError] if the agent process fails to start.
   /// Throws [ACPTimeoutError] if initialization takes too long.
   Future<void> connect() async {
+    debugPrint('[ACPClientWrapper] connect() called');
+    debugPrint('[ACPClientWrapper] Current state: $_connectionState');
+
     if (_connectionState == ACPConnectionState.connected) {
+      debugPrint('[ACPClientWrapper] Already connected, throwing error');
       throw ACPStateError.alreadyConnected();
     }
     if (_connectionState == ACPConnectionState.connecting) {
+      debugPrint('[ACPClientWrapper] Already connecting, throwing error');
       throw const ACPStateError(
         'Connection already in progress',
         currentState: 'connecting',
@@ -329,22 +334,28 @@ class ACPClientWrapper extends ChangeNotifier {
     // Clear any previous error and set connecting state
     _lastError = null;
     _connectionState = ACPConnectionState.connecting;
+    debugPrint('[ACPClientWrapper] State set to connecting, notifying...');
     notifyListeners();
 
     developer.log(
       'Connecting to agent: ${agentConfig.name} (${agentConfig.command})',
       name: 'ACPClientWrapper',
     );
+    debugPrint('[ACPClientWrapper] Connecting to: ${agentConfig.command} '
+        '${agentConfig.args.join(" ")}');
 
     try {
       // Spawn the agent process with merged environment
+      debugPrint('[ACPClientWrapper] Spawning agent process...');
       try {
         _process = await Process.start(
           agentConfig.command,
           agentConfig.args,
           environment: {...Platform.environment, ...agentConfig.env},
         );
+        debugPrint('[ACPClientWrapper] Process started, pid: ${_process!.pid}');
       } on ProcessException catch (e) {
+        debugPrint('[ACPClientWrapper] Process failed to start: ${e.message}');
         throw ACPConnectionError.failedToStart(
           e.message,
           command: agentConfig.command,
@@ -379,9 +390,11 @@ class ACPClientWrapper extends ChangeNotifier {
       );
 
       // Create NDJSON stream for communication
+      debugPrint('[ACPClientWrapper] Creating NDJSON stream...');
       final stream = ndJsonStream(_process!.stdout, _process!.stdin);
 
       // Create our Client implementation that bridges to streams
+      debugPrint('[ACPClientWrapper] Creating CCInsightsACPClient...');
       final client = CCInsightsACPClient(
         updateController: _updateController,
         permissionController: _permissionController,
@@ -389,9 +402,12 @@ class ACPClientWrapper extends ChangeNotifier {
       );
 
       // Create connection with our client handler
+      debugPrint('[ACPClientWrapper] Creating ClientSideConnection...');
       _connection = ClientSideConnection((_) => client, stream);
 
       // Initialize the connection with our capabilities (with timeout)
+      debugPrint('[ACPClientWrapper] Calling initialize() with '
+          '${connectionTimeout.inSeconds}s timeout...');
       try {
         _initResult = await _connection!
             .initialize(
@@ -407,7 +423,10 @@ class ACPClientWrapper extends ChangeNotifier {
               ),
             )
             .timeout(connectionTimeout);
+        debugPrint('[ACPClientWrapper] Initialize completed successfully');
       } on TimeoutException {
+        debugPrint('[ACPClientWrapper] Initialize timed out after '
+            '${connectionTimeout.inSeconds}s');
         throw ACPTimeoutError.connectionTimeout(connectionTimeout);
       }
 
@@ -415,8 +434,11 @@ class ACPClientWrapper extends ChangeNotifier {
         'Connected to agent. Protocol version: ${_initResult!.protocolVersion}',
         name: 'ACPClientWrapper',
       );
+      debugPrint('[ACPClientWrapper] Protocol version: '
+          '${_initResult!.protocolVersion}');
 
       _connectionState = ACPConnectionState.connected;
+      debugPrint('[ACPClientWrapper] Connection complete, notifying listeners');
       notifyListeners();
     } on ACPError catch (e) {
       _setError(e);
@@ -476,6 +498,11 @@ class ACPClientWrapper extends ChangeNotifier {
   /// the project root. Optional [mcpServers] can be provided to connect
   /// to Model Context Protocol servers.
   ///
+  /// Set [includePartialMessages] to `false` to disable streaming text updates.
+  /// When disabled, only complete messages are sent instead of character-by-character
+  /// streaming. This can be useful for clients that don't handle partial messages well.
+  /// Defaults to `true`.
+  ///
   /// Returns an [ACPSessionWrapper] that provides session-specific streams
   /// and methods for interacting with the agent.
   ///
@@ -497,6 +524,7 @@ class ACPClientWrapper extends ChangeNotifier {
   Future<ACPSessionWrapper> createSession({
     required String cwd,
     List<McpServerBase>? mcpServers,
+    bool includePartialMessages = true,
   }) async {
     if (_connectionState != ACPConnectionState.connected ||
         _connection == null) {
@@ -504,7 +532,7 @@ class ACPClientWrapper extends ChangeNotifier {
     }
 
     developer.log(
-      'Creating session in: $cwd',
+      'Creating session in: $cwd (partial messages: $includePartialMessages)',
       name: 'ACPClientWrapper',
     );
 
@@ -512,6 +540,11 @@ class ACPClientWrapper extends ChangeNotifier {
       NewSessionRequest(
         cwd: cwd,
         mcpServers: mcpServers ?? [],
+        meta: {
+          'claudeCode': {
+            'includePartialMessages': includePartialMessages,
+          },
+        },
       ),
     );
 

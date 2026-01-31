@@ -155,6 +155,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// available agents on the system.
   ///
   /// This runs in the background and doesn't block app startup.
+  /// After discovery, automatically connects to Claude Code if available.
   Future<void> _initializeAgentRegistry() async {
     try {
       // Load saved custom agents first
@@ -164,6 +165,20 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       debugPrint(
         'Agent registry initialized: ${_agentRegistry!.agents.length} agents',
       );
+
+      // Auto-connect to Claude Code if available
+      final claudeCode = _agentRegistry!.getAgent('claude-code');
+      if (claudeCode != null) {
+        debugPrint('Auto-connecting to Claude Code...');
+        try {
+          await _agentService!.connect(claudeCode);
+          debugPrint('Successfully connected to Claude Code');
+        } catch (e) {
+          debugPrint('Failed to auto-connect to Claude Code: $e');
+        }
+      } else {
+        debugPrint('Claude Code not found, skipping auto-connect');
+      }
     } catch (e) {
       debugPrint('Error initializing agent registry: $e');
     }

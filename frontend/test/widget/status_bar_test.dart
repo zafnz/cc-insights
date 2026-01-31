@@ -124,6 +124,7 @@ class FakeAgentService extends ChangeNotifier implements AgentService {
   Future<ACPSessionWrapper> createSession({
     required String cwd,
     List<McpServerBase>? mcpServers,
+    bool includePartialMessages = true,
   }) async {
     throw StateError('FakeAgentService does not support createSession');
   }
