@@ -170,6 +170,71 @@ class _EmptyChatsPlaceholder extends StatelessWidget {
   }
 }
 
+/// Status indicator for a chat showing its current state.
+///
+/// Shows one of:
+/// - Green filled dot: Finished with unread messages
+/// - Open circle: Finished, no unread messages
+/// - Spinner: Currently working
+/// - Exclamation mark: Permission/question waiting
+class _ChatStatusIndicator extends StatelessWidget {
+  const _ChatStatusIndicator({required this.chat});
+
+  final ChatState chat;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 10.0;
+
+    // Priority order: permission > working > unread > idle
+    if (chat.isWaitingForPermission) {
+      // Exclamation mark for pending permission
+      return Icon(
+        Icons.priority_high,
+        size: size + 4,
+        color: Colors.orange,
+      );
+    }
+
+    if (chat.isWorking) {
+      // Spinner for working
+      return SizedBox(
+        width: size,
+        height: size,
+        child: CircularProgressIndicator(
+          strokeWidth: 1.5,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    }
+
+    if (chat.hasUnreadMessages) {
+      // Filled green dot for unread messages
+      return Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.green,
+        ),
+      );
+    }
+
+    // Open circle for idle/no unread
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline,
+          width: 1.5,
+        ),
+      ),
+    );
+  }
+}
+
 /// A single compact chat entry in the list with close button on hover.
 class _ChatListItem extends StatefulWidget {
   const _ChatListItem({
@@ -208,71 +273,78 @@ class _ChatListItemState extends State<_ChatListItem> {
         final subagentCount = data.subagentConversations.length;
 
         return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: Material(
-        color: widget.isSelected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : Colors.transparent,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              // Chat icon
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              // Chat name (single-click to select, double-click to rename)
-              Expanded(
-                child: EditableLabel(
-                  text: data.name,
-                  style: textTheme.bodyMedium,
-                  onTap: widget.onTap,
-                  onSubmit: (newName) => widget.onRename?.call(newName),
+          onEnter: (_) => setState(() => _isHovered = true),
+          onExit: (_) => setState(() => _isHovered = false),
+          child: Material(
+            color: widget.isSelected
+                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                : Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    // Chat icon
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    // Status indicator
+                    _ChatStatusIndicator(chat: widget.chat),
+                    const SizedBox(width: 6),
+                    // Chat name (single-click to select, double-click to rename)
+                    Expanded(
+                      child: EditableLabel(
+                        text: data.name,
+                        style: textTheme.bodyMedium,
+                        onTap: widget.onTap,
+                        onSubmit: (newName) => widget.onRename?.call(newName),
+                      ),
+                    ),
+                    // Close button (visible on hover)
+                    if (_isHovered)
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          iconSize: 14,
+                          onPressed: widget.onClose,
+                          icon: Icon(
+                            Icons.close,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          tooltip: 'Close chat',
+                        ),
+                      )
+                    // Subagent count indicator (visible when not hovered)
+                    else if (subagentCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '$subagentCount',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-                // Close button (visible on hover)
-                if (_isHovered)
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      iconSize: 14,
-                      onPressed: widget.onClose,
-                      icon: Icon(
-                        Icons.close,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      tooltip: 'Close chat',
-                    ),
-                  )
-                // Subagent count indicator (visible when not hovered)
-                else if (subagentCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '$subagentCount',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ),
-              ],
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }

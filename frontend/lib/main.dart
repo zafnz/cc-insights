@@ -158,14 +158,16 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       _backend!.start();
     }
 
-    // Create or use injected SdkMessageHandler
-    _handler = widget.messageHandler ?? SdkMessageHandler();
-
     // Create the project restore service for persistence operations
     _restoreService = ProjectRestoreService();
 
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();
+
+    // Create or use injected SdkMessageHandler
+    // Pass askAiService for auto-generating chat titles
+    _handler = widget.messageHandler ??
+        SdkMessageHandler(askAiService: _askAiService);
 
     // Initialize project (sync for mock, async for real)
     if (shouldUseMock) {

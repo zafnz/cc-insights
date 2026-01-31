@@ -162,47 +162,75 @@ class _WorktreeListItem extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final data = worktree.data;
     // Show relative path for linked worktrees, full path for primary
-    final displayPath = _getRelativePath(data.worktreeRoot) ?? data.worktreeRoot;
+    final displayPath =
+        _getRelativePath(data.worktreeRoot) ?? data.worktreeRoot;
 
-    return Material(
-      color: isSelected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Branch name (normal weight, ~13px)
-              Text(
-                data.branch,
-                style: textTheme.bodyMedium,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              // Path + status on same line (muted, monospace, ~11px)
-              Row(
+    // Listen to all chats in this worktree to detect permission changes
+    return ListenableBuilder(
+      listenable: Listenable.merge(worktree.chats),
+      builder: (context, _) {
+        // Check if any chat in this worktree has a pending permission
+        final hasAnyPermissionPending =
+            worktree.chats.any((chat) => chat.isWaitingForPermission);
+
+        return Material(
+          color: isSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+              : Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Path (full for primary, relative for linked)
-                  Expanded(
-                    child: Text(
-                      displayPath,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                  // Top row: Branch name + permission indicator
+                  Row(
+                    children: [
+                      // Branch name (normal weight, ~13px)
+                      Expanded(
+                        child: Text(
+                          data.branch,
+                          style: textTheme.bodyMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                      // Permission indicator (question/exclamation mark)
+                      if (hasAnyPermissionPending)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(
+                            Icons.priority_high,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
+                        ),
+                    ],
                   ),
-                  // Inline status indicators
-                  InlineStatusIndicators(data: data),
+                  const SizedBox(height: 2),
+                  // Path + status on same line (muted, monospace, ~11px)
+                  Row(
+                    children: [
+                      // Path (full for primary, relative for linked)
+                      Expanded(
+                        child: Text(
+                          displayPath,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Inline status indicators
+                      InlineStatusIndicators(data: data),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

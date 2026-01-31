@@ -180,6 +180,9 @@ class ClaudeSingleRequest {
         workingDirectory: workingDirectory,
       );
 
+      // Close stdin immediately - Claude CLI waits for EOF before proceeding
+      await process.stdin.close();
+
       // Collect stdout and stderr
       final stdoutBuffer = StringBuffer();
       final stderrBuffer = StringBuffer();

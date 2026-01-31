@@ -1,8 +1,11 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
+
 import '../models/agent.dart';
 import '../models/chat.dart';
 import '../models/output_entry.dart';
+import 'ask_ai_service.dart';
 
 /// Handles SDK messages and routes them to the correct conversation.
 ///
@@ -47,12 +50,29 @@ class SdkMessageHandler {
   /// [ContextSummaryEntry].
   bool _expectingContextSummary = false;
 
+  /// AskAiService for generating chat titles.
+  final AskAiService? _askAiService;
+
+  /// Set of chat IDs that are currently having their title generated.
+  ///
+  /// Used to prevent duplicate concurrent title generation requests.
+  final Set<String> _pendingTitleGenerations = {};
+
+  /// Set of chat IDs that have already had title generation attempted.
+  ///
+  /// Once a chat ID is in this set, we won't attempt title generation again.
+  /// This persists for the lifetime of the SdkMessageHandler instance.
+  final Set<String> _titlesGenerated = {};
+
   // Phase 3: Streaming state (commented out for now)
   // final Map<String, Map<int, OutputEntry>> _streamingEntries = {};
   // Timer? _notifyTimer;
 
   /// Creates an [SdkMessageHandler].
-  SdkMessageHandler();
+  ///
+  /// If [askAiService] is provided, it will be used to auto-generate chat
+  /// titles after the first assistant response.
+  SdkMessageHandler({AskAiService? askAiService}) : _askAiService = askAiService;
 
   /// Handle an incoming SDK message.
   ///
@@ -381,22 +401,20 @@ class SdkMessageHandler {
       }
     }
 
-    // Extract agent type/label from Task tool input.
-    // The SDK uses 'subagent_type' for the agent name (e.g., "code-reviewer",
-    // "general-purpose", "Explore"). Some older code may use 'name'.
+    // Extract agent type from Task tool input.
+    // The SDK uses 'subagent_type' for the agent type (e.g., "general-purpose",
+    // "Explore", "Plan"). Some older code may use 'name'.
     final agentType = input['subagent_type'] as String? ??
-        input['name'] as String? ??
-        'Agent';
+        input['name'] as String?;
 
-    // Extract task description from 'prompt' field.
-    // The 'prompt' contains the full task instructions for the subagent.
-    // Fall back to 'description' for backwards compatibility.
-    final taskDescription = input['prompt'] as String? ??
-        input['description'] as String? ??
+    // Extract task description from 'description' field.
+    // This is a short (3-5 word) summary of what the agent will do.
+    // Fall back to 'task' for backwards compatibility.
+    final taskDescription = input['description'] as String? ??
         input['task'] as String?;
 
     developer.log(
-      'Creating subagent: type=$agentType, description=${taskDescription?.substring(0, taskDescription.length > 50 ? 50 : taskDescription.length) ?? "null"}...',
+      'Creating subagent: type=${agentType ?? "null"}, description=${taskDescription?.substring(0, taskDescription.length > 50 ? 50 : taskDescription.length) ?? "null"}...',
       name: 'SdkMessageHandler',
     );
 
@@ -407,9 +425,9 @@ class SdkMessageHandler {
         name: 'SdkMessageHandler',
       );
     }
-    if (input['prompt'] == null) {
+    if (input['description'] == null) {
       developer.log(
-        'Task tool missing prompt field. Input keys: ${input.keys.toList()}',
+        'Task tool missing description field. Input keys: ${input.keys.toList()}',
         name: 'SdkMessageHandler',
       );
     }
@@ -495,6 +513,8 @@ class SdkMessageHandler {
   }
 
   void _handleResultMessage(ChatState chat, Map<String, dynamic> msg) {
+    final parentToolUseId = msg['parent_tool_use_id'] as String?;
+
     // Extract total cost
     final totalCostUsd =
         (msg['total_cost_usd'] as num?)?.toDouble() ?? 0.0;
@@ -537,7 +557,6 @@ class SdkMessageHandler {
 
     // Check for agent completion
     final subtype = msg['subtype'] as String?;
-    final parentToolUseId = msg['parent_tool_use_id'] as String?;
 
     // Only update cumulative usage for main agent results (not subagents).
     // Subagent costs are already included in the parent's total_cost_usd.
@@ -607,6 +626,100 @@ class SdkMessageHandler {
     ));
   }
 
+  /// Generates an AI-powered title for a chat based on the user's message.
+  ///
+  /// Call this when creating a new chat and sending the first message.
+  /// The title generation is fire-and-forget - failures are logged but don't
+  /// affect the user experience.
+  ///
+  /// The method is idempotent - it tracks which chats have had title generation
+  /// attempted and won't generate twice for the same chat.
+  ///
+  /// Parameters:
+  /// - [chat]: The chat to generate a title for
+  /// - [userMessage]: The user's message to base the title on
+  void generateChatTitle(ChatState chat, String userMessage) {
+    // Fire and forget - don't await
+    _generateChatTitleAsync(chat, userMessage);
+  }
+
+  Future<void> _generateChatTitleAsync(ChatState chat, String userMessage) async {
+    // Skip if no AskAiService available
+    if (_askAiService == null) return;
+
+    // Skip if we've already generated (or attempted to generate) a title for this chat
+    if (_titlesGenerated.contains(chat.data.id)) return;
+
+    // Skip if currently generating a title for this chat
+    if (_pendingTitleGenerations.contains(chat.data.id)) return;
+
+    if (userMessage.isEmpty) return;
+
+    // Get the working directory
+    final workingDirectory = chat.data.worktreeRoot;
+    if (workingDirectory == null) return;
+
+    // Mark as generated (even before we start, to prevent duplicate attempts)
+    _titlesGenerated.add(chat.data.id);
+
+    // Mark as pending (prevents duplicate concurrent requests)
+    _pendingTitleGenerations.add(chat.data.id);
+
+    try {
+      final prompt = '''Read the following and produce a short 3-5 word statement succiciently summing up what the request is. It should be concise, do not worry about grammer.
+Your reply should be between ==== marks. eg:
+=====
+Automatic Chat Summary
+=====
+
+User's message:
+$userMessage''';
+
+      final result = await _askAiService!.ask(
+        prompt: prompt,
+        workingDirectory: workingDirectory,
+        model: 'haiku',
+        allowedTools: [], // No tools needed for title generation
+        maxTurns: 1, // Single turn only - no tool use
+        timeoutSeconds: 30,
+      );
+
+      if (result != null && !result.isError && result.result.isNotEmpty) {
+        // Extract the title from between ==== marks
+        final rawResult = result.result;
+        final titleMatch = RegExp(r'=+\s*\n(.+?)\n\s*=+', dotAll: true)
+            .firstMatch(rawResult);
+
+        String title;
+        if (titleMatch != null) {
+          title = titleMatch.group(1)?.trim() ?? rawResult.trim();
+        } else {
+          // Fallback: use the raw result if no ==== marks found
+          title = rawResult.trim();
+        }
+
+        // Clean up the title - remove any remaining markers and limit length
+        title = title.replaceAll(RegExp(r'^=+'), '').replaceAll(RegExp(r'=+$'), '').trim();
+        if (title.length > 50) {
+          title = '${title.substring(0, 47)}...';
+        }
+
+        if (title.isNotEmpty) {
+          chat.rename(title);
+        }
+      }
+    } catch (e) {
+      // Title generation is fire-and-forget - log but don't propagate errors
+      developer.log(
+        'Failed to generate chat title: $e',
+        name: 'SdkMessageHandler',
+        level: 900,
+      );
+    } finally {
+      _pendingTitleGenerations.remove(chat.data.id);
+    }
+  }
+
   /// Clears all internal state.
   ///
   /// Call this when the session ends or is cleared.
@@ -616,6 +729,8 @@ class SdkMessageHandler {
     _toolUseIdToAgentId.clear();
     _hasAssistantOutputThisTurn = false;
     _expectingContextSummary = false;
+    _pendingTitleGenerations.clear();
+    _titlesGenerated.clear();
   }
 
   /// Disposes of resources.
