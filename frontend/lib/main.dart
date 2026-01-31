@@ -9,6 +9,7 @@ import 'models/worktree.dart';
 import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
 import 'services/backend_service.dart';
+import 'services/git_service.dart';
 import 'services/persistence_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
@@ -316,6 +317,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         Provider<SdkMessageHandler>.value(value: _handler!),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
+        // Git service for git operations (stateless)
+        Provider<GitService>.value(value: const RealGitService()),
         // Project state
         ChangeNotifierProvider<ProjectState>.value(value: project),
         // Selection state depends on project

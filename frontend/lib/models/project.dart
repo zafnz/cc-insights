@@ -127,6 +127,16 @@ class ProjectState extends ChangeNotifier {
 
   /// Adds a linked worktree to this project.
   ///
+  /// The worktree is added to the [linkedWorktrees] list and listeners
+  /// are notified. This does NOT persist the worktree - that should be
+  /// done separately via [WorktreeService] or [PersistenceService].
+  void addWorktree(WorktreeState worktree) {
+    _linkedWorktrees.add(worktree);
+    notifyListeners();
+  }
+
+  /// Adds a linked worktree to this project.
+  ///
   /// The worktree must be a linked worktree (not primary). Optionally selects
   /// the newly added worktree if [select] is true.
   void addLinkedWorktree(WorktreeState worktree, {bool select = false}) {

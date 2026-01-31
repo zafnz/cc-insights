@@ -70,7 +70,7 @@ class CreateWorktreeCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          // TODO: Implement create worktree dialog
+          context.read<SelectionState>().showCreateWorktreePanel();
         },
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

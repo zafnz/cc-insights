@@ -139,6 +139,34 @@ class FakeGitService implements GitService {
     return repoRoots[path];
   }
 
+  @override
+  Future<List<String>> listBranches(String repoRoot) async {
+    await _maybeDelay();
+    _maybeThrow();
+    // Return empty list by default
+    return [];
+  }
+
+  @override
+  Future<bool> branchExists(String repoRoot, String branchName) async {
+    await _maybeDelay();
+    _maybeThrow();
+    // Return false by default
+    return false;
+  }
+
+  @override
+  Future<void> createWorktree({
+    required String repoRoot,
+    required String worktreePath,
+    required String branch,
+    required bool newBranch,
+  }) async {
+    await _maybeDelay();
+    _maybeThrow();
+    // No-op by default
+  }
+
   // =========================================================================
   // Convenience methods for test setup
   // =========================================================================

@@ -9,6 +9,15 @@ import '../models/worktree.dart';
 import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 
+/// Mode for the main content panel.
+enum ContentPanelMode {
+  /// Normal conversation view
+  conversation,
+
+  /// Create worktree form
+  createWorktree,
+}
+
 /// Provides a unified view of the current selection state.
 ///
 /// This class is a convenience accessor that delegates to the entity hierarchy.
@@ -35,6 +44,9 @@ class SelectionState extends ChangeNotifier {
   /// File selection is separate from the entity hierarchy (project/worktree/
   /// chat/conversation) and can be set independently.
   String? _selectedFilePath;
+
+  /// The current mode for the main content panel.
+  ContentPanelMode _contentPanelMode = ContentPanelMode.conversation;
 
   /// Creates a [SelectionState] for the given project.
   ///
@@ -68,6 +80,9 @@ class SelectionState extends ChangeNotifier {
 
   /// The currently selected file path, if any.
   String? get selectedFilePath => _selectedFilePath;
+
+  /// The current mode for the main content panel.
+  ContentPanelMode get contentPanelMode => _contentPanelMode;
 
   /// Selects a worktree within the project.
   ///
@@ -233,6 +248,18 @@ class SelectionState extends ChangeNotifier {
     worktree.addChat(chat, select: true);
 
     // Notify listeners so UI rebuilds
+    notifyListeners();
+  }
+
+  /// Shows the create worktree panel in the content area.
+  void showCreateWorktreePanel() {
+    _contentPanelMode = ContentPanelMode.createWorktree;
+    notifyListeners();
+  }
+
+  /// Returns to the normal conversation panel view.
+  void showConversationPanel() {
+    _contentPanelMode = ContentPanelMode.conversation;
     notifyListeners();
   }
 }
