@@ -234,7 +234,7 @@ class ChatState extends ChangeNotifier {
   String? _selectedConversationId;
 
   /// The selected Claude model for this chat.
-  ClaudeModel _model = ClaudeModel.sonnet;
+  ClaudeModel _model = ClaudeModel.opus;
 
   /// The permission mode for this chat.
   PermissionMode _permissionMode = PermissionMode.defaultMode;
