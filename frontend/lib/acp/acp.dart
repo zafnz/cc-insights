@@ -6,6 +6,7 @@
 library;
 
 export 'acp_client_wrapper.dart';
+export 'acp_errors.dart';
 export 'acp_session_wrapper.dart';
 export 'cc_insights_acp_client.dart';
 export 'pending_permission.dart';

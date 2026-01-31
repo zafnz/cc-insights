@@ -2,8 +2,6 @@ import 'package:cc_insights_v2/acp/acp_client_wrapper.dart';
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/services/agent_registry.dart';
 import 'package:cc_insights_v2/services/agent_service.dart';
-import 'package:cc_insights_v2/services/backend_service.dart';
-import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -103,54 +101,6 @@ void main() {
       });
     });
 
-    group('Legacy Services', () {
-      testWidgets('BackendService is available via Provider', (tester) async {
-        await tester.pumpWidget(const CCInsightsApp());
-        await safePumpAndSettle(tester);
-
-        final context = tester.element(find.byType(MaterialApp));
-
-        // Verify BackendService is accessible
-        final backend = context.read<BackendService>();
-        expect(backend, isNotNull);
-        expect(backend, isA<BackendService>());
-      });
-
-      testWidgets(
-          'SdkMessageHandler is available via Provider',
-          (tester) async {
-        await tester.pumpWidget(const CCInsightsApp());
-        await safePumpAndSettle(tester);
-
-        final context = tester.element(find.byType(MaterialApp));
-
-        // Verify SdkMessageHandler is accessible
-        final handler = context.read<SdkMessageHandler>();
-        expect(handler, isNotNull);
-        expect(handler, isA<SdkMessageHandler>());
-      });
-
-      testWidgets('BackendService is a ChangeNotifier', (tester) async {
-        await tester.pumpWidget(const CCInsightsApp());
-        await safePumpAndSettle(tester);
-
-        final context = tester.element(find.byType(MaterialApp));
-        final backend = context.read<BackendService>();
-
-        // Verify it extends ChangeNotifier
-        var listenerCalled = false;
-        void listener() {
-          listenerCalled = true;
-        }
-
-        backend.addListener(listener);
-        expect(backend, isA<ChangeNotifier>());
-
-        // Clean up listener
-        backend.removeListener(listener);
-      });
-    });
-
     group('Provider Tree Integration', () {
       testWidgets(
           'All services are accessible in same widget tree',
@@ -160,11 +110,9 @@ void main() {
 
         final context = tester.element(find.byType(MaterialApp));
 
-        // Verify all providers are accessible from the same context
+        // Verify all ACP providers are accessible from the same context
         expect(() => context.read<AgentRegistry>(), returnsNormally);
         expect(() => context.read<AgentService>(), returnsNormally);
-        expect(() => context.read<BackendService>(), returnsNormally);
-        expect(() => context.read<SdkMessageHandler>(), returnsNormally);
       });
 
       testWidgets(
@@ -186,11 +134,6 @@ void main() {
         final service2 = context.read<AgentService>();
         expect(service1, same(service2),
             reason: 'AgentService should be same instance');
-
-        final backend1 = context.read<BackendService>();
-        final backend2 = context.read<BackendService>();
-        expect(backend1, same(backend2),
-            reason: 'BackendService should be same instance');
       });
     });
 

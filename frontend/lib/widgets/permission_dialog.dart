@@ -1,5 +1,6 @@
-import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
+
+import '../legacy/sdk_types.dart' as sdk;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';

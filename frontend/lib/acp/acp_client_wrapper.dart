@@ -5,10 +5,39 @@ import 'dart:io';
 import 'package:acp_dart/acp_dart.dart';
 import 'package:flutter/foundation.dart';
 
+import 'acp_errors.dart';
 import 'acp_session_wrapper.dart';
 import 'cc_insights_acp_client.dart';
 import 'handlers/terminal_handler.dart';
 import 'pending_permission.dart';
+
+/// The connection state of an ACP client.
+///
+/// This enum tracks the lifecycle of a connection to an ACP agent,
+/// from initial state through connection attempts, active connection,
+/// and disconnection or error states.
+enum ACPConnectionState {
+  /// Initial state before any connection attempt.
+  disconnected,
+
+  /// Currently attempting to connect to the agent.
+  ///
+  /// The client is in the process of spawning the agent process
+  /// and performing ACP protocol initialization.
+  connecting,
+
+  /// Successfully connected to the agent.
+  ///
+  /// The agent process is running and protocol initialization
+  /// is complete. Sessions can be created.
+  connected,
+
+  /// Connection failed or the agent process crashed.
+  ///
+  /// Check [ACPClientWrapper.lastError] for details about the failure.
+  /// Call [ACPClientWrapper.connect] to retry.
+  error,
+}
 
 /// Configuration for an ACP agent.
 ///
@@ -185,24 +214,49 @@ class ACPClientWrapper extends ChangeNotifier {
   /// Creates a new ACP client wrapper.
   ///
   /// The [agentConfig] specifies the agent to connect to.
+  /// The optional [connectionTimeout] controls how long to wait for
+  /// the agent to initialize (default: 30 seconds).
   /// Call [connect] to establish the connection.
-  ACPClientWrapper({required this.agentConfig});
+  ACPClientWrapper({
+    required this.agentConfig,
+    this.connectionTimeout = const Duration(seconds: 30),
+  });
 
   /// Configuration for the agent to connect to.
   final AgentConfig agentConfig;
 
+  /// Timeout for connection initialization.
+  final Duration connectionTimeout;
+
   Process? _process;
   ClientSideConnection? _connection;
-  bool _isConnected = false;
+  ACPConnectionState _connectionState = ACPConnectionState.disconnected;
   InitializeResponse? _initResult;
+  ACPError? _lastError;
+  StreamSubscription<int>? _exitCodeSubscription;
+  StreamSubscription<String>? _stderrSubscription;
 
   // Stream controllers for bridging callbacks to streams
   final _updateController = StreamController<SessionNotification>.broadcast();
   final _permissionController = StreamController<PendingPermission>.broadcast();
   final _terminalHandler = TerminalHandler();
 
+  /// The current connection state.
+  ///
+  /// Use this to track connection lifecycle and show appropriate UI.
+  ACPConnectionState get connectionState => _connectionState;
+
   /// Whether the client is connected to the agent.
-  bool get isConnected => _isConnected;
+  ///
+  /// This is a convenience getter equivalent to
+  /// `connectionState == ACPConnectionState.connected`.
+  bool get isConnected => _connectionState == ACPConnectionState.connected;
+
+  /// The last error that occurred, if any.
+  ///
+  /// This is set when [connectionState] is [ACPConnectionState.error].
+  /// It is cleared when [connect] is called again.
+  ACPError? get lastError => _lastError;
 
   /// The agent's capabilities, available after [connect] completes.
   ///
@@ -214,7 +268,7 @@ class ACPClientWrapper extends ChangeNotifier {
   ///
   /// Note: The current ACP spec's [InitializeResponse] does not include
   /// agent info directly. This is derived from [agentConfig].
-  AgentInfo? get agentInfo => _isConnected
+  AgentInfo? get agentInfo => isConnected
       ? AgentInfo(
           id: agentConfig.id,
           name: agentConfig.name,
@@ -258,78 +312,162 @@ class ACPClientWrapper extends ChangeNotifier {
   /// After successful connection, [isConnected] is `true` and [capabilities]
   /// is available.
   ///
-  /// Throws an exception if the agent process fails to start or if
-  /// initialization fails.
+  /// Throws [ACPStateError] if already connected.
+  /// Throws [ACPConnectionError] if the agent process fails to start.
+  /// Throws [ACPTimeoutError] if initialization takes too long.
   Future<void> connect() async {
-    if (_isConnected) {
-      throw StateError('Already connected. Call disconnect() first.');
+    if (_connectionState == ACPConnectionState.connected) {
+      throw ACPStateError.alreadyConnected();
     }
+    if (_connectionState == ACPConnectionState.connecting) {
+      throw const ACPStateError(
+        'Connection already in progress',
+        currentState: 'connecting',
+      );
+    }
+
+    // Clear any previous error and set connecting state
+    _lastError = null;
+    _connectionState = ACPConnectionState.connecting;
+    notifyListeners();
 
     developer.log(
       'Connecting to agent: ${agentConfig.name} (${agentConfig.command})',
       name: 'ACPClientWrapper',
     );
 
-    // Spawn the agent process with merged environment
-    _process = await Process.start(
-      agentConfig.command,
-      agentConfig.args,
-      environment: {...Platform.environment, ...agentConfig.env},
-    );
-
-    // Log stderr for debugging
-    _process!.stderr.transform(const SystemEncoding().decoder).listen(
-      (data) {
-        developer.log(
-          'Agent stderr: $data',
-          name: 'ACPClientWrapper',
-          level: 800, // WARNING level
+    try {
+      // Spawn the agent process with merged environment
+      try {
+        _process = await Process.start(
+          agentConfig.command,
+          agentConfig.args,
+          environment: {...Platform.environment, ...agentConfig.env},
         );
-      },
-      onError: (Object error) {
-        developer.log(
-          'Agent stderr error: $error',
-          name: 'ACPClientWrapper',
-          level: 1000, // SEVERE level
-          error: error,
+      } on ProcessException catch (e) {
+        throw ACPConnectionError.failedToStart(
+          e.message,
+          command: agentConfig.command,
         );
-      },
-    );
+      }
 
-    // Create NDJSON stream for communication
-    final stream = ndJsonStream(_process!.stdout, _process!.stdin);
+      // Monitor for unexpected process exit
+      _exitCodeSubscription = _process!.exitCode.asStream().listen(
+        (exitCode) {
+          _handleProcessExit(exitCode);
+        },
+      );
 
-    // Create our Client implementation that bridges to streams
-    final client = CCInsightsACPClient(
-      updateController: _updateController,
-      permissionController: _permissionController,
-      terminalHandler: _terminalHandler,
-    );
+      // Log stderr for debugging - track subscription for cleanup
+      _stderrSubscription =
+          _process!.stderr.transform(const SystemEncoding().decoder).listen(
+        (data) {
+          developer.log(
+            'Agent stderr: $data',
+            name: 'ACPClientWrapper',
+            level: 800, // WARNING level
+          );
+        },
+        onError: (Object error) {
+          developer.log(
+            'Agent stderr error: $error',
+            name: 'ACPClientWrapper',
+            level: 1000, // SEVERE level
+            error: error,
+          );
+        },
+      );
 
-    // Create connection with our client handler
-    _connection = ClientSideConnection((_) => client, stream);
+      // Create NDJSON stream for communication
+      final stream = ndJsonStream(_process!.stdout, _process!.stdin);
 
-    // Initialize the connection with our capabilities
-    _initResult = await _connection!.initialize(
-      InitializeRequest(
-        protocolVersion: 1,
-        clientCapabilities: ClientCapabilities(
-          fs: FileSystemCapability(
-            readTextFile: true,
-            writeTextFile: true,
-          ),
-          terminal: true,
-        ),
-      ),
-    );
+      // Create our Client implementation that bridges to streams
+      final client = CCInsightsACPClient(
+        updateController: _updateController,
+        permissionController: _permissionController,
+        terminalHandler: _terminalHandler,
+      );
 
-    developer.log(
-      'Connected to agent. Protocol version: ${_initResult!.protocolVersion}',
-      name: 'ACPClientWrapper',
-    );
+      // Create connection with our client handler
+      _connection = ClientSideConnection((_) => client, stream);
 
-    _isConnected = true;
+      // Initialize the connection with our capabilities (with timeout)
+      try {
+        _initResult = await _connection!
+            .initialize(
+              InitializeRequest(
+                protocolVersion: 1,
+                clientCapabilities: ClientCapabilities(
+                  fs: FileSystemCapability(
+                    readTextFile: true,
+                    writeTextFile: true,
+                  ),
+                  terminal: true,
+                ),
+              ),
+            )
+            .timeout(connectionTimeout);
+      } on TimeoutException {
+        throw ACPTimeoutError.connectionTimeout(connectionTimeout);
+      }
+
+      developer.log(
+        'Connected to agent. Protocol version: ${_initResult!.protocolVersion}',
+        name: 'ACPClientWrapper',
+      );
+
+      _connectionState = ACPConnectionState.connected;
+      notifyListeners();
+    } on ACPError catch (e) {
+      _setError(e);
+      rethrow;
+    } catch (e) {
+      final error = ACPConnectionError.failedToStart(
+        e.toString(),
+        command: agentConfig.command,
+      );
+      _setError(error);
+      throw error;
+    }
+  }
+
+  /// Handles unexpected process exit.
+  void _handleProcessExit(int exitCode) {
+    // Only handle if we're still supposed to be connected
+    if (_connectionState == ACPConnectionState.connected ||
+        _connectionState == ACPConnectionState.connecting) {
+      developer.log(
+        'Agent process exited unexpectedly with code $exitCode',
+        name: 'ACPClientWrapper',
+        level: 1000, // SEVERE level
+      );
+
+      final error = ACPConnectionError.processCrashed(
+        exitCode,
+        command: agentConfig.command,
+      );
+      _setError(error);
+    }
+  }
+
+  /// Sets the error state and cleans up.
+  void _setError(ACPError error) {
+    _lastError = error;
+    _connectionState = ACPConnectionState.error;
+    _cleanup();
     notifyListeners();
+  }
+
+  /// Cleans up resources without changing state.
+  void _cleanup() {
+    _exitCodeSubscription?.cancel();
+    _exitCodeSubscription = null;
+    _stderrSubscription?.cancel();
+    _stderrSubscription = null;
+    _process?.kill();
+    _process = null;
+    _connection = null;
+    _initResult = null;
   }
 
   /// Creates a new session with the agent.
@@ -355,13 +493,14 @@ class ACPClientWrapper extends ChangeNotifier {
   /// session.dispose();
   /// ```
   ///
-  /// Throws [StateError] if not connected.
+  /// Throws [ACPStateError] if not connected.
   Future<ACPSessionWrapper> createSession({
     required String cwd,
     List<McpServerBase>? mcpServers,
   }) async {
-    if (!_isConnected || _connection == null) {
-      throw StateError('Not connected. Call connect() first.');
+    if (_connectionState != ACPConnectionState.connected ||
+        _connection == null) {
+      throw ACPStateError.notConnected();
     }
 
     developer.log(
@@ -406,7 +545,8 @@ class ACPClientWrapper extends ChangeNotifier {
   ///
   /// Safe to call multiple times; subsequent calls are no-ops.
   Future<void> disconnect() async {
-    if (!_isConnected && _process == null) {
+    if (_connectionState == ACPConnectionState.disconnected &&
+        _process == null) {
       return; // Already disconnected
     }
 
@@ -415,15 +555,25 @@ class ACPClientWrapper extends ChangeNotifier {
       name: 'ACPClientWrapper',
     );
 
-    _isConnected = false;
+    // Cancel subscriptions first
+    await _exitCodeSubscription?.cancel();
+    _exitCodeSubscription = null;
+    await _stderrSubscription?.cancel();
+    _stderrSubscription = null;
+
+    _connectionState = ACPConnectionState.disconnected;
+    _lastError = null;
 
     // Kill the process and wait for it to exit
-    _process?.kill();
-    try {
-      await _process?.exitCode.timeout(const Duration(seconds: 5));
-    } catch (_) {
-      // Force kill if it doesn't exit gracefully
-      _process?.kill(ProcessSignal.sigkill);
+    final process = _process;
+    if (process != null) {
+      process.kill();
+      try {
+        await process.exitCode.timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Force kill if it doesn't exit gracefully
+        process.kill(ProcessSignal.sigkill);
+      }
     }
 
     _process = null;
@@ -435,8 +585,19 @@ class ACPClientWrapper extends ChangeNotifier {
 
   @override
   void dispose() {
-    // Start disconnection but don't await it
-    disconnect();
+    // Cancel subscriptions
+    _exitCodeSubscription?.cancel();
+    _exitCodeSubscription = null;
+    _stderrSubscription?.cancel();
+    _stderrSubscription = null;
+
+    // Clean up process without calling notifyListeners
+    // (since we're being disposed, listeners shouldn't be notified)
+    _connectionState = ACPConnectionState.disconnected;
+    _process?.kill();
+    _process = null;
+    _connection = null;
+    _initResult = null;
 
     // Close stream controllers
     _updateController.close();

@@ -11,15 +11,12 @@ import 'screens/replay_demo_screen.dart';
 import 'services/agent_registry.dart';
 import 'services/agent_service.dart';
 import 'services/ask_ai_service.dart';
-import 'services/backend_service.dart';
 import 'services/git_service.dart';
 import 'services/persistence_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
-import 'services/sdk_message_handler.dart';
 import 'services/worktree_watcher_service.dart';
 import 'state/selection_state.dart';
-import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
 
 /// Global flag to force mock data usage in tests.
@@ -79,17 +76,7 @@ bool _shouldUseMockData() {
 
 /// CC-Insights V2 - Desktop application for monitoring Claude Code agents.
 class CCInsightsApp extends StatefulWidget {
-  /// Optional BackendService instance for dependency injection in tests.
-  final BackendService? backendService;
-
-  /// Optional SdkMessageHandler instance for dependency injection in tests.
-  final SdkMessageHandler? messageHandler;
-
-  const CCInsightsApp({
-    super.key,
-    this.backendService,
-    this.messageHandler,
-  });
+  const CCInsightsApp({super.key});
 
   @override
   State<CCInsightsApp> createState() => _CCInsightsAppState();
@@ -97,12 +84,6 @@ class CCInsightsApp extends StatefulWidget {
 
 class _CCInsightsAppState extends State<CCInsightsApp>
     with WidgetsBindingObserver {
-  /// The backend service instance - created once in initState.
-  BackendService? _backend;
-
-  /// The SDK message handler - created once in initState.
-  SdkMessageHandler? _handler;
-
   /// The project restore service - shared for persistence operations.
   ProjectRestoreService? _restoreService;
 
@@ -148,26 +129,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// not on every hot reload.
   void _initializeServices() {
     final shouldUseMock = _shouldUseMockData();
-
-    // Create or use injected BackendService
-    if (widget.backendService != null) {
-      _backend = widget.backendService;
-    } else if (shouldUseMock) {
-      // Use MockBackendService for mock mode
-      final mockBackend = MockBackendService();
-      mockBackend.nextSessionConfig = const MockResponseConfig(
-        autoReply: true,
-        replyText: 'Mock response to: {message}',
-      );
-      mockBackend.start();
-      _backend = mockBackend;
-    } else {
-      _backend = BackendService();
-      _backend!.start();
-    }
-
-    // Create or use injected SdkMessageHandler
-    _handler = widget.messageHandler ?? SdkMessageHandler();
 
     // Create the project restore service for persistence operations
     _restoreService = ProjectRestoreService();
@@ -269,14 +230,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     WidgetsBinding.instance.removeObserver(this);
     // Dispose ACP services
     _agentService?.dispose();
-
-    // Only dispose legacy services we created, not injected ones
-    if (widget.backendService == null) {
-      _backend?.dispose();
-    }
-    if (widget.messageHandler == null) {
-      _handler?.dispose();
-    }
     super.dispose();
   }
 
@@ -359,10 +312,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<AgentRegistry>.value(value: _agentRegistry!),
         // ACP agent service for managing agent connections
         ChangeNotifierProvider<AgentService>.value(value: _agentService!),
-        // Legacy: Backend service for spawning SDK sessions
-        ChangeNotifierProvider<BackendService>.value(value: _backend!),
-        // Legacy: SDK message handler (stateless - shared across all chats)
-        Provider<SdkMessageHandler>.value(value: _handler!),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
         // Git service for git operations (stateless)

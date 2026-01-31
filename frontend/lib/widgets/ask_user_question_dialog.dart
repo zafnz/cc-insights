@@ -1,5 +1,6 @@
-import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
+
+import '../legacy/sdk_types.dart' as sdk;
 
 import 'permission_dialog.dart' show PermissionFontSizes, textStyle;
 

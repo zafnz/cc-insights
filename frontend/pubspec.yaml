@@ -14,10 +14,6 @@ dependencies:
   # State management
   provider: ^6.1.2
 
-  # Claude SDK (local)
-  claude_sdk:
-    path: ../dart_sdk
-
   # ACP (Agent Communication Protocol)
   acp_dart: ^0.3.0
 

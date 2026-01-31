@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'types/usage.dart';
+import 'usage.dart';
 
 /// Result from a single Claude CLI request.
 class SingleRequestResult {

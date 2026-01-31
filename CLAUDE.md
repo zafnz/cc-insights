@@ -20,20 +20,20 @@ If you encounter a failing test:
 
 ## Project Overview
 
-CC-Insights is a desktop application for monitoring and interacting with Claude Code agents via the SDK. It provides real-time visibility into agent hierarchies, tool usage, and conversation flow.
+CC-Insights is a desktop application for monitoring and interacting with AI coding agents via ACP (Agent Client Protocol). It provides real-time visibility into agent hierarchies, tool usage, and conversation flow.
 
 **V2 Goals:**
 - Git worktrees as a core concept (not bolt-on)
 - Flexible panel-based UI
 - Clean hierarchy: Project → Worktree → Chat → Conversation
-- Preserve working components (Dart SDK, display widgets)
+- Multi-agent support via ACP
 
 **Architecture:**
-- **Backend** (`backend-node/`): Thin Node.js subprocess using `@anthropic-ai/agent-sdk` (TypeScript)
-- **Dart SDK** (`dart_sdk/`): Flutter/Dart SDK wrapper providing native API and subprocess management
+- **ACP Integration** (`frontend/lib/acp/`): Agent Client Protocol wrappers for Dart/Flutter
 - **Frontend** (`frontend/`): Flutter desktop app (macOS) with Provider state management
+- **ACP Dart Package** (`packages/acp-dart/`): Dart implementation of ACP protocol
 
-**Communication:** Dart SDK spawns Node.js backend as subprocess, communicates via stdin/stdout JSON lines.
+**Communication:** Frontend uses ACP (Agent Client Protocol) to communicate with agents via NDJSON streams. Any ACP-compatible agent (Claude Code, Gemini CLI, etc.) can be used.
 
 ---
 
@@ -83,26 +83,25 @@ Project: CC-Insights
 ## Directory Structure
 
 ```
-claude-project/
-├── backend-node/
-│   └── src/
-│       ├── index.ts            # Entry point (stdin/stdout reader)
-│       ├── session-manager.ts  # SDK session lifecycle management
-│       ├── callback-bridge.ts  # Bridges SDK callbacks to protocol
-│       ├── protocol.ts         # Type-safe message definitions
-│       ├── message-queue.ts    # Reliable message delivery
-│       └── logger.ts           # Structured logging
-├── dart_sdk/
-│   └── lib/
-│       ├── claude_sdk.dart     # Main export
-│       └── src/
-│           ├── backend.dart    # Subprocess spawning & management
-│           ├── session.dart    # Session API (createSession, send, etc.)
-│           ├── protocol.dart   # Protocol implementation (stdin/stdout)
-│           └── types/          # Type definitions
+cc-insights/
+├── packages/
+│   ├── acp-dart/               # ACP Dart library
+│   ├── agent-client-protocol/  # ACP specification
+│   └── claude-code-acp/        # Claude Code ACP adapter
+│
 ├── frontend/
 │   └── lib/
 │       ├── main.dart
+│       ├── acp/                # ACP integration layer
+│       │   ├── acp.dart                  # Library export
+│       │   ├── acp_client_wrapper.dart   # Main client wrapper
+│       │   ├── acp_session_wrapper.dart  # Session wrapper
+│       │   ├── cc_insights_acp_client.dart  # Client implementation
+│       │   ├── pending_permission.dart   # Permission model
+│       │   ├── session_update_handler.dart  # Update routing
+│       │   └── handlers/
+│       │       ├── fs_handler.dart       # File system handler
+│       │       └── terminal_handler.dart # Terminal handler
 │       ├── models/
 │       │   ├── project.dart
 │       │   ├── worktree.dart
@@ -113,7 +112,8 @@ claude-project/
 │       ├── state/
 │       │   └── selection_state.dart
 │       ├── services/
-│       │   ├── backend_service.dart
+│       │   ├── agent_service.dart     # ACP agent management
+│       │   ├── agent_registry.dart    # Agent discovery
 │       │   ├── git_service.dart
 │       │   └── persistence_service.dart
 │       ├── panels/
@@ -121,12 +121,9 @@ claude-project/
 │       │   ├── worktree_panel.dart
 │       │   ├── chat_panel.dart
 │       │   ├── conversation_panel.dart
-│       │   ├── conversation_viewer_panel.dart
-│       │   ├── files_panel.dart
-│       │   ├── file_viewer_panel.dart
-│       │   └── git_status_panel.dart
+│       │   └── ...
 │       └── widgets/
-│           ├── display/        # Preserved from V1
+│           ├── display/        # Display components
 │           │   ├── tool_card.dart
 │           │   ├── output_panel.dart
 │           │   └── diff_view.dart
@@ -134,58 +131,56 @@ claude-project/
 │               └── message_input.dart
 └── docs/
     ├── architecture/          # V2 architecture & implementation plan
-    ├── dart-sdk/              # Dart SDK implementation docs
     └── sdk/                   # Claude Agent SDK reference
 ```
 
 ---
 
-## SDK Documentation Reference
+## ACP (Agent Client Protocol)
 
-Quick reference to SDK documentation in `docs/sdk/`:
+ACP is a standardized protocol for communicating with AI coding agents. CC-Insights uses ACP to support multiple agents (Claude Code, Gemini CLI, etc.) through a unified interface.
 
-- **typescript.md** - Complete TypeScript SDK API reference
-- **streaming.md** - Server-sent events streaming, extended thinking, web search
-- **user-input.md** - Handling user approvals and clarifying questions
-- **permissions.md** - Permission modes, canUseTool callback, tool authorization
-- **hooks.md** - Event hooks (PreToolUse, PostToolUse, SessionStart, etc.)
-- **sessions.md** - Session lifecycle, resuming conversations
-- **subagents.md** - Creating and managing specialized subagents with Task tool
-- **mcp.md** - Model Context Protocol (MCP) server integration
-- **cost-tracking.md** - Token usage tracking and billing
+### Key ACP Components
 
----
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `ACPClientWrapper` | `frontend/lib/acp/` | Manages agent process lifecycle |
+| `ACPSessionWrapper` | `frontend/lib/acp/` | Wraps session with filtered streams |
+| `CCInsightsACPClient` | `frontend/lib/acp/` | Implements ACP Client interface |
+| `AgentService` | `frontend/lib/services/` | Provider-based agent management |
+| `AgentRegistry` | `frontend/lib/services/` | Agent discovery and configuration |
 
-## Message Flow
+### Message Flow
+
+Communication uses ACP over NDJSON streams:
 
 ```
-Claude API → SDK → session-manager.ts → stdout (JSON lines) →
-  protocol.dart → ClaudeSession → Stream → Chat model → UI
+ACP Agent (Claude Code, etc.)
+        ↕ NDJSON (stdin/stdout)
+ACPClientWrapper
+        ↕ Dart Streams
+ACPSessionWrapper → SessionUpdateHandler → ChatState
+        ↕
+      UI
 ```
 
-User input flows reverse:
+User input flows through the ACP session:
 ```
-UI → Chat.sendMessage() → ClaudeSession.send() →
-  protocol.dart → stdin (JSON lines) → session-manager.ts → SDK
+UI → ChatState.sendMessage() → ACPSessionWrapper.prompt() → Agent
 ```
 
 ### Permission System
 
-The SDK evaluates tool permissions in this order (first match wins):
+Agents request permissions through ACP. CC-Insights handles:
+- `requestPermission` - Agent asks for tool permission
+- User responds via `AcpPermissionDialog`
+- Response sent back through `PendingPermission.allow()` or `cancel()`
 
-```
-1. Hooks (PreToolUse)     → Can block or modify tool calls
-2. Permission Rules       → Explicit allow/deny patterns
-3. allowedTools list      → Auto-approves tools
-4. Permission Mode        → Mode-based auto-approval
-5. canUseTool callback    → Final fallback for user approval
-```
-
-**Permission Modes:**
-- `default` - Requires permission for most operations
-- `acceptEdits` - Auto-approves file operations within project directory
-- `plan` - Planning mode with restricted tool access
-- `bypassPermissions` - Dangerous: approves everything without asking
+Permission options can include:
+- Allow once
+- Allow for session
+- Deny
+- Custom options provided by agent
 
 ---
 
@@ -261,26 +256,6 @@ The SDK evaluates tool permissions in this order (first match wins):
 
 ---
 
-## TypeScript/Backend Standards
-
-**Async Patterns:**
-- Use `async/await` consistently
-- Handle promise rejections in message handlers
-- Clean up resources when sessions terminate
-
-**Logging:**
-- Use `logger.info()` for significant events
-- Use `logger.debug()` for detailed tracing
-- Include session ID in log context: `{ sessionId }`
-- Logs written to `/tmp/backend-{timestamp}.log`
-
-**Type Safety:**
-- Use TypeScript interfaces for all messages (see `protocol.ts`)
-- Use discriminated unions for message types
-- Avoid `any` types - use `unknown` if type is truly unknown
-
----
-
 ## Testing Requirements
 
 **See `TESTING.md` for comprehensive testing guidelines, helpers, and patterns.**
@@ -334,22 +309,25 @@ The `get_test_result` tool is specifically designed to parse and return the rele
 ## Common Pitfalls
 
 1. **Forgetting to notify listeners** - State changes without `notifyListeners()` won't update UI
-2. **Not handling streaming messages** - SDK sends messages asynchronously
-3. **Message type mismatches** - Always have fallback handling
+2. **Not handling streaming messages** - ACP sends messages asynchronously via streams
+3. **Message type mismatches** - Always handle unknown ACP update types gracefully
 4. **Widget rebuild issues** - Ensure builders listen to the right object
-5. **Backend disposal** - Always dispose backend on app exit
-6. **Callback response ordering** - Responses must match request IDs
+5. **Agent disposal** - Always dispose AgentService on app exit
+6. **Permission response ordering** - Permission responses must match request IDs
 
 ---
 
 ## Debug Tools
 
-- **Dart SDK logs**: Flutter console shows backend stderr
+- **Flutter console**: Shows agent stderr and ACP communication errors
 - **Dart DevTools**: Use `dart:developer` `log()` for structured logging
---**Example messages**: examples/*.jsonl 
+- **MITM logging**: Use `tools/mitm.py` to log all ACP messages (see README.md)
+- **Example messages**: `examples/*.jsonl` contains sample ACP message flows
+
 ---
 
 ## Architecture Documentation
 
 For detailed V2 architecture, see:
 - `docs/architecture/cc-insights-v2-architecture.md` - Data models, selection model, UI architecture
+- `docs/architecture/acp-implementation-plan.md` - ACP integration implementation plan

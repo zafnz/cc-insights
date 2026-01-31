@@ -24,7 +24,6 @@ Yet another Claude Code coordinater desktop GUI application.
 
 ## Prerequisites
 
-- **Node** (for now)
 - **Flutter 3.10+**
 - **Claude account OR Anthropic API key** (so long as the claude cli program works for you, then CC Insights will work for you).
 
@@ -60,9 +59,7 @@ cc-insights [project_directory]
 
 ### Architecture
 
-Because I've not yet finished the Dart SDK for Claude, I'm using a typescript bridge to handle the direct talking to claude binary.
-
-It's not beautiful, but it works surprisingly well. The Node.js backend will go away soon, hopefully.
+CC Insights uses ACP (Agent Client Protocol) to communicate with AI agents like Claude Code.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -76,29 +73,18 @@ It's not beautiful, but it works surprisingly well. The Node.js backend will go 
 │  └──────────────┘  └──────────────┘  └───────────────────────┘  │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                  Dart SDK (claude_sdk)                   │   │
-│  │  - Type-safe protocol layer                              │   │
+│  │                ACP Client (acp_dart)                     │   │
+│  │  - Agent Client Protocol implementation                  │   │
 │  │  - Session management & streaming                        │   │
-│  │  - Subprocess spawning & lifecycle                       │   │
+│  │  - Process spawning & lifecycle                          │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              │ stdin/stdout (JSON lines)
+                              │ NDJSON streams (ACP)
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│      Node.js Backend (thin subprocess - protocol bridge)        │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Session Manager + Callback Bridge                       │   │
-│  │  - Forwards SDK messages to Flutter via stdout           │   │
-│  │  - Receives commands from Flutter via stdin              │   │
-│  │  - Bridges callbacks (canUseTool, askUserQuestion, etc.) │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Claude Agent SDK (TypeScript)
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Claude API                                 │
+│                  ACP-compatible Agent                           │
+│              (e.g., Claude Code, Gemini CLI)                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -107,7 +93,7 @@ It's not beautiful, but it works surprisingly well. The Node.js backend will go 
 ### Frontend
 
 ```bash
-cd flutter_app
+cd frontend
 
 # Get dependencies
 flutter pub get
@@ -116,7 +102,7 @@ flutter pub get
 flutter run -d macos
 
 # If you want to start it in a different directory (eg your project dir)
-flutter run --dart-entrypoint-args="<your-project-dir>" 
+flutter run --dart-entrypoint-args="<your-project-dir>"
 ```
 
 ### Logging
@@ -136,111 +122,57 @@ Those logs go to `~/claude_mitm.log`, and are parsable with `jq`.
 ## Project Structure
 
 ```
-claude-project/
-├── backend-node/           # Node.js backend (subprocess)
-│   ├── src/
-│   │   ├── index.ts        # Entry point (stdin/stdout)
-│   │   ├── session-manager.ts  # SDK session lifecycle
-│   │   ├── callback-bridge.ts  # SDK callback handling
-│   │   ├── protocol.ts     # Type-safe message definitions
-│   │   ├── message-queue.ts    # Reliable message delivery
-│   │   └── logger.ts       # Structured logging
-│   ├── test/
-│   │   └── test-client.js  # Protocol testing
-│   └── package.json
+cc-insights/
+├── packages/
+│   ├── acp-dart/               # ACP Dart library
+│   ├── agent-client-protocol/  # ACP specification
+│   └── claude-code-acp/        # Claude Code ACP adapter
 │
-├── dart_sdk/               # Dart SDK for Flutter
-│   ├── lib/
-│   │   ├── claude_sdk.dart # Main export
-│   │   ├── src/
-│   │   │   ├── backend.dart    # Subprocess management
-│   │   │   ├── session.dart    # Session API
-│   │   │   ├── protocol.dart   # Protocol implementation
-│   │   │   └── types/          # Type definitions
-│   │   │       ├── callbacks.dart
-│   │   │       ├── content_blocks.dart
-│   │   │       ├── sdk_messages.dart
-│   │   │       ├── session_options.dart
-│   │   │       └── usage.dart
-│   └── pubspec.yaml
-│
-├── flutter_app/            # Flutter desktop UI
+├── frontend/                   # Flutter desktop UI
 │   ├── lib/
 │   │   ├── main.dart
+│   │   ├── acp/                # ACP integration layer
+│   │   │   ├── acp.dart                  # Library export
+│   │   │   ├── acp_client_wrapper.dart   # Agent connection wrapper
+│   │   │   ├── acp_session_wrapper.dart  # Session wrapper
+│   │   │   ├── cc_insights_acp_client.dart
+│   │   │   ├── pending_permission.dart
+│   │   │   ├── session_update_handler.dart
+│   │   │   └── handlers/       # File/terminal handlers
 │   │   ├── models/
-│   │   │   └── session.dart
-│   │   ├── providers/
-│   │   │   └── session_provider.dart
 │   │   ├── services/
-│   │   │   └── backend_service.dart  # Backend lifecycle
+│   │   │   ├── agent_service.dart     # ACP agent management
+│   │   │   ├── agent_registry.dart    # Agent discovery
+│   │   │   └── ...
 │   │   ├── screens/
-│   │   │   └── home_screen.dart
 │   │   └── widgets/
-│   │       ├── session_list.dart
-│   │       ├── agent_tree.dart
-│   │       ├── output_panel.dart
-│   │       ├── input_panel.dart
-│   │       ├── log_viewer.dart
-│   │       └── message_input.dart
 │   └── pubspec.yaml
 │
 └── docs/
-    ├── dart-sdk/           # Dart SDK implementation docs
-    └── sdk/                # Claude Agent SDK reference
+    ├── architecture/           # Architecture documentation
+    └── sdk/                    # Agent SDK reference
 ```
 
 ## Protocol
 
-Communication between the Dart SDK and Node.js backend uses JSON lines over stdin/stdout.
-
-### Flutter → Backend (stdin)
-
-| Message Type | Description |
-|--------------|-------------|
-| `session.create` | Create a new Claude session |
-| `session.send` | Send user message to session |
-| `session.interrupt` | Interrupt running session |
-| `session.kill` | Terminate a session |
-| `callback.response` | Response to callback request |
-| `query.call` | Call query method on session |
-
-### Backend → Flutter (stdout)
-
-| Message Type | Description |
-|--------------|-------------|
-| `session.created` | Session created successfully |
-| `sdk.message` | SDK message (streaming) |
-| `callback.request` | Request user permission/input |
-| `query.result` | Query method result |
-| `session.interrupted` | Session interrupted |
-| `session.killed` | Session terminated |
-| `error` | Error occurred |
-
-See `docs/dart-sdk/02-protocol.md` for complete protocol specification.
+Communication uses ACP (Agent Client Protocol) over NDJSON streams.
+See `packages/agent-client-protocol/` for the protocol specification.
 
 ## Development
 
 ### Running Tests
 
 ```bash
-# Backend tests
-cd backend-node
-npm test
-
-# Dart SDK tests
-cd dart_sdk
-dart test
-
 # Flutter tests
-cd flutter_app
+cd frontend
 flutter test
 ```
 
 ### Debug Logging
 
-- Backend logs all messages to `/tmp/messages.jsonl`
-- Backend structured logs to `/tmp/backend-{timestamp}.log`
-- Access logs in the UI via the log viewer (View → Logs)
+- ACP messages can be logged using the MITM tool (see Logging section above)
+- Access logs in the UI via the log viewer (View -> Logs)
+- Example ACP messages are in `examples/*.jsonl`
 
 ## Configuration
 

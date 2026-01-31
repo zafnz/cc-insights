@@ -1,5 +1,6 @@
 import 'package:acp_dart/acp_dart.dart';
 import 'package:cc_insights_v2/acp/acp_client_wrapper.dart';
+import 'package:cc_insights_v2/acp/acp_errors.dart';
 import 'package:cc_insights_v2/acp/acp_session_wrapper.dart';
 import 'package:cc_insights_v2/acp/pending_permission.dart';
 import 'package:cc_insights_v2/models/project.dart';
@@ -84,9 +85,17 @@ class FakeAgentService extends ChangeNotifier implements AgentService {
 
   bool _isConnected = false;
   AgentConfig? _currentAgent;
+  ACPConnectionState _connectionState = ACPConnectionState.disconnected;
+  ACPError? _lastError;
 
   @override
   bool get isConnected => _isConnected;
+
+  @override
+  ACPConnectionState get connectionState => _connectionState;
+
+  @override
+  ACPError? get lastError => _lastError;
 
   @override
   AgentConfig? get currentAgent => _currentAgent;
@@ -107,6 +116,7 @@ class FakeAgentService extends ChangeNotifier implements AgentService {
   Future<void> connect(AgentConfig config) async {
     _currentAgent = config;
     _isConnected = true;
+    _connectionState = ACPConnectionState.connected;
     notifyListeners();
   }
 
@@ -122,13 +132,21 @@ class FakeAgentService extends ChangeNotifier implements AgentService {
   Future<void> disconnect() async {
     _currentAgent = null;
     _isConnected = false;
+    _connectionState = ACPConnectionState.disconnected;
+    _lastError = null;
     notifyListeners();
   }
+
+  @override
+  Future<bool> reconnect() async => false;
 
   /// Sets the connection state for testing.
   void setConnected(bool connected, {AgentConfig? agent}) {
     _isConnected = connected;
     _currentAgent = agent;
+    _connectionState = connected
+        ? ACPConnectionState.connected
+        : ACPConnectionState.disconnected;
     notifyListeners();
   }
 }

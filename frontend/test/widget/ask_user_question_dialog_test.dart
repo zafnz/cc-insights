@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:cc_insights_v2/legacy/sdk_types.dart' as sdk;
 import 'package:cc_insights_v2/widgets/ask_user_question_dialog.dart';
-import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

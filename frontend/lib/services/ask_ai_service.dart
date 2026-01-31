@@ -1,7 +1,8 @@
 import 'dart:developer' as developer;
 
-import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
+
+import '../legacy/sdk_types.dart';
 
 /// Cumulative usage statistics for the AskAI service.
 ///

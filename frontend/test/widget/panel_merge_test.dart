@@ -1,9 +1,14 @@
+import 'package:acp_dart/acp_dart.dart';
+import 'package:cc_insights_v2/acp/acp_client_wrapper.dart';
+import 'package:cc_insights_v2/acp/acp_errors.dart';
+import 'package:cc_insights_v2/acp/acp_session_wrapper.dart';
+import 'package:cc_insights_v2/acp/pending_permission.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
-import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/agent_registry.dart';
+import 'package:cc_insights_v2/services/agent_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
-import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:checks/checks.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
@@ -14,16 +19,77 @@ import 'package:provider/provider.dart';
 
 import '../test_helpers.dart';
 
+/// Fake AgentRegistry for testing.
+class FakeAgentRegistry extends ChangeNotifier implements AgentRegistry {
+  @override
+  List<AgentConfig> get agents => [];
+  @override
+  List<AgentConfig> get discoveredAgents => [];
+  @override
+  List<AgentConfig> get customAgents => [];
+  @override
+  bool get hasDiscovered => true;
+  @override
+  String? get configDir => null;
+  @override
+  Future<void> discover() async {}
+  @override
+  Future<void> load() async {}
+  @override
+  Future<void> save() async {}
+  @override
+  AgentConfig? getAgent(String id) => null;
+  @override
+  bool hasAgent(String id) => false;
+  @override
+  void addCustomAgent(AgentConfig config) {}
+  @override
+  void removeAgent(String id) {}
+}
+
+/// Fake AgentService for testing.
+class FakeAgentService extends ChangeNotifier implements AgentService {
+  FakeAgentService({required this.agentRegistry});
+  @override
+  final AgentRegistry agentRegistry;
+  @override
+  bool get isConnected => false;
+  @override
+  ACPConnectionState get connectionState => ACPConnectionState.disconnected;
+  @override
+  ACPError? get lastError => null;
+  @override
+  AgentConfig? get currentAgent => null;
+  @override
+  AgentCapabilities? get capabilities => null;
+  @override
+  AgentInfo? get agentInfo => null;
+  @override
+  Stream<SessionNotification>? get updates => null;
+  @override
+  Stream<PendingPermission>? get permissionRequests => null;
+  @override
+  Future<void> connect(AgentConfig config) async {}
+  @override
+  Future<ACPSessionWrapper> createSession({required String cwd, List<McpServerBase>? mcpServers}) async => throw UnimplementedError();
+  @override
+  Future<void> disconnect() async {}
+  @override
+  Future<bool> reconnect() async => false;
+}
+
 void main() {
   group('Panel Merge/Separate Tests', () {
     late ProjectState project;
     late SelectionState selection;
-    late MockBackendService mockBackend;
+    late FakeAgentRegistry fakeRegistry;
+    late FakeAgentService fakeAgentService;
 
     Widget createTestApp() {
       return MultiProvider(
         providers: [
-          ChangeNotifierProvider<BackendService>.value(value: mockBackend),
+          ChangeNotifierProvider<AgentRegistry>.value(value: fakeRegistry),
+          ChangeNotifierProvider<AgentService>.value(value: fakeAgentService),
           ChangeNotifierProvider<ProjectState>.value(value: project),
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
             create: (_) => selection,
@@ -39,12 +105,11 @@ void main() {
     setUp(() async {
       project = MockDataFactory.createMockProject();
       selection = SelectionState(project);
-      mockBackend = MockBackendService();
-      await mockBackend.start();
+      fakeRegistry = FakeAgentRegistry();
+      fakeAgentService = FakeAgentService(agentRegistry: fakeRegistry);
     });
 
     tearDown(() {
-      mockBackend.dispose();
     });
 
     group('Initial State', () {

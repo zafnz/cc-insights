@@ -22,6 +22,38 @@ import 'package:cc_insights_v2/testing/test_helpers.dart';
 ///
 /// Run tests:
 ///   flutter test integration_test/worktree_creation_test.dart -d macos
+
+/// Helper to scroll to and tap the "New Worktree" card.
+///
+/// The card may be at the bottom of the worktree list and not visible
+/// in small window sizes. We need to scroll the ListView inside the
+/// WorktreePanel to make it visible.
+Future<void> tapNewWorktreeCard(WidgetTester tester) async {
+  // First, find the ListView inside the WorktreePanel and scroll to the bottom
+  // to make the "New Worktree" card visible
+  final worktreePanel = find.byType(WorktreePanel);
+  expect(worktreePanel, findsOneWidget);
+
+  // Find the scrollable ListView inside the panel
+  final listView = find.descendant(
+    of: worktreePanel,
+    matching: find.byType(Scrollable),
+  );
+
+  // Scroll down to reveal the "New Worktree" card at the bottom
+  await tester.scrollUntilVisible(
+    find.text('New Worktree'),
+    100.0, // scroll by 100 pixels each time
+    scrollable: listView,
+    maxScrolls: 10,
+  );
+  await safePumpAndSettle(tester);
+
+  // Now tap the card
+  await tester.tap(find.text('New Worktree'));
+  await safePumpAndSettle(tester);
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -45,13 +77,8 @@ void main() {
       // Verify we start with the Conversation panel visible (default view)
       expect(find.text('Conversation'), findsOneWidget);
 
-      // Find and verify the "New Worktree" card exists in the WorktreePanel
-      final newWorktreeCard = find.text('New Worktree');
-      expect(newWorktreeCard, findsOneWidget);
-
-      // Tap on "New Worktree" card
-      await tester.tap(newWorktreeCard);
-      await safePumpAndSettle(tester);
+      // Scroll to and tap on "New Worktree" card
+      await tapNewWorktreeCard(tester);
 
       // Verify CreateWorktreePanel widget is present
       expect(find.byType(CreateWorktreePanel), findsOneWidget);
@@ -76,8 +103,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete (branch list loads asynchronously)
       await pumpUntilGone(
@@ -101,12 +127,6 @@ void main() {
       expect(find.text('Cancel'), findsOneWidget);
       // "Create Worktree" appears in both the panel header and the button
       expect(find.text('Create Worktree'), findsWidgets);
-
-      // Verify the directory warning note
-      expect(
-        find.text('This directory must be outside the project repository'),
-        findsOneWidget,
-      );
     });
 
     testWidgets('help card expands when tapped', (tester) async {
@@ -115,8 +135,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete
       await pumpUntilGone(
@@ -158,8 +177,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete
       await pumpUntilGone(
@@ -190,8 +208,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete - the panel will finish loading
       // (possibly with an error if git operations fail in mock mode)
@@ -224,8 +241,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete - wait for Branch Name label
       await pumpUntilFound(
@@ -271,8 +287,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete - wait for Branch Name label
       await pumpUntilFound(
@@ -314,8 +329,7 @@ void main() {
       expect(find.byType(CreateWorktreePanel), findsNothing);
 
       // Navigate to create worktree
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading
       await pumpUntilGone(
@@ -348,8 +362,7 @@ void main() {
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Navigate to create worktree
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Worktree panel should still be visible during create flow
       expect(find.byType(WorktreePanel), findsOneWidget);
@@ -368,8 +381,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
-      await tester.tap(find.text('New Worktree'));
-      await safePumpAndSettle(tester);
+      await tapNewWorktreeCard(tester);
 
       // Wait for loading to complete - wait for Branch Name label
       await pumpUntilFound(

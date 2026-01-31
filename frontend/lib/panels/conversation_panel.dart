@@ -1,28 +1,24 @@
 import 'dart:developer' as developer;
 
-import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 import '../acp/pending_permission.dart';
+import '../acp/session_update_handler.dart';
 import '../models/agent.dart';
 import '../models/chat.dart';
 import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
 import '../services/agent_service.dart';
-import '../services/backend_service.dart';
 import '../services/project_restore_service.dart';
-import '../services/sdk_message_handler.dart';
 import '../state/selection_state.dart';
 import '../widgets/acp_permission_dialog.dart';
-import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/context_indicator.dart';
 import '../widgets/cost_indicator.dart';
 import '../widgets/message_input.dart';
 import '../widgets/output_entries.dart';
-import '../widgets/permission_dialog.dart';
 
 /// A conversation panel with smart scroll behavior.
 ///
@@ -63,10 +59,6 @@ class _ConversationPanelState extends State<ConversationPanel>
   late final AnimationController _permissionAnimController;
   late final Animation<double> _permissionAnimation;
 
-  /// Cache the last SDK permission request for animation-out.
-  /// This ensures we can still render the widget while animating out.
-  sdk.PermissionRequest? _cachedPermission;
-
   /// Cache the last ACP permission request for animation-out.
   /// This ensures we can still render the widget while animating out.
   PendingPermission? _cachedAcpPermission;
@@ -86,9 +78,8 @@ class _ConversationPanelState extends State<ConversationPanel>
     // Handle permission animation lifecycle
     _permissionAnimController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) {
-        // Clear cached permissions when animation completes reverse
+        // Clear cached permission when animation completes reverse
         setState(() {
-          _cachedPermission = null;
           _cachedAcpPermission = null;
         });
       } else if (status == AnimationStatus.completed) {
@@ -353,37 +344,25 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     final isPrimary = conversation.isPrimary;
 
-    // Check for both SDK and ACP permissions
-    final currentPermission = chat?.pendingPermission;
+    // Check for pending ACP permission
     final currentAcpPermission = chat?.pendingAcpPermission;
-    final hasAnyPermission =
-        currentPermission != null || currentAcpPermission != null;
 
     // Update cache and animate
-    if (hasAnyPermission) {
-      // Cache whichever permission is pending (SDK or ACP)
-      if (currentPermission != null) {
-        _cachedPermission = currentPermission;
-        _cachedAcpPermission = null;
-      } else if (currentAcpPermission != null) {
-        _cachedAcpPermission = currentAcpPermission;
-        _cachedPermission = null;
-      }
+    if (currentAcpPermission != null) {
+      _cachedAcpPermission = currentAcpPermission;
       if (!_permissionAnimController.isCompleted) {
         _permissionAnimController.forward();
       }
-    } else if (_cachedPermission != null || _cachedAcpPermission != null) {
+    } else if (_cachedAcpPermission != null) {
       // Permission was cleared, animate out
       _permissionAnimController.reverse();
     }
 
     // Determine if we should show the permission widget
-    // Show if we have a cached permission (SDK or ACP) AND either:
+    // Show if we have a cached permission AND either:
     // - animation is animating forward (including value=0 at start)
     // - animation value > 0 (during animation or completed)
-    final hasCachedPermission =
-        _cachedPermission != null || _cachedAcpPermission != null;
-    final shouldShowPermissionWidget = hasCachedPermission &&
+    final shouldShowPermissionWidget = _cachedAcpPermission != null &&
         (_permissionAnimController.status == AnimationStatus.forward ||
             _permissionAnimController.status == AnimationStatus.completed ||
             _permissionAnimController.value > 0);
@@ -446,50 +425,8 @@ class _ConversationPanelState extends State<ConversationPanel>
 
   /// Build the permission widget with slide-up animation.
   Widget _buildPermissionWidget(ChatState chat) {
-    // Check for ACP permission first, then SDK permission
     final acpPermission = _cachedAcpPermission;
-    final sdkPermission = _cachedPermission;
-
-    Widget dialogWidget;
-
-    if (acpPermission != null) {
-      // ACP permission dialog
-      dialogWidget = AcpPermissionDialog(
-        permission: acpPermission,
-        onAllow: (optionId) => chat.allowAcpPermission(optionId),
-        onCancel: () => chat.cancelAcpPermission(),
-      );
-    } else if (sdkPermission != null) {
-      // SDK permission dialog
-      // Determine which widget to show based on tool name
-      final isAskUserQuestion = sdkPermission.toolName == 'AskUserQuestion';
-
-      if (isAskUserQuestion) {
-        dialogWidget = AskUserQuestionDialog(
-          request: sdkPermission,
-          onSubmit: (answers) {
-            // Submit answers through the permission system
-            chat.allowPermission(
-              updatedInput: {'answers': answers},
-            );
-          },
-        );
-      } else {
-        dialogWidget = PermissionDialog(
-          request: sdkPermission,
-          onAllow: ({
-            Map<String, dynamic>? updatedInput,
-            List<dynamic>? updatedPermissions,
-          }) {
-            chat.allowPermission(
-              updatedInput: updatedInput,
-              updatedPermissions: updatedPermissions,
-            );
-          },
-          onDeny: (message) => chat.denyPermission(message),
-        );
-      }
-    } else {
+    if (acpPermission == null) {
       // No permission to show
       return const SizedBox.shrink();
     }
@@ -497,7 +434,11 @@ class _ConversationPanelState extends State<ConversationPanel>
     return SizeTransition(
       sizeFactor: _permissionAnimation,
       axisAlignment: 1.0, // Align to bottom (slide up from bottom)
-      child: dialogWidget,
+      child: AcpPermissionDialog(
+        permission: acpPermission,
+        onAllow: (optionId) => chat.allowAcpPermission(optionId),
+        onCancel: () => chat.cancelAcpPermission(),
+      ),
     );
   }
 
@@ -560,22 +501,17 @@ class _ConversationPanelState extends State<ConversationPanel>
     final chat = selection.selectedChat;
     if (chat == null) return;
 
-    final backend = context.read<BackendService>();
-    final messageHandler = context.read<SdkMessageHandler>();
+    final agentService = context.read<AgentService>();
 
     if (!chat.hasActiveSession) {
-      // First message - start a new session with the prompt
-      // Add user input entry first
-      chat.addEntry(UserInputEntry(
-        timestamp: DateTime.now(),
-        text: text,
-        images: images,
-      ));
+      // First message - start a new ACP session with the prompt
+      // Create a session update handler for this chat
+      final updateHandler = _createUpdateHandler(chat);
 
       try {
-        await chat.startSession(
-          backend: backend,
-          messageHandler: messageHandler,
+        await chat.startAcpSession(
+          agentService: agentService,
+          updateHandler: updateHandler,
           prompt: text,
           images: images,
         );
@@ -600,6 +536,46 @@ class _ConversationPanelState extends State<ConversationPanel>
         ));
       }
     }
+  }
+
+  /// Creates a SessionUpdateHandler that routes updates to the chat.
+  SessionUpdateHandler _createUpdateHandler(ChatState chat) {
+    return SessionUpdateHandler(
+      onAgentMessage: (text) {
+        chat.addEntry(TextOutputEntry(
+          timestamp: DateTime.now(),
+          text: text,
+          contentType: 'assistant',
+        ));
+      },
+      onThinkingMessage: (text) {
+        chat.addEntry(TextOutputEntry(
+          timestamp: DateTime.now(),
+          text: text,
+          contentType: 'thinking',
+        ));
+      },
+      onToolCall: (info) {
+        chat.addEntry(ToolUseOutputEntry(
+          timestamp: DateTime.now(),
+          toolName: info.title,
+          toolInput: info.rawInput ?? {},
+          toolUseId: info.toolCallId,
+        ));
+      },
+      onToolCallUpdate: (info) {
+        // Tool call updates could be used to update the tool result
+        // For now, we'll add a tool result entry when status is complete
+        if (info.status?.name == 'complete' && info.rawOutput != null) {
+          chat.addEntry(ToolResultEntry(
+            timestamp: DateTime.now(),
+            toolUseId: info.toolCallId,
+            result: info.rawOutput,
+            isError: false,
+          ));
+        }
+      },
+    );
   }
 }
 
@@ -1208,8 +1184,7 @@ class _WelcomeCardState extends State<WelcomeCard> {
     if (worktree == null) return;
 
     final project = context.read<ProjectState>();
-    final backend = context.read<BackendService>();
-    final messageHandler = context.read<SdkMessageHandler>();
+    final agentService = context.read<AgentService>();
     final restoreService = context.read<ProjectRestoreService>();
 
     // Generate a chat name from the first message (truncated)
@@ -1244,19 +1219,14 @@ class _WelcomeCardState extends State<WelcomeCard> {
       );
     });
 
-    // Add the user's message
-    final userEntry = UserInputEntry(
-      timestamp: DateTime.now(),
-      text: text,
-      images: images,
-    );
-    chat.addEntry(userEntry);
+    // Create a session update handler for this chat
+    final updateHandler = _createUpdateHandler(chat);
 
-    // Start session with the first message (including images if attached)
+    // Start ACP session with the first message (including images if attached)
     try {
-      await chat.startSession(
-        backend: backend,
-        messageHandler: messageHandler,
+      await chat.startAcpSession(
+        agentService: agentService,
+        updateHandler: updateHandler,
         prompt: text,
         images: images,
       );
@@ -1268,6 +1238,46 @@ class _WelcomeCardState extends State<WelcomeCard> {
         contentType: 'error',
       ));
     }
+  }
+
+  /// Creates a SessionUpdateHandler that routes updates to the chat.
+  SessionUpdateHandler _createUpdateHandler(ChatState chat) {
+    return SessionUpdateHandler(
+      onAgentMessage: (text) {
+        chat.addEntry(TextOutputEntry(
+          timestamp: DateTime.now(),
+          text: text,
+          contentType: 'assistant',
+        ));
+      },
+      onThinkingMessage: (text) {
+        chat.addEntry(TextOutputEntry(
+          timestamp: DateTime.now(),
+          text: text,
+          contentType: 'thinking',
+        ));
+      },
+      onToolCall: (info) {
+        chat.addEntry(ToolUseOutputEntry(
+          timestamp: DateTime.now(),
+          toolName: info.title,
+          toolInput: info.rawInput ?? {},
+          toolUseId: info.toolCallId,
+        ));
+      },
+      onToolCallUpdate: (info) {
+        // Tool call updates could be used to update the tool result
+        // For now, we'll add a tool result entry when status is complete
+        if (info.status?.name == 'complete' && info.rawOutput != null) {
+          chat.addEntry(ToolResultEntry(
+            timestamp: DateTime.now(),
+            toolUseId: info.toolCallId,
+            result: info.rawOutput,
+            isError: false,
+          ));
+        }
+      },
+    );
   }
 
   /// Generates a chat name from the first message.

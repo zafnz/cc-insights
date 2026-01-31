@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:acp_dart/acp_dart.dart';
 import 'package:cc_insights_v2/acp/acp_client_wrapper.dart';
+import 'package:cc_insights_v2/acp/acp_errors.dart';
 import 'package:cc_insights_v2/acp/pending_permission.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -110,6 +111,8 @@ void main() {
     test('starts in disconnected state', () {
       // Assert - wrapper should be disconnected initially
       expect(wrapper.isConnected, isFalse);
+      expect(wrapper.connectionState, ACPConnectionState.disconnected);
+      expect(wrapper.lastError, isNull);
       expect(wrapper.capabilities, isNull);
       expect(wrapper.agentInfo, isNull);
       expect(wrapper.protocolVersion, isNull);
@@ -193,13 +196,61 @@ void main() {
 
       // Assert
       expect(wrapper.isConnected, isFalse);
+      expect(wrapper.connectionState, ACPConnectionState.disconnected);
     });
 
-    test('createSession throws when not connected', () async {
+    test('disconnect clears error state', () async {
+      // Arrange - create wrapper with non-existent command to trigger error
+      final badWrapper = ACPClientWrapper(
+        agentConfig: const AgentConfig(
+          id: 'bad-agent',
+          name: 'Bad Agent',
+          command: '/nonexistent/command/that/does/not/exist',
+        ),
+      );
+      resources.track(badWrapper);
+
+      // Try to connect (will fail)
+      try {
+        await badWrapper.connect();
+      } catch (_) {
+        // Expected to fail
+      }
+
+      // Act
+      await badWrapper.disconnect();
+
+      // Assert - error should be cleared
+      expect(badWrapper.lastError, isNull);
+      expect(badWrapper.connectionState, ACPConnectionState.disconnected);
+    });
+
+    test('has default connection timeout', () {
+      // Assert
+      expect(wrapper.connectionTimeout, const Duration(seconds: 30));
+    });
+
+    test('accepts custom connection timeout', () {
+      // Arrange
+      final customWrapper = ACPClientWrapper(
+        agentConfig: const AgentConfig(
+          id: 'test',
+          name: 'Test',
+          command: 'echo',
+        ),
+        connectionTimeout: const Duration(seconds: 60),
+      );
+      resources.track(customWrapper);
+
+      // Assert
+      expect(customWrapper.connectionTimeout, const Duration(seconds: 60));
+    });
+
+    test('createSession throws ACPStateError when not connected', () async {
       // Act & Assert
       expect(
         () async => wrapper.createSession(cwd: '/tmp'),
-        throwsA(isA<StateError>().having(
+        throwsA(isA<ACPStateError>().having(
           (e) => e.message,
           'message',
           contains('Not connected'),
@@ -247,6 +298,141 @@ void main() {
     });
   });
 
+  group('ACPClientWrapper error handling', () {
+    late TestResources resources;
+
+    setUp(() {
+      resources = TestResources();
+    });
+
+    tearDown(() async {
+      await resources.disposeAll();
+    });
+
+    test('connect throws ACPConnectionError for non-existent command', () async {
+      // Arrange
+      final wrapper = ACPClientWrapper(
+        agentConfig: const AgentConfig(
+          id: 'bad-agent',
+          name: 'Bad Agent',
+          command: '/nonexistent/command/path/12345',
+        ),
+      );
+      resources.track(wrapper);
+
+      // Act & Assert
+      expect(
+        () async => wrapper.connect(),
+        throwsA(isA<ACPConnectionError>()),
+      );
+    });
+
+    test('connection failure sets error state', () async {
+      // Arrange
+      final wrapper = ACPClientWrapper(
+        agentConfig: const AgentConfig(
+          id: 'bad-agent',
+          name: 'Bad Agent',
+          command: '/nonexistent/command/path/12345',
+        ),
+      );
+      resources.track(wrapper);
+
+      // Act
+      try {
+        await wrapper.connect();
+      } on ACPConnectionError {
+        // Expected
+      }
+
+      // Assert
+      expect(wrapper.connectionState, ACPConnectionState.error);
+      expect(wrapper.lastError, isA<ACPConnectionError>());
+      expect(wrapper.isConnected, isFalse);
+    });
+
+    test('connect notifies listeners during state transitions', () async {
+      // Arrange
+      final wrapper = ACPClientWrapper(
+        agentConfig: const AgentConfig(
+          id: 'bad-agent',
+          name: 'Bad Agent',
+          command: '/nonexistent/command/path/12345',
+        ),
+      );
+      resources.track(wrapper);
+
+      final states = <ACPConnectionState>[];
+      wrapper.addListener(() {
+        states.add(wrapper.connectionState);
+      });
+
+      // Act
+      try {
+        await wrapper.connect();
+      } on ACPConnectionError {
+        // Expected
+      }
+
+      // Assert - should have notified for 'connecting' and 'error' states
+      expect(states, contains(ACPConnectionState.connecting));
+      expect(states, contains(ACPConnectionState.error));
+    });
+
+    test('connect clears previous error when retrying', () async {
+      // Arrange
+      final wrapper = ACPClientWrapper(
+        agentConfig: const AgentConfig(
+          id: 'bad-agent',
+          name: 'Bad Agent',
+          command: '/nonexistent/command/path/12345',
+        ),
+      );
+      resources.track(wrapper);
+
+      // First attempt (will fail)
+      try {
+        await wrapper.connect();
+      } on ACPConnectionError {
+        // Expected
+      }
+      expect(wrapper.lastError, isNotNull);
+
+      // Act - second attempt should clear error initially
+      var errorCleared = false;
+      wrapper.addListener(() {
+        if (wrapper.connectionState == ACPConnectionState.connecting &&
+            wrapper.lastError == null) {
+          errorCleared = true;
+        }
+      });
+
+      try {
+        await wrapper.connect();
+      } on ACPConnectionError {
+        // Expected
+      }
+
+      // Assert
+      expect(errorCleared, isTrue);
+    });
+  });
+
+  group('ACPConnectionState enum', () {
+    test('has all expected values', () {
+      expect(ACPConnectionState.values, hasLength(4));
+      expect(
+        ACPConnectionState.values,
+        containsAll([
+          ACPConnectionState.disconnected,
+          ACPConnectionState.connecting,
+          ACPConnectionState.connected,
+          ACPConnectionState.error,
+        ]),
+      );
+    });
+  });
+
   group('ACPClientWrapper integration tests', () {
     // These tests would require a real ACP agent and are marked as skipped.
     // They document the expected behavior for future integration testing.
@@ -259,19 +445,20 @@ void main() {
         // 1. Create a wrapper with a real agent command
         // 2. Call connect()
         // 3. Verify isConnected is true
-        // 4. Verify capabilities is not null
-        // 5. Clean up with disconnect()
+        // 4. Verify connectionState is ACPConnectionState.connected
+        // 5. Verify capabilities is not null
+        // 6. Clean up with disconnect()
       },
     );
 
     test(
-      'connect() throws when already connected',
+      'connect() throws ACPStateError when already connected',
       skip: 'Requires real ACP agent',
       () async {
         // This test would:
         // 1. Create wrapper and connect()
         // 2. Try to connect() again
-        // 3. Verify StateError is thrown
+        // 3. Verify ACPStateError is thrown
       },
     );
 
@@ -288,14 +475,26 @@ void main() {
     );
 
     test(
-      'updates stream receives session notifications',
+      'process crash sets error state and notifies listeners',
       skip: 'Requires real ACP agent',
       () async {
         // This test would:
         // 1. Create wrapper and connect()
-        // 2. Create session and send prompt
-        // 3. Listen to updates stream
-        // 4. Verify notifications are received
+        // 2. Kill the agent process externally
+        // 3. Verify connectionState becomes ACPConnectionState.error
+        // 4. Verify lastError is ACPConnectionError.processCrashed
+        // 5. Verify listeners were notified
+      },
+    );
+
+    test(
+      'connection timeout throws ACPTimeoutError',
+      skip: 'Requires slow/hanging agent',
+      () async {
+        // This test would:
+        // 1. Create wrapper with a very short timeout
+        // 2. Connect to a slow agent that doesn't respond
+        // 3. Verify ACPTimeoutError is thrown
       },
     );
 

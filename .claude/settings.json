@@ -5,7 +5,10 @@
       "mcp__flutter-test__run_tests",
       "mcp__flutter-test__get_test_result",
       "Bash(flutter pub:*)",
-      "Bash(npm run bundle:*)"
+      "Bash(npm run bundle:*)",
+      "Bash(flutter build:*)",
+      "Read(//Users/zaf/.pub-cache/**)",
+      "Read(//Users/zaf/projects/.cc-insights-wt/cci/**)"
     ]
   }
 }

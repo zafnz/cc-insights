@@ -2,13 +2,14 @@ import 'package:acp_dart/acp_dart.dart';
 import 'package:flutter/foundation.dart';
 
 import '../acp/acp_client_wrapper.dart';
+import '../acp/acp_errors.dart';
 import '../acp/acp_session_wrapper.dart';
 import '../acp/pending_permission.dart';
 import 'agent_registry.dart';
 
 /// Service for managing agent connections.
 ///
-/// This service replaces [BackendService] with ACP-based agent management.
+/// This service provides ACP-based agent management.
 /// It uses [ACPClientWrapper] to connect to agents discovered by [AgentRegistry].
 ///
 /// The service extends [ChangeNotifier] for Provider integration, notifying
@@ -48,6 +49,19 @@ class AgentService extends ChangeNotifier {
   ///
   /// Returns `true` if a connection has been established and is active.
   bool get isConnected => _client?.isConnected ?? false;
+
+  /// The current connection state.
+  ///
+  /// Returns [ACPConnectionState.disconnected] if no connection attempt
+  /// has been made.
+  ACPConnectionState get connectionState =>
+      _client?.connectionState ?? ACPConnectionState.disconnected;
+
+  /// The last error that occurred during connection.
+  ///
+  /// Returns `null` if no error has occurred or if the connection
+  /// was successful.
+  ACPError? get lastError => _client?.lastError;
 
   /// The currently connected agent configuration.
   ///
@@ -89,8 +103,9 @@ class AgentService extends ChangeNotifier {
   ///
   /// Notifies listeners when the connection state changes.
   ///
-  /// Throws an exception if the agent process fails to start or if
-  /// initialization fails.
+  /// Throws [ACPConnectionError] if the agent process fails to start.
+  /// Throws [ACPTimeoutError] if connection takes too long.
+  /// Throws [ACPStateError] if already connected.
   ///
   /// Example:
   /// ```dart
@@ -99,7 +114,11 @@ class AgentService extends ChangeNotifier {
   ///   name: 'Claude Code',
   ///   command: 'claude-code-acp',
   /// );
-  /// await agentService.connect(config);
+  /// try {
+  ///   await agentService.connect(config);
+  /// } on ACPConnectionError catch (e) {
+  ///   print('Failed to connect: ${e.message}');
+  /// }
   /// ```
   Future<void> connect(AgentConfig config) async {
     // Disconnect from any existing agent first
@@ -108,7 +127,22 @@ class AgentService extends ChangeNotifier {
     _currentAgent = config;
     _client = ACPClientWrapper(agentConfig: config);
 
-    await _client!.connect();
+    // Listen for client state changes (e.g., process crash)
+    _client!.addListener(_onClientStateChanged);
+
+    try {
+      await _client!.connect();
+      notifyListeners();
+    } catch (e) {
+      // Notify listeners about the failed connection
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Called when the client state changes (e.g., process crash).
+  void _onClientStateChanged() {
+    // Propagate state changes to our listeners
     notifyListeners();
   }
 
@@ -121,7 +155,7 @@ class AgentService extends ChangeNotifier {
   /// Returns an [ACPSessionWrapper] that provides session-specific streams
   /// and methods for interacting with the agent.
   ///
-  /// Throws [StateError] if not connected to an agent.
+  /// Throws [ACPStateError] if not connected to an agent.
   ///
   /// Example:
   /// ```dart
@@ -143,7 +177,7 @@ class AgentService extends ChangeNotifier {
     List<McpServerBase>? mcpServers,
   }) async {
     if (_client == null || !_client!.isConnected) {
-      throw StateError('Agent not connected. Call connect() first.');
+      throw ACPStateError.notConnected();
     }
 
     return _client!.createSession(
@@ -159,14 +193,36 @@ class AgentService extends ChangeNotifier {
   ///
   /// Notifies listeners when disconnection completes.
   Future<void> disconnect() async {
+    _client?.removeListener(_onClientStateChanged);
     await _client?.disconnect();
     _client = null;
     _currentAgent = null;
     notifyListeners();
   }
 
+  /// Attempts to reconnect to the current agent.
+  ///
+  /// This is useful after a connection failure or process crash.
+  /// If no agent was previously connected, this method does nothing.
+  ///
+  /// Returns `true` if reconnection was attempted, `false` if there
+  /// was no previous agent to reconnect to.
+  ///
+  /// Throws [ACPConnectionError] if the reconnection fails.
+  Future<bool> reconnect() async {
+    final agent = _currentAgent;
+    if (agent == null) {
+      return false;
+    }
+
+    await disconnect();
+    await connect(agent);
+    return true;
+  }
+
   @override
   void dispose() {
+    _client?.removeListener(_onClientStateChanged);
     _client?.dispose();
     super.dispose();
   }
