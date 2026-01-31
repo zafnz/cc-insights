@@ -60,6 +60,7 @@ class FakeBackendService extends BackendService {
     required String prompt,
     required String cwd,
     SessionOptions? options,
+    List<ContentBlock>? content,
   }) async {
     if (!_isReady) {
       throw StateError('Backend not started. Call start() first.');

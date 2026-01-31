@@ -56,6 +56,7 @@ class FakeClaudeBackend implements ClaudeBackend {
     required String prompt,
     required String cwd,
     SessionOptions? options,
+    List<ContentBlock>? content,
   }) async {
     if (createSessionDelay != null) {
       await Future<void>.delayed(createSessionDelay!);
@@ -620,6 +621,7 @@ class _TestableBackendService extends BackendService {
     required String prompt,
     required String cwd,
     SessionOptions? options,
+    List<ContentBlock>? content,
   }) {
     if (_backendState == null) {
       throw StateError('Backend not started. Call start() first.');
@@ -628,6 +630,7 @@ class _TestableBackendService extends BackendService {
       prompt: prompt,
       cwd: cwd,
       options: options,
+      content: content,
     );
   }
 

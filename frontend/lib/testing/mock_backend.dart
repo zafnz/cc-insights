@@ -151,6 +151,7 @@ class MockBackendService extends BackendService {
     required String prompt,
     required String cwd,
     SessionOptions? options,
+    List<ContentBlock>? content,
   }) async {
     if (_disposed) {
       throw StateError('MockBackendService has been disposed');

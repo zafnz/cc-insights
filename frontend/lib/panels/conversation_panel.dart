@@ -540,12 +540,11 @@ class _ConversationPanelState extends State<ConversationPanel>
       ));
 
       try {
-        // Note: startSession doesn't support images yet; images are sent
-        // in subsequent messages via sendMessage
         await chat.startSession(
           backend: backend,
           messageHandler: messageHandler,
           prompt: text,
+          images: images,
         );
       } catch (e) {
         // Show error in conversation
@@ -1111,14 +1110,13 @@ class _WelcomeCardState extends State<WelcomeCard> {
     );
     chat.addEntry(userEntry);
 
-    // Start session with the first message
-    // Note: startSession doesn't support images yet; images would need
-    // to be sent in a subsequent message if needed
+    // Start session with the first message (including images if attached)
     try {
       await chat.startSession(
         backend: backend,
         messageHandler: messageHandler,
         prompt: text,
+        images: images,
       );
     } catch (e) {
       // Show error in conversation

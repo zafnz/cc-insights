@@ -21,12 +21,14 @@ class SessionCreateMessage extends OutgoingMessage {
     required this.prompt,
     required this.cwd,
     this.options,
+    this.content,
   });
 
   final String id;
   final String prompt;
   final String cwd;
   final Map<String, dynamic>? options;
+  final List<ContentBlock>? content;
 
   @override
   Map<String, dynamic> toJson() => {
@@ -36,6 +38,8 @@ class SessionCreateMessage extends OutgoingMessage {
           'prompt': prompt,
           'cwd': cwd,
           if (options != null) 'options': options,
+          if (content != null)
+            'content': content!.map((c) => c.toJson()).toList(),
         },
       };
 }

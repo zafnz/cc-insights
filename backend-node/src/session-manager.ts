@@ -128,12 +128,17 @@ export class SessionManager {
 
       // Push initial prompt to queue only if non-empty
       // Empty prompts (e.g., from /clear command) should wait for user input
-      if (msg.payload.prompt.trim() !== "") {
+      if (msg.payload.prompt.trim() !== "" || msg.payload.content?.length) {
+        // Use content blocks if provided (supports images), otherwise use prompt string
+        const content = msg.payload.content?.length
+          ? msg.payload.content
+          : msg.payload.prompt;
+
         const initialMessage: SDKUserMessage = {
           type: "user",
           message: {
             role: "user",
-            content: msg.payload.prompt,
+            content,
           },
           parent_tool_use_id: null,
           session_id: sessionId,

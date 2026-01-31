@@ -82,12 +82,15 @@ class BackendService extends ChangeNotifier {
   /// - [prompt]: The initial prompt to start the session with.
   /// - [cwd]: The working directory for the session (typically the worktree root).
   /// - [options]: Optional session configuration (model, permission mode, etc.).
+  /// - [content]: Optional content blocks (text + images) for the initial message.
+  ///   If provided, this takes precedence over [prompt].
   ///
   /// Throws [StateError] if the backend is not started.
   Future<ClaudeSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
+    List<ContentBlock>? content,
   }) async {
     if (_backend == null) {
       throw StateError('Backend not started. Call start() first.');
@@ -96,6 +99,7 @@ class BackendService extends ChangeNotifier {
       prompt: prompt,
       cwd: cwd,
       options: options,
+      content: content,
     );
   }
 

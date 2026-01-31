@@ -58,6 +58,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     required String prompt,
     required String cwd,
     sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
   }) async {
     createSessionCalls.add(_CreateSessionCall(
       prompt: prompt,

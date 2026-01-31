@@ -615,6 +615,7 @@ class ChatState extends ChangeNotifier {
     required BackendService backend,
     required SdkMessageHandler messageHandler,
     required String prompt,
+    List<AttachedImage> images = const [],
   }) async {
     if (_session != null) {
       throw StateError('Session already active');
@@ -634,6 +635,21 @@ class ChatState extends ChangeNotifier {
       );
     }
 
+    // Build content blocks if images are attached
+    List<sdk.ContentBlock>? content;
+    if (images.isNotEmpty) {
+      content = <sdk.ContentBlock>[
+        sdk.TextBlock(text: prompt),
+        ...images.map((img) => sdk.ImageBlock(
+              source: sdk.ImageSource(
+                type: 'base64',
+                mediaType: img.mediaType,
+                data: img.base64,
+              ),
+            )),
+      ];
+    }
+
     // Create session with current settings, including resume if available
     _session = await backend.createSession(
       prompt: prompt,
@@ -647,6 +663,7 @@ class ChatState extends ChangeNotifier {
         // Use Claude Code's system prompt (includes CLAUDE.md support)
         systemPrompt: const sdk.PresetSystemPrompt(),
       ),
+      content: content,
     );
 
     // Store the new session ID for future resume

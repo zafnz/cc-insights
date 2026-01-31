@@ -100,10 +100,15 @@ class ClaudeBackend {
   }
 
   /// Create a new Claude session.
+  ///
+  /// If [content] is provided (e.g., text + images), it takes precedence over
+  /// the [prompt] string. Use [content] when you need to send images with the
+  /// initial message.
   Future<ClaudeSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
+    List<ContentBlock>? content,
   }) async {
     if (_disposed) {
       throw const BackendProcessError('Backend has been disposed');
@@ -118,6 +123,7 @@ class ClaudeBackend {
       prompt: prompt,
       cwd: cwd,
       options: options?.toJson(),
+      content: content,
     ));
 
     return completer.future;

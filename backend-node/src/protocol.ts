@@ -14,6 +14,7 @@ export interface SessionCreateMessage {
     prompt: string;
     cwd: string;
     options?: SessionOptions;
+    content?: ContentBlock[];
   };
 }
 
