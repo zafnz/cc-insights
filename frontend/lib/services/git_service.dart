@@ -119,6 +119,31 @@ abstract class GitService {
   ///
   /// Returns the repository root path if found, or null if not a git repo.
   Future<String?> findRepoRoot(String path);
+
+  /// Lists all local branches in the repository.
+  ///
+  /// Returns a list of branch names (e.g., ["main", "develop", "feature/x"]).
+  /// Throws [GitException] if [repoRoot] is not a git repository.
+  Future<List<String>> listBranches(String repoRoot);
+
+  /// Checks if a branch exists in the repository.
+  ///
+  /// Returns true if the branch exists, false otherwise.
+  /// Throws [GitException] if [repoRoot] is not a git repository.
+  Future<bool> branchExists(String repoRoot, String branchName);
+
+  /// Creates a new worktree at the specified path.
+  ///
+  /// If [newBranch] is true, creates a new branch with the given name.
+  /// If [newBranch] is false, checks out an existing branch.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> createWorktree({
+    required String repoRoot,
+    required String worktreePath,
+    required String branch,
+    required bool newBranch,
+  });
 }
 
 /// Real implementation of [GitService] that spawns git processes.
@@ -221,6 +246,44 @@ class RealGitService implements GitService {
     } on GitException {
       return null;
     }
+  }
+
+  @override
+  Future<List<String>> listBranches(String repoRoot) async {
+    final output = await _runGit(
+      ['branch', '--format=%(refname:short)'],
+      workingDirectory: repoRoot,
+    );
+    return output.split('\n').where((b) => b.isNotEmpty).toList();
+  }
+
+  @override
+  Future<bool> branchExists(String repoRoot, String branchName) async {
+    try {
+      await _runGit(
+        ['rev-parse', '--verify', 'refs/heads/$branchName'],
+        workingDirectory: repoRoot,
+      );
+      return true;
+    } on GitException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> createWorktree({
+    required String repoRoot,
+    required String worktreePath,
+    required String branch,
+    required bool newBranch,
+  }) async {
+    final args = ['worktree', 'add'];
+    if (newBranch) {
+      args.addAll(['-b', branch, worktreePath]);
+    } else {
+      args.addAll([worktreePath, branch]);
+    }
+    await _runGit(args, workingDirectory: repoRoot);
   }
 }
 

@@ -4,7 +4,8 @@
       "mcp__dart__dart_format",
       "mcp__flutter-test__run_tests",
       "mcp__flutter-test__get_test_result",
-      "Bash(flutter pub:*)"
+      "Bash(flutter pub:*)",
+      "Bash(npm run bundle:*)"
     ]
   }
 }

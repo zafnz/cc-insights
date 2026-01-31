@@ -429,11 +429,19 @@ class ProjectInfo {
   /// Map of worktree paths to worktree information.
   final Map<String, WorktreeInfo> worktrees;
 
+  /// Default parent directory for new linked worktrees.
+  ///
+  /// If not set, defaults to `{project_parent_dir}/.{project_name}-wt`.
+  /// For example, a project at `/Users/dev/my-app` would default to
+  /// `/Users/dev/.my-app-wt`.
+  final String? defaultWorktreeRoot;
+
   /// Creates a [ProjectInfo] instance.
   const ProjectInfo({
     required this.id,
     required this.name,
     this.worktrees = const {},
+    this.defaultWorktreeRoot,
   });
 
   /// Creates a copy with the given fields replaced.
@@ -441,11 +449,13 @@ class ProjectInfo {
     String? id,
     String? name,
     Map<String, WorktreeInfo>? worktrees,
+    String? defaultWorktreeRoot,
   }) {
     return ProjectInfo(
       id: id ?? this.id,
       name: name ?? this.name,
       worktrees: worktrees ?? this.worktrees,
+      defaultWorktreeRoot: defaultWorktreeRoot ?? this.defaultWorktreeRoot,
     );
   }
 
@@ -455,6 +465,8 @@ class ProjectInfo {
       'id': id,
       'name': name,
       'worktrees': worktrees.map((k, v) => MapEntry(k, v.toJson())),
+      if (defaultWorktreeRoot != null)
+        'defaultWorktreeRoot': defaultWorktreeRoot,
     };
   }
 
@@ -467,6 +479,7 @@ class ProjectInfo {
       worktrees: worktreesJson.map(
         (k, v) => MapEntry(k, WorktreeInfo.fromJson(v as Map<String, dynamic>)),
       ),
+      defaultWorktreeRoot: json['defaultWorktreeRoot'] as String?,
     );
   }
 
@@ -476,11 +489,17 @@ class ProjectInfo {
     return other is ProjectInfo &&
         other.id == id &&
         other.name == name &&
-        mapEquals(other.worktrees, worktrees);
+        mapEquals(other.worktrees, worktrees) &&
+        other.defaultWorktreeRoot == defaultWorktreeRoot;
   }
 
   @override
-  int get hashCode => Object.hash(id, name, Object.hashAll(worktrees.entries));
+  int get hashCode => Object.hash(
+        id,
+        name,
+        Object.hashAll(worktrees.entries),
+        defaultWorktreeRoot,
+      );
 
   @override
   String toString() {
