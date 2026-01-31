@@ -5,6 +5,7 @@
 library;
 
 export 'agent_registry.dart';
+export 'agent_service.dart';
 export 'ask_ai_service.dart';
 export 'backend_service.dart';
 // Hide WorktreeInfo from git_service to avoid conflict with persistence_models

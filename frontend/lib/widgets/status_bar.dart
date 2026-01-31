@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/project.dart';
+import '../services/agent_service.dart';
 
 /// Status bar showing backend connection status and statistics.
 class StatusBar extends StatelessWidget {
@@ -12,6 +13,11 @@ class StatusBar extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final project = context.watch<ProjectState>();
+
+    // Try to get AgentService if available
+    final agentService = context.watch<AgentService?>();
+    final isConnected = agentService?.isConnected ?? false;
+    final agentName = agentService?.currentAgent?.name;
 
     // Calculate stats from project state
     final worktreeCount = project.allWorktrees.length;
@@ -33,6 +39,12 @@ class StatusBar extends StatelessWidget {
           ),
     );
 
+    // Determine connection status color and text
+    final statusColor = isConnected ? Colors.green : Colors.grey;
+    final statusText = isConnected
+        ? (agentName ?? 'Connected')
+        : 'Not connected';
+
     return Container(
       height: 24,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -46,16 +58,16 @@ class StatusBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Backend connection status (green dot)
+          // ACP agent connection status indicator
           Container(
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: statusColor,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withValues(alpha: 0.4),
+                  color: statusColor.withValues(alpha: 0.4),
                   blurRadius: 4,
                   spreadRadius: 1,
                 ),
@@ -64,7 +76,7 @@ class StatusBar extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            'Connected',
+            statusText,
             style: textTheme.labelSmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),

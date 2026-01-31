@@ -78,7 +78,8 @@ void main() {
         await safePumpAndSettle(tester);
 
         // Verify status bar elements
-        expect(find.text('Connected'), findsOneWidget);
+        // Without AgentService provider, status shows "Not connected"
+        expect(find.text('Not connected'), findsOneWidget);
         // Find worktree count - use findsWidgets since text may appear elsewhere
         expect(find.textContaining('worktrees'), findsWidgets);
         expect(find.textContaining('chats'), findsWidgets);

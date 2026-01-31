@@ -286,7 +286,8 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Verify status bar elements are present
-      expect(find.text('Connected'), findsOneWidget);
+      // Note: Shows "Not connected" since no ACP agent is connected in this test
+      expect(find.text('Not connected'), findsOneWidget);
       expect(find.textContaining('Total \$'), findsOneWidget);
 
       await _takeScreenshot(tester, '10_status_bar');

@@ -3,23 +3,26 @@ import 'dart:developer' as developer;
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:super_sliver_list/super_sliver_list.dart';
 
+import '../acp/pending_permission.dart';
 import '../models/agent.dart';
 import '../models/chat.dart';
 import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
+import '../services/agent_service.dart';
 import '../services/backend_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/sdk_message_handler.dart';
 import '../state/selection_state.dart';
+import '../widgets/acp_permission_dialog.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/context_indicator.dart';
 import '../widgets/cost_indicator.dart';
 import '../widgets/message_input.dart';
 import '../widgets/output_entries.dart';
 import '../widgets/permission_dialog.dart';
-import 'package:super_sliver_list/super_sliver_list.dart';
 
 /// A conversation panel with smart scroll behavior.
 ///
@@ -60,9 +63,13 @@ class _ConversationPanelState extends State<ConversationPanel>
   late final AnimationController _permissionAnimController;
   late final Animation<double> _permissionAnimation;
 
-  /// Cache the last permission request for animation-out.
+  /// Cache the last SDK permission request for animation-out.
   /// This ensures we can still render the widget while animating out.
   sdk.PermissionRequest? _cachedPermission;
+
+  /// Cache the last ACP permission request for animation-out.
+  /// This ensures we can still render the widget while animating out.
+  PendingPermission? _cachedAcpPermission;
 
   @override
   void initState() {
@@ -79,9 +86,10 @@ class _ConversationPanelState extends State<ConversationPanel>
     // Handle permission animation lifecycle
     _permissionAnimController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) {
-        // Clear cached permission when animation completes reverse
+        // Clear cached permissions when animation completes reverse
         setState(() {
           _cachedPermission = null;
+          _cachedAcpPermission = null;
         });
       } else if (status == AnimationStatus.completed) {
         // Permission widget fully visible - if user was at bottom, scroll there
@@ -344,25 +352,38 @@ class _ConversationPanelState extends State<ConversationPanel>
     }
 
     final isPrimary = conversation.isPrimary;
+
+    // Check for both SDK and ACP permissions
     final currentPermission = chat?.pendingPermission;
-    final showPermission = currentPermission != null;
+    final currentAcpPermission = chat?.pendingAcpPermission;
+    final hasAnyPermission =
+        currentPermission != null || currentAcpPermission != null;
 
     // Update cache and animate
-    if (showPermission) {
-      _cachedPermission = currentPermission;
+    if (hasAnyPermission) {
+      // Cache whichever permission is pending (SDK or ACP)
+      if (currentPermission != null) {
+        _cachedPermission = currentPermission;
+        _cachedAcpPermission = null;
+      } else if (currentAcpPermission != null) {
+        _cachedAcpPermission = currentAcpPermission;
+        _cachedPermission = null;
+      }
       if (!_permissionAnimController.isCompleted) {
         _permissionAnimController.forward();
       }
-    } else if (_cachedPermission != null) {
+    } else if (_cachedPermission != null || _cachedAcpPermission != null) {
       // Permission was cleared, animate out
       _permissionAnimController.reverse();
     }
 
     // Determine if we should show the permission widget
-    // Show if we have a cached permission AND either:
+    // Show if we have a cached permission (SDK or ACP) AND either:
     // - animation is animating forward (including value=0 at start)
     // - animation value > 0 (during animation or completed)
-    final shouldShowPermissionWidget = _cachedPermission != null &&
+    final hasCachedPermission =
+        _cachedPermission != null || _cachedAcpPermission != null;
+    final shouldShowPermissionWidget = hasCachedPermission &&
         (_permissionAnimController.status == AnimationStatus.forward ||
             _permissionAnimController.status == AnimationStatus.completed ||
             _permissionAnimController.value > 0);
@@ -425,40 +446,52 @@ class _ConversationPanelState extends State<ConversationPanel>
 
   /// Build the permission widget with slide-up animation.
   Widget _buildPermissionWidget(ChatState chat) {
-    // Use cached permission to ensure we have a valid request during animation
-    final permission = _cachedPermission;
-    if (permission == null) {
-      return const SizedBox.shrink();
-    }
-
-    // Determine which widget to show based on tool name
-    final isAskUserQuestion = permission.toolName == 'AskUserQuestion';
+    // Check for ACP permission first, then SDK permission
+    final acpPermission = _cachedAcpPermission;
+    final sdkPermission = _cachedPermission;
 
     Widget dialogWidget;
-    if (isAskUserQuestion) {
-      dialogWidget = AskUserQuestionDialog(
-        request: permission,
-        onSubmit: (answers) {
-          // Submit answers through the permission system
-          chat.allowPermission(
-            updatedInput: {'answers': answers},
-          );
-        },
+
+    if (acpPermission != null) {
+      // ACP permission dialog
+      dialogWidget = AcpPermissionDialog(
+        permission: acpPermission,
+        onAllow: (optionId) => chat.allowAcpPermission(optionId),
+        onCancel: () => chat.cancelAcpPermission(),
       );
+    } else if (sdkPermission != null) {
+      // SDK permission dialog
+      // Determine which widget to show based on tool name
+      final isAskUserQuestion = sdkPermission.toolName == 'AskUserQuestion';
+
+      if (isAskUserQuestion) {
+        dialogWidget = AskUserQuestionDialog(
+          request: sdkPermission,
+          onSubmit: (answers) {
+            // Submit answers through the permission system
+            chat.allowPermission(
+              updatedInput: {'answers': answers},
+            );
+          },
+        );
+      } else {
+        dialogWidget = PermissionDialog(
+          request: sdkPermission,
+          onAllow: ({
+            Map<String, dynamic>? updatedInput,
+            List<dynamic>? updatedPermissions,
+          }) {
+            chat.allowPermission(
+              updatedInput: updatedInput,
+              updatedPermissions: updatedPermissions,
+            );
+          },
+          onDeny: (message) => chat.denyPermission(message),
+        );
+      }
     } else {
-      dialogWidget = PermissionDialog(
-        request: permission,
-        onAllow: ({
-          Map<String, dynamic>? updatedInput,
-          List<dynamic>? updatedPermissions,
-        }) {
-          chat.allowPermission(
-            updatedInput: updatedInput,
-            updatedPermissions: updatedPermissions,
-          );
-        },
-        onDeny: (message) => chat.denyPermission(message),
-      );
+      // No permission to show
+      return const SizedBox.shrink();
     }
 
     return SizeTransition(
@@ -594,6 +627,11 @@ class _ConversationHeader extends StatelessWidget {
     final chatName = chat.data.name;
     final isSubagent = !conversation.isPrimary;
 
+    // Get connected agent info for primary conversations
+    final agentService = context.watch<AgentService?>();
+    final isConnected = agentService?.isConnected ?? false;
+    final agentName = agentService?.currentAgent?.name;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -639,6 +677,14 @@ class _ConversationHeader extends StatelessWidget {
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      // Connected agent badge (only for primary conversations)
+                      if (!isSubagent && agentName != null) ...[
+                        const SizedBox(width: 8),
+                        _AgentBadge(
+                          agentName: agentName,
+                          isConnected: isConnected,
+                        ),
+                      ],
                       // Model and permission selectors
                       if (!isSubagent) ...[
                         const SizedBox(width: 12),
@@ -688,6 +734,59 @@ class _ConversationHeader extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Badge showing the connected ACP agent with status indicator.
+class _AgentBadge extends StatelessWidget {
+  const _AgentBadge({
+    required this.agentName,
+    required this.isConnected,
+  });
+
+  final String agentName;
+  final bool isConnected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final statusColor = isConnected ? Colors.green : Colors.grey;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Connection status dot
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: statusColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Agent name
+          Text(
+            agentName,
+            style: textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSecondaryContainer,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

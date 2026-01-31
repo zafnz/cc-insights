@@ -1,10 +1,16 @@
 import 'dart:async';
 
+import 'package:acp_dart/acp_dart.dart';
+import 'package:cc_insights_v2/acp/acp_client_wrapper.dart';
+import 'package:cc_insights_v2/acp/acp_session_wrapper.dart';
+import 'package:cc_insights_v2/acp/pending_permission.dart';
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/conversation.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
+import 'package:cc_insights_v2/services/agent_registry.dart';
+import 'package:cc_insights_v2/services/agent_service.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -203,6 +209,112 @@ class _HandleMessageCall {
 
   final ChatState chat;
   final Map<String, dynamic> rawMessage;
+}
+
+/// Fake implementation of AgentRegistry for testing.
+class FakeAgentRegistry extends ChangeNotifier implements AgentRegistry {
+  final List<AgentConfig> _agents = [];
+
+  @override
+  List<AgentConfig> get agents => List.unmodifiable(_agents);
+
+  @override
+  List<AgentConfig> get discoveredAgents => _agents;
+
+  @override
+  List<AgentConfig> get customAgents => const [];
+
+  @override
+  bool get hasDiscovered => true;
+
+  @override
+  String? get configDir => null;
+
+  @override
+  Future<void> discover() async {}
+
+  @override
+  Future<void> load() async {}
+
+  @override
+  Future<void> save() async {}
+
+  @override
+  AgentConfig? getAgent(String id) =>
+      _agents.where((a) => a.id == id).firstOrNull;
+
+  @override
+  bool hasAgent(String id) => getAgent(id) != null;
+
+  @override
+  void addCustomAgent(AgentConfig config) {
+    _agents.add(config);
+    notifyListeners();
+  }
+
+  @override
+  void removeAgent(String id) {
+    _agents.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
+}
+
+/// Fake implementation of AgentService for testing.
+class FakeAgentService extends ChangeNotifier implements AgentService {
+  FakeAgentService({required this.agentRegistry});
+
+  @override
+  final AgentRegistry agentRegistry;
+
+  bool _isConnected = false;
+  AgentConfig? _currentAgent;
+
+  @override
+  bool get isConnected => _isConnected;
+
+  @override
+  AgentConfig? get currentAgent => _currentAgent;
+
+  @override
+  AgentCapabilities? get capabilities => null;
+
+  @override
+  AgentInfo? get agentInfo => null;
+
+  @override
+  Stream<SessionNotification>? get updates => null;
+
+  @override
+  Stream<PendingPermission>? get permissionRequests => null;
+
+  @override
+  Future<void> connect(AgentConfig config) async {
+    _currentAgent = config;
+    _isConnected = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<ACPSessionWrapper> createSession({
+    required String cwd,
+    List<McpServerBase>? mcpServers,
+  }) async {
+    throw StateError('FakeAgentService does not support createSession');
+  }
+
+  @override
+  Future<void> disconnect() async {
+    _currentAgent = null;
+    _isConnected = false;
+    notifyListeners();
+  }
+
+  /// Sets the connection state for testing.
+  void setConnected(bool connected, {AgentConfig? agent}) {
+    _isConnected = connected;
+    _currentAgent = agent;
+    notifyListeners();
+  }
 }
 
 // =============================================================================
@@ -496,6 +608,216 @@ void main() {
         // Verify tool input is displayed (generic tool shows key-value pairs)
         expect(find.textContaining('file_path'), findsOneWidget);
         expect(find.textContaining('/secret/file.txt'), findsOneWidget);
+      });
+    });
+  });
+
+  group('ConversationPanel agent badge', () {
+    final resources = TestResources();
+    late ProjectState project;
+    late SelectionState selectionState;
+    late FakeBackendService fakeBackend;
+    late FakeSdkMessageHandler fakeMessageHandler;
+    late FakeAgentRegistry fakeRegistry;
+    late FakeAgentService fakeAgentService;
+    late ChatState testChat;
+
+    setUp(() {
+      fakeBackend = FakeBackendService();
+      fakeMessageHandler = FakeSdkMessageHandler();
+      fakeRegistry = FakeAgentRegistry();
+      fakeAgentService = FakeAgentService(agentRegistry: fakeRegistry);
+
+      testChat = ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path');
+
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/path',
+          isPrimary: true,
+          branch: 'main',
+          uncommittedFiles: 0,
+          stagedFiles: 0,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          hasMergeConflict: false,
+        ),
+        chats: [testChat],
+      );
+
+      project = resources.track(ProjectState(
+        const ProjectData(
+          name: 'Test Project',
+          repoRoot: '/test/path',
+        ),
+        worktree,
+        linkedWorktrees: [],
+        autoValidate: false,
+        watchFilesystem: false,
+      ));
+
+      selectionState = resources.track(SelectionState(project));
+      selectionState.selectChat(testChat);
+    });
+
+    tearDown(() async {
+      fakeMessageHandler.dispose();
+      await resources.disposeAll();
+    });
+
+    Widget buildTestWidget({AgentService? agentService}) {
+      return MaterialApp(
+        home: MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: project),
+            ChangeNotifierProvider.value(value: selectionState),
+            ChangeNotifierProvider<BackendService>.value(value: fakeBackend),
+            Provider<SdkMessageHandler>.value(value: fakeMessageHandler),
+            if (agentService != null)
+              ChangeNotifierProvider<AgentService>.value(value: agentService),
+          ],
+          child: const Scaffold(
+            body: KeyboardFocusManager(
+              child: SizedBox(
+                width: 600,
+                height: 800,
+                child: ConversationPanel(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    group('Primary conversation header', () {
+      testWidgets('shows agent badge when connected', (tester) async {
+        // Connect to an agent
+        const agentConfig = AgentConfig(
+          id: 'claude-code',
+          name: 'Claude Code',
+          command: '/usr/bin/claude',
+        );
+        fakeAgentService.setConnected(true, agent: agentConfig);
+
+        await tester.pumpWidget(buildTestWidget(agentService: fakeAgentService));
+        await safePumpAndSettle(tester);
+
+        // Should show the agent name in the header
+        expect(find.text('Claude Code'), findsOneWidget);
+      });
+
+      testWidgets('does not show agent badge when not connected',
+          (tester) async {
+        fakeAgentService.setConnected(false);
+
+        await tester.pumpWidget(buildTestWidget(agentService: fakeAgentService));
+        await safePumpAndSettle(tester);
+
+        // Should not show any agent name (no badge)
+        expect(find.text('Claude Code'), findsNothing);
+        expect(find.text('Gemini CLI'), findsNothing);
+      });
+
+      testWidgets('does not show agent badge when AgentService not provided',
+          (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Should not show any agent name (no badge)
+        expect(find.text('Claude Code'), findsNothing);
+      });
+
+      testWidgets('agent badge updates when connection state changes',
+          (tester) async {
+        fakeAgentService.setConnected(false);
+
+        await tester.pumpWidget(buildTestWidget(agentService: fakeAgentService));
+        await safePumpAndSettle(tester);
+
+        // Initially no agent badge
+        expect(find.text('Claude Code'), findsNothing);
+
+        // Connect to agent
+        const agentConfig = AgentConfig(
+          id: 'claude-code',
+          name: 'Claude Code',
+          command: '/usr/bin/claude',
+        );
+        fakeAgentService.setConnected(true, agent: agentConfig);
+        await tester.pump();
+
+        // Now badge should be visible
+        expect(find.text('Claude Code'), findsOneWidget);
+
+        // Disconnect
+        fakeAgentService.setConnected(false);
+        await tester.pump();
+
+        // Badge should be gone
+        expect(find.text('Claude Code'), findsNothing);
+      });
+
+      testWidgets('shows green indicator in agent badge when connected',
+          (tester) async {
+        const agentConfig = AgentConfig(
+          id: 'claude-code',
+          name: 'Claude Code',
+          command: '/usr/bin/claude',
+        );
+        fakeAgentService.setConnected(true, agent: agentConfig);
+
+        await tester.pumpWidget(buildTestWidget(agentService: fakeAgentService));
+        await safePumpAndSettle(tester);
+
+        // Find the agent badge text
+        expect(find.text('Claude Code'), findsOneWidget);
+
+        // Find containers with green color (status indicator in badge)
+        final containers = tester.widgetList<Container>(find.byType(Container));
+        final greenIndicator = containers.where((c) {
+          final decoration = c.decoration;
+          if (decoration is BoxDecoration && decoration.shape == BoxShape.circle) {
+            return decoration.color == Colors.green;
+          }
+          return false;
+        });
+
+        check(greenIndicator).isNotEmpty();
+      });
+    });
+
+    group('Subagent conversation header', () {
+      testWidgets('does not show agent badge for subagent conversations',
+          (tester) async {
+        // Connect to an agent
+        const agentConfig = AgentConfig(
+          id: 'claude-code',
+          name: 'Claude Code',
+          command: '/usr/bin/claude',
+        );
+        fakeAgentService.setConnected(true, agent: agentConfig);
+
+        // Create a subagent conversation and select it
+        testChat.addSubagentConversation(
+          'sdk-agent-1',
+          'Research Task',
+          'Research the topic',
+        );
+        // Get the subagent conversation and select it
+        final subagentConv = testChat.data.subagentConversations.values.first;
+        testChat.selectConversation(subagentConv.id);
+
+        await tester.pumpWidget(buildTestWidget(agentService: fakeAgentService));
+        await safePumpAndSettle(tester);
+
+        // Should show the subagent label in the header
+        expect(find.text('Research Task'), findsOneWidget);
+
+        // The agent badge should NOT appear for subagent conversations
+        // The _AgentBadge widget is only rendered for primary conversations
+        // So the agent name should not appear as a badge (though it may appear elsewhere)
+        // We verify by checking that the subagent-specific header is shown
+        // (indicated by the smart_toy_outlined icon for subagent conversations)
+        expect(find.byIcon(Icons.smart_toy_outlined), findsOneWidget);
       });
     });
   });

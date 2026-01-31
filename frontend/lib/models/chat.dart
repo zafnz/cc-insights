@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:acp_dart/acp_dart.dart' as acp;
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/foundation.dart';
 
+import '../acp/acp_session_wrapper.dart';
+import '../acp/pending_permission.dart';
+import '../acp/session_update_handler.dart';
+import '../services/agent_service.dart';
 import '../services/backend_service.dart';
 import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
@@ -191,23 +196,40 @@ class ChatData {
 class ChatState extends ChangeNotifier {
   ChatData _data;
 
-  /// The SDK session for this chat.
+  /// The SDK session for this chat (legacy, kept for backward compatibility).
   ///
   /// Null when no session is active.
   sdk.ClaudeSession? _session;
 
-  /// Subscription to the session's message stream.
+  /// The ACP session for this chat.
+  ///
+  /// Null when no session is active.
+  ACPSessionWrapper? _acpSession;
+
+  /// Subscription to the session's message stream (legacy).
   StreamSubscription<sdk.SDKMessage>? _messageSubscription;
 
-  /// Subscription to the session's permission request stream.
+  /// Subscription to the session's permission request stream (legacy).
   StreamSubscription<sdk.PermissionRequest>? _permissionSubscription;
 
-  /// Queue of pending permission requests.
+  /// Subscription to the ACP session's update stream.
+  StreamSubscription<acp.SessionUpdate>? _acpUpdateSubscription;
+
+  /// Subscription to the ACP session's permission request stream.
+  StreamSubscription<PendingPermission>? _acpPermissionSubscription;
+
+  /// Queue of pending permission requests (legacy SDK format).
   ///
   /// Multiple permission requests can arrive concurrently (e.g., when Claude
   /// is working on parallel tasks). This queue ensures all requests are
   /// displayed to the user in order, rather than only showing the most recent.
   final List<sdk.PermissionRequest> _pendingPermissions = [];
+
+  /// Queue of pending ACP permission requests.
+  ///
+  /// Similar to [_pendingPermissions] but uses the ACP [PendingPermission]
+  /// format for the new ACP-based sessions.
+  final List<PendingPermission> _pendingAcpPermissions = [];
 
   /// Whether Claude is currently working (processing a request).
   ///
@@ -342,19 +364,28 @@ class ChatState extends ChangeNotifier {
   ChatData get data => _data;
 
   /// Whether there is an active SDK session.
-  bool get hasActiveSession => _session != null || _testHasActiveSession;
+  bool get hasActiveSession =>
+      _session != null || _acpSession != null || _testHasActiveSession;
 
   /// Whether the chat is waiting for a permission response from the user.
-  bool get isWaitingForPermission => _pendingPermissions.isNotEmpty;
+  bool get isWaitingForPermission =>
+      _pendingPermissions.isNotEmpty || _pendingAcpPermissions.isNotEmpty;
 
-  /// The currently pending permission request, if any.
+  /// The currently pending permission request, if any (legacy SDK format).
   ///
   /// Returns the first request in the queue (FIFO order).
   sdk.PermissionRequest? get pendingPermission =>
       _pendingPermissions.isNotEmpty ? _pendingPermissions.first : null;
 
+  /// The currently pending ACP permission request, if any.
+  ///
+  /// Returns the first request in the queue (FIFO order).
+  PendingPermission? get pendingAcpPermission =>
+      _pendingAcpPermissions.isNotEmpty ? _pendingAcpPermissions.first : null;
+
   /// The number of pending permission requests in the queue.
-  int get pendingPermissionCount => _pendingPermissions.length;
+  int get pendingPermissionCount =>
+      _pendingPermissions.length + _pendingAcpPermissions.length;
 
   /// Whether Claude is currently working (processing a request).
   ///
@@ -722,6 +753,100 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Starts a new ACP session for this chat.
+  ///
+  /// Creates a session via [AgentService] and subscribes to update and
+  /// permission request streams. The [updateHandler] is used to route
+  /// incoming updates to the appropriate conversation.
+  ///
+  /// This is the ACP-based equivalent of [startSession]. Use this method
+  /// when working with ACP-compatible agents.
+  ///
+  /// Throws [StateError] if a session is already active.
+  /// Throws [StateError] if the chat has no worktree root.
+  Future<void> startAcpSession({
+    required AgentService agentService,
+    required SessionUpdateHandler updateHandler,
+    required String prompt,
+    List<AttachedImage> images = const [],
+  }) async {
+    if (_acpSession != null || _session != null) {
+      throw StateError('Session already active');
+    }
+
+    final worktreeRoot = _data.worktreeRoot;
+    if (worktreeRoot == null) {
+      throw StateError('Chat has no worktree root');
+    }
+
+    developer.log(
+      'Starting ACP session in: $worktreeRoot',
+      name: 'ChatState',
+    );
+
+    // Create session via AgentService
+    _acpSession = await agentService.createSession(cwd: worktreeRoot);
+
+    developer.log(
+      'ACP session created: ${_acpSession!.sessionId}',
+      name: 'ChatState',
+    );
+
+    // Subscribe to update stream
+    _acpUpdateSubscription = _acpSession!.updates.listen(
+      (update) {
+        updateHandler.handleUpdate(update);
+      },
+      onError: _handleAcpError,
+      onDone: _handleAcpSessionEnd,
+    );
+
+    // Subscribe to permission requests
+    _acpPermissionSubscription = _acpSession!.permissionRequests.listen(
+      (pending) {
+        addPendingAcpPermission(pending);
+      },
+    );
+
+    // Add user message to conversation
+    addEntry(UserInputEntry(
+      timestamp: DateTime.now(),
+      text: prompt,
+      images: images,
+    ));
+
+    // Mark as working since we're starting with a prompt
+    _isWorking = true;
+    notifyListeners();
+
+    // Send the initial prompt
+    final contentBlocks = _buildAcpContentBlocks(prompt, images);
+    try {
+      await _acpSession!.prompt(contentBlocks);
+    } finally {
+      // Mark as not working when prompt completes
+      _isWorking = false;
+      notifyListeners();
+    }
+  }
+
+  /// Builds ACP content blocks from a text message and optional images.
+  List<acp.ContentBlock> _buildAcpContentBlocks(
+    String text,
+    List<AttachedImage> images,
+  ) {
+    if (images.isEmpty) {
+      return [acp.TextContentBlock(text: text)];
+    }
+    return [
+      acp.TextContentBlock(text: text),
+      ...images.map((img) => acp.ImageContentBlock(
+            data: img.base64,
+            mimeType: img.mediaType,
+          )),
+    ];
+  }
+
   /// Sends a message to the active session.
   ///
   /// Adds a user input entry to the conversation and sends the message
@@ -730,12 +855,14 @@ class ChatState extends ChangeNotifier {
   /// If [images] is provided and non-empty, the message is sent with
   /// content blocks including the images.
   ///
+  /// Supports both legacy SDK sessions and ACP sessions.
+  ///
   /// Throws [StateError] if no session is active.
   Future<void> sendMessage(
     String text, {
     List<AttachedImage> images = const [],
   }) async {
-    if (_session == null) {
+    if (_session == null && _acpSession == null) {
       throw StateError('No active session');
     }
 
@@ -749,21 +876,32 @@ class ChatState extends ChangeNotifier {
     // Mark as working
     setWorking(true);
 
-    // Send to SDK - use content blocks if images are attached
-    if (images.isNotEmpty) {
-      final content = <sdk.ContentBlock>[
-        sdk.TextBlock(text: text),
-        ...images.map((img) => sdk.ImageBlock(
-              source: sdk.ImageSource(
-                type: 'base64',
-                mediaType: img.mediaType,
-                data: img.base64,
-              ),
-            )),
-      ];
-      await _session!.sendWithContent(content);
-    } else {
-      await _session!.send(text);
+    // Send to the appropriate session type
+    if (_acpSession != null) {
+      // ACP session - use prompt() with content blocks
+      final contentBlocks = _buildAcpContentBlocks(text, images);
+      try {
+        await _acpSession!.prompt(contentBlocks);
+      } finally {
+        setWorking(false);
+      }
+    } else if (_session != null) {
+      // Legacy SDK session
+      if (images.isNotEmpty) {
+        final content = <sdk.ContentBlock>[
+          sdk.TextBlock(text: text),
+          ...images.map((img) => sdk.ImageBlock(
+                source: sdk.ImageSource(
+                  type: 'base64',
+                  mediaType: img.mediaType,
+                  data: img.base64,
+                ),
+              )),
+        ];
+        await _session!.sendWithContent(content);
+      } else {
+        await _session!.send(text);
+      }
     }
   }
 
@@ -771,15 +909,28 @@ class ChatState extends ChangeNotifier {
   ///
   /// Cancels stream subscriptions, kills the session, and clears
   /// session-related state. Active agents are also cleared.
+  ///
+  /// Supports both legacy SDK sessions and ACP sessions.
   Future<void> stopSession() async {
+    // Cancel legacy SDK subscriptions
     await _messageSubscription?.cancel();
     await _permissionSubscription?.cancel();
     await _session?.kill();
 
+    // Cancel ACP subscriptions
+    await _acpUpdateSubscription?.cancel();
+    await _acpPermissionSubscription?.cancel();
+    _acpSession?.dispose();
+
+    // Clear all session state
     _session = null;
+    _acpSession = null;
     _messageSubscription = null;
     _permissionSubscription = null;
+    _acpUpdateSubscription = null;
+    _acpPermissionSubscription = null;
     _pendingPermissions.clear();
+    _pendingAcpPermissions.clear();
     _activeAgents.clear();
 
     notifyListeners();
@@ -791,6 +942,8 @@ class ChatState extends ChangeNotifier {
   /// after the interruption. Use this when the user wants to stop the current
   /// response but may want to continue the conversation.
   ///
+  /// Supports both legacy SDK sessions and ACP sessions.
+  ///
   /// Does nothing if no session is active.
   Future<void> interrupt() async {
     // Check if we have an active session (either real or test)
@@ -798,8 +951,10 @@ class ChatState extends ChangeNotifier {
 
     developer.log('Interrupting session', name: 'ChatState');
 
-    // Only call SDK interrupt if we have a real session
-    if (_session != null) {
+    // Call the appropriate cancel/interrupt method
+    if (_acpSession != null) {
+      await _acpSession!.cancel();
+    } else if (_session != null) {
       await _session!.interrupt();
     }
 
@@ -838,6 +993,16 @@ class ChatState extends ChangeNotifier {
     if (request != null) {
       addPendingPermission(request);
     }
+  }
+
+  /// Adds an ACP permission request to the queue.
+  ///
+  /// Permission requests are processed in FIFO order. When multiple requests
+  /// arrive concurrently, they are all queued and displayed to the user
+  /// one at a time.
+  void addPendingAcpPermission(PendingPermission request) {
+    _pendingAcpPermissions.add(request);
+    notifyListeners();
   }
 
   /// Sets the working state.
@@ -912,6 +1077,32 @@ class ChatState extends ChangeNotifier {
     }
   }
 
+  /// Responds to the current pending ACP permission request with allow.
+  ///
+  /// The [optionId] specifies which permission option to select (e.g.,
+  /// 'allow_once', 'allow_always').
+  ///
+  /// After allowing, the next request in the queue (if any) becomes current.
+  void allowAcpPermission(String optionId) {
+    if (_pendingAcpPermissions.isEmpty) return;
+
+    final request = _pendingAcpPermissions.removeAt(0);
+    request.allow(optionId);
+    notifyListeners();
+  }
+
+  /// Responds to the current pending ACP permission request with cancel/deny.
+  ///
+  /// This cancels the pending tool operation. After canceling, the next
+  /// request in the queue (if any) becomes current.
+  void cancelAcpPermission() {
+    if (_pendingAcpPermissions.isEmpty) return;
+
+    final request = _pendingAcpPermissions.removeAt(0);
+    request.cancel();
+    notifyListeners();
+  }
+
   /// Handles errors from the session message stream.
   void _handleError(Object error) {
     developer.log(
@@ -955,6 +1146,44 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Handles errors from the ACP session update stream.
+  void _handleAcpError(Object error) {
+    developer.log(
+      'ACP session error: $error',
+      name: 'ChatState',
+      error: error,
+    );
+
+    // Add error entry to conversation
+    addEntry(TextOutputEntry(
+      timestamp: DateTime.now(),
+      text: 'Error: $error',
+      contentType: 'error',
+    ));
+
+    _isWorking = false;
+    notifyListeners();
+  }
+
+  /// Handles ACP session end (when the update stream closes).
+  void _handleAcpSessionEnd() {
+    developer.log(
+      'ACP session ended',
+      name: 'ChatState',
+    );
+
+    _acpSession?.dispose();
+    _acpSession = null;
+    _isWorking = false;
+    _isCompacting = false;
+    _acpUpdateSubscription = null;
+    _acpPermissionSubscription = null;
+    _pendingAcpPermissions.clear();
+    _activeAgents.clear();
+
+    notifyListeners();
+  }
+
   /// Converts the chat's permission mode to SDK permission mode.
   sdk.PermissionMode get _sdkPermissionMode {
     return switch (_permissionMode) {
@@ -978,7 +1207,7 @@ class ChatState extends ChangeNotifier {
   /// Marks the chat as having an active session for testing purposes.
   ///
   /// This is used in tests where we need to simulate an active session
-  /// without having an actual [ClaudeSession] instance.
+  /// without having an actual [ClaudeSession] or [ACPSessionWrapper] instance.
   @visibleForTesting
   void setHasActiveSessionForTesting(bool hasSession) {
     if (hasSession) {
@@ -989,6 +1218,7 @@ class ChatState extends ChangeNotifier {
     } else {
       _testHasActiveSession = false;
       _session = null;
+      _acpSession = null;
     }
     notifyListeners();
   }
@@ -1005,15 +1235,27 @@ class ChatState extends ChangeNotifier {
   /// Call this when the session ends (e.g., after `/clear` command).
   /// Agents are discarded but conversations persist.
   void clearSession() {
+    // Clear legacy SDK session
     _session = null;
-    _testHasActiveSession = false;
-    _isWorking = false;
-    _isCompacting = false;
     _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
     _messageSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
+
+    // Clear ACP session
+    _acpSession?.dispose();
+    _acpSession = null;
+    _acpUpdateSubscription?.cancel();
+    _acpPermissionSubscription?.cancel();
+    _acpUpdateSubscription = null;
+    _acpPermissionSubscription = null;
+    _pendingAcpPermissions.clear();
+
+    // Clear common state
+    _testHasActiveSession = false;
+    _isWorking = false;
+    _isCompacting = false;
     _activeAgents.clear();
     notifyListeners();
   }
@@ -1307,17 +1549,31 @@ class ChatState extends ChangeNotifier {
   void dispose() {
     // Cancel any pending meta save.
     _metaSaveTimer?.cancel();
-    // Cancel stream subscriptions.
+
+    // Cancel legacy SDK stream subscriptions.
     _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
-    // Kill the session if active.
+    // Kill the legacy session if active.
     _session?.kill();
     _session = null;
-    _testHasActiveSession = false;
     _messageSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
+
+    // Cancel ACP stream subscriptions.
+    _acpUpdateSubscription?.cancel();
+    _acpPermissionSubscription?.cancel();
+    // Dispose the ACP session if active.
+    _acpSession?.dispose();
+    _acpSession = null;
+    _acpUpdateSubscription = null;
+    _acpPermissionSubscription = null;
+    _pendingAcpPermissions.clear();
+
+    // Clear common state.
+    _testHasActiveSession = false;
     _activeAgents.clear();
+
     // Dispose the context tracker.
     _contextTracker.dispose();
     super.dispose();

@@ -8,6 +8,8 @@ import 'models/project.dart';
 import 'models/worktree.dart';
 import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
+import 'services/agent_registry.dart';
+import 'services/agent_service.dart';
 import 'services/ask_ai_service.dart';
 import 'services/backend_service.dart';
 import 'services/git_service.dart';
@@ -107,6 +109,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The AskAI service for one-shot AI queries.
   AskAiService? _askAiService;
 
+  /// The agent registry for discovering ACP agents.
+  AgentRegistry? _agentRegistry;
+
+  /// The agent service for managing ACP connections.
+  AgentService? _agentService;
+
   /// Future for project restoration.
   Future<ProjectState>? _projectFuture;
 
@@ -167,11 +175,36 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();
 
+    // Create the agent registry and service for ACP support
+    _agentRegistry = AgentRegistry();
+    _agentService = AgentService(agentRegistry: _agentRegistry!);
+
+    // Initialize agent registry in the background (discovery and loading)
+    _initializeAgentRegistry();
+
     // Initialize project (sync for mock, async for real)
     if (shouldUseMock) {
       _mockProject = _createMockProject();
     } else {
       _projectFuture = _restoreProject();
+    }
+  }
+
+  /// Initializes the agent registry by loading saved agents and discovering
+  /// available agents on the system.
+  ///
+  /// This runs in the background and doesn't block app startup.
+  Future<void> _initializeAgentRegistry() async {
+    try {
+      // Load saved custom agents first
+      await _agentRegistry!.load();
+      // Then discover available agents on the system
+      await _agentRegistry!.discover();
+      debugPrint(
+        'Agent registry initialized: ${_agentRegistry!.agents.length} agents',
+      );
+    } catch (e) {
+      debugPrint('Error initializing agent registry: $e');
     }
   }
 
@@ -234,7 +267,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Only dispose services we created, not injected ones
+    // Dispose ACP services
+    _agentService?.dispose();
+
+    // Only dispose legacy services we created, not injected ones
     if (widget.backendService == null) {
       _backend?.dispose();
     }
@@ -319,9 +355,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   Widget _buildApp(ProjectState project) {
     return MultiProvider(
       providers: [
-        // Backend service for spawning SDK sessions
+        // ACP agent registry for discovering available agents
+        ChangeNotifierProvider<AgentRegistry>.value(value: _agentRegistry!),
+        // ACP agent service for managing agent connections
+        ChangeNotifierProvider<AgentService>.value(value: _agentService!),
+        // Legacy: Backend service for spawning SDK sessions
         ChangeNotifierProvider<BackendService>.value(value: _backend!),
-        // SDK message handler (stateless - shared across all chats)
+        // Legacy: SDK message handler (stateless - shared across all chats)
         Provider<SdkMessageHandler>.value(value: _handler!),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
