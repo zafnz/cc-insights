@@ -142,6 +142,7 @@ class AskAiService {
     required String workingDirectory,
     String model = 'haiku',
     List<String>? allowedTools,
+    int? maxTurns,
     int timeoutSeconds = 60,
   }) async {
     final result = await _claude.request(
@@ -150,6 +151,7 @@ class AskAiService {
       options: SingleRequestOptions(
         model: model,
         allowedTools: allowedTools ?? ['Bash(git:*)', 'Bash(gh:*)', 'Read'],
+        maxTurns: maxTurns,
         timeoutSeconds: timeoutSeconds,
       ),
     );

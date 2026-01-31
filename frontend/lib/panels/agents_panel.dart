@@ -65,6 +65,8 @@ class _AgentsListContent extends StatelessWidget {
     List<ConversationData> subagents,
     Map<String, Agent> activeAgents,
   ) {
+    // Reverse subagents so newest appears first (after main chat)
+    final reversedSubagents = subagents.reversed.toList();
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -75,8 +77,8 @@ class _AgentsListContent extends StatelessWidget {
           isSelected: selection.selectedConversation == primaryConversation,
           onTap: () => selection.selectConversation(primaryConversation),
         ),
-        // Subagent entries
-        ...subagents.map((subagent) {
+        // Subagent entries (newest first)
+        ...reversedSubagents.map((subagent) {
           // Find the agent for this conversation
           final agent = activeAgents.values.cast<Agent?>().firstWhere(
             (a) => a?.conversationId == subagent.id,
@@ -184,6 +186,10 @@ class _PrimaryChatListItem extends StatelessWidget {
 }
 
 /// A single compact agent/subagent entry in the list.
+///
+/// Display format:
+/// - Line 1: Task description (or "Subagent #N" fallback)
+/// - Line 2: subagent_type (or blank if none)
 class _AgentListItem extends StatelessWidget {
   const _AgentListItem({
     required this.conversation,
@@ -202,6 +208,13 @@ class _AgentListItem extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    // Primary line: description, or fallback to "Subagent #N"
+    final primaryLabel = conversation.taskDescription ??
+        'Subagent #${conversation.subagentNumber ?? '?'}';
+
+    // Secondary line: subagent_type (may be null)
+    final secondaryLabel = conversation.label;
+
     return Material(
       color: isSelected
           ? colorScheme.primaryContainer.withValues(alpha: 0.3)
@@ -219,19 +232,19 @@ class _AgentListItem extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
-              // Agent label
+              // Agent description and type
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      conversation.label ?? 'Agent',
+                      primaryLabel,
                       style: textTheme.bodyMedium,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (conversation.taskDescription != null)
+                    if (secondaryLabel != null)
                       Text(
-                        conversation.taskDescription!,
+                        secondaryLabel,
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

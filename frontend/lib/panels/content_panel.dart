@@ -17,16 +17,36 @@ class ContentPanel extends StatelessWidget {
     final selection = context.watch<SelectionState>();
 
     return switch (selection.contentPanelMode) {
-      ContentPanelMode.conversation => const PanelWrapper(
-        title: 'Conversation',
-        icon: Icons.chat_bubble_outline,
-        child: ConversationPanel(),
-      ),
+      ContentPanelMode.conversation => _buildConversationPanel(context, selection),
       ContentPanelMode.createWorktree => const PanelWrapper(
         title: 'Create Worktree',
         icon: Icons.account_tree,
         child: CreateWorktreePanel(),
       ),
     };
+  }
+
+  Widget _buildConversationPanel(BuildContext context, SelectionState selection) {
+    final chat = selection.selectedChat;
+    final conversation = chat?.selectedConversation;
+
+    // Build the title: "Conversation" or "Conversation - <name>"
+    String title = 'Conversation';
+    if (chat != null && conversation != null) {
+      if (conversation.isPrimary) {
+        title = 'Conversation - ${chat.data.name}';
+      } else {
+        // For subagent conversations, show the task description or fallback
+        final subagentTitle = conversation.taskDescription ??
+            'Subagent #${conversation.subagentNumber ?? '?'}';
+        title = 'Conversation - $subagentTitle';
+      }
+    }
+
+    return PanelWrapper(
+      title: title,
+      icon: Icons.chat_bubble_outline,
+      child: const ConversationPanel(),
+    );
   }
 }
