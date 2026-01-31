@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import 'acp/acp_logger.dart';
 import 'models/output_entry.dart';
 import 'models/project.dart';
 import 'models/worktree.dart';
@@ -37,6 +38,11 @@ void main(List<String> args) async {
 
   // Initialize the notification service for desktop notifications
   await NotificationService.instance.initialize();
+
+  // Enable ACP protocol logging for debugging
+  // All messages between app and agent are logged to /tmp/acp.jsonl
+  ACPLogger.instance.enable('/tmp/acp.jsonl');
+  debugPrint('ACP logging enabled: /tmp/acp.jsonl');
 
   runApp(const CCInsightsApp());
 }

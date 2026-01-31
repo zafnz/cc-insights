@@ -6,6 +6,7 @@ import 'package:acp_dart/acp_dart.dart';
 import 'package:flutter/foundation.dart';
 
 import 'acp_errors.dart';
+import 'acp_logger.dart';
 import 'acp_session_wrapper.dart';
 import 'cc_insights_acp_client.dart';
 import 'handlers/terminal_handler.dart';
@@ -391,7 +392,13 @@ class ACPClientWrapper extends ChangeNotifier {
 
       // Create NDJSON stream for communication
       debugPrint('[ACPClientWrapper] Creating NDJSON stream...');
-      final stream = ndJsonStream(_process!.stdout, _process!.stdin);
+      var stream = ndJsonStream(_process!.stdout, _process!.stdin);
+
+      // Wrap with logger if enabled
+      if (ACPLogger.instance.isEnabled) {
+        debugPrint('[ACPClientWrapper] Wrapping stream with logger...');
+        stream = ACPLogger.instance.wrapStream(stream);
+      }
 
       // Create our Client implementation that bridges to streams
       debugPrint('[ACPClientWrapper] Creating CCInsightsACPClient...');
