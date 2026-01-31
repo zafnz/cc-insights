@@ -4,3 +4,12 @@
 [submodule "packages/drag_split_layout"]
 	path = packages/drag_split_layout
 	url = https://github.com/zafnz/drag_split_layout.git
+[submodule "packages/agent-client-protocol"]
+	path = packages/agent-client-protocol
+	url = https://github.com/agentclientprotocol/agent-client-protocol.git
+[submodule "packages/acp-dart"]
+	path = packages/acp-dart
+	url = https://github.com/SkrOYC/acp-dart
+[submodule "packages/claude-code-acp"]
+	path = packages/claude-code-acp
+	url = https://github.com/zed-industries/claude-code-acp.git

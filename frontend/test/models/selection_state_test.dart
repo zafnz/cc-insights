@@ -40,7 +40,12 @@ void main() {
         path: '/repo',
         isPrimary: true,
       );
-      return ProjectState(projectData, primaryWorktree);
+      return ProjectState(
+        projectData,
+        primaryWorktree,
+        autoValidate: false,
+        watchFilesystem: false,
+      );
     }
 
     group('constructor', () {
@@ -82,6 +87,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
         final selection = SelectionState(project);
 
@@ -109,6 +116,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
         final selection = SelectionState(project);
         var notified = false;
@@ -169,6 +178,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
         final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
         primaryWorktree.addChat(chat, select: true);
@@ -370,6 +381,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
         final selection = SelectionState(project);
         selection.selectFile('/path/to/file.dart');

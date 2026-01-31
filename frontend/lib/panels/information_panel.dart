@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/worktree.dart';
+import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
 import 'panel_wrapper.dart';
 
@@ -25,8 +26,39 @@ class InformationPanel extends StatelessWidget {
   }
 }
 
-class _InformationContent extends StatelessWidget {
+class _InformationContent extends StatefulWidget {
   const _InformationContent();
+
+  @override
+  State<_InformationContent> createState() => _InformationContentState();
+}
+
+class _InformationContentState extends State<_InformationContent> {
+  WorktreeState? _lastWorktree;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final selection = context.read<SelectionState>();
+    final worktree = selection.selectedWorktree;
+
+    // Start watching worktree when it changes
+    if (worktree != null && worktree != _lastWorktree) {
+      _lastWorktree = worktree;
+      _startWatching(worktree);
+    }
+  }
+
+  void _startWatching(WorktreeState worktree) {
+    // Try to get WorktreeWatcherService - may not be available in tests
+    try {
+      final watcherService = context.read<WorktreeWatcherService>();
+      watcherService.watchWorktree(worktree);
+    } catch (e) {
+      // Provider not available (e.g., in tests)
+      debugPrint('WorktreeWatcherService not available: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +121,13 @@ class _WorktreeInfo extends StatelessWidget {
           _DivergenceInfo(data: data),
           const SizedBox(height: 16),
 
-          // Stage and commit button
+          // Stage and commit button (enabled when there are changes)
           _CompactButton(
-            onPressed: null,
+            onPressed: data.uncommittedFiles > 0 || data.stagedFiles > 0
+                ? () {
+                    // TODO: Wire up stage and commit functionality
+                  }
+                : null,
             label: 'Stage and commit all',
             icon: Icons.check_circle_outline,
           ),

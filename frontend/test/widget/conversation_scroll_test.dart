@@ -72,6 +72,8 @@ void main() {
         ),
         worktree,
         linkedWorktrees: [],
+        autoValidate: false,
+        watchFilesystem: false,
       ));
 
       selectionState = resources.track(SelectionState(project));

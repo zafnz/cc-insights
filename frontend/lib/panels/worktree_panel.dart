@@ -46,6 +46,7 @@ class _WorktreeListContent extends StatelessWidget {
         final isSelected = selection.selectedWorktree == worktree;
         return _WorktreeListItem(
           worktree: worktree,
+          repoRoot: project.data.repoRoot,
           isSelected: isSelected,
           onTap: () => selection.selectWorktree(worktree),
         );
@@ -112,19 +113,56 @@ class CreateWorktreeCard extends StatelessWidget {
 class _WorktreeListItem extends StatelessWidget {
   const _WorktreeListItem({
     required this.worktree,
+    required this.repoRoot,
     required this.isSelected,
     required this.onTap,
   });
 
   final WorktreeState worktree;
+  final String repoRoot;
   final bool isSelected;
   final VoidCallback onTap;
+
+  /// Computes a relative path from the repo root to the worktree.
+  /// Returns null for the primary worktree (at repo root).
+  String? _getRelativePath(String worktreePath) {
+    // Primary worktree at repo root - show full path
+    if (worktreePath == repoRoot) {
+      return null;
+    }
+
+    // Split paths into components
+    final repoComponents = repoRoot.split('/');
+    final worktreeComponents = worktreePath.split('/');
+
+    // Find common prefix length
+    int commonLength = 0;
+    while (commonLength < repoComponents.length &&
+        commonLength < worktreeComponents.length &&
+        repoComponents[commonLength] == worktreeComponents[commonLength]) {
+      commonLength++;
+    }
+
+    // Build relative path: go up from repo, then down to worktree
+    final upCount = repoComponents.length - commonLength;
+    final downPath = worktreeComponents.skip(commonLength).toList();
+
+    final parts = <String>[];
+    for (int i = 0; i < upCount; i++) {
+      parts.add('..');
+    }
+    parts.addAll(downPath);
+
+    return parts.isEmpty ? '.' : parts.join('/');
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final data = worktree.data;
+    // Show relative path for linked worktrees, full path for primary
+    final displayPath = _getRelativePath(data.worktreeRoot) ?? data.worktreeRoot;
 
     return Material(
       color: isSelected
@@ -147,10 +185,10 @@ class _WorktreeListItem extends StatelessWidget {
               // Path + status on same line (muted, monospace, ~11px)
               Row(
                 children: [
-                  // Path
+                  // Path (full for primary, relative for linked)
                   Expanded(
                     child: Text(
-                      data.worktreeRoot,
+                      displayPath,
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

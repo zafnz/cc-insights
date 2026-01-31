@@ -132,7 +132,12 @@ void main() {
         );
 
         // Act
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
 
         // Assert
         check(state.data.name).equals('Project');
@@ -159,6 +164,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
 
         // Assert
@@ -184,6 +191,8 @@ void main() {
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
           selectedWorktree: linkedWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
         );
 
         // Assert
@@ -199,7 +208,12 @@ void main() {
           path: '/repo',
           isPrimary: true,
         );
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
 
         // Act
         final allWorktrees = state.allWorktrees;
@@ -233,6 +247,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree1, linkedWorktree2],
+          autoValidate: false,
+          watchFilesystem: false,
         );
 
         // Act
@@ -255,7 +271,12 @@ void main() {
           path: '/repo',
           isPrimary: true,
         );
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
         var notified = false;
         state.addListener(() => notified = true);
 
@@ -284,6 +305,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
         var notified = false;
         state.addListener(() => notified = true);
@@ -303,7 +326,12 @@ void main() {
           path: '/repo',
           isPrimary: true,
         );
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
 
         // Act
         state.selectWorktree(null);
@@ -321,7 +349,12 @@ void main() {
           path: '/repo',
           isPrimary: true,
         );
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
         final linkedWorktree = createWorktreeState(
           path: '/repo-linked',
           isPrimary: false,
@@ -345,7 +378,12 @@ void main() {
           path: '/repo',
           isPrimary: true,
         );
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
         final linkedWorktree = createWorktreeState(
           path: '/repo-linked',
           isPrimary: false,
@@ -365,7 +403,12 @@ void main() {
           path: '/repo',
           isPrimary: true,
         );
-        final state = ProjectState(projectData, primaryWorktree);
+        final state = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
         final linkedWorktree = createWorktreeState(
           path: '/repo-linked',
           isPrimary: false,
@@ -395,6 +438,8 @@ void main() {
           projectData,
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
+          autoValidate: false,
+          watchFilesystem: false,
         );
         var notified = false;
         state.addListener(() => notified = true);
@@ -423,6 +468,8 @@ void main() {
           primaryWorktree,
           linkedWorktrees: [linkedWorktree],
           selectedWorktree: linkedWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
         );
 
         // Act
@@ -452,6 +499,8 @@ void main() {
           primaryWorktree,
           linkedWorktrees: [linkedWorktree1, linkedWorktree2],
           selectedWorktree: linkedWorktree1,
+          autoValidate: false,
+          watchFilesystem: false,
         );
 
         // Act

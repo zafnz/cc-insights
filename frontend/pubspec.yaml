@@ -23,6 +23,7 @@ dependencies:
   json_annotation: ^4.9.0
   intl: ^0.20.2
   path: ^1.9.0
+  watcher: ^1.1.0
 
   # The markdown package
   gpt_markdown: ^1.1.5

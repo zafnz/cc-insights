@@ -149,7 +149,9 @@ Widget createTestAppWithProviders({
   // Force mock data mode for tests
   useMockData = true;
 
-  final testProject = project ?? MockDataFactory.createMockProject();
+  final testProject = project ?? MockDataFactory.createMockProject(
+    watchFilesystem: false,
+  );
   final testBackend = backendService ?? FakeBackendService();
   final testHandler = messageHandler ?? SdkMessageHandler();
 

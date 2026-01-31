@@ -179,6 +179,8 @@ void main() {
         ),
         worktree,
         linkedWorktrees: [],
+        autoValidate: false,
+        watchFilesystem: false,
       ));
 
       selectionState = resources.track(SelectionState(projectState));
@@ -549,6 +551,8 @@ void main() {
         ),
         worktree,
         linkedWorktrees: [],
+        autoValidate: false,
+        watchFilesystem: false,
       ));
 
       selectionState = resources.track(SelectionState(projectState));
@@ -683,6 +687,8 @@ void main() {
         ),
         worktree,
         linkedWorktrees: [],
+        autoValidate: false,
+        watchFilesystem: false,
       ));
 
       selectionState = resources.track(SelectionState(projectState));

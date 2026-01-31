@@ -103,6 +103,9 @@ void main() {
         final projectId = PersistenceService.generateProjectId(projectRoot);
         final persistence = _TestPersistenceService(tempDir.path);
 
+        // Create the linked worktree directory so validation doesn't prune it
+        Directory(linkedWorktreePath).createSync();
+
         final projectsIndex = ProjectsIndex(
           projects: {
             projectRoot: ProjectInfo(
@@ -127,6 +130,8 @@ void main() {
         // Act
         final (project, isNew) = await service.restoreOrCreateProject(
           projectRoot,
+          autoValidate: false,
+          watchFilesystem: false,
         );
 
         // Assert

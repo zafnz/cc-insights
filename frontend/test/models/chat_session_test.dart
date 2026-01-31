@@ -293,7 +293,7 @@ void main() {
         check(backend.lastPrompt).equals('Hello Claude');
         check(backend.lastCwd).equals('/path/to/worktree');
         check(backend.lastOptions).isNotNull();
-        check(backend.lastOptions!.model).equals('sonnet');
+        check(backend.lastOptions!.model).equals('opus');
       });
 
       test('notifies listeners when session starts', () async {

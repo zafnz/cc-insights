@@ -29,6 +29,8 @@ void main() {
       return ProjectState(
         const ProjectData(name: 'My Project', repoRoot: '/Users/test/my-project'),
         primaryWorktree,
+        autoValidate: false,
+        watchFilesystem: false,
       );
     }
 
@@ -73,6 +75,7 @@ void main() {
 
         // Should show the primary worktree
         expect(find.text('main'), findsOneWidget);
+        // Primary worktree shows full path
         expect(find.text('/Users/test/my-project'), findsOneWidget);
 
         // And the ghost card

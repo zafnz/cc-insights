@@ -105,6 +105,8 @@ void main() {
           repoRoot: '/test',
         ),
         worktree,
+        autoValidate: false,
+        watchFilesystem: false,
       ));
 
       selectionState = resources.track(SelectionState(project));
