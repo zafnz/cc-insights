@@ -486,7 +486,8 @@ class Protocol {
   void send(OutgoingMessage message) {
     final messageJson = message.toJson();
     final json = jsonEncode(messageJson);
-    process.stdin.writeln(json);
+    // Explicitly encode to UTF-8 and add newline
+    process.stdin.add(utf8.encode('$json\n'));
   }
 
   /// Dispose of the protocol handler.
