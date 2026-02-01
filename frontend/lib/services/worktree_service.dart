@@ -1,12 +1,16 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
 import '../models/project.dart';
+import '../models/project_config.dart';
 import '../models/worktree.dart';
 import 'git_service.dart';
 import 'persistence_models.dart' as persistence;
 import 'persistence_service.dart';
+import 'project_config_service.dart';
+import 'script_execution_service.dart';
 
 /// Exception thrown when worktree creation fails.
 ///
@@ -31,15 +35,22 @@ class WorktreeCreationException implements Exception {
 class WorktreeService {
   final GitService _gitService;
   final PersistenceService _persistenceService;
+  final ProjectConfigService _configService;
+  final ScriptExecutionService? _scriptService;
 
   /// Creates a [WorktreeService] with optional dependency injection.
   ///
   /// If not provided, uses [RealGitService] and [PersistenceService].
+  /// The [scriptService] is optional and used for running lifecycle hooks.
   WorktreeService({
     GitService? gitService,
     PersistenceService? persistenceService,
+    ProjectConfigService? configService,
+    ScriptExecutionService? scriptService,
   })  : _gitService = gitService ?? const RealGitService(),
-        _persistenceService = persistenceService ?? PersistenceService();
+        _persistenceService = persistenceService ?? PersistenceService(),
+        _configService = configService ?? ProjectConfigService(),
+        _scriptService = scriptService;
 
   /// Creates a new worktree and persists it.
   ///
@@ -111,7 +122,27 @@ class WorktreeService {
       await parentDir.create(recursive: true);
     }
 
-    // 6. Create the git worktree
+    // 6. Run pre-create hook if configured
+    final config = await _configService.loadConfig(repoRoot);
+    final preCreateHook = config.getHook('worktree-pre-create');
+    if (preCreateHook != null && preCreateHook.isNotEmpty) {
+      final exitCode = await _runHook(
+        hookName: 'worktree-pre-create',
+        command: preCreateHook,
+        workingDirectory: repoRoot,
+      );
+      if (exitCode != 0) {
+        throw WorktreeCreationException(
+          'Pre-create hook failed with exit code $exitCode',
+          suggestions: [
+            'Check the hook script for errors',
+            'Review the terminal output for details',
+          ],
+        );
+      }
+    }
+
+    // 7. Create the git worktree
     try {
       await _gitService.createWorktree(
         repoRoot: repoRoot,
@@ -126,10 +157,28 @@ class WorktreeService {
       );
     }
 
-    // 7. Get git status for the new worktree
+    // 8. Run post-create hook if configured
+    final postCreateHook = config.getHook('worktree-post-create');
+    if (postCreateHook != null && postCreateHook.isNotEmpty) {
+      // Run in the new worktree directory
+      final exitCode = await _runHook(
+        hookName: 'worktree-post-create',
+        command: postCreateHook,
+        workingDirectory: worktreePath,
+      );
+      if (exitCode != 0) {
+        developer.log(
+          'Post-create hook failed with exit code $exitCode, continuing anyway',
+          name: 'WorktreeService',
+        );
+        // Don't fail worktree creation for post-create hook failures
+      }
+    }
+
+    // 9. Get git status for the new worktree
     final status = await _gitService.getStatus(worktreePath);
 
-    // 8. Create WorktreeData and WorktreeState
+    // 10. Create WorktreeData and WorktreeState
     final worktreeData = WorktreeData(
       worktreeRoot: worktreePath,
       isPrimary: false,
@@ -142,10 +191,10 @@ class WorktreeService {
     );
     final worktreeState = WorktreeState(worktreeData);
 
-    // 9. Persist to projects.json
+    // 11. Persist to projects.json
     await _persistWorktree(project, worktreeState);
 
-    // 10. Return WorktreeState
+    // 12. Return WorktreeState
     return worktreeState;
   }
 
@@ -222,6 +271,38 @@ class WorktreeService {
     }
 
     return ['Check the git error message above for details'];
+  }
+
+  /// Runs a lifecycle hook script and returns the exit code.
+  ///
+  /// If a [ScriptExecutionService] is available, uses it to show output
+  /// in the terminal panel. Otherwise, runs the script directly.
+  Future<int> _runHook({
+    required String hookName,
+    required String command,
+    required String workingDirectory,
+  }) async {
+    developer.log(
+      'Running hook "$hookName": $command in $workingDirectory',
+      name: 'WorktreeService',
+    );
+
+    if (_scriptService != null) {
+      // Use script service to show output in terminal panel
+      return await _scriptService.runScriptSync(
+        name: hookName,
+        command: command,
+        workingDirectory: workingDirectory,
+      );
+    } else {
+      // Run directly without UI
+      final result = await Process.run(
+        '/bin/sh',
+        ['-c', command],
+        workingDirectory: workingDirectory,
+      );
+      return result.exitCode;
+    }
   }
 
   /// Persists a new worktree to projects.json.
