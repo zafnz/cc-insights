@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/output_entry.dart';
 import '../services/runtime_config.dart';
-import 'click_to_scroll_container.dart';
 import 'diff_view.dart';
 
 /// Expandable card showing tool execution details.
@@ -355,17 +354,22 @@ class _ToolCardState extends State<ToolCard> {
             ),
           ),
           const SizedBox(height: 4),
-          ClickToScrollContainer(
-            maxHeight: 300,
+          Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(8),
-            backgroundColor: Colors.black87,
-            borderRadius: BorderRadius.circular(4),
-            child: SelectableText(
-              entry.result?.toString() ?? '',
-              style: GoogleFonts.getFont(
-                monoFont,
-                fontSize: 11,
-                color: Colors.grey,
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                entry.result?.toString() ?? '',
+                style: GoogleFonts.getFont(
+                  monoFont,
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
               ),
             ),
           ),
@@ -387,21 +391,26 @@ class _ToolCardState extends State<ToolCard> {
           ),
         ),
         const SizedBox(height: 4),
-        ClickToScrollContainer(
-          maxHeight: 300,
+        Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(8),
-          backgroundColor: isError
-              ? Colors.red.withValues(alpha: 0.1)
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(4),
-          child: SelectableText(
-            entry.result?.toString() ?? '',
-            style: GoogleFonts.getFont(
-              monoFont,
-              fontSize: 11,
-              color: isError
-                  ? Colors.red
-                  : Theme.of(context).colorScheme.onSurface,
+          decoration: BoxDecoration(
+            color: isError
+                ? Colors.red.withValues(alpha: 0.1)
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          constraints: const BoxConstraints(maxHeight: 300),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              entry.result?.toString() ?? '',
+              style: GoogleFonts.getFont(
+                monoFont,
+                fontSize: 11,
+                color: isError
+                    ? Colors.red
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
         ),
@@ -509,17 +518,22 @@ class _WriteInputWidget extends StatelessWidget {
           projectDir: projectDir,
         ),
         const SizedBox(height: 4),
-        ClickToScrollContainer(
-          maxHeight: 150,
+        Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(8),
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(4),
-          child: SelectableText(
-            content.length > 500 ? '${content.substring(0, 500)}...' : content,
-            style: GoogleFonts.getFont(
-              monoFont,
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurface,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          constraints: const BoxConstraints(maxHeight: 150),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              content.length > 500 ? '${content.substring(0, 500)}...' : content,
+              style: GoogleFonts.getFont(
+                monoFont,
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
         ),
@@ -814,16 +828,21 @@ class _TaskInputWidget extends StatelessWidget {
         ),
         if (prompt.isNotEmpty) ...[
           const SizedBox(height: 4),
-          ClickToScrollContainer(
-            maxHeight: 100,
+          Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(8),
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(4),
-            child: SelectableText(
-              prompt,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.onSurface,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            constraints: const BoxConstraints(maxHeight: 100),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                prompt,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
             ),
           ),
