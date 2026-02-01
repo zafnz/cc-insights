@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:math' as math;
 
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
@@ -63,6 +64,7 @@ class _ConversationPanelState extends State<ConversationPanel>
   /// Cache the last permission request for animation-out.
   /// This ensures we can still render the widget while animating out.
   sdk.PermissionRequest? _cachedPermission;
+  bool _permissionWasAtBottom = false;
 
   @override
   void initState() {
@@ -79,10 +81,15 @@ class _ConversationPanelState extends State<ConversationPanel>
     // Handle permission animation lifecycle
     _permissionAnimController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) {
+        final shouldScrollToBottom = _permissionWasAtBottom;
+        _permissionWasAtBottom = false;
         // Clear cached permission when animation completes reverse
         setState(() {
           _cachedPermission = null;
         });
+        if (shouldScrollToBottom) {
+          _scheduleScrollToBottom();
+        }
       } else if (status == AnimationStatus.completed) {
         // Permission widget fully visible - if user was at bottom, scroll there
         // This handles the case where the animation changed the list height
@@ -118,8 +125,10 @@ class _ConversationPanelState extends State<ConversationPanel>
     if (!_scrollController.hasClients) return;
 
     final position = _scrollController.position;
-    // Consider "at bottom" if within 50 pixels of the end
-    final atBottom = position.pixels >= position.maxScrollExtent - 50;
+    // Consider "at bottom" if within a dynamic threshold of the end.
+    // For very short lists, keep the threshold small so "top" isn't
+    // incorrectly treated as "bottom".
+    final atBottom = _isNearBottom(position);
 
     if (_isAtBottom != atBottom) {
       developer.log(
@@ -130,6 +139,18 @@ class _ConversationPanelState extends State<ConversationPanel>
       );
     }
     _isAtBottom = atBottom;
+  }
+
+  /// Returns true if the scroll position is close enough to the bottom
+  /// to be treated as "at bottom" for auto-scroll purposes.
+  bool _isNearBottom(ScrollPosition position) {
+    final maxExtent = position.maxScrollExtent;
+    if (maxExtent <= 0) {
+      return true;
+    }
+
+    final threshold = math.min(50.0, maxExtent * 0.2);
+    return position.pixels >= maxExtent - threshold;
   }
 
   /// Scrolls to the bottom of the list with animation.
@@ -158,7 +179,7 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     final position = _scrollController.position;
     final currentPixels = position.pixels;
-    final wasAtBottom = currentPixels >= position.maxScrollExtent - 50;
+    final wasAtBottom = _isNearBottom(position);
 
     // Calculate which item is at the top of the viewport
     // Use the list controller to get the first visible item
@@ -279,7 +300,11 @@ class _ConversationPanelState extends State<ConversationPanel>
     // The scroll listener may not have fired yet, so we recompute here
     if (newEntriesAdded && _scrollController.hasClients) {
       final position = _scrollController.position;
-      final wasAtBottom = position.pixels >= position.maxScrollExtent - 50;
+      final wasAtBottom = _isNearBottom(position);
+
+      // Capture current scroll position BEFORE setState
+      // SuperListView may adjust scroll position when items are added
+      final savedPixels = position.pixels;
 
       developer.log(
         'New entry: wasAtBottom=$wasAtBottom, '
@@ -292,6 +317,24 @@ class _ConversationPanelState extends State<ConversationPanel>
         // User was at bottom - schedule scroll to bottom after layout
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollToBottom();
+        });
+      } else {
+        // User was scrolled up - preserve their exact position
+        // Use nested postFrameCallbacks to ensure correction happens after
+        // SuperListView's own layout adjustments
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              final currentPixels = _scrollController.position.pixels;
+              if ((currentPixels - savedPixels).abs() > 1.0) {
+                developer.log(
+                  'Correcting scroll: was $savedPixels, became $currentPixels, restoring to $savedPixels',
+                  name: 'ConversationPanel',
+                );
+                _scrollController.jumpTo(savedPixels);
+              }
+            }
+          });
         });
       }
     } else if (newEntriesAdded && !_scrollController.hasClients) {
@@ -349,6 +392,9 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     // Update cache and animate
     if (showPermission) {
+      if (_cachedPermission == null) {
+        _permissionWasAtBottom = _isAtBottom;
+      }
       _cachedPermission = currentPermission;
       if (!_permissionAnimController.isCompleted) {
         _permissionAnimController.forward();
