@@ -316,6 +316,12 @@ class ChatState extends ChangeNotifier {
   /// Set by [markAsViewed] and [markAsNotViewed].
   bool _isBeingViewed = false;
 
+  /// Draft text being typed in the message input.
+  ///
+  /// Preserved when switching between chats so users don't lose their
+  /// in-progress messages.
+  String _draftText = '';
+
   /// The persistence service instance.
   ///
   /// Can be overridden for testing.
@@ -447,6 +453,10 @@ class ChatState extends ChangeNotifier {
 
   /// The number of unread messages in this chat.
   int get unreadCount => _unreadCount;
+
+  /// Draft text being typed in the message input.
+  String get draftText => _draftText;
+  set draftText(String value) => _draftText = value;
 
   /// Sets the last session ID for this chat.
   ///

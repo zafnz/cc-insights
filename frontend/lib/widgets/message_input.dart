@@ -33,6 +33,8 @@ class MessageInput extends StatefulWidget {
     super.key,
     required this.onSubmit,
     this.onInterrupt,
+    this.onTextChanged,
+    this.initialText = '',
     this.placeholder = 'Type a message...',
     this.enabled = true,
     this.autofocus = true,
@@ -46,6 +48,12 @@ class MessageInput extends StatefulWidget {
   /// Called when the user clicks the interrupt button.
   /// If null, the interrupt button is hidden.
   final VoidCallback? onInterrupt;
+
+  /// Called when the text changes (for saving drafts).
+  final ValueChanged<String>? onTextChanged;
+
+  /// Initial text to populate the input with.
+  final String initialText;
 
   /// Placeholder text shown when the input is empty.
   final String placeholder;
@@ -80,6 +88,18 @@ class _MessageInputState extends State<MessageInput>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Restore initial text (e.g., draft from previous session)
+    if (widget.initialText.isNotEmpty) {
+      _controller.text = widget.initialText;
+      // Move cursor to end
+      _controller.selection = TextSelection.collapsed(
+        offset: widget.initialText.length,
+      );
+    }
+
+    // Listen for text changes to save drafts
+    _controller.addListener(_onTextChanged);
+
     // Auto-focus after the first frame
     if (widget.autofocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -88,6 +108,10 @@ class _MessageInputState extends State<MessageInput>
         }
       });
     }
+  }
+
+  void _onTextChanged() {
+    widget.onTextChanged?.call(_controller.text);
   }
 
   @override
@@ -102,6 +126,7 @@ class _MessageInputState extends State<MessageInput>
   void dispose() {
     // Unregister from the keyboard focus manager using saved reference
     _keyboardFocusManager?.unregisterMessageInput(_focusNode);
+    _controller.removeListener(_onTextChanged);
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _focusNode.dispose();
