@@ -40,6 +40,15 @@ class AppNavigationRail extends StatelessWidget {
             isSelected: selectedIndex == 0,
             onTap: () => onDestinationSelected(0),
           ),
+          const SizedBox(height: 4),
+          // File Manager button
+          _NavRailButton(
+            icon: Icons.folder_outlined,
+            selectedIcon: Icons.folder,
+            tooltip: 'File Manager',
+            isSelected: selectedIndex == 1,
+            onTap: () => onDestinationSelected(1),
+          ),
           const SizedBox(height: 8),
           Divider(
             indent: 8,
@@ -59,8 +68,9 @@ class AppNavigationRail extends StatelessWidget {
           // Chats: lit if separate, dark if merged into worktrees
           _NavRailToggleButton(
             icon: Icons.forum_outlined,
-            tooltip:
-                isChatsSeparate ? 'Chats' : 'Chats (merged - tap to split)',
+            tooltip: isChatsSeparate
+                ? 'Chats'
+                : 'Chats (merged - tap to split)',
             isActive: isChatsSeparate,
             onTap: () => onPanelToggle('chats'),
           ),
@@ -68,8 +78,9 @@ class AppNavigationRail extends StatelessWidget {
           // Agents: lit if separate, dark if merged into chats or worktrees
           _NavRailToggleButton(
             icon: Icons.smart_toy_outlined,
-            tooltip:
-                isAgentsSeparate ? 'Agents' : 'Agents (merged - tap to split)',
+            tooltip: isAgentsSeparate
+                ? 'Agents'
+                : 'Agents (merged - tap to split)',
             isActive: isAgentsSeparate,
             onTap: () => onPanelToggle('agents'),
           ),
