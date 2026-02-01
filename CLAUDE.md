@@ -29,11 +29,10 @@ CC-Insights is a desktop application for monitoring and interacting with Claude 
 - Preserve working components (Dart SDK, display widgets)
 
 **Architecture:**
-- **Backend** (`backend-node/`): Thin Node.js subprocess using `@anthropic-ai/agent-sdk` (TypeScript)
-- **Dart SDK** (`dart_sdk/`): Flutter/Dart SDK wrapper providing native API and subprocess management
+- **Dart SDK** (`dart_sdk/`): Flutter/Dart SDK that communicates directly with the Claude CLI
 - **Frontend** (`frontend/`): Flutter desktop app (macOS) with Provider state management
 
-**Communication:** Dart SDK spawns Node.js backend as subprocess, communicates via stdin/stdout JSON lines.
+**Communication:** Dart SDK spawns the Claude CLI directly as a subprocess, communicating via stdin/stdout JSON lines using the CLI's stream-json protocol.
 
 ---
 
@@ -84,22 +83,22 @@ Project: CC-Insights
 
 ```
 claude-project/
-├── backend-node/
-│   └── src/
-│       ├── index.ts            # Entry point (stdin/stdout reader)
-│       ├── session-manager.ts  # SDK session lifecycle management
-│       ├── callback-bridge.ts  # Bridges SDK callbacks to protocol
-│       ├── protocol.ts         # Type-safe message definitions
-│       ├── message-queue.ts    # Reliable message delivery
-│       └── logger.ts           # Structured logging
 ├── dart_sdk/
 │   └── lib/
 │       ├── claude_sdk.dart     # Main export
 │       └── src/
-│           ├── backend.dart    # Subprocess spawning & management
-│           ├── session.dart    # Session API (createSession, send, etc.)
-│           ├── protocol.dart   # Protocol implementation (stdin/stdout)
-│           └── types/          # Type definitions
+│           ├── cli_process.dart    # Claude CLI subprocess management
+│           ├── cli_session.dart    # Direct CLI session implementation
+│           ├── cli_backend.dart    # Direct CLI backend implementation
+│           ├── backend_factory.dart # Backend factory for type selection
+│           ├── backend_interface.dart # Abstract backend interface
+│           ├── backend.dart        # Node.js backend (implements AgentBackend)
+│           ├── session.dart        # Node.js session (used by BackendFactory)
+│           ├── protocol.dart       # Protocol implementation (stdin/stdout)
+│           └── types/              # Type definitions
+│               ├── sdk_messages.dart
+│               ├── control_messages.dart  # CLI control protocol types
+│               └── ...
 ├── frontend/
 │   └── lib/
 │       ├── main.dart
@@ -113,7 +112,7 @@ claude-project/
 │       ├── state/
 │       │   └── selection_state.dart
 │       ├── services/
-│       │   ├── backend_service.dart
+│       │   ├── backend_service.dart  # Uses BackendFactory
 │       │   ├── git_service.dart
 │       │   └── persistence_service.dart
 │       ├── panels/
@@ -158,15 +157,31 @@ Quick reference to SDK documentation in `docs/sdk/`:
 
 ## Message Flow
 
+The Dart SDK communicates directly with the Claude CLI using stream-json format:
+
 ```
-Claude API → SDK → session-manager.ts → stdout (JSON lines) →
-  protocol.dart → ClaudeSession → Stream → Chat model → UI
+Claude CLI ← → CliProcess ← → CliSession ← → Chat model → UI
+              (stdin/stdout)   (SDK messages)
 ```
 
-User input flows reverse:
+**Initialization:**
+1. `CliProcess` spawns Claude CLI with `--output-format stream-json --input-format stream-json`
+2. Dart sends `control_request` with `subtype: "initialize"`
+3. CLI responds with `control_response` containing available commands, models, etc.
+4. CLI sends `system` message with `subtype: "init"` (tools, MCP servers, etc.)
+5. Dart sends initial user message via `session.create`
+
+**Message flow:**
 ```
-UI → Chat.sendMessage() → ClaudeSession.send() →
-  protocol.dart → stdin (JSON lines) → session-manager.ts → SDK
+UI → Chat.sendMessage() → CliSession.send() →
+  stdin (JSON lines) → Claude CLI → Claude API
+```
+
+**Permission requests:**
+```
+Claude CLI → callback.request (can_use_tool) → CliSession.permissionRequests →
+  UI shows permission dialog → User approves/denies →
+  callback.response → Claude CLI
 ```
 
 ### Permission System
@@ -261,26 +276,6 @@ The SDK evaluates tool permissions in this order (first match wins):
 
 ---
 
-## TypeScript/Backend Standards
-
-**Async Patterns:**
-- Use `async/await` consistently
-- Handle promise rejections in message handlers
-- Clean up resources when sessions terminate
-
-**Logging:**
-- Use `logger.info()` for significant events
-- Use `logger.debug()` for detailed tracing
-- Include session ID in log context: `{ sessionId }`
-- Logs written to `/tmp/backend-{timestamp}.log`
-
-**Type Safety:**
-- Use TypeScript interfaces for all messages (see `protocol.ts`)
-- Use discriminated unions for message types
-- Avoid `any` types - use `unknown` if type is truly unknown
-
----
-
 ## Testing Requirements
 
 **See `TESTING.md` for comprehensive testing guidelines, helpers, and patterns.**
@@ -337,7 +332,7 @@ The `get_test_result` tool is specifically designed to parse and return the rele
 2. **Not handling streaming messages** - SDK sends messages asynchronously
 3. **Message type mismatches** - Always have fallback handling
 4. **Widget rebuild issues** - Ensure builders listen to the right object
-5. **Backend disposal** - Always dispose backend on app exit
+5. **CLI process disposal** - Always dispose CLI processes on app exit
 6. **Callback response ordering** - Responses must match request IDs
 
 ---

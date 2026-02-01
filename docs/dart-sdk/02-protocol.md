@@ -1,6 +1,6 @@
 # JSON Protocol Specification
 
-This document defines the JSON line protocol between the Dart SDK and Node backend.
+This document defines the JSON line protocol between the Dart SDK and the Claude CLI.
 
 ## Transport
 
@@ -11,79 +11,98 @@ This document defines the JSON line protocol between the Dart SDK and Node backe
 
 Each message is a single line of JSON followed by `\n`.
 
-## Message Envelope
+## CLI Arguments
 
-All messages follow this structure:
+The Dart SDK spawns the Claude CLI with these required arguments:
 
-```typescript
-{
-  "type": string,       // Message type identifier
-  "id": string?,        // Optional correlation ID for request/response
-  "session_id": string?, // Session identifier (when applicable)
-  "payload": object     // Message-specific data
-}
+```bash
+claude --output-format stream-json \
+       --input-format stream-json \
+       --permission-prompt-tool stdio \
+       --cwd <working-directory>
 ```
+
+Optional arguments:
+- `--model <model>` - Model selection (sonnet, opus, haiku)
+- `--permission-mode <mode>` - Permission mode (default, acceptEdits, plan)
+- `--max-turns <n>` - Maximum conversation turns
+- `--verbose` - Enable verbose logging
+- `--resume <session-id>` - Resume a previous session
 
 ---
 
-## Dart → Backend Messages
+## Dart → CLI Messages
 
-### `session.create`
+### `control_request` (Initialize)
 
-Create a new Claude session.
+Initialize the session and get available commands/models.
 
-```typescript
+```json
 {
-  "type": "session.create",
-  "id": "uuid",  // Correlation ID for response
-  "payload": {
-    "prompt": "string",           // Initial prompt
-    "cwd": "string",              // Working directory
-    "options": {                  // All optional
-      "model": "string",
-      "permission_mode": "default" | "acceptEdits" | "bypassPermissions" | "plan",
-      "allowed_tools": ["string"],
-      "disallowed_tools": ["string"],
-      "system_prompt": "string" | { "type": "preset", "preset": "claude_code", "append": "string?" },
-      "max_turns": number,
-      "max_budget_usd": number,
-      "max_thinking_tokens": number,
-      "include_partial_messages": boolean,
-      "enable_file_checkpointing": boolean,
-      "additional_directories": ["string"],
-      "mcp_servers": { [name]: McpServerConfig },
-      "agents": { [name]: AgentDefinition },
-      "hooks": { [event]: HookConfig[] },
-      "sandbox": SandboxSettings,
-      "setting_sources": ["user" | "project" | "local"],
-      "betas": ["string"],
-      "output_format": { "type": "json_schema", "schema": object },
-      "fallback_model": "string"
-    }
+  "type": "control_request",
+  "request_id": "uuid",
+  "request": {
+    "subtype": "initialize",
+    "system_prompt": "optional custom system prompt",
+    "mcp_servers": {},
+    "agents": {},
+    "hooks": {}
   }
 }
 ```
 
-**Response:** `session.created` or `error`
+**Response:** `control_response`
+
+---
+
+### `session.create`
+
+Start a new conversation with an initial message.
+
+```json
+{
+  "type": "session.create",
+  "message": {
+    "role": "user",
+    "content": "Hello, Claude!"
+  }
+}
+```
+
+For multimodal content (text + images):
+
+```json
+{
+  "type": "session.create",
+  "message": {
+    "role": "user",
+    "content": [
+      { "type": "text", "text": "What is in this image?" },
+      { "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "..." } }
+    ]
+  }
+}
+```
+
+**Response:** `session.created`, then SDK messages
 
 ---
 
 ### `session.send`
 
-Send a follow-up message to an existing session.
+Send a follow-up message to an existing conversation.
 
-```typescript
+```json
 {
   "type": "session.send",
-  "id": "uuid",
-  "session_id": "string",
-  "payload": {
-    "message": "string"   // User's message
+  "message": {
+    "role": "user",
+    "content": "Follow-up question..."
   }
 }
 ```
 
-**Response:** Continues with `sdk.message` stream
+**Response:** SDK messages continue streaming
 
 ---
 
@@ -91,208 +110,229 @@ Send a follow-up message to an existing session.
 
 Interrupt the current execution.
 
-```typescript
+```json
 {
-  "type": "session.interrupt",
-  "id": "uuid",
-  "session_id": "string",
-  "payload": {}
+  "type": "session.interrupt"
 }
 ```
 
-**Response:** `session.interrupted` or `error`
-
----
-
-### `session.kill`
-
-Terminate a session permanently.
-
-```typescript
-{
-  "type": "session.kill",
-  "id": "uuid",
-  "session_id": "string",
-  "payload": {}
-}
-```
-
-**Response:** `session.killed` or `error`
+**Response:** `session.interrupted`
 
 ---
 
 ### `callback.response`
 
-Respond to a `callback.request` (canUseTool or hook).
+Respond to a permission request from the CLI.
 
-```typescript
+```json
 {
   "type": "callback.response",
-  "id": "string",  // Must match callback.request id
-  "session_id": "string",
-  "payload": {
-    // For canUseTool:
-    "behavior": "allow" | "deny",
-    "updated_input": object?,      // Modified tool input (allow only)
-    "message": "string?",          // Denial reason (deny only)
-    "updated_permissions": [...]?, // Permission updates (allow only)
-
-    // For hooks:
-    "continue": boolean?,
-    "decision": "approve" | "block"?,
-    "system_message": "string?",
-    "reason": "string?",
-    "hook_specific_output": object?
+  "response": {
+    "subtype": "success",
+    "request_id": "original-request-id",
+    "response": {
+      "behavior": "allow",
+      "updated_input": {},
+      "updated_permissions": [],
+      "tool_use_id": "tool-use-uuid"
+    }
   }
 }
 ```
 
----
+For denial:
 
-### `query.call`
-
-Call a method on the Query object.
-
-```typescript
+```json
 {
-  "type": "query.call",
-  "id": "uuid",
-  "session_id": "string",
-  "payload": {
-    "method": "supportedModels" | "supportedCommands" | "mcpServerStatus" |
-              "accountInfo" | "setModel" | "setPermissionMode" |
-              "setMaxThinkingTokens" | "rewindFiles",
-    "args": any[]  // Method arguments
+  "type": "callback.response",
+  "response": {
+    "subtype": "success",
+    "request_id": "original-request-id",
+    "response": {
+      "behavior": "deny",
+      "message": "User denied permission",
+      "tool_use_id": "tool-use-uuid"
+    }
   }
 }
 ```
 
-**Response:** `query.result` or `error`
-
 ---
 
-## Backend → Dart Messages
+## CLI → Dart Messages
+
+### `control_response`
+
+Response to `control_request` (initialize).
+
+```json
+{
+  "type": "control_response",
+  "request_id": "uuid",
+  "response": {
+    "commands": [
+      { "name": "/help", "description": "..." },
+      { "name": "/clear", "description": "..." }
+    ],
+    "output_style": "markdown",
+    "available_output_styles": ["markdown", "json"],
+    "models": [
+      { "value": "sonnet", "display": "Sonnet (Fast)" },
+      { "value": "opus", "display": "Opus (Powerful)" }
+    ],
+    "account": {
+      "account_type": "pro",
+      "email": "user@example.com"
+    }
+  }
+}
+```
+
+---
 
 ### `session.created`
 
 Session successfully created.
 
-```typescript
+```json
 {
   "type": "session.created",
-  "id": "uuid",  // Correlation ID from request
-  "session_id": "string",  // Backend-generated session ID
-  "payload": {
-    "sdk_session_id": "string"  // SDK's internal session ID (for resume)
+  "session_id": "session-uuid"
+}
+```
+
+---
+
+### `system`
+
+System initialization message with tools and MCP servers.
+
+```json
+{
+  "type": "system",
+  "subtype": "init",
+  "session_id": "session-uuid",
+  "tools": [
+    { "name": "Bash", "description": "Execute bash commands" },
+    { "name": "Read", "description": "Read file contents" }
+  ],
+  "mcp_servers": []
+}
+```
+
+---
+
+### `assistant`
+
+Assistant response with content blocks.
+
+```json
+{
+  "type": "assistant",
+  "uuid": "message-uuid",
+  "session_id": "session-uuid",
+  "message": {
+    "type": "message",
+    "content": [
+      { "type": "text", "text": "Hello! How can I help you?" }
+    ]
+  },
+  "model": "sonnet",
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 50,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0
   }
 }
 ```
 
 ---
 
-### `sdk.message`
+### `user`
 
-Raw SDK message, forwarded verbatim.
+User message or tool results.
 
-```typescript
+```json
 {
-  "type": "sdk.message",
-  "session_id": "string",
-  "payload": SDKMessage  // Exact SDK message, see SDK Message Types
+  "type": "user",
+  "uuid": "message-uuid",
+  "session_id": "session-uuid",
+  "message": {
+    "type": "message",
+    "content": [
+      {
+        "type": "tool_result",
+        "tool_use_id": "tool-use-uuid",
+        "content": "Command output..."
+      }
+    ]
+  }
 }
 ```
 
-The `payload` is the raw SDK message with its original structure:
+---
 
-```typescript
-// Examples of payload content:
-{ "type": "system", "subtype": "init", "session_id": "...", ... }
-{ "type": "assistant", "uuid": "...", "message": {...}, ... }
-{ "type": "user", "uuid": "...", "message": {...}, ... }
-{ "type": "result", "subtype": "success", ... }
-{ "type": "stream_event", "event": {...}, ... }
+### `result`
+
+Turn completion status.
+
+```json
+{
+  "type": "result",
+  "subtype": "success",
+  "session_id": "session-uuid",
+  "turn_count": 1,
+  "duration_seconds": 5.2,
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 50
+  }
+}
+```
+
+Error result:
+
+```json
+{
+  "type": "result",
+  "subtype": "error_max_turns",
+  "session_id": "session-uuid",
+  "error": "Maximum turns exceeded"
+}
 ```
 
 ---
 
 ### `callback.request`
 
-Backend needs a response for canUseTool or hook.
+Permission request for tool execution.
 
-```typescript
+```json
 {
   "type": "callback.request",
-  "id": "uuid",  // Use this ID in callback.response
-  "session_id": "string",
-  "payload": {
-    "callback_type": "can_use_tool" | "hook",
-
-    // For can_use_tool:
-    "tool_name": "string?",
-    "tool_input": object?,
-    "suggestions": PermissionUpdate[]?,
-
-    // For hooks:
-    "hook_event": "PreToolUse" | "PostToolUse" | "PostToolUseFailure" |
-                  "Notification" | "UserPromptSubmit" | "SessionStart" |
-                  "SessionEnd" | "Stop" | "SubagentStart" | "SubagentStop" |
-                  "PreCompact" | "PermissionRequest",
-    "hook_input": object,  // Hook-specific input data
-    "tool_use_id": "string?"
+  "request_id": "callback-uuid",
+  "request": {
+    "subtype": "can_use_tool",
+    "tool_name": "Bash",
+    "input": {
+      "command": "ls -la"
+    },
+    "tool_use_id": "tool-use-uuid",
+    "permission_suggestions": [
+      {
+        "type": "bash",
+        "action": "allow",
+        "pattern": "ls *",
+        "scope": "session"
+      }
+    ],
+    "blocked_path": null
   }
 }
 ```
 
-**Must respond with:** `callback.response` using the same `id`
-
----
-
-### `query.result`
-
-Response to a `query.call`.
-
-```typescript
-{
-  "type": "query.result",
-  "id": "uuid",  // Correlation ID from request
-  "session_id": "string",
-  "payload": {
-    "success": boolean,
-    "result": any,      // Method return value
-    "error": "string?"  // Error message if success=false
-  }
-}
-```
-
----
-
-### `session.interrupted`
-
-Session was successfully interrupted.
-
-```typescript
-{
-  "type": "session.interrupted",
-  "id": "uuid",
-  "session_id": "string",
-  "payload": {}
-}
-```
-
----
-
-### `session.killed`
-
-Session was terminated.
-
-```typescript
-{
-  "type": "session.killed",
-  "id": "uuid",
-  "session_id": "string",
-  "payload": {}
-}
-```
+**Must respond with:** `callback.response` using the same `request_id`
 
 ---
 
@@ -300,188 +340,113 @@ Session was terminated.
 
 An error occurred.
 
-```typescript
+```json
 {
   "type": "error",
-  "id": "uuid?",       // Correlation ID if responding to request
-  "session_id": "string?",
-  "payload": {
-    "code": "string",     // Error code
-    "message": "string",  // Human-readable message
-    "details": object?    // Additional error details
+  "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found"
   }
 }
 ```
-
-**Error codes:**
-- `INVALID_MESSAGE` - Malformed or unknown message
-- `SESSION_NOT_FOUND` - Session ID doesn't exist
-- `SESSION_CREATE_FAILED` - Failed to create session
-- `CALLBACK_TIMEOUT` - Callback response not received in time
-- `CALLBACK_NOT_FOUND` - Callback ID doesn't exist
-- `QUERY_METHOD_FAILED` - Query method threw error
-- `SDK_ERROR` - Error from Claude SDK
 
 ---
 
 ## Message Flows
 
-### Session Lifecycle
+### Session Initialization
 
 ```
-Dart                              Backend                           SDK
- │                                   │                               │
- │─── session.create ───────────────>│                               │
- │                                   │─── query({ prompt, ... }) ───>│
- │                                   │                               │
- │<── session.created ───────────────│                               │
- │                                   │                               │
- │                                   │<── SDKSystemMessage ──────────│
- │<── sdk.message (system/init) ─────│                               │
- │                                   │                               │
- │                                   │<── SDKAssistantMessage ───────│
- │<── sdk.message (assistant) ───────│                               │
- │                                   │                               │
- │                                   │<── (canUseTool callback) ─────│
- │<── callback.request ──────────────│                               │
- │                                   │         (waiting...)          │
- │─── callback.response ────────────>│                               │
- │                                   │─── (resolve callback) ───────>│
- │                                   │                               │
- │                                   │<── SDKUserMessage (result) ───│
- │<── sdk.message (user) ────────────│                               │
- │                                   │                               │
- │                                   │<── SDKResultMessage ──────────│
- │<── sdk.message (result) ──────────│                               │
- │                                   │                               │
- │─── session.send ─────────────────>│                               │
- │                                   │─── query({ resume, ... }) ───>│
- │                                   │           ...                 │
+Dart                              CLI
+ │                                 │
+ │─── control_request ────────────>│
+ │    (subtype: "initialize")      │
+ │                                 │
+ │<── control_response ────────────│
+ │    (commands, models, account)  │
+ │                                 │
+ │<── system ──────────────────────│
+ │    (subtype: "init", tools)     │
+ │                                 │
+ │─── session.create ─────────────>│
+ │    (initial user message)       │
+ │                                 │
+ │<── session.created ─────────────│
+ │    (session_id)                 │
+ │                                 │
+ │<── assistant ───────────────────│
+ │    (response content)           │
+ │                                 │
+ │<── result ──────────────────────│
+ │    (subtype: "success")         │
 ```
 
-### Callback Flow (canUseTool)
+### Permission Request Flow
 
 ```
-Dart                              Backend                           SDK
- │                                   │                               │
- │                                   │<── canUseTool(tool, input) ───│
- │                                   │                               │
- │                                   │    (create pending Promise)   │
- │                                   │                               │
- │<── callback.request ──────────────│                               │
- │    {                              │                               │
- │      id: "cb-123",                │                               │
- │      callback_type: "can_use_tool"│                               │
- │      tool_name: "Bash",           │                               │
- │      tool_input: { command: ... } │                               │
- │    }                              │                               │
- │                                   │                               │
- │    (show permission UI)           │                               │
- │    (user clicks approve)          │                               │
- │                                   │                               │
- │─── callback.response ────────────>│                               │
- │    {                              │                               │
- │      id: "cb-123",                │                               │
- │      behavior: "allow",           │                               │
- │      updated_input: { ... }       │                               │
- │    }                              │                               │
- │                                   │                               │
- │                                   │    (resolve Promise)          │
- │                                   │─── return { allow, ... } ────>│
- │                                   │                               │
+Dart                              CLI
+ │                                 │
+ │<── callback.request ────────────│
+ │    {                            │
+ │      request_id: "cb-123",      │
+ │      request: {                 │
+ │        subtype: "can_use_tool", │
+ │        tool_name: "Bash",       │
+ │        input: { command: ... }  │
+ │      }                          │
+ │    }                            │
+ │                                 │
+ │    (show permission UI)         │
+ │    (user clicks approve)        │
+ │                                 │
+ │─── callback.response ──────────>│
+ │    {                            │
+ │      response: {                │
+ │        subtype: "success",      │
+ │        request_id: "cb-123",    │
+ │        response: {              │
+ │          behavior: "allow"      │
+ │        }                        │
+ │      }                          │
+ │    }                            │
+ │                                 │
+ │<── user ────────────────────────│
+ │    (tool_result content)        │
+ │                                 │
 ```
 
-### Query Method Call
+### Follow-up Message
 
 ```
-Dart                              Backend
- │                                   │
- │─── query.call ───────────────────>│
- │    {                              │
- │      id: "qc-456",                │
- │      method: "supportedModels",   │
- │      args: []                     │
- │    }                              │
- │                                   │
- │                                   │    query.supportedModels()
- │                                   │
- │<── query.result ──────────────────│
- │    {                              │
- │      id: "qc-456",                │
- │      success: true,               │
- │      result: [                    │
- │        { value: "...", ... }      │
- │      ]                            │
- │    }                              │
+Dart                              CLI
+ │                                 │
+ │─── session.send ───────────────>│
+ │    (follow-up message)          │
+ │                                 │
+ │<── assistant ───────────────────│
+ │    (response content)           │
+ │                                 │
+ │<── result ──────────────────────│
+ │    (subtype: "success")         │
 ```
 
 ---
 
 ## SDK Message Types Reference
 
-The `sdk.message` payload contains the raw SDK message. See [06-sdk-message-types.md](./06-sdk-message-types.md) for the complete type definitions.
+The CLI sends various message types. See [06-sdk-message-types.md](./06-sdk-message-types.md) for complete type definitions.
 
-Summary of SDK message types:
+Summary of CLI message types:
 
 | Type | Subtype | Description |
 |------|---------|-------------|
+| `control_response` | - | Response to initialize request |
+| `session.created` | - | Session successfully created |
 | `system` | `init` | Session initialization info |
 | `system` | `compact_boundary` | Context was compacted |
 | `assistant` | - | Assistant response with content blocks |
 | `user` | - | User message or tool results |
 | `result` | `success` | Turn completed successfully |
 | `result` | `error_*` | Turn ended with error |
-| `stream_event` | - | Partial message (when streaming enabled) |
-
----
-
-## Configuration Types
-
-### McpServerConfig
-
-```typescript
-McpServerConfig =
-  | { type?: "stdio", command: string, args?: string[], env?: object }
-  | { type: "sse", url: string, headers?: object }
-  | { type: "http", url: string, headers?: object }
-```
-
-### AgentDefinition
-
-```typescript
-{
-  "description": "string",   // When to use this agent
-  "prompt": "string",        // Agent's system prompt
-  "tools": ["string"]?,      // Allowed tools (optional)
-  "model": "sonnet" | "opus" | "haiku" | "inherit"?
-}
-```
-
-### SandboxSettings
-
-```typescript
-{
-  "enabled": boolean?,
-  "auto_allow_bash_if_sandboxed": boolean?,
-  "excluded_commands": ["string"]?,
-  "allow_unsandboxed_commands": boolean?,
-  "network": {
-    "allow_local_binding": boolean?,
-    "allow_unix_sockets": ["string"]?,
-    "allow_all_unix_sockets": boolean?
-  }?,
-  "ignore_violations": {
-    "file": ["string"]?,
-    "network": ["string"]?
-  }?
-}
-```
-
-### HookConfig
-
-```typescript
-{
-  "matcher": "string?",  // Tool name pattern (e.g., "Bash", "Write|Edit")
-  // Note: Actual hook callbacks are handled via callback.request/response
-}
-```
+| `callback.request` | - | Permission request (can_use_tool) |
+| `error` | - | Error occurred |

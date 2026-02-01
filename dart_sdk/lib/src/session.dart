@@ -1,7 +1,10 @@
 part of 'core.dart';
 
 /// A Claude session for interacting with Claude Code.
-class ClaudeSession {
+///
+/// This class implements [AgentSession] and provides a session for interacting
+/// with Claude Code via the Node.js backend.
+class ClaudeSession implements AgentSession {
   ClaudeSession._({
     required ClaudeBackend backend,
     required this.sessionId,
@@ -31,6 +34,7 @@ class ClaudeSession {
   final bool _isTestSession;
 
   /// The session ID (Dart-side).
+  @override
   final String sessionId;
 
   /// The SDK session ID (from Claude Code).
@@ -42,16 +46,23 @@ class ClaudeSession {
   final _hookRequestsController = StreamController<HookRequest>.broadcast();
 
   /// Stream of SDK messages.
+  @override
   Stream<SDKMessage> get messages => _messagesController.stream;
 
   /// Stream of permission requests.
+  @override
   Stream<PermissionRequest> get permissionRequests =>
       _permissionRequestsController.stream;
 
   /// Stream of hook requests.
+  @override
   Stream<HookRequest> get hookRequests => _hookRequestsController.stream;
 
   bool _disposed = false;
+
+  /// Whether the session is active.
+  @override
+  bool get isActive => !_disposed;
 
   /// Messages sent via [send] when this is a test session.
   ///
@@ -67,6 +78,7 @@ class ClaudeSession {
   Future<void> Function(String message)? onTestSend;
 
   /// Send a follow-up message to the session.
+  @override
   Future<void> send(String message) async {
     if (_disposed) return;
     if (_isTestSession) {
@@ -80,6 +92,7 @@ class ClaudeSession {
   /// Send a message with content blocks (text and images).
   ///
   /// Use this instead of [send] when attaching images to a message.
+  @override
   Future<void> sendWithContent(List<ContentBlock> content) async {
     if (_disposed) return;
     if (_isTestSession) {
@@ -93,6 +106,7 @@ class ClaudeSession {
   }
 
   /// Interrupt the current execution.
+  @override
   Future<void> interrupt() async {
     if (_disposed) return;
     if (_isTestSession) return;
@@ -100,6 +114,7 @@ class ClaudeSession {
   }
 
   /// Kill the session.
+  @override
   Future<void> kill() async {
     if (_disposed) return;
     if (_isTestSession) {

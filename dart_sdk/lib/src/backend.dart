@@ -1,7 +1,10 @@
 part of 'core.dart';
 
 /// Backend for communicating with Claude Code via a Node.js subprocess.
-class ClaudeBackend {
+///
+/// This class implements [AgentBackend] and manages the lifecycle of a
+/// Node.js backend process that communicates with the Claude Agent SDK.
+class ClaudeBackend implements AgentBackend {
   ClaudeBackend._({
     required Process process,
     required Protocol protocol,
@@ -21,16 +24,23 @@ class ClaudeBackend {
   final _errorsController = StreamController<BackendError>.broadcast();
 
   /// Stream of backend errors.
+  @override
   Stream<BackendError> get errors => _errorsController.stream;
 
   /// Stream of backend stderr logs.
+  @override
   Stream<String> get logs => _protocol.stderrLogs;
 
   /// Path to the backend log file, if file logging is enabled.
   String? get logFilePath => _protocol.logFilePath;
 
   /// Whether the backend process is running.
+  @override
   bool get isRunning => !_disposed;
+
+  /// List of active sessions.
+  @override
+  List<AgentSession> get sessions => List.unmodifiable(_sessions.values);
 
   bool _disposed = false;
 
@@ -104,6 +114,7 @@ class ClaudeBackend {
   /// If [content] is provided (e.g., text + images), it takes precedence over
   /// the [prompt] string. Use [content] when you need to send images with the
   /// initial message.
+  @override
   Future<ClaudeSession> createSession({
     required String prompt,
     required String cwd,
@@ -372,6 +383,7 @@ class ClaudeBackend {
   }
 
   /// Dispose of the backend and all sessions.
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

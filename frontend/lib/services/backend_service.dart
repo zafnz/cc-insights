@@ -1,14 +1,16 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as path;
 
-/// Service for managing the Node.js backend subprocess lifecycle.
+/// Service for managing the Claude backend lifecycle.
 ///
-/// This service handles spawning and disposing the Claude backend process,
+/// This service handles spawning and disposing the Claude CLI backend process,
 /// and provides session creation capabilities for chats.
+///
+/// The backend communicates directly with the Claude CLI using the stream-json
+/// protocol. Requires the `claude` CLI to be installed and available in PATH,
+/// or configured via the `CLAUDE_CODE_PATH` environment variable.
 ///
 /// Usage:
 /// ```dart
@@ -27,7 +29,7 @@ import 'package:path/path.dart' as path;
 /// backendService.dispose();
 /// ```
 class BackendService extends ChangeNotifier {
-  ClaudeBackend? _backend;
+  AgentBackend? _backend;
   StreamSubscription<BackendError>? _errorSubscription;
   bool _isStarting = false;
   String? _error;
@@ -41,7 +43,11 @@ class BackendService extends ChangeNotifier {
   /// The current error message, if any.
   String? get error => _error;
 
-  /// Starts the Node.js backend subprocess.
+  /// Starts the Claude CLI backend.
+  ///
+  /// This spawns a direct connection to the Claude CLI using the stream-json
+  /// protocol. The CLI path can be configured via the `CLAUDE_CODE_PATH`
+  /// environment variable, otherwise it defaults to `claude` in PATH.
   ///
   /// This method is idempotent - calling it while already started or starting
   /// will return immediately without doing anything.
@@ -56,8 +62,8 @@ class BackendService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _backend = await ClaudeBackend.spawn(
-        backendPath: _getBackendPath(),
+      _backend = await BackendFactory.create(
+        type: BackendType.directCli,
       );
 
       // Monitor backend errors
@@ -86,7 +92,7 @@ class BackendService extends ChangeNotifier {
   ///   If provided, this takes precedence over [prompt].
   ///
   /// Throws [StateError] if the backend is not started.
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -106,7 +112,7 @@ class BackendService extends ChangeNotifier {
   /// Disposes of the backend service and terminates the subprocess.
   ///
   /// This should be called when the app is shutting down to ensure
-  /// the Node.js process is properly terminated.
+  /// the backend process is properly terminated.
   @override
   void dispose() {
     _errorSubscription?.cancel();
@@ -114,41 +120,5 @@ class BackendService extends ChangeNotifier {
     _backend?.dispose();
     _backend = null;
     super.dispose();
-  }
-
-  /// Gets the path to the backend Node.js entry point.
-  ///
-  /// In development, this returns the path to the compiled JavaScript.
-  /// In production (macOS app bundle), this returns the bundled backend.
-  String _getBackendPath() {
-    // macOS app bundle: look in Resources first (production)
-    if (Platform.isMacOS) {
-      final executablePath = Platform.resolvedExecutable;
-      final appDir = path.dirname(path.dirname(executablePath));
-      final bundledPath =
-          path.join(appDir, 'Resources', 'backend', 'bundle.js');
-      if (File(bundledPath).existsSync()) {
-        return bundledPath;
-      }
-    }
-
-    // Get the directory where the app is running from
-    final currentDir = Directory.current.path;
-
-    // Check if we're in the frontend directory
-    if (path.basename(currentDir) == 'frontend') {
-      // Development: relative to frontend
-      return path.join(currentDir, '..', 'backend-node', 'dist', 'index.js');
-    }
-
-    // Check if we're in the project root
-    final backendPath =
-        path.join(currentDir, 'backend-node', 'dist', 'index.js');
-    if (File(backendPath).existsSync()) {
-      return backendPath;
-    }
-
-    // Fallback: assume we're in project root
-    return path.join(currentDir, 'backend-node', 'dist', 'index.js');
   }
 }

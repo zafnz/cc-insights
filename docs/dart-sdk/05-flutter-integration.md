@@ -6,10 +6,10 @@ This document describes how to integrate the Dart SDK into the Flutter applicati
 
 The Flutter app will:
 
-1. Spawn the Node backend on startup
-2. Use `ClaudeBackend` and `ClaudeSession` for all Claude interactions
+1. Use `BackendFactory` to create a `ClaudeCliBackend` on startup
+2. Use `AgentBackend` and `AgentSession` interfaces for all Claude interactions
 3. Wire SDK streams to UI state
-4. Handle permissions and hooks via streams
+4. Handle permission requests via streams
 
 ## Dependency Setup
 
@@ -46,15 +46,15 @@ void main() async {
   // Parse command line args
   final args = _parseArgs();
 
-  // Spawn backend
-  final backend = await ClaudeBackend.spawn(
-    backendPath: _getBackendPath(),
+  // Create backend (direct CLI)
+  final backend = await BackendFactory.create(
+    type: BackendType.directCli,
   );
 
   runApp(
     MultiProvider(
       providers: [
-        Provider<ClaudeBackend>.value(value: backend),
+        Provider<AgentBackend>.value(value: backend),
         ChangeNotifierProvider(
           create: (_) => AppState(
             backend: backend,
@@ -65,26 +65,6 @@ void main() async {
       child: const MyApp(),
     ),
   );
-}
-
-String _getBackendPath() {
-  // In development: use the built backend
-  // In production: bundled with app
-
-  if (Platform.environment.containsKey('CLAUDE_BACKEND_PATH')) {
-    return Platform.environment['CLAUDE_BACKEND_PATH']!;
-  }
-
-  // Default: relative to app
-  final appDir = Platform.resolvedExecutable;
-  final backendPath = '${Directory(appDir).parent.path}/backend/index.js';
-
-  if (File(backendPath).existsSync()) {
-    return backendPath;
-  }
-
-  // Fallback for development
-  return '../backend-node/dist/index.js';
 }
 
 class _Args {
@@ -130,7 +110,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 
 /// Application state managing Claude sessions.
 class AppState extends ChangeNotifier {
-  final ClaudeBackend backend;
+  final AgentBackend backend;
   final String defaultCwd;
 
   AppState({
@@ -218,12 +198,6 @@ class AppState extends ChangeNotifier {
       state._pendingPermission = req;
       notifyListeners();
     });
-
-    // Hook requests
-    state._hooksSub = session.hookRequests.listen((req) {
-      state._pendingHooks.add(req);
-      notifyListeners();
-    });
   }
 
   void _handleBackendError(BackendError error) {
@@ -243,7 +217,7 @@ class AppState extends ChangeNotifier {
 
 /// State for a single Claude session.
 class SessionState {
-  final ClaudeSession session;
+  final AgentSession session;
 
   SessionState({required this.session});
 
@@ -282,10 +256,8 @@ class SessionState {
   // ═══════════════════════════════════════════════════════════════════════════
 
   PermissionRequest? _pendingPermission;
-  final List<HookRequest> _pendingHooks = [];
 
   PermissionRequest? get pendingPermission => _pendingPermission;
-  List<HookRequest> get pendingHooks => List.unmodifiable(_pendingHooks);
 
   /// Respond to pending permission request.
   void respondToPermission(bool approved, {Map<String, dynamic>? updatedInput}) {
@@ -299,12 +271,6 @@ class SessionState {
     }
 
     _pendingPermission = null;
-  }
-
-  /// Respond to a hook request.
-  void respondToHook(HookRequest request, HookResponse response) {
-    request.respond(response);
-    _pendingHooks.remove(request);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -422,12 +388,10 @@ class SessionState {
 
   StreamSubscription<SDKMessage>? _messagesSub;
   StreamSubscription<PermissionRequest>? _permissionsSub;
-  StreamSubscription<HookRequest>? _hooksSub;
 
   void dispose() {
     _messagesSub?.cancel();
     _permissionsSub?.cancel();
-    _hooksSub?.cancel();
   }
 }
 
@@ -448,270 +412,23 @@ class AgentInfo {
 }
 ```
 
-## Widget Updates
+## Environment Variables
 
-### Permission Dialog
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:claude_sdk/claude_sdk.dart';
-import '../providers/app_state.dart';
-
-class PermissionDialog extends StatelessWidget {
-  const PermissionDialog({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AppState>(
-      builder: (context, state, _) {
-        final session = state.activeSession;
-        final request = session?.pendingPermission;
-
-        if (request == null) return const SizedBox.shrink();
-
-        return AlertDialog(
-          title: Text('Permission Required'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Tool: ${request.toolName}'),
-              const SizedBox(height: 8),
-              Text(
-                'Input: ${_formatInput(request.toolInput)}',
-                style: TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => session.respondToPermission(false),
-              child: const Text('Deny'),
-            ),
-            ElevatedButton(
-              onPressed: () => session.respondToPermission(true),
-              child: const Text('Allow'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _formatInput(Map<String, dynamic> input) {
-    // Format tool input for display
-    if (input.containsKey('command')) {
-      return input['command'] as String;
-    }
-    if (input.containsKey('file_path')) {
-      return input['file_path'] as String;
-    }
-    return input.toString();
-  }
-}
-```
-
-### Output Panel
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:claude_sdk/claude_sdk.dart';
-import '../providers/app_state.dart';
-
-class OutputPanel extends StatelessWidget {
-  const OutputPanel({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AppState>(
-      builder: (context, state, _) {
-        final session = state.activeSession;
-        if (session == null) {
-          return const Center(child: Text('No active session'));
-        }
-
-        return ListView.builder(
-          itemCount: session.messages.length,
-          itemBuilder: (context, index) {
-            return _buildMessage(session.messages[index]);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildMessage(SDKMessage msg) {
-    switch (msg) {
-      case SDKAssistantMessage m:
-        return _buildAssistantMessage(m);
-      case SDKUserMessage m:
-        return _buildUserMessage(m);
-      case SDKResultMessage m:
-        return _buildResultMessage(m);
-      case SDKSystemMessage m:
-        return _buildSystemMessage(m);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildAssistantMessage(SDKAssistantMessage msg) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final block in msg.message.content)
-          _buildContentBlock(block),
-      ],
-    );
-  }
-
-  Widget _buildContentBlock(ContentBlock block) {
-    switch (block) {
-      case TextBlock b:
-        return Padding(
-          padding: const EdgeInsets.all(8),
-          child: SelectableText(b.text),
-        );
-      case ThinkingBlock b:
-        return Container(
-          padding: const EdgeInsets.all(8),
-          color: Colors.grey[900],
-          child: SelectableText(
-            b.thinking,
-            style: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic),
-          ),
-        );
-      case ToolUseBlock b:
-        return _buildToolUse(b);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildToolUse(ToolUseBlock block) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              block.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _formatToolInput(block.name, block.input),
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserMessage(SDKUserMessage msg) {
-    // Tool results
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final block in msg.message.content)
-          if (block is ToolResultBlock)
-            _buildToolResult(block),
-      ],
-    );
-  }
-
-  Widget _buildToolResult(ToolResultBlock block) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: block.isError == true ? Colors.red[900] : Colors.green[900],
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        _truncate(block.content?.toString() ?? '', 500),
-        style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-      ),
-    );
-  }
-
-  Widget _buildResultMessage(SDKResultMessage msg) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      margin: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Turns: ${msg.numTurns}'),
-          Text('Cost: \$${msg.totalCostUsd?.toStringAsFixed(4) ?? '?'}'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSystemMessage(SDKSystemMessage msg) {
-    if (msg.subtype != 'init') return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: Colors.blue[900],
-      child: Text('Model: ${msg.model} | Tools: ${msg.tools.length}'),
-    );
-  }
-
-  String _formatToolInput(String toolName, Map<String, dynamic> input) {
-    switch (toolName) {
-      case 'Bash':
-        return input['command'] as String? ?? '';
-      case 'Read':
-      case 'Write':
-      case 'Edit':
-        return input['file_path'] as String? ?? '';
-      case 'Glob':
-      case 'Grep':
-        return input['pattern'] as String? ?? '';
-      default:
-        return input.toString();
-    }
-  }
-
-  String _truncate(String s, int maxLength) {
-    if (s.length <= maxLength) return s;
-    return '${s.substring(0, maxLength)}...';
-  }
-}
-```
-
-## Files to Delete
-
-After integration is complete, delete these files:
-
-```
-flutter_app/lib/services/websocket_service.dart
-flutter_app/lib/models/messages.dart
-flutter_app/lib/models/session.dart  (if redundant with SDK types)
-docs/websocket-protocol.md
-```
+| Variable | Description |
+|----------|-------------|
+| `CLAUDE_CODE_PATH` | Path to claude CLI executable (optional, defaults to `claude` in PATH) |
 
 ## Migration Checklist
 
-- [ ] Add `claude_sdk` dependency to pubspec.yaml
-- [ ] Update `main.dart` to spawn backend
-- [ ] Create new `AppState` provider
-- [ ] Update session creation to use SDK
-- [ ] Update output panel for SDK message types
-- [ ] Update permission handling for SDK callbacks
-- [ ] Update agent tree for SDK-based hierarchy
-- [ ] Update input panel for SDK session methods
-- [ ] Remove WebSocket service
-- [ ] Remove old message types
-- [ ] Test all functionality
-- [ ] Update CLAUDE.md with new architecture
+- [x] Add `claude_sdk` dependency to pubspec.yaml
+- [x] Update `main.dart` to use BackendFactory
+- [x] Create new `AppState` provider using AgentBackend
+- [x] Update session creation to use SDK
+- [x] Update output panel for SDK message types
+- [x] Update permission handling for SDK callbacks
+- [x] Update agent tree for SDK-based hierarchy
+- [x] Update input panel for SDK session methods
+- [x] Remove WebSocket service
+- [x] Remove old message types
+- [x] Test all functionality
+- [x] Update CLAUDE.md with new architecture

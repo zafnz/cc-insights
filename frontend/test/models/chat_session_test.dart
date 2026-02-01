@@ -90,6 +90,9 @@ class FakeClaudeSession implements ClaudeSession {
   Stream<HookRequest> get hookRequests => _hookRequestsController.stream;
 
   @override
+  bool get isActive => true;
+
+  @override
   String get sessionId => 'fake-session-id';
 
   @override

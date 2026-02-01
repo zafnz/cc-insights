@@ -95,6 +95,12 @@ class ModelInfo {
       description: json['description'] as String? ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'value': value,
+        'displayName': displayName,
+        'description': description,
+      };
 }
 
 /// Information about a slash command.
@@ -116,6 +122,12 @@ class SlashCommand {
       argumentHint: json['argumentHint'] as String? ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'description': description,
+        'argumentHint': argumentHint,
+      };
 }
 
 /// MCP server status.
@@ -206,6 +218,14 @@ class AccountInfo {
       apiKeySource: json['apiKeySource'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        if (email != null) 'email': email,
+        if (organization != null) 'organization': organization,
+        if (subscriptionType != null) 'subscriptionType': subscriptionType,
+        if (tokenSource != null) 'tokenSource': tokenSource,
+        if (apiKeySource != null) 'apiKeySource': apiKeySource,
+      };
 }
 
 /// Per-message usage data from assistant messages.

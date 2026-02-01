@@ -87,6 +87,9 @@ class _FakeClaudeSession implements ClaudeSession {
   Stream<HookRequest> get hookRequests => const Stream.empty();
 
   @override
+  bool get isActive => true;
+
+  @override
   Future<void> send(String message) async {}
 
   @override

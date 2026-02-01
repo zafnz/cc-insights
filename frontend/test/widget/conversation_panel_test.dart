@@ -120,6 +120,9 @@ class FakeClaudeSession implements sdk.ClaudeSession {
   Stream<sdk.HookRequest> get hookRequests => _hooksController.stream;
 
   @override
+  bool get isActive => true;
+
+  @override
   Future<void> send(String message) async {
     sendCalls.add(message);
   }

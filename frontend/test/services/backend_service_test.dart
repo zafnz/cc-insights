@@ -52,6 +52,9 @@ class FakeClaudeBackend implements ClaudeBackend {
   bool get isRunning => !disposed;
 
   @override
+  List<AgentSession> get sessions => [];
+
+  @override
   Future<ClaudeSession> createSession({
     required String prompt,
     required String cwd,
@@ -140,6 +143,9 @@ class FakeClaudeSession implements ClaudeSession {
 
   @override
   Stream<HookRequest> get hookRequests => const Stream.empty();
+
+  @override
+  bool get isActive => true;
 
   @override
   Future<void> send(String message) async {}
@@ -617,7 +623,7 @@ class _TestableBackendService extends BackendService {
   }
 
   @override
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
