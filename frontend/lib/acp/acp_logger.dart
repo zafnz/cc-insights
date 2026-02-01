@@ -28,12 +28,26 @@ import 'package:flutter/foundation.dart';
 ///
 /// Log format:
 /// ```json
-/// {"ts": "2024-01-15T10:30:00.000Z", "conn": "a1b2c3", "dir": "in", "msg": {...}}
+/// {"ts": "2024-01-15T10:30:00.000Z", "conn": "a1b2c3", "sid": "session-xyz", "dir": "in", "msg": {...}}
 /// ```
 ///
-/// Filtering by connection:
+/// Fields:
+/// - `ts`: ISO8601 timestamp
+/// - `conn`: Connection ID (unique per agent process connection)
+/// - `sid`: Session ID (extracted from message, links to chat in UI) - only present if message contains sessionId
+/// - `dir`: Direction ("in" from agent, "out" to agent, "info" for lifecycle events)
+/// - `msg`: The raw JSON-RPC message
+///
+/// Filtering examples:
 /// ```bash
+/// # Filter by connection
 /// cat /tmp/acp.jsonl | jq 'select(.conn == "a1b2c3")'
+///
+/// # Filter by session ID (links to a specific chat)
+/// cat /tmp/acp.jsonl | jq 'select(.sid == "session-xyz")'
+///
+/// # Show all session IDs
+/// cat /tmp/acp.jsonl | jq -r 'select(.sid) | .sid' | sort -u
 /// ```
 class ACPLogger {
   static ACPLogger? _instance;
@@ -120,9 +134,14 @@ class ACPLogger {
     if (!_enabled || _sink == null) return;
 
     try {
+      // Extract sessionId from message if present (for easier filtering)
+      // It can be in params.sessionId, result.sessionId, or at top level
+      final sessionId = _extractSessionId(message);
+
       final entry = <String, dynamic>{
         'ts': DateTime.now().toUtc().toIso8601String(),
         if (connectionId != null) 'conn': connectionId,
+        if (sessionId != null) 'sid': sessionId,
         'dir': direction,
         'msg': message,
       };
@@ -130,6 +149,29 @@ class ACPLogger {
     } catch (e) {
       debugPrint('[ACPLogger] Failed to write log entry: $e');
     }
+  }
+
+  /// Extracts sessionId from a JSON-RPC message if present.
+  String? _extractSessionId(Map<String, dynamic> message) {
+    // Check params (for requests)
+    final params = message['params'];
+    if (params is Map<String, dynamic>) {
+      final sid = params['sessionId'];
+      if (sid is String) return sid;
+    }
+
+    // Check result (for responses)
+    final result = message['result'];
+    if (result is Map<String, dynamic>) {
+      final sid = result['sessionId'];
+      if (sid is String) return sid;
+    }
+
+    // Check top level (for notifications)
+    final sid = message['sessionId'];
+    if (sid is String) return sid;
+
+    return null;
   }
 
   /// Logs an info message (metadata, not a protocol message).
