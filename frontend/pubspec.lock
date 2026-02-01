@@ -152,6 +152,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  code_highlight_view:
+    dependency: "direct main"
+    description:
+      name: code_highlight_view
+      sha256: e9c8c2f6169704c3bdd2c663cf95e62b35ad94ee688bb06c45b7f7843dfedbf0
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.1"
   collection:
     dependency: transitive
     description:
@@ -376,6 +384,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.5"
+  highlight:
+    dependency: transitive
+    description:
+      name: highlight
+      sha256: "5353a83ffe3e3eca7df0abfb72dcf3fa66cc56b953728e7113ad4ad88497cf21"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
   hooks:
     dependency: transitive
     description:

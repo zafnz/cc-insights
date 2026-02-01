@@ -11,6 +11,7 @@ import 'package:cc_insights_v2/widgets/file_viewers/image_viewer.dart';
 import 'package:cc_insights_v2/widgets/file_viewers/markdown_viewer.dart';
 import 'package:cc_insights_v2/widgets/file_viewers/plaintext_viewer.dart';
 import 'package:cc_insights_v2/widgets/file_viewers/source_code_viewer.dart';
+import 'package:code_highlight_view/code_highlight_view.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -279,9 +280,9 @@ void main() {
         );
         await tester.pump();
 
-        // Should show SourceCodeViewer
+        // Should show SourceCodeViewer with CodeHighlightView
         expect(find.byType(SourceCodeViewer), findsOneWidget);
-        expect(find.byType(GptMarkdown), findsOneWidget);
+        expect(find.byType(CodeHighlightView), findsOneWidget);
       });
 
       testWidgets('renders SourceCodeViewer for json', (tester) async {
@@ -301,9 +302,9 @@ void main() {
         );
         await tester.pump();
 
-        // Should show SourceCodeViewer
+        // Should show SourceCodeViewer with CodeHighlightView
         expect(find.byType(SourceCodeViewer), findsOneWidget);
-        expect(find.byType(GptMarkdown), findsOneWidget);
+        expect(find.byType(CodeHighlightView), findsOneWidget);
       });
 
       testWidgets('renders MarkdownViewer for markdown', (tester) async {

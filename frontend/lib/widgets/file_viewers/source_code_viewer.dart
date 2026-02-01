@@ -1,11 +1,12 @@
+import 'package:code_highlight_view/code_highlight_view.dart';
+import 'package:code_highlight_view/themes/atom-one-dark.dart';
+import 'package:code_highlight_view/themes/atom-one-light.dart';
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 
 /// Displays source code with syntax highlighting.
 ///
-/// This viewer wraps the content in a code fence for GptMarkdown,
-/// which provides syntax highlighting based on the specified language.
-/// Supports common languages like dart, json, yaml, javascript, etc.
+/// Uses code_highlight_view for syntax highlighting without any container
+/// decoration - just the highlighted code filling the available space.
 class SourceCodeViewer extends StatelessWidget {
   const SourceCodeViewer({
     super.key,
@@ -24,22 +25,25 @@ class SourceCodeViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Wrap content in code fence for syntax highlighting
-    final markdownContent = '```$language\n$content\n```';
+    // Start with the base theme and override the background to be transparent
+    final baseTheme = isDark ? atomOneDarkTheme : atomOneLightTheme;
+    final theme = Map<String, TextStyle>.from(baseTheme);
+    // Remove background color so it inherits from the panel
+    theme['root'] = const TextStyle(backgroundColor: Colors.transparent);
 
     return SingleChildScrollView(
-      child: Padding(
+      child: CodeHighlightView(
+        content,
+        language: language,
+        theme: theme,
+        isSelectable: true,
         padding: const EdgeInsets.all(16),
-        child: SelectionArea(
-          child: GptMarkdown(
-            markdownContent,
-            style: TextStyle(
-              fontSize: 13,
-              color: colorScheme.onSurface,
-            ),
-          ),
+        textStyle: const TextStyle(
+          fontFamily: 'JetBrains Mono',
+          fontSize: 13,
+          height: 1.5,
         ),
       ),
     );
