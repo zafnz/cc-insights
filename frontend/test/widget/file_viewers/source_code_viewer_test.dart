@@ -1,7 +1,7 @@
 import 'package:cc_insights_v2/widgets/file_viewers/source_code_viewer.dart';
+import 'package:code_highlight_view/code_highlight_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../../test_helpers.dart';
 
@@ -10,8 +10,15 @@ void main() {
     Widget createTestApp({
       required String content,
       required String language,
+      Brightness brightness = Brightness.light,
     }) {
       return MaterialApp(
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: brightness,
+          ),
+        ),
         home: Scaffold(
           body: SourceCodeViewer(
             content: content,
@@ -21,7 +28,7 @@ void main() {
       );
     }
 
-    testWidgets('renders GptMarkdown', (tester) async {
+    testWidgets('renders CodeHighlightView', (tester) async {
       const testContent = 'void main() {}';
       const testLanguage = 'dart';
 
@@ -31,7 +38,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('renders Dart code', (tester) async {
@@ -44,8 +51,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      // GptMarkdown should be present
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('renders JSON code', (tester) async {
@@ -58,7 +64,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('renders YAML code', (tester) async {
@@ -71,7 +77,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('renders JavaScript code', (tester) async {
@@ -84,7 +90,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('renders Python code', (tester) async {
@@ -97,7 +103,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('renders unknown language', (tester) async {
@@ -111,10 +117,10 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Should still render without error
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
-    testWidgets('wraps content in code fence', (tester) async {
+    testWidgets('passes content to CodeHighlightView', (tester) async {
       const testContent = 'print("test")';
       const testLanguage = 'dart';
 
@@ -124,12 +130,10 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      // GptMarkdown receives wrapped content
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
-      );
-
-      expect(markdown.data, equals('```$testLanguage\n$testContent\n```'));
+      // Verify CodeHighlightView is rendered with the content
+      expect(find.byType(CodeHighlightView), findsOneWidget);
+      // The content should be visible in the rendered text
+      expect(find.textContaining('print'), findsOneWidget);
     });
 
     testWidgets('is scrollable', (tester) async {
@@ -142,7 +146,6 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      // Should have scroll view (GptMarkdown may add its own)
       expect(find.byType(SingleChildScrollView), findsWidgets);
     });
 
@@ -161,7 +164,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Should render without error
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('handles empty content', (tester) async {
@@ -174,7 +177,7 @@ void main() {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('handles multiline code', (tester) async {
@@ -192,7 +195,7 @@ class MyClass {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('handles special characters in code', (tester) async {
@@ -205,7 +208,7 @@ class MyClass {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('is selectable', (tester) async {
@@ -218,10 +221,14 @@ class MyClass {
       ));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(SelectionArea), findsOneWidget);
+      // CodeHighlightView has isSelectable: true
+      final highlighter = tester.widget<CodeHighlightView>(
+        find.byType(CodeHighlightView),
+      );
+      expect(highlighter.isSelectable, isTrue);
     });
 
-    testWidgets('uses correct font size', (tester) async {
+    testWidgets('uses correct font settings', (tester) async {
       const testContent = 'void main() {}';
       const testLanguage = 'dart';
 
@@ -231,40 +238,50 @@ class MyClass {
       ));
       await safePumpAndSettle(tester);
 
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
+      final highlighter = tester.widget<CodeHighlightView>(
+        find.byType(CodeHighlightView),
       );
 
-      expect(markdown.style?.fontSize, equals(13.0));
+      expect(highlighter.textStyle?.fontSize, equals(13.0));
+      expect(highlighter.textStyle?.fontFamily, equals('JetBrains Mono'));
     });
 
-    testWidgets('respects theme colors', (tester) async {
+    testWidgets('uses light theme for light mode', (tester) async {
       const testContent = 'void main() {}';
       const testLanguage = 'dart';
 
-      final testApp = MaterialApp(
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.purple,
-            brightness: Brightness.light,
-          ),
-        ),
-        home: Scaffold(
-          body: SourceCodeViewer(
-            content: testContent,
-            language: testLanguage,
-          ),
-        ),
-      );
-
-      await tester.pumpWidget(testApp);
+      await tester.pumpWidget(createTestApp(
+        content: testContent,
+        language: testLanguage,
+        brightness: Brightness.light,
+      ));
       await safePumpAndSettle(tester);
 
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
+      final highlighter = tester.widget<CodeHighlightView>(
+        find.byType(CodeHighlightView),
       );
 
-      expect(markdown.style?.color, isNotNull);
+      // Theme should be set (not null)
+      expect(highlighter.theme, isNotNull);
+    });
+
+    testWidgets('uses dark theme for dark mode', (tester) async {
+      const testContent = 'void main() {}';
+      const testLanguage = 'dart';
+
+      await tester.pumpWidget(createTestApp(
+        content: testContent,
+        language: testLanguage,
+        brightness: Brightness.dark,
+      ));
+      await safePumpAndSettle(tester);
+
+      final highlighter = tester.widget<CodeHighlightView>(
+        find.byType(CodeHighlightView),
+      );
+
+      // Theme should be set (not null)
+      expect(highlighter.theme, isNotNull);
     });
 
     testWidgets('has proper padding', (tester) async {
@@ -277,15 +294,11 @@ class MyClass {
       ));
       await safePumpAndSettle(tester);
 
-      final paddingFinder = find.ancestor(
-        of: find.byType(SelectionArea),
-        matching: find.byType(Padding),
+      final highlighter = tester.widget<CodeHighlightView>(
+        find.byType(CodeHighlightView),
       );
 
-      expect(paddingFinder, findsOneWidget);
-
-      final paddingWidget = tester.widget<Padding>(paddingFinder);
-      expect(paddingWidget.padding, equals(const EdgeInsets.all(16)));
+      expect(highlighter.padding, equals(const EdgeInsets.all(16)));
     });
 
     testWidgets('handles code with backticks', (tester) async {
@@ -299,7 +312,7 @@ class MyClass {
       await safePumpAndSettle(tester);
 
       // Should render without error
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
 
     testWidgets('handles code with triple backticks', (tester) async {
@@ -313,7 +326,7 @@ class MyClass {
       await safePumpAndSettle(tester);
 
       // Should render without error
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(CodeHighlightView), findsOneWidget);
     });
   });
 }
