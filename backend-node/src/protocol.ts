@@ -23,7 +23,7 @@ export interface SessionSendMessage {
   id: string;
   session_id: string;
   payload: {
-    message: string;
+    message?: string;
     content?: ContentBlock[];
   };
 }

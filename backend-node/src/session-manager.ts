@@ -400,8 +400,8 @@ export class SessionManager {
 
     logger.info("Pushing message to session queue", {
       sessionId: msg.session_id,
-      messageLength: msg.payload.message.length,
-      hasContentBlocks: !!msg.payload.content,
+      messageLength: msg.payload.message?.length ?? 0,
+      contentBlockCount: msg.payload.content?.length ?? 0,
       sdkSessionId: session.sdkSessionId,
     });
 
