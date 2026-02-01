@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
@@ -11,33 +12,44 @@ import 'package:cc_insights_v2/testing/test_helpers.dart';
 /// Integration test for file tree expand performance.
 ///
 /// Uses the real cc-insights-test-repo (317 files, 177 directories) for
-/// realistic performance testing by symlinking it to /tmp/cc-insights.
+/// realistic performance testing by symlinking it to a temp directory.
 ///
 /// Run with:
 ///   flutter test integration_test/file_tree_expand_performance_test.dart -d macos
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  // Use the real test repo for realistic file counts
-  const testRepoPath = '/Users/zaf/projects/cc-insights-test-repo';
-  const mockPath = '/tmp/cc-insights';
+  late String mockPath;
+  late String testRepoPath;
 
   setUpAll(() {
     useMockData = true;
 
-    // Remove existing mock directory/symlink and create symlink to test repo
-    final mockDir = Directory(mockPath);
-    final mockLink = Link(mockPath);
+    // Find the test repo relative to the project root
+    // Integration tests run from frontend/, so go up one level
+    final projectRoot = p.dirname(Directory.current.path);
+    testRepoPath = p.join(projectRoot, 'cc-insights-test-repo');
 
-    if (mockLink.existsSync()) {
-      mockLink.deleteSync();
-    } else if (mockDir.existsSync()) {
-      mockDir.deleteSync(recursive: true);
+    if (!Directory(testRepoPath).existsSync()) {
+      // Fallback: try from current directory (if running from project root)
+      testRepoPath = p.join(Directory.current.path, '..', 'cc-insights-test-repo');
+      testRepoPath = p.normalize(testRepoPath);
     }
+
+    if (!Directory(testRepoPath).existsSync()) {
+      fail('cc-insights-test-repo not found at $testRepoPath');
+    }
+
+    // Create a unique temp directory for this test run
+    final tempDir = Directory.systemTemp.createTempSync('cc-insights-perf-test-');
+    mockPath = p.join(tempDir.path, 'cc-insights');
 
     // Create symlink to the real test repo
     Link(mockPath).createSync(testRepoPath);
     debugPrint('Created symlink: $mockPath -> $testRepoPath');
+
+    // Override the mock data path
+    mockDataProjectPath = mockPath;
 
     // Verify the symlink works
     final files = Directory(mockPath).listSync();
@@ -45,10 +57,15 @@ void main() {
   });
 
   tearDownAll(() {
-    // Clean up the symlink
+    // Clean up the symlink and temp directory
     final mockLink = Link(mockPath);
     if (mockLink.existsSync()) {
       mockLink.deleteSync();
+    }
+    // Also clean up the parent temp directory
+    final tempDir = Directory(p.dirname(mockPath));
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
     }
   });
 
