@@ -415,6 +415,8 @@ class _ConversationPanelState extends State<ConversationPanel>
               ? _buildPermissionWidget(chat!)
               : MessageInput(
                   key: ValueKey('input-${chat!.data.id}'),
+                  initialText: chat.draftText,
+                  onTextChanged: (text) => chat.draftText = text,
                   onSubmit: (text, images) =>
                       _handleSubmit(context, text, images),
                   isWorking: isWorking,
@@ -527,6 +529,9 @@ class _ConversationPanelState extends State<ConversationPanel>
     final selection = context.read<SelectionState>();
     final chat = selection.selectedChat;
     if (chat == null) return;
+
+    // Clear the draft text since it's being submitted
+    chat.draftText = '';
 
     final backend = context.read<BackendService>();
     final messageHandler = context.read<SdkMessageHandler>();
