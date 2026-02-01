@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -62,7 +61,6 @@ class _ClickToScrollContainerState extends State<ClickToScrollContainer> {
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(_onFocusChange);
     // Check if content needs scrolling after first layout
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkIfNeedsScroll();
@@ -71,23 +69,15 @@ class _ClickToScrollContainerState extends State<ClickToScrollContainer> {
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _onFocusChange() {
-    if (!_focusNode.hasFocus && _isActive) {
-      setState(() => _isActive = false);
-    }
-  }
-
   void _checkIfNeedsScroll() {
     if (!mounted) return;
     if (_scrollController.hasClients) {
-      final needsScroll =
-          _scrollController.position.maxScrollExtent > 0;
+      final needsScroll = _scrollController.position.maxScrollExtent > 0;
       if (needsScroll != _needsScroll) {
         setState(() => _needsScroll = needsScroll);
       }
@@ -100,44 +90,41 @@ class _ClickToScrollContainerState extends State<ClickToScrollContainer> {
     _focusNode.requestFocus();
   }
 
-  void _handlePointerSignal(PointerSignalEvent event) {
-    if (!_isActive || !_needsScroll) return;
-
-    if (event is PointerScrollEvent) {
-      final delta = event.scrollDelta.dy;
-      final currentOffset = _scrollController.offset;
-      final maxOffset = _scrollController.position.maxScrollExtent;
-
-      // Calculate new offset, clamped to valid range
-      final newOffset = (currentOffset + delta).clamp(0.0, maxOffset);
-      _scrollController.jumpTo(newOffset);
+  void _deactivate() {
+    if (_isActive) {
+      setState(() => _isActive = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final ScrollPhysics activePhysics = const ClampingScrollPhysics();
 
-    return Focus(
-      focusNode: _focusNode,
-      onKeyEvent: (node, event) {
-        // Deactivate on Escape
-        if (event.logicalKey == LogicalKeyboardKey.escape && _isActive) {
-          setState(() => _isActive = false);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: GestureDetector(
-        onTap: _activate,
-        behavior: HitTestBehavior.opaque,
-        child: MouseRegion(
-          cursor: _needsScroll && !_isActive
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.text,
-          child: Listener(
-            // Intercept scroll events directly when active
-            onPointerSignal: _handlePointerSignal,
+    return TapRegion(
+      onTapOutside: _isActive ? (_) => _deactivate() : null,
+      child: Focus(
+        focusNode: _focusNode,
+        onKeyEvent: (node, event) {
+          // Deactivate on Escape
+          if (event.logicalKey == LogicalKeyboardKey.escape && _isActive) {
+            _deactivate();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Listener(
+          // Use onPointerDown to detect clicks - this fires before gesture
+          // recognition, so it works even when SelectableText consumes taps
+          onPointerDown: (_) {
+            if (!_isActive && _needsScroll) {
+              _activate();
+            }
+          },
+          child: MouseRegion(
+            cursor: _needsScroll && !_isActive
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.text,
             child: NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 // Update _needsScroll when scroll metrics change
@@ -169,7 +156,9 @@ class _ClickToScrollContainerState extends State<ClickToScrollContainer> {
                       padding: widget.padding ?? EdgeInsets.zero,
                       child: SingleChildScrollView(
                         controller: _scrollController,
-                        physics: const NeverScrollableScrollPhysics(),
+                        physics: _isActive
+                            ? activePhysics
+                            : const NeverScrollableScrollPhysics(),
                         child: widget.child,
                       ),
                     ),

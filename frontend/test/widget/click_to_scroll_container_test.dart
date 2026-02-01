@@ -94,17 +94,19 @@ void main() {
       expect(find.text('click to scroll'), findsNothing);
     });
 
-    testWidgets('deactivates on focus loss', (tester) async {
-      final outerFocusNode = FocusNode();
-
+    testWidgets('deactivates on tap outside', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: Column(
               children: [
-                Focus(
-                  focusNode: outerFocusNode,
-                  child: const Text('Other focusable'),
+                const SizedBox(
+                  height: 100,
+                  width: double.infinity,
+                  child: ColoredBox(
+                    color: Colors.grey,
+                    child: Text('Outside area'),
+                  ),
                 ),
                 ClickToScrollContainer(
                   maxHeight: 50,
@@ -125,14 +127,12 @@ void main() {
       await safePumpAndSettle(tester);
       expect(find.text('click to scroll'), findsNothing);
 
-      // Move focus elsewhere
-      outerFocusNode.requestFocus();
+      // Tap outside the container
+      await tester.tap(find.text('Outside area'));
       await safePumpAndSettle(tester);
 
-      // Should show indicator again
+      // Should show indicator again (deactivated)
       expect(find.text('click to scroll'), findsOneWidget);
-
-      outerFocusNode.dispose();
     });
 
     testWidgets('deactivates on Escape key', (tester) async {
