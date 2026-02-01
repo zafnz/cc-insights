@@ -15,6 +15,8 @@ import 'services/notification_service.dart';
 import 'services/persistence_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
+import 'services/project_config_service.dart';
+import 'services/script_execution_service.dart';
 import 'services/sdk_message_handler.dart';
 import 'services/worktree_watcher_service.dart';
 import 'state/selection_state.dart';
@@ -359,6 +361,14 @@ class _CCInsightsAppState extends State<CCInsightsApp>
                 gitService: gitService,
                 project: project,
               ),
+        ),
+        // Project config service for reading/writing .ccinsights/config.json
+        Provider<ProjectConfigService>(
+          create: (_) => ProjectConfigService(),
+        ),
+        // Script execution service for running user actions
+        ChangeNotifierProvider<ScriptExecutionService>(
+          create: (_) => ScriptExecutionService(),
         ),
       ],
       child: MaterialApp(

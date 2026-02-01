@@ -2,6 +2,10 @@
 
 Yet another Claude Code coordinater desktop GUI application.
 
+## WARNING
+
+This project is still deeeep in development, the only way to run it is clone the repo, this is in PoC stage. 
+
 ## Whats different this time?
 
 - Worktrees are the first class and primary method of working (though you can just do multiple chats if you like pain)
