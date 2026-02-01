@@ -7,8 +7,8 @@
 **There must be NO pre-existing test failures.**
 
 Before completing any task:
-1. Run all tests (`flutter test` for unit/widget tests)
-2. Run integration tests (`flutter test integration_test -d macos`)
+1. Run all tests using `mcp__flutter-test__run_tests`
+2. Run integration tests separately: `mcp__flutter-test__run_tests(path: "integration_test/app_test.dart")`
 3. **ALL tests must pass** - even if the failure wasn't caused by you, YOU MUST FIX IT
 
 If you encounter a failing test:

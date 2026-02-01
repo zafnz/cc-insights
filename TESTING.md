@@ -190,4 +190,4 @@ When `pumpUntil` times out, it automatically calls `debugDumpApp()` and `debugDu
 - [ ] No `tester.pumpAndSettle()` without timeout (use `safePumpAndSettle`)
 - [ ] Resources tracked with `TestResources` and disposed in `tearDown`
 - [ ] No arbitrary `Future.delayed()` - use `pumpUntil` instead
-- [ ] Integration tests run with `flutter test integration_test -d <device>`
+- [ ] Integration tests run separately with `mcp__flutter-test__run_tests(path: "integration_test/app_test.dart")`
