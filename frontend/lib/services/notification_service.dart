@@ -45,7 +45,6 @@ class NotificationService {
     required String chatName,
   }) async {
     if (!_isInitialized) {
-      debugPrint('NotificationService: not initialized, skipping notification');
       return;
     }
 
@@ -87,7 +86,6 @@ class NotificationService {
     required String chatName,
   }) async {
     if (!_isInitialized) {
-      debugPrint('NotificationService: not initialized, skipping notification');
       return;
     }
 

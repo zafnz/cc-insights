@@ -281,22 +281,13 @@ not valid json
       await player.load();
 
       final stats = player.stats;
-      // ignore: avoid_print
-      print('Log file stats: $stats');
 
       expect(stats['loaded'], true);
       expect(stats['totalLines'], greaterThan(0));
 
       final outputs = player.toOutputEntries();
-      // ignore: avoid_print
-      print('Generated ${outputs.length} output entries');
 
-      // Print first few entries for inspection
-      for (var i = 0; i < outputs.length && i < 5; i++) {
-        final entry = outputs[i];
-        // ignore: avoid_print
-        print('  [$i] ${entry.runtimeType}: ${_summarize(entry)}');
-      }
+      expect(outputs, isNotEmpty);
     });
   });
 }
