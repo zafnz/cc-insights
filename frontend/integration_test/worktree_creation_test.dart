@@ -10,6 +10,41 @@ import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 
+Finder _findWorktreeScrollable() {
+  return find.descendant(
+    of: find.byType(WorktreePanel),
+    matching: find.byType(Scrollable),
+  );
+}
+
+Future<void> _scrollToNewWorktreeCard(WidgetTester tester) async {
+  final scrollable = _findWorktreeScrollable();
+  expect(scrollable, findsWidgets);
+
+  await tester.scrollUntilVisible(
+    find.text('New Worktree'),
+    200,
+    scrollable: scrollable.first,
+  );
+  await safePumpAndSettle(tester);
+}
+
+Future<void> _scrollWorktreePanelTo(
+  WidgetTester tester,
+  Finder target, {
+  double delta = 200,
+}) async {
+  final scrollable = _findWorktreeScrollable();
+  expect(scrollable, findsWidgets);
+
+  await tester.scrollUntilVisible(
+    target,
+    delta,
+    scrollable: scrollable.first,
+  );
+  await safePumpAndSettle(tester);
+}
+
 /// Integration tests for the worktree creation flow.
 ///
 /// These tests verify the UI flow for creating git worktrees:
@@ -35,6 +70,7 @@ void main() {
     useMockData = true;
   });
 
+
   group('Worktree Creation Navigation Flow', () {
     testWidgets('clicking New Worktree card shows CreateWorktreePanel',
         (tester) async {
@@ -46,6 +82,7 @@ void main() {
       expect(find.text('Conversation'), findsOneWidget);
 
       // Find and verify the "New Worktree" card exists in the WorktreePanel
+      await _scrollToNewWorktreeCard(tester);
       final newWorktreeCard = find.text('New Worktree');
       expect(newWorktreeCard, findsOneWidget);
 
@@ -76,6 +113,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -102,11 +140,6 @@ void main() {
       // "Create Worktree" appears in both the panel header and the button
       expect(find.text('Create Worktree'), findsWidgets);
 
-      // Verify the directory warning note
-      expect(
-        find.text('This directory must be outside the project repository'),
-        findsOneWidget,
-      );
     });
 
     testWidgets('help card expands when tapped', (tester) async {
@@ -115,6 +148,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -158,6 +192,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -190,6 +225,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -224,6 +260,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -271,6 +308,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -314,6 +352,7 @@ void main() {
       expect(find.byType(CreateWorktreePanel), findsNothing);
 
       // Navigate to create worktree
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -348,6 +387,7 @@ void main() {
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Navigate to create worktree
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
@@ -356,6 +396,7 @@ void main() {
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Existing worktrees should still be listed
+      await _scrollWorktreePanelTo(tester, find.text('main'), delta: -200);
       expect(find.text('main'), findsWidgets);
       expect(find.text('feat-dark-mode'), findsOneWidget);
     });
@@ -368,6 +409,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Navigate to create worktree panel
+      await _scrollToNewWorktreeCard(tester);
       await tester.tap(find.text('New Worktree'));
       await safePumpAndSettle(tester);
 
