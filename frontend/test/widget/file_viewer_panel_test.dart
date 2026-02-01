@@ -379,7 +379,7 @@ void main() {
     });
 
     group('Header', () {
-      testWidgets('displays file name in header', (tester) async {
+      testWidgets('displays file name and type in header', (tester) async {
         final state = resources.track(
           _TestableFileManagerState(project, fakeFileSystem),
         );
@@ -396,8 +396,8 @@ void main() {
         );
         await tester.pump();
 
-        // Header should show the file name (not full path)
-        expect(find.text('important.txt'), findsOneWidget);
+        // Header should show the file name and type
+        expect(find.text('important.txt (Text)'), findsOneWidget);
       });
 
       testWidgets('shows default title when no file', (tester) async {
@@ -443,7 +443,7 @@ void main() {
           );
           await tester.pump();
 
-          expect(find.text('file1.txt'), findsOneWidget);
+          expect(find.text('file1.txt (Text)'), findsOneWidget);
 
           // Change to different file
           state.setFileContent(
@@ -455,8 +455,8 @@ void main() {
           await tester.pump();
 
           // Header should update
-          expect(find.text('file2.txt'), findsOneWidget);
-          expect(find.text('file1.txt'), findsNothing);
+          expect(find.text('file2.txt (Text)'), findsOneWidget);
+          expect(find.text('file1.txt (Text)'), findsNothing);
         },
       );
     });
@@ -842,8 +842,8 @@ void main() {
           expect(find.byType(PlaintextFileViewer), findsOneWidget);
           expect(find.text('This is test content'), findsOneWidget);
 
-          // Header should show file name
-          expect(find.text('test.txt'), findsOneWidget);
+          // Header should show file name and type
+          expect(find.text('test.txt (Text)'), findsOneWidget);
         },
       );
 

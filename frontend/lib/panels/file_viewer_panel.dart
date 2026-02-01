@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/file_content.dart';
@@ -41,16 +42,17 @@ class _FileViewerPanelState extends State<FileViewerPanel> {
     final fileContent = fileManagerState.fileContent;
     final isLoadingFile = fileManagerState.isLoadingFile;
 
-    // Determine header title
+    // Determine header title - show file name and type
     String title = 'File Viewer';
     if (fileContent != null) {
-      title = fileContent.fileName;
+      final typeLabel = _getFileTypeLabel(fileContent.type);
+      title = '${fileContent.fileName} ($typeLabel)';
     }
 
     return PanelWrapper(
       title: title,
       icon: Icons.description,
-      trailing: _buildTrailingWidgets(fileContent),
+      trailing: _buildTrailingWidgets(context, fileContent),
       child: _FileViewerContent(
         fileContent: fileContent,
         isLoadingFile: isLoadingFile,
@@ -59,21 +61,85 @@ class _FileViewerPanelState extends State<FileViewerPanel> {
     );
   }
 
+  /// Returns a human-readable label for the file type.
+  String _getFileTypeLabel(FileContentType type) {
+    switch (type) {
+      case FileContentType.plaintext:
+        return 'Text';
+      case FileContentType.dart:
+        return 'Dart';
+      case FileContentType.json:
+        return 'JSON';
+      case FileContentType.markdown:
+        return 'Markdown';
+      case FileContentType.image:
+        return 'Image';
+      case FileContentType.binary:
+        return 'Binary';
+      case FileContentType.error:
+        return 'Error';
+    }
+  }
+
   /// Builds trailing widgets for the panel header based on file type.
   ///
-  /// Shows a toggle button for markdown files to switch between
-  /// preview and raw modes.
-  Widget? _buildTrailingWidgets(FileContent? fileContent) {
-    if (fileContent?.type == FileContentType.markdown) {
-      return IconButton(
-        icon: const Icon(Icons.preview),
-        tooltip: 'Toggle Preview/Raw',
-        onPressed: () {
-          _markdownViewerKey.currentState?.toggleMode();
-        },
+  /// Shows copy button for text content and toggle for markdown.
+  Widget? _buildTrailingWidgets(BuildContext context, FileContent? fileContent) {
+    if (fileContent == null || fileContent.isError) {
+      return null;
+    }
+
+    final widgets = <Widget>[];
+
+    // Copy button for text content
+    if (fileContent.isText) {
+      widgets.add(
+        IconButton(
+          icon: const Icon(Icons.copy, size: 18),
+          iconSize: 18,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: 'Copy to clipboard',
+          onPressed: () {
+            final text = fileContent.textContent;
+            if (text != null) {
+              Clipboard.setData(ClipboardData(text: text));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Copied to clipboard'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            }
+          },
+        ),
       );
     }
-    return null;
+
+    // Toggle button for markdown preview/raw
+    if (fileContent.type == FileContentType.markdown) {
+      widgets.add(
+        IconButton(
+          icon: const Icon(Icons.preview, size: 18),
+          iconSize: 18,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: 'Toggle Preview/Raw',
+          onPressed: () {
+            _markdownViewerKey.currentState?.toggleMode();
+          },
+        ),
+      );
+    }
+
+    if (widgets.isEmpty) {
+      return null;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: widgets,
+    );
   }
 }
 
