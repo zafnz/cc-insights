@@ -1,5 +1,7 @@
 import 'package:diff_match_patch/diff_match_patch.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/runtime_config.dart';
@@ -12,7 +14,10 @@ import '../services/runtime_config.dart';
 ///
 /// Alternatively, if [structuredPatch] is provided, it uses pre-computed
 /// diff hunks from the SDK instead of computing diffs locally.
-class DiffView extends StatelessWidget {
+///
+/// When maxHeight is set and content exceeds it, uses click-to-scroll
+/// behavior to avoid capturing scroll events from the parent.
+class DiffView extends StatefulWidget {
   /// The original text (before changes).
   /// Used when [structuredPatch] is not provided.
   final String oldText;
@@ -50,14 +55,80 @@ class DiffView extends StatelessWidget {
   });
 
   @override
+  State<DiffView> createState() => _DiffViewState();
+}
+
+class _DiffViewState extends State<DiffView> {
+  bool _isScrollActive = false;
+  bool _needsScroll = false;
+  final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkIfNeedsScroll();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus && _isScrollActive) {
+      setState(() => _isScrollActive = false);
+    }
+  }
+
+  void _checkIfNeedsScroll() {
+    if (!mounted) return;
+    if (_scrollController.hasClients) {
+      final needsScroll = _scrollController.position.maxScrollExtent > 0;
+      if (needsScroll != _needsScroll) {
+        setState(() => _needsScroll = needsScroll);
+      }
+    }
+  }
+
+  void _activate() {
+    if (!_needsScroll || widget.maxHeight == null) return;
+    setState(() => _isScrollActive = true);
+    _focusNode.requestFocus();
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (!_isScrollActive || !_needsScroll) return;
+
+    if (event is PointerScrollEvent) {
+      final delta = event.scrollDelta.dy;
+      final currentOffset = _scrollController.offset;
+      final maxOffset = _scrollController.position.maxScrollExtent;
+
+      // Calculate new offset, clamped to valid range
+      final newOffset = (currentOffset + delta).clamp(0.0, maxOffset);
+      _scrollController.jumpTo(newOffset);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     // Use structuredPatch if provided and non-empty, otherwise compute diffs
-    final diffItems = (structuredPatch != null && structuredPatch!.isNotEmpty)
-        ? _parseStructuredPatch(structuredPatch!)
-        : _computeLineDiffs(
-            oldText,
-            newText,
-          ).map((line) => _DiffItem.line(line)).toList();
+    final diffItems =
+        (widget.structuredPatch != null && widget.structuredPatch!.isNotEmpty)
+            ? _parseStructuredPatch(widget.structuredPatch!)
+            : _computeLineDiffs(
+                widget.oldText,
+                widget.newText,
+              ).map((line) => _DiffItem.line(line)).toList();
 
     // Calculate the width needed for line numbers
     final maxLineNumber = diffItems.fold<int>(0, (max, item) {
@@ -67,35 +138,102 @@ class DiffView extends StatelessWidget {
     });
     final lineNumberWidth = maxLineNumber.toString().length * 10.0 + 16.0;
 
-    Widget content = ListView.builder(
-      shrinkWrap: true,
-      itemCount: diffItems.length,
-      itemBuilder: (context, index) {
-        final item = diffItems[index];
-        if (item.isHunkHeader) {
-          return _HunkHeaderWidget(header: item.hunkHeader!);
+    Widget listView = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollMetricsNotification) {
+          _checkIfNeedsScroll();
         }
-        return _DiffLineWidget(
-          line: item.line!,
-          lineNumberWidth: lineNumberWidth,
-        );
+        return false;
       },
+      child: ListView.builder(
+        controller: _scrollController,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: diffItems.length,
+        itemBuilder: (context, index) {
+          final item = diffItems[index];
+          if (item.isHunkHeader) {
+            return _HunkHeaderWidget(header: item.hunkHeader!);
+          }
+          return _DiffLineWidget(
+            line: item.line!,
+            lineNumberWidth: lineNumberWidth,
+          );
+        },
+      ),
     );
 
-    if (maxHeight != null) {
+    Widget content = listView;
+    if (widget.maxHeight != null) {
       content = ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight!),
+        constraints: BoxConstraints(maxHeight: widget.maxHeight!),
+        child: listView,
+      );
+    }
+
+    // If no maxHeight, just return the simple container
+    if (widget.maxHeight == null) {
+      return Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: content,
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
+    // With maxHeight, wrap in click-to-scroll behavior
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: (node, event) {
+        if (event.logicalKey == LogicalKeyboardKey.escape && _isScrollActive) {
+          setState(() => _isScrollActive = false);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: _activate,
+        behavior: HitTestBehavior.opaque,
+        child: MouseRegion(
+          cursor: _needsScroll && !_isScrollActive
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
+          child: Listener(
+            onPointerSignal: _handlePointerSignal,
+            child: Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+                border: _needsScroll && !_isScrollActive
+                    ? Border.all(
+                        color: colorScheme.outline.withValues(alpha: 0.3),
+                        width: 1,
+                      )
+                    : _isScrollActive
+                        ? Border.all(
+                            color: colorScheme.primary.withValues(alpha: 0.5),
+                            width: 1,
+                          )
+                        : null,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  content,
+                  if (_needsScroll && !_isScrollActive)
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: _ScrollIndicator(),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: content,
     );
   }
 
@@ -410,6 +548,43 @@ class _HunkHeaderWidget extends StatelessWidget {
           color: headerColor,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+}
+
+/// Visual indicator showing that content is scrollable.
+class _ScrollIndicator extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.unfold_more,
+            size: 12,
+            color: colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            'click to scroll',
+            style: TextStyle(
+              fontSize: 9,
+              color: colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
       ),
     );
   }
