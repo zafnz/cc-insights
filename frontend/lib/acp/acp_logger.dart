@@ -8,14 +8,15 @@ import 'package:flutter/foundation.dart';
 /// Logger for ACP protocol messages.
 ///
 /// Logs all incoming and outgoing JSON-RPC messages to a file for debugging.
-/// Each message is written as a JSONL entry with metadata (timestamp, direction).
+/// Each message is written as a JSONL entry with metadata including timestamp,
+/// direction, and connection ID.
 ///
 /// Usage:
 /// ```dart
 /// // Enable logging (call once at startup)
 /// ACPLogger.instance.enable('/tmp/acp.jsonl');
 ///
-/// // Wrap the ACP stream
+/// // Wrap the ACP stream (each wrap gets a unique connection ID)
 /// final loggedStream = ACPLogger.instance.wrapStream(stream);
 ///
 /// // Use loggedStream instead of stream
@@ -23,6 +24,16 @@ import 'package:flutter/foundation.dart';
 ///
 /// // Disable when done
 /// ACPLogger.instance.disable();
+/// ```
+///
+/// Log format:
+/// ```json
+/// {"ts": "2024-01-15T10:30:00.000Z", "conn": "a1b2c3", "dir": "in", "msg": {...}}
+/// ```
+///
+/// Filtering by connection:
+/// ```bash
+/// cat /tmp/acp.jsonl | jq 'select(.conn == "a1b2c3")'
 /// ```
 class ACPLogger {
   static ACPLogger? _instance;
@@ -38,6 +49,7 @@ class ACPLogger {
   IOSink? _sink;
   String? _logPath;
   bool _enabled = false;
+  int _connectionCounter = 0;
 
   /// Whether logging is currently enabled.
   bool get isEnabled => _enabled;
@@ -52,13 +64,14 @@ class ACPLogger {
   ///
   /// Each log entry has the format:
   /// ```json
-  /// {"ts": "2024-01-15T10:30:00.000Z", "dir": "in", "msg": {...}}
+  /// {"ts": "2024-01-15T10:30:00.000Z", "conn": "a1b2c3", "dir": "in", "msg": {...}}
   /// ```
   ///
   /// Where:
   /// - `ts` is the ISO8601 timestamp
-  /// - `dir` is "in" (from agent) or "out" (to agent)
-  /// - `msg` is the raw JSON-RPC message
+  /// - `conn` is a short connection ID (unique per wrapStream call)
+  /// - `dir` is "in" (from agent), "out" (to agent), or "info" (metadata)
+  /// - `msg` is the raw JSON-RPC message or info payload
   void enable(String path) {
     if (_enabled) {
       disable();
@@ -69,10 +82,11 @@ class ACPLogger {
       _sink = file.openWrite(mode: FileMode.write);
       _logPath = path;
       _enabled = true;
+      _connectionCounter = 0;
       debugPrint('[ACPLogger] Logging enabled: $path');
 
       // Write header
-      _log('info', {'event': 'logging_started', 'path': path});
+      _logInfo(null, {'event': 'logging_started', 'path': path});
     } catch (e) {
       debugPrint('[ACPLogger] Failed to enable logging: $e');
       _enabled = false;
@@ -85,7 +99,7 @@ class ACPLogger {
   void disable() {
     if (!_enabled) return;
 
-    _log('info', {'event': 'logging_stopped'});
+    _logInfo(null, {'event': 'logging_stopped'});
     _sink?.close();
     _sink = null;
     _logPath = null;
@@ -93,13 +107,22 @@ class ACPLogger {
     debugPrint('[ACPLogger] Logging disabled');
   }
 
-  /// Logs a message with the given direction.
-  void _log(String direction, Map<String, dynamic> message) {
+  /// Generates a short unique connection ID.
+  String _generateConnectionId() {
+    _connectionCounter++;
+    // Use a combination of counter and timestamp for uniqueness
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return '${timestamp.toRadixString(36).substring(4)}${_connectionCounter.toRadixString(36)}';
+  }
+
+  /// Logs a message with the given direction and connection ID.
+  void _log(String? connectionId, String direction, Map<String, dynamic> message) {
     if (!_enabled || _sink == null) return;
 
     try {
-      final entry = {
+      final entry = <String, dynamic>{
         'ts': DateTime.now().toUtc().toIso8601String(),
+        if (connectionId != null) 'conn': connectionId,
         'dir': direction,
         'msg': message,
       };
@@ -109,35 +132,38 @@ class ACPLogger {
     }
   }
 
-  /// Logs an incoming message (from agent).
-  void logIncoming(Map<String, dynamic> message) {
-    _log('in', message);
-  }
-
-  /// Logs an outgoing message (to agent).
-  void logOutgoing(Map<String, dynamic> message) {
-    _log('out', message);
+  /// Logs an info message (metadata, not a protocol message).
+  void _logInfo(String? connectionId, Map<String, dynamic> info) {
+    _log(connectionId, 'info', info);
   }
 
   /// Wraps an [AcpStream] to log all messages.
   ///
   /// Returns a new [AcpStream] that logs all incoming and outgoing messages
-  /// while passing them through unchanged.
+  /// while passing them through unchanged. Each call to this method generates
+  /// a unique connection ID that is included in all log entries for that stream.
+  ///
+  /// The connection ID is logged in an info message when the stream is wrapped,
+  /// making it easy to identify which connection each message belongs to.
   AcpStream wrapStream(AcpStream stream) {
     if (!_enabled) {
       return stream;
     }
 
+    final connectionId = _generateConnectionId();
+    _logInfo(connectionId, {'event': 'connection_started'});
+
     // Wrap readable stream to log incoming messages
     final loggingReadable = stream.readable.map((message) {
-      logIncoming(message);
+      _log(connectionId, 'in', message);
       return message;
     });
 
     // Wrap writable sink to log outgoing messages
     final loggingWritable = _LoggingSink(
       stream.writable,
-      (message) => logOutgoing(message),
+      (message) => _log(connectionId, 'out', message),
+      () => _logInfo(connectionId, {'event': 'connection_closed'}),
     );
 
     return AcpStream(
@@ -156,8 +182,9 @@ class ACPLogger {
 class _LoggingSink implements StreamSink<Map<String, dynamic>> {
   final StreamSink<Map<String, dynamic>> _inner;
   final void Function(Map<String, dynamic>) _onMessage;
+  final void Function() _onClose;
 
-  _LoggingSink(this._inner, this._onMessage);
+  _LoggingSink(this._inner, this._onMessage, this._onClose);
 
   @override
   void add(Map<String, dynamic> event) {
@@ -179,7 +206,10 @@ class _LoggingSink implements StreamSink<Map<String, dynamic>> {
   }
 
   @override
-  Future close() => _inner.close();
+  Future close() {
+    _onClose();
+    return _inner.close();
+  }
 
   @override
   Future get done => _inner.done;

@@ -6,7 +6,7 @@ CC-Insights is a desktop application for monitoring and interacting with Claude 
 
 1. Makes git worktrees a core concept rather than a bolt-on
 2. Introduces a flexible panel-based UI
-3. Preserves working components (Dart SDK, display widgets)
+3. Uses ACP (Agent Client Protocol) for multi-agent support
 4. Replaces problematic session management with a cleaner hierarchy
 
 ---
@@ -21,10 +21,10 @@ CC-Insights is a desktop application for monitoring and interacting with Claude 
 | **Worktree** | A git working tree with files. Has a path and a branch. |
 | **Primary Worktree** | The worktree at the repository root (where the common `.git` directory lives). |
 | **Linked Worktree** | A worktree created via `git worktree add`. Points back to the primary's `.git`. |
-| **Chat** | A user-facing conversation unit. Belongs to a worktree. Contains conversations and optionally an active SDK session. |
+| **Chat** | A user-facing conversation unit. Belongs to a worktree. Contains conversations and optionally an active ACP session. |
 | **Conversation** | A persistent log of messages/output. Survives session lifecycle. Each chat has a primary conversation and zero or more subagent conversations. |
-| **Agent** | A runtime SDK entity. Exists only while a session is active. Created when SDK spawns via Task tool. Links to a Conversation for output storage. |
-| **Session** | Internal SDK concept. The active connection to Claude. Users see "Chats", not "Sessions". |
+| **Agent** | A runtime entity. Exists only while a session is active. Created when the agent spawns via Task tool. Links to a Conversation for output storage. |
+| **Session** | ACP session concept. The active connection to an AI agent. Users see "Chats", not "Sessions". |
 
 ### Hierarchy
 
@@ -221,14 +221,14 @@ class ChatState extends ChangeNotifier {
   ChatData _data;
 
   // Runtime state (ephemeral - only exists while session active)
-  ClaudeSession? _session;
+  ACPSessionWrapper? _session;  // ACP session wrapper
   Map<String, Agent> _activeAgents = {};
 
   // Selection
   String? _selectedConversationId;  // null = primary
 
   // Pending permission/question requests
-  final Queue<PendingRequest> _pendingRequests = Queue();
+  final Queue<PendingPermission> _pendingRequests = Queue();
 
   ChatData get data => _data;
   bool get hasActiveSession => _session != null;
@@ -601,38 +601,39 @@ Future: Merge operations may involve cross-chat coordination (one Claude session
 
 ---
 
-## Component Preservation
+## Component Architecture
 
-### Fully Preserved (Copy As-Is)
+### ACP Integration
+
+The application now uses ACP (Agent Client Protocol) for all agent communication. See `CLAUDE.md` for comprehensive ACP documentation.
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| ACPClientWrapper | `frontend/lib/acp/` | Manages agent process lifecycle, NDJSON streams |
+| ACPSessionWrapper | `frontend/lib/acp/` | Session-specific stream filtering |
+| CCInsightsACPClient | `frontend/lib/acp/` | Implements ACP Client interface |
+| AgentService | `frontend/lib/services/` | Provider-based agent management |
+| AgentRegistry | `frontend/lib/services/` | Agent discovery and configuration |
+| claude-code-acp | `packages/claude-code-acp/` | ACP adapter for Claude Code |
+
+### Display Widgets (Preserved)
 
 | Component | Location | Notes |
 |-----------|----------|-------|
-| Dart SDK | `dart_sdk/` | ClaudeBackend, ClaudeSession, Protocol, all types |
-| Session Model | `flutter_app/lib/models/session.dart` | Agent, OutputEntry classes (rename file) |
-| Tool Card | `flutter_app/lib/widgets/tool_card.dart` | Tool rendering with expandable cards |
-| Output Panel | `flutter_app/lib/widgets/output_panel.dart` | Smart scrolling behavior |
-| Output Entries | `flutter_app/lib/widgets/output_entries.dart` | Polymorphic entry rendering |
-| Diff View | `flutter_app/lib/widgets/diff_view.dart` | Visual diff display |
-| Permission Widgets | `flutter_app/lib/widgets/permission_widgets.dart` | Permission request UI |
-| SDK Message Handler | `flutter_app/lib/services/sdk_message_handler.dart` | Message routing |
-| Backend Service | `flutter_app/lib/services/backend_service.dart` | Process lifecycle |
+| Tool Card | `frontend/lib/widgets/tool_card.dart` | Tool rendering with expandable cards |
+| Output Panel | `frontend/lib/widgets/output_panel.dart` | Smart scrolling behavior |
+| Output Entries | `frontend/lib/widgets/output_entries.dart` | Polymorphic entry rendering |
+| Diff View | `frontend/lib/widgets/diff_view.dart` | Visual diff display |
+| ACP Permission Dialog | `frontend/lib/widgets/acp_permission_dialog.dart` | Permission request UI for ACP |
 
-### Redesigned
+### Services
 
-| Component | Current Issue | New Approach |
-|-----------|---------------|--------------|
-| SessionProvider | Worktree logic entangled | Split into ChatProvider (SDK ops) + SelectionState |
-| Session terminology | Confusing (SDK vs UI) | "Chat" for UI, "Session" internal only |
-| App initialization | Heavy worktree service setup | Simplified, project-focused |
-| Home screen | Worktree-specific layout | Panel-based, flexible |
-
-### Not Preserved (Rewrite)
-
-| Component | Reason |
-|-----------|--------|
-| Worktree services | Need redesign for new hierarchy |
-| Worktree dialogs | Shell-specific UI |
-| Project config service | New persistence model |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| AgentService | `frontend/lib/services/agent_service.dart` | Agent connection and session management |
+| AgentRegistry | `frontend/lib/services/agent_registry.dart` | Agent discovery and persistence |
+| GitService | `frontend/lib/services/git_service.dart` | Git operations |
+| PersistenceService | `frontend/lib/services/persistence_service.dart` | Chat/project persistence |
 
 ---
 
@@ -708,16 +709,18 @@ Future: Full conversation logs for session resumption (entries populated with Ou
 
 ## Communication Flow
 
+The application uses ACP (Agent Client Protocol) for agent communication:
+
 ```
-Claude API
+AI Agent (Claude Code, Gemini, etc.)
     ↓
-Node.js Backend (session-manager.ts)
-    ↓ stdout (JSON lines)
-Dart SDK (Protocol → ClaudeSession)
-    ↓ Stream<SDKMessage>
-SDK Message Handler
-    ↓ Updates
-Chat Model (agents, output, usage)
+claude-code-acp adapter (for Claude Code)
+    ↓ NDJSON (stdin/stdout)
+ACPClientWrapper
+    ↓ Dart Streams
+ACPSessionWrapper (filters by session ID)
+    ↓ SessionUpdate stream
+SessionUpdateHandler → ChatState
     ↓ notifyListeners()
 UI Widgets
 ```
@@ -727,14 +730,14 @@ User input flows reverse:
 ```
 UI Input
     ↓
-ChatProvider.sendMessage()
+ChatState.sendMessage()
     ↓
-Chat.ensureSession() → ClaudeSession.send()
-    ↓ stdin (JSON lines)
-Node.js Backend
-    ↓
-Claude API
+ACPSessionWrapper.prompt()
+    ↓ NDJSON
+Agent Process
 ```
+
+For detailed ACP documentation, see `CLAUDE.md`.
 
 ---
 
@@ -750,21 +753,21 @@ Panels receive their context from SelectionState. They don't manage which worktr
 
 ### 2. Chat Owns Session Lifecycle
 
-The Chat model manages its ClaudeSession internally:
+The Chat model manages its ACP session internally:
 
-- Creates session on first message
+- Creates ACP session on first message via `AgentService.createSession()`
 - Destroys session on `/clear`
 - Recreates session on next message after `/clear`
-- UI never directly touches ClaudeSession
+- UI never directly touches ACPSessionWrapper
 
-### 3. SDK Concepts Stay Internal
+### 3. ACP/SDK Concepts Stay Internal
 
 Users see:
 - **Chat** (not "Session")
-- **Agent** (not "SDK Agent")
+- **Agent** (not "ACP Agent" or "SDK Agent")
 - **Worktree** (not "Working Directory")
 
-SDK terminology is implementation detail.
+ACP and SDK terminology are implementation details.
 
 ### 4. Worktree Branch Is Mutable
 
@@ -810,12 +813,23 @@ Don't implement these now, but don't preclude them.
 
 ---
 
-## Directory Structure (New Shell)
+## Directory Structure
 
 ```
 frontend/
 ├── lib/
 │   ├── main.dart
+│   │
+│   ├── acp/                          # ACP integration
+│   │   ├── acp.dart                  # Library export
+│   │   ├── acp_client_wrapper.dart   # Agent process lifecycle
+│   │   ├── acp_session_wrapper.dart  # Session-specific streams
+│   │   ├── cc_insights_acp_client.dart # ACP Client implementation
+│   │   ├── acp_errors.dart           # Error types
+│   │   ├── pending_permission.dart   # Permission model
+│   │   └── handlers/                 # ACP handlers
+│   │       ├── terminal_handler.dart
+│   │       └── fs_handler.dart
 │   │
 │   ├── models/
 │   │   ├── project.dart
@@ -831,39 +845,42 @@ frontend/
 │   │   └── chat_state.dart
 │   │
 │   ├── services/
-│   │   ├── backend_service.dart      # Preserved
-│   │   ├── sdk_message_handler.dart  # Preserved
-│   │   ├── git_service.dart          # New
-│   │   └── persistence_service.dart  # New
+│   │   ├── agent_service.dart        # ACP agent management
+│   │   ├── agent_registry.dart       # Agent discovery
+│   │   ├── git_service.dart
+│   │   └── persistence_service.dart
 │   │
 │   ├── panels/
 │   │   ├── panel_manager.dart        # Drag/drop/resize infrastructure
 │   │   ├── worktree_panel.dart
 │   │   ├── chat_panel.dart
-│   │   ├── conversation_panel.dart   # List of conversations in chat
-│   │   ├── conversation_viewer_panel.dart  # Output display + input
+│   │   ├── conversation_panel.dart   # Output display + input
 │   │   ├── files_panel.dart
 │   │   ├── file_viewer_panel.dart
 │   │   └── git_status_panel.dart
 │   │
 │   ├── widgets/
-│   │   ├── display/                  # Preserved
+│   │   ├── display/
 │   │   │   ├── tool_card.dart
 │   │   │   ├── output_panel.dart
 │   │   │   ├── output_entries.dart
 │   │   │   ├── diff_view.dart
-│   │   │   └── permission_widgets.dart
+│   │   │   └── acp_permission_dialog.dart
 │   │   └── input/
 │   │       └── message_input.dart
 │   │
 │   └── screens/
 │       └── main_screen.dart
 │
-└── test/
-    ├── models/
-    ├── state/
-    ├── panels/
-    └── integration/
+├── test/
+│   ├── acp/                          # ACP tests
+│   ├── models/
+│   ├── services/
+│   ├── widget/
+│   └── integration/
+│
+└── packages/
+    └── claude-code-acp/              # ACP adapter for Claude Code
 ```
 
 ---
@@ -883,7 +900,9 @@ frontend/
 | MVP panel binding | Everything follows selected worktree |
 | File viewer | Read-only with syntax highlighting |
 | Panel manager approach | Adapt from `drag_split_layout` concepts |
-| Existing code | Preserve SDK, display widgets; redesign providers |
+| Agent communication | ACP (Agent Client Protocol) |
+| Claude Code adapter | `claude-code-acp` in `packages/` |
+| Existing code | Preserve display widgets; use ACP for agent communication |
 
 ---
 
