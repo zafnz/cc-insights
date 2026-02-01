@@ -2,6 +2,8 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/file_system_service.dart';
+import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
@@ -19,6 +21,10 @@ void main() {
     late ProjectState project;
     late SelectionState selection;
     late MockBackendService mockBackend;
+    late FakeFileSystemService fakeFileSystem;
+    late FileManagerState fileManagerState;
+
+    final resources = TestResources();
 
     Widget createTestApp() {
       return MultiProvider(
@@ -28,6 +34,10 @@ void main() {
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
             create: (_) => selection,
             update: (_, __, previous) => previous!,
+          ),
+          Provider<FileSystemService>.value(value: fakeFileSystem),
+          ChangeNotifierProvider<FileManagerState>.value(
+            value: fileManagerState,
           ),
         ],
         child: MaterialApp(
@@ -41,10 +51,15 @@ void main() {
       selection = SelectionState(project);
       mockBackend = MockBackendService();
       await mockBackend.start();
+      fakeFileSystem = FakeFileSystemService();
+      fileManagerState = resources.track(
+        FileManagerState(project, fakeFileSystem),
+      );
     });
 
-    tearDown(() {
+    tearDown(() async {
       mockBackend.dispose();
+      await resources.disposeAll();
     });
 
     group('Initial State', () {

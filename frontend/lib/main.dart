@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +9,7 @@ import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
 import 'services/ask_ai_service.dart';
 import 'services/backend_service.dart';
+import 'services/file_system_service.dart';
 import 'services/git_service.dart';
 import 'services/notification_service.dart';
 import 'services/persistence_service.dart';
@@ -19,6 +19,7 @@ import 'services/project_config_service.dart';
 import 'services/script_execution_service.dart';
 import 'services/sdk_message_handler.dart';
 import 'services/worktree_watcher_service.dart';
+import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
@@ -36,7 +37,9 @@ void main(List<String> args) async {
   // First positional arg is the working directory.
   debugPrint('main() args: $args');
   RuntimeConfig.initialize(args);
-  debugPrint('RuntimeConfig.useMockData: ${RuntimeConfig.instance.useMockData}');
+  debugPrint(
+    'RuntimeConfig.useMockData: ${RuntimeConfig.instance.useMockData}',
+  );
 
   // Initialize the notification service for desktop notifications
   await NotificationService.instance.initialize();
@@ -92,11 +95,7 @@ class CCInsightsApp extends StatefulWidget {
   /// Optional SdkMessageHandler instance for dependency injection in tests.
   final SdkMessageHandler? messageHandler;
 
-  const CCInsightsApp({
-    super.key,
-    this.backendService,
-    this.messageHandler,
-  });
+  const CCInsightsApp({super.key, this.backendService, this.messageHandler});
 
   @override
   State<CCInsightsApp> createState() => _CCInsightsAppState();
@@ -175,8 +174,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Create or use injected SdkMessageHandler
     // Pass askAiService for auto-generating chat titles
-    _handler = widget.messageHandler ??
-        SdkMessageHandler(askAiService: _askAiService);
+    _handler =
+        widget.messageHandler ?? SdkMessageHandler(askAiService: _askAiService);
 
     // Initialize project (sync for mock, async for real)
     if (shouldUseMock) {
@@ -220,11 +219,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           // But also explicitly persist (async) - collect the future
           if (chat.projectId != null) {
             writes.add(
-              persistence.appendChatEntry(
-                chat.projectId!,
-                chat.data.id,
-                entry,
-              ),
+              persistence.appendChatEntry(chat.projectId!, chat.data.id, entry),
             );
           }
         }
@@ -338,6 +333,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         Provider<ProjectRestoreService>.value(value: _restoreService!),
         // Git service for git operations (stateless)
         Provider<GitService>.value(value: const RealGitService()),
+        // File system service for file tree and content (stateless)
+        Provider<FileSystemService>.value(value: const RealFileSystemService()),
         // AskAI service for one-shot AI queries
         Provider<AskAiService>.value(value: _askAiService!),
         // Project state
@@ -348,19 +345,32 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           update: (context, project, previous) =>
               previous ?? SelectionState(project),
         ),
+        // File manager state depends on project and file system service
+        ChangeNotifierProxyProvider2<
+          ProjectState,
+          FileSystemService,
+          FileManagerState
+        >(
+          create: (context) => FileManagerState(
+            context.read<ProjectState>(),
+            context.read<FileSystemService>(),
+          ),
+          update: (context, project, fileService, previous) =>
+              previous ?? FileManagerState(project, fileService),
+        ),
         // Worktree watcher service for monitoring git status changes
-        ChangeNotifierProxyProvider2<GitService, ProjectState,
-            WorktreeWatcherService>(
+        ChangeNotifierProxyProvider2<
+          GitService,
+          ProjectState,
+          WorktreeWatcherService
+        >(
           create: (context) => WorktreeWatcherService(
             gitService: context.read<GitService>(),
             project: context.read<ProjectState>(),
           ),
           update: (context, gitService, project, previous) =>
               previous ??
-              WorktreeWatcherService(
-                gitService: gitService,
-                project: project,
-              ),
+              WorktreeWatcherService(gitService: gitService, project: project),
         ),
         // Project config service for reading/writing .ccinsights/config.json
         Provider<ProjectConfigService>(
@@ -378,9 +388,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         darkTheme: _buildTheme(Brightness.dark),
         themeMode: ThemeMode.system,
         home: const MainScreen(),
-        routes: {
-          '/replay': (context) => const ReplayDemoScreen(),
-        },
+        routes: {'/replay': (context) => const ReplayDemoScreen()},
       ),
     );
   }

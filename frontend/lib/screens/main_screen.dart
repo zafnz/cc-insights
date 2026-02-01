@@ -1,5 +1,4 @@
 import 'package:drag_split_layout/drag_split_layout.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +7,7 @@ import '../services/backend_service.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
+import 'file_manager_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
 class MainScreen extends StatefulWidget {
@@ -23,11 +23,13 @@ class _MainScreenState extends State<MainScreen> {
   // Track panel merge state
   // These flags track which panels are merged together:
   // - _agentsMergedIntoChats: agents are nested under chats
-  // - _chatsMergedIntoWorktrees: chats (possibly with agents) are nested under worktrees
+  // - _chatsMergedIntoWorktrees: chats (possibly with agents)
+  //   are nested under worktrees
   bool _agentsMergedIntoChats = false;
   bool _chatsMergedIntoWorktrees = false;
 
-  // Navigation rail selection (0 = main view, others are panel toggles)
+  // Navigation rail selection
+  // 0 = main view, 1 = file manager, others are panel toggles
   int _selectedNavIndex = 0;
 
   // Track last error shown to avoid duplicate snackbars
@@ -153,9 +155,8 @@ class _MainScreenState extends State<MainScreen> {
           SplitNode.leaf(
             id: 'chats_agents',
             flex: chatsNode?.flex ?? 1.0,
-            widgetBuilder: (context) => ChatsAgentsPanel(
-              onSeparateAgents: _separateAgentsFromChats,
-            ),
+            widgetBuilder: (context) =>
+                ChatsAgentsPanel(onSeparateAgents: _separateAgentsFromChats),
           ),
         ),
       );
@@ -172,7 +173,8 @@ class _MainScreenState extends State<MainScreen> {
     final isChatsAgents = _controller.findPathById('chats_agents') != null;
 
     // Remove the chats (or chats_agents) panel from the layout
-    final chatsPath = _controller.findPathById('chats') ??
+    final chatsPath =
+        _controller.findPathById('chats') ??
         _controller.findPathById('chats_agents');
     if (chatsPath != null) {
       _controller.removeNode(chatsPath);
@@ -184,11 +186,13 @@ class _MainScreenState extends State<MainScreen> {
       final worktreesNode = _controller.getNodeAtPath(worktreesPath);
 
       // Use WorktreesChatsAgentsPanel if agents are merged, else WorktreesChatsPanel
-      final newPanelId =
-          isChatsAgents ? 'worktrees_chats_agents' : 'worktrees_chats';
+      final newPanelId = isChatsAgents
+          ? 'worktrees_chats_agents'
+          : 'worktrees_chats';
       final newWidget = isChatsAgents
           ? WorktreesChatsAgentsPanel(
-              onSeparateChats: _separateChatsFromWorktrees)
+              onSeparateChats: _separateChatsFromWorktrees,
+            )
           : WorktreesChatsPanel(onSeparateChats: _separateChatsFromWorktrees);
 
       _controller.updateRootNode(
@@ -249,7 +253,8 @@ class _MainScreenState extends State<MainScreen> {
     });
 
     // Find the combined panel (could be worktrees_chats or worktrees_chats_agents)
-    final combinedPath = _controller.findPathById('worktrees_chats_agents') ??
+    final combinedPath =
+        _controller.findPathById('worktrees_chats_agents') ??
         _controller.findPathById('worktrees_chats');
     if (combinedPath == null) return;
 
@@ -261,9 +266,8 @@ class _MainScreenState extends State<MainScreen> {
         ? SplitNode.leaf(
             id: 'chats_agents',
             flex: 1.0,
-            widgetBuilder: (context) => ChatsAgentsPanel(
-              onSeparateAgents: _separateAgentsFromChats,
-            ),
+            widgetBuilder: (context) =>
+                ChatsAgentsPanel(onSeparateAgents: _separateAgentsFromChats),
           )
         : SplitNode.leaf(
             id: 'chats',
@@ -398,34 +402,46 @@ class _MainScreenState extends State<MainScreen> {
                     thickness: 1,
                     color: colorScheme.outlineVariant.withValues(alpha: 0.3),
                   ),
-                  // Panel layout
+                  // Screen content - switches based on navigation
                   Expanded(
-                    child: EditableMultiSplitView(
-                      controller: _controller,
-                      config: EditableMultiSplitViewConfig(
-                        dividerThickness: 6.0,
-                        paneConfig: DraggablePaneConfig(
-                          dragFeedbackOpacity: 0.8,
-                          dragFeedbackScale: 0.95,
-                          useLongPressOnMobile: true,
-                          previewStyle: DropPreviewStyle(
-                            splitColor:
-                                colorScheme.primary.withValues(alpha: 0.3),
-                            replaceColor:
-                                colorScheme.secondary.withValues(alpha: 0.3),
-                            borderWidth: 2.0,
-                            animationDuration:
-                                const Duration(milliseconds: 150),
-                          ),
-                          // Only the drag handle icon should initiate dragging
-                          dragHandleBuilder: (context) => Icon(
-                            Icons.drag_indicator,
-                            size: 14,
-                            color: colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.5),
+                    child: IndexedStack(
+                      index: _selectedNavIndex,
+                      children: [
+                        // Index 0: Main screen with panel layout
+                        EditableMultiSplitView(
+                          controller: _controller,
+                          config: EditableMultiSplitViewConfig(
+                            dividerThickness: 6.0,
+                            paneConfig: DraggablePaneConfig(
+                              dragFeedbackOpacity: 0.8,
+                              dragFeedbackScale: 0.95,
+                              useLongPressOnMobile: true,
+                              previewStyle: DropPreviewStyle(
+                                splitColor: colorScheme.primary.withValues(
+                                  alpha: 0.3,
+                                ),
+                                replaceColor: colorScheme.secondary.withValues(
+                                  alpha: 0.3,
+                                ),
+                                borderWidth: 2.0,
+                                animationDuration: const Duration(
+                                  milliseconds: 150,
+                                ),
+                              ),
+                              // Only the drag handle initiates dragging
+                              dragHandleBuilder: (context) => Icon(
+                                Icons.drag_indicator,
+                                size: 14,
+                                color: colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        // Index 1: File Manager screen
+                        const FileManagerScreen(),
+                      ],
                     ),
                   ),
                 ],
