@@ -16,6 +16,10 @@ import '../services/file_system_service.dart';
 ///
 /// Use [selectWorktree] to choose a worktree, which triggers file tree
 /// building. Use [selectFile] to load a file's content for viewing.
+///
+/// The expanded state of directories is tracked separately from the tree
+/// structure in [_expandedPaths] to avoid rebuilding the entire tree on
+/// each expand/collapse operation.
 class FileManagerState extends ChangeNotifier {
   final ProjectState _project;
   final FileSystemService _fileSystemService;
@@ -27,6 +31,10 @@ class FileManagerState extends ChangeNotifier {
   bool _isLoadingTree = false;
   bool _isLoadingFile = false;
   String? _error;
+
+  /// Set of paths that are currently expanded in the UI.
+  /// Tracked separately from tree nodes for performance.
+  final Set<String> _expandedPaths = {};
 
   /// Creates a [FileManagerState] with the given project and file service.
   ///
@@ -64,6 +72,15 @@ class FileManagerState extends ChangeNotifier {
   /// Cleared when a new operation succeeds.
   String? get error => _error;
 
+  /// Set of directory paths that are currently expanded.
+  ///
+  /// Use [isExpanded] to check if a specific path is expanded.
+  /// Use [toggleExpanded] to change the expanded state.
+  Set<String> get expandedPaths => _expandedPaths;
+
+  /// Returns whether the directory at [path] is expanded.
+  bool isExpanded(String path) => _expandedPaths.contains(path);
+
   /// Selects a worktree and builds its file tree.
   ///
   /// Clears the previous tree and file selection, then triggers an async
@@ -84,6 +101,7 @@ class FileManagerState extends ChangeNotifier {
     _selectedFilePath = null;
     _fileContent = null;
     _error = null;
+    _expandedPaths.clear();
     notifyListeners();
 
     // Trigger async tree build
@@ -218,11 +236,10 @@ class FileManagerState extends ChangeNotifier {
 
   /// Toggles the expanded state of a directory node.
   ///
-  /// Finds the node at [path] in the current tree and toggles its
-  /// [isExpanded] property. The entire tree is rebuilt immutably to
-  /// reflect the change.
+  /// Updates the [expandedPaths] set without rebuilding the tree structure.
+  /// This is much more performant than rebuilding the entire tree.
   ///
-  /// Does nothing if [rootNode] is null or if the path isn't found.
+  /// Does nothing if [rootNode] is null.
   void toggleExpanded(String path) {
     if (_rootNode == null) {
       return;
@@ -233,35 +250,12 @@ class FileManagerState extends ChangeNotifier {
       name: 'FileManagerState',
     );
 
-    _rootNode = _toggleNodeExpanded(_rootNode!, path);
+    if (_expandedPaths.contains(path)) {
+      _expandedPaths.remove(path);
+    } else {
+      _expandedPaths.add(path);
+    }
     notifyListeners();
-  }
-
-  /// Recursively finds and toggles the expanded state of a node.
-  ///
-  /// Returns a new tree with the specified node toggled.
-  FileTreeNode _toggleNodeExpanded(FileTreeNode node, String targetPath) {
-    if (node.path == targetPath) {
-      // Found the target node - toggle its expanded state
-      return node.copyWith(isExpanded: !node.isExpanded);
-    }
-
-    if (!node.isDirectory || node.children.isEmpty) {
-      // Not a directory or no children - return unchanged
-      return node;
-    }
-
-    // Check if target might be in this node's children
-    if (!targetPath.startsWith('${node.path}/')) {
-      return node;
-    }
-
-    // Recursively process children
-    final newChildren = node.children.map((child) {
-      return _toggleNodeExpanded(child, targetPath);
-    }).toList();
-
-    return node.copyWith(children: newChildren);
   }
 
   /// Clears the current file selection.
@@ -280,6 +274,7 @@ class FileManagerState extends ChangeNotifier {
     _error = null;
     _isLoadingTree = false;
     _isLoadingFile = false;
+    _expandedPaths.clear();
     notifyListeners();
   }
 }

@@ -114,19 +114,120 @@ class RealFileSystemService implements FileSystemService {
       );
     }
 
+    // Build set of ignored paths upfront if gitignore is enabled
+    Set<String>? ignoredPaths;
+    if (respectGitignore) {
+      // First collect all paths in the tree
+      final allPaths = await _collectAllPaths(rootDir, maxDepth, 0);
+      // Then batch check all paths for gitignore in a single git call
+      ignoredPaths = await _getIgnoredPaths(rootPath, allPaths);
+    }
+
     return _buildTree(
       rootDir,
       rootPath,
-      respectGitignore: respectGitignore,
+      ignoredPaths: ignoredPaths,
       maxDepth: maxDepth,
       currentDepth: 0,
     );
   }
 
+  /// Collects all paths in the directory tree for batch gitignore checking.
+  Future<List<String>> _collectAllPaths(
+    Directory dir,
+    int maxDepth,
+    int currentDepth,
+  ) async {
+    final paths = <String>[];
+    if (currentDepth >= maxDepth) {
+      return paths;
+    }
+
+    try {
+      final entities = await dir.list().toList();
+      for (final entity in entities) {
+        final name = _getFileName(entity.path);
+        if (name == '.git') continue;
+
+        paths.add(entity.path);
+        if (entity is Directory) {
+          paths.addAll(await _collectAllPaths(
+            entity,
+            maxDepth,
+            currentDepth + 1,
+          ));
+        }
+      }
+    } on FileSystemException {
+      // Skip directories we can't read
+    }
+    return paths;
+  }
+
+  /// Gets all ignored paths using a single batched git check-ignore call.
+  ///
+  /// This is much faster than calling git check-ignore per file because
+  /// it spawns only one process and passes all paths via stdin.
+  Future<Set<String>> _getIgnoredPaths(
+    String repoRoot,
+    List<String> allPaths,
+  ) async {
+    if (allPaths.isEmpty) {
+      return {};
+    }
+
+    try {
+      // Use git check-ignore with --stdin to batch check all paths at once
+      // --stdin: read paths from stdin (one per line)
+      // -z: NUL-terminated input/output for safe handling of special chars
+      final process = await Process.start(
+        'git',
+        ['check-ignore', '--stdin', '-z'],
+        workingDirectory: repoRoot,
+      );
+
+      // Start reading stdout immediately to prevent pipe deadlock
+      final outputFuture = process.stdout
+          .transform(const SystemEncoding().decoder)
+          .join()
+          .timeout(const Duration(seconds: 10));
+
+      // Write all paths to stdin (NUL-separated)
+      // Use try-catch to handle broken pipe if git exits early
+      try {
+        process.stdin.write(allPaths.join('\x00'));
+        process.stdin.write('\x00');
+        await process.stdin.close();
+      } on SocketException {
+        // Git process may have exited, continue to read any output
+      } on IOException {
+        // Handle other I/O errors gracefully
+      }
+
+      final output = await outputFuture;
+      await process.exitCode;
+
+      if (output.isEmpty) {
+        return {};
+      }
+
+      // Parse NUL-separated ignored paths
+      return output.split('\x00').where((p) => p.isNotEmpty).toSet();
+    } on TimeoutException {
+      return {};
+    } on ProcessException {
+      return {};
+    } catch (e) {
+      // Catch any other errors (SocketException, etc.) and return empty set
+      // to fall back to showing all files
+      return {};
+    }
+  }
+
   Future<FileTreeNode> _buildTree(
     Directory dir,
     String repoRoot, {
-    required bool respectGitignore,
+    required Set<String>? ignoredPaths,
     required int maxDepth,
     required int currentDepth,
   }) async {
@@ -147,11 +248,9 @@ class RealFileSystemService implements FileSystemService {
             continue;
           }
 
-          // Check gitignore if needed
-          if (respectGitignore) {
-            if (await isIgnored(repoRoot, entity.path)) {
-              continue;
-            }
+          // Check gitignore if needed (O(1) set lookup)
+          if (ignoredPaths != null && ignoredPaths.contains(entity.path)) {
+            continue;
           }
 
           if (entity is Directory) {
@@ -176,7 +275,7 @@ class RealFileSystemService implements FileSystemService {
             final childNode = await _buildTree(
               subDir as Directory,
               repoRoot,
-              respectGitignore: respectGitignore,
+              ignoredPaths: ignoredPaths,
               maxDepth: maxDepth,
               currentDepth: currentDepth + 1,
             );

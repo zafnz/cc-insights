@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/file_tree_node.dart';
@@ -101,6 +100,7 @@ class _FileTreeContent extends StatelessWidget {
     return const _NoWorktreeSelected();
   }
 }
+
 
 /// Widget shown when no worktree is selected.
 class _NoWorktreeSelected extends StatelessWidget {
@@ -236,7 +236,8 @@ class _ErrorMessage extends StatelessWidget {
 
 /// Displays the file tree using a ListView.
 ///
-/// Flattens the tree into a list (depth-first) respecting [isExpanded] state.
+/// Flattens the tree into a list (depth-first) respecting expanded state
+/// from [FileManagerState.expandedPaths].
 /// Uses [ListView.builder] for performance with large trees.
 class _FileTreeView extends StatelessWidget {
   const _FileTreeView({required this.rootNode});
@@ -245,7 +246,16 @@ class _FileTreeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final flattenedNodes = _flattenTree(rootNode.children, depth: 0);
+    // Watch only the expandedPaths set, not the entire state
+    final expandedPaths = context.select<FileManagerState, Set<String>>(
+      (state) => state.expandedPaths,
+    );
+
+    final flattenedNodes = _flattenTree(
+      rootNode.children,
+      depth: 0,
+      expandedPaths: expandedPaths,
+    );
 
     if (flattenedNodes.isEmpty) {
       return const _EmptyTreeMessage();
@@ -255,21 +265,27 @@ class _FileTreeView extends StatelessWidget {
       itemCount: flattenedNodes.length,
       itemBuilder: (context, index) {
         final (node, depth) = flattenedNodes[index];
-        return _FileTreeItem(node: node, depth: depth);
+        return _FileTreeItem(key: ValueKey(node.path), node: node, depth: depth);
       },
     );
   }
 
-  /// Flattens tree into list of (node, depth) tuples, respecting isExpanded.
-  List<(FileTreeNode, int)> _flattenTree(
-    List<FileTreeNode> nodes,
-    {required int depth}
-  ) {
+  /// Flattens tree into list of (node, depth) tuples, respecting expandedPaths.
+  static List<(FileTreeNode, int)> _flattenTree(
+    List<FileTreeNode> nodes, {
+    required int depth,
+    required Set<String> expandedPaths,
+  }) {
     final result = <(FileTreeNode, int)>[];
     for (final node in nodes) {
       result.add((node, depth));
-      if (node.isDirectory && node.isExpanded && node.children.isNotEmpty) {
-        result.addAll(_flattenTree(node.children, depth: depth + 1));
+      final isExpanded = expandedPaths.contains(node.path);
+      if (node.isDirectory && isExpanded && node.children.isNotEmpty) {
+        result.addAll(_flattenTree(
+          node.children,
+          depth: depth + 1,
+          expandedPaths: expandedPaths,
+        ));
       }
     }
     return result;
@@ -321,6 +337,7 @@ class _EmptyTreeMessage extends StatelessWidget {
 /// - Files: Click selects the file for viewing
 class _FileTreeItem extends StatefulWidget {
   const _FileTreeItem({
+    super.key,
     required this.node,
     required this.depth,
   });
@@ -362,11 +379,21 @@ class _FileTreeItemState extends State<_FileTreeItem> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final fileManagerState = context.watch<FileManagerState>();
+
+    // Select only what this item needs - file selection and this node's expanded state
+    final selectedFilePath = context.select<FileManagerState, String?>(
+      (state) => state.selectedFilePath,
+    );
+    // Only directories need to watch expanded state
+    final isExpanded = widget.node.isDirectory
+        ? context.select<FileManagerState, bool>(
+            (state) => state.isExpanded(widget.node.path),
+          )
+        : false;
 
     final leftPadding = widget.depth * _indentPerLevel + 8.0;
-    final isSelected = widget.node.isFile &&
-        fileManagerState.selectedFilePath == widget.node.path;
+    final isSelected =
+        widget.node.isFile && selectedFilePath == widget.node.path;
 
     // Determine background color based on state
     Color backgroundColor;
@@ -382,40 +409,35 @@ class _FileTreeItemState extends State<_FileTreeItem> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: Tooltip(
-        message: _buildTooltipMessage(),
-        waitDuration: const Duration(milliseconds: 500),
-        child: InkWell(
-          onTap: _handleTap,
-          onDoubleTap: widget.node.isDirectory ? _toggleExpanded : _selectFile,
-          child: Container(
-            height: _itemHeight,
-            color: backgroundColor,
-            child: Padding(
-              padding: EdgeInsets.only(left: leftPadding, right: 8),
-              child: Row(
-                children: [
-                  // Expand/collapse chevron (only for directories)
-                  _buildExpandIcon(colorScheme),
-                  const SizedBox(width: 4),
-                  // File/folder icon
-                  _buildNodeIcon(colorScheme),
-                  const SizedBox(width: 6),
-                  // File/folder name
-                  Expanded(
-                    child: Text(
-                      widget.node.name,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: isSelected
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurface,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+      child: GestureDetector(
+        onTap: _handleTap,
+        child: Container(
+          height: _itemHeight,
+          color: backgroundColor,
+          child: Padding(
+            padding: EdgeInsets.only(left: leftPadding, right: 8),
+            child: Row(
+              children: [
+                // Expand/collapse chevron (only for directories)
+                _buildExpandIcon(colorScheme, isExpanded),
+                const SizedBox(width: 4),
+                // File/folder icon
+                _buildNodeIcon(colorScheme, isExpanded),
+                const SizedBox(width: 6),
+                // File/folder name
+                Expanded(
+                  child: Text(
+                    widget.node.name,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: isSelected
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurface,
                     ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -427,7 +449,7 @@ class _FileTreeItemState extends State<_FileTreeItem> {
   ///
   /// Shows chevron_right when collapsed, expand_more when expanded.
   /// For files, returns empty space to maintain alignment.
-  Widget _buildExpandIcon(ColorScheme colorScheme) {
+  Widget _buildExpandIcon(ColorScheme colorScheme, bool isExpanded) {
     if (!widget.node.isDirectory) {
       // Empty space to maintain alignment for files
       return const SizedBox(width: _iconSize);
@@ -437,7 +459,7 @@ class _FileTreeItemState extends State<_FileTreeItem> {
     return GestureDetector(
       onTap: _toggleExpanded,
       child: Icon(
-        widget.node.isExpanded ? Icons.expand_more : Icons.chevron_right,
+        isExpanded ? Icons.expand_more : Icons.chevron_right,
         size: _iconSize,
         color: colorScheme.onSurfaceVariant,
       ),
@@ -445,10 +467,10 @@ class _FileTreeItemState extends State<_FileTreeItem> {
   }
 
   /// Builds the file or folder icon based on node type.
-  Widget _buildNodeIcon(ColorScheme colorScheme) {
+  Widget _buildNodeIcon(ColorScheme colorScheme, bool isExpanded) {
     if (widget.node.isDirectory) {
       return Icon(
-        widget.node.isExpanded ? Icons.folder_open : Icons.folder,
+        isExpanded ? Icons.folder_open : Icons.folder,
         size: _iconSize,
         color: colorScheme.primary,
       );
@@ -489,37 +511,5 @@ class _FileTreeItemState extends State<_FileTreeItem> {
 
     // Default file icon
     return Icons.insert_drive_file;
-  }
-
-  /// Builds the tooltip message with path and metadata.
-  String _buildTooltipMessage() {
-    final buffer = StringBuffer(widget.node.path);
-
-    if (widget.node.isFile && widget.node.size != null) {
-      buffer.write('\nSize: ${_formatFileSize(widget.node.size!)}');
-    }
-
-    if (widget.node.modified != null) {
-      final formatter = DateFormat('yyyy-MM-dd HH:mm');
-      buffer.write('\nModified: ${formatter.format(widget.node.modified!)}');
-    }
-
-    if (widget.node.isDirectory && widget.node.children.isNotEmpty) {
-      buffer.write('\n${widget.node.children.length} items');
-    }
-
-    return buffer.toString();
-  }
-
-  /// Formats file size in human-readable format.
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }

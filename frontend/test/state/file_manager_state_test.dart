@@ -554,20 +554,15 @@ void main() {
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
 
-        // Find the src directory
-        final srcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        check(srcDir.isExpanded).isFalse();
+        // Verify src directory exists and is not expanded
+        check(state.rootNode!.children.any((c) => c.name == 'src')).isTrue();
+        check(state.isExpanded('/repo/src')).isFalse();
 
         // Act
         state.toggleExpanded('/repo/src');
 
-        // Assert
-        final updatedSrcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        check(updatedSrcDir.isExpanded).isTrue();
+        // Assert - expanded state is tracked separately from tree nodes
+        check(state.isExpanded('/repo/src')).isTrue();
       });
 
       test('toggles back to collapsed', () async {
@@ -581,17 +576,13 @@ void main() {
 
         // Expand first
         state.toggleExpanded('/repo/src');
-        check(state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        ).isExpanded).isTrue();
+        check(state.isExpanded('/repo/src')).isTrue();
 
         // Act - toggle again to collapse
         state.toggleExpanded('/repo/src');
 
         // Assert
-        check(state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        ).isExpanded).isFalse();
+        check(state.isExpanded('/repo/src')).isFalse();
       });
 
       test('notifies listeners', () async {
@@ -665,14 +656,8 @@ void main() {
         // Act - toggle nested directory
         state.toggleExpanded('/repo/src/widgets');
 
-        // Assert
-        final srcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        final widgetsDir = srcDir.children.firstWhere(
-          (c) => c.name == 'widgets',
-        );
-        check(widgetsDir.isExpanded).isTrue();
+        // Assert - expanded state is tracked by path
+        check(state.isExpanded('/repo/src/widgets')).isTrue();
       });
     });
 

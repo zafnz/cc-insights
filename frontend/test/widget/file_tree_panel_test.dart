@@ -443,84 +443,7 @@ void main() {
         await gesture.removePointer();
       });
 
-      testWidgets('tooltip shows correct info for file', (tester) async {
-        // Set up file with content (size will be calculated from content)
-        fakeFileSystem.addDirectory('/Users/test/my-project');
-        fakeFileSystem.addTextFile(
-          '/Users/test/my-project/main.dart',
-          'void main() {}', // 14 bytes
-        );
-
-        final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
-        );
-
-        await tester.pumpWidget(createTestApp(state));
-        await safePumpAndSettle(tester);
-
-        state.selectWorktree(project.primaryWorktree);
-        await safePumpAndSettle(tester);
-
-        // Find the tooltip that wraps the file tree item
-        final fileFinder = find.text('main.dart');
-        final tooltipFinder = find.ancestor(
-          of: fileFinder,
-          matching: find.byType(Tooltip),
-        );
-        expect(tooltipFinder, findsOneWidget);
-
-        // Verify tooltip message contains path and metadata
-        final tooltip = tester.widget<Tooltip>(tooltipFinder);
-        final message = tooltip.message!;
-
-        expect(message, contains('/Users/test/my-project/main.dart'));
-        expect(message, contains('Size:'));
-        expect(message, contains('14 B')); // content length
-        expect(message, contains('Modified:'));
-      });
-
-      testWidgets('tooltip shows correct info for directory', (tester) async {
-        // Set up directory with children
-        fakeFileSystem.addDirectory('/Users/test/my-project');
-        fakeFileSystem.addDirectory('/Users/test/my-project/src');
-        fakeFileSystem.addTextFile(
-          '/Users/test/my-project/src/a.dart',
-          'a',
-        );
-        fakeFileSystem.addTextFile(
-          '/Users/test/my-project/src/b.dart',
-          'b',
-        );
-        fakeFileSystem.addTextFile(
-          '/Users/test/my-project/src/c.dart',
-          'c',
-        );
-
-        final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
-        );
-
-        await tester.pumpWidget(createTestApp(state));
-        await safePumpAndSettle(tester);
-
-        state.selectWorktree(project.primaryWorktree);
-        await safePumpAndSettle(tester);
-
-        // Find the tooltip that wraps the directory tree item
-        final dirFinder = find.text('src');
-        final tooltipFinder = find.ancestor(
-          of: dirFinder,
-          matching: find.byType(Tooltip),
-        );
-        expect(tooltipFinder, findsOneWidget);
-
-        // Verify tooltip message contains path and item count
-        final tooltip = tester.widget<Tooltip>(tooltipFinder);
-        final message = tooltip.message!;
-
-        expect(message, contains('/Users/test/my-project/src'));
-        expect(message, contains('3 items'));
-      });
+      // Tooltip tests removed - tooltips were removed for performance
     });
 
     group('PanelWrapper Integration', () {
@@ -822,13 +745,8 @@ void main() {
         state.selectWorktree(project.primaryWorktree);
         await safePumpAndSettle(tester);
 
-        // Initially the src node should be collapsed
-        final initialNode = _findNodeByPath(
-          state.rootNode!,
-          '/Users/test/my-project/src',
-        );
-        expect(initialNode, isNotNull);
-        expect(initialNode!.isExpanded, isFalse);
+        // Initially the src node should be collapsed (expanded state tracked separately)
+        expect(state.isExpanded('/Users/test/my-project/src'), isFalse);
 
         // Click to expand
         // Must pump past kDoubleTapTimeout (300ms) for single tap to register
@@ -837,12 +755,7 @@ void main() {
         await safePumpAndSettle(tester);
 
         // Now the src node should be expanded in state
-        final expandedNode = _findNodeByPath(
-          state.rootNode!,
-          '/Users/test/my-project/src',
-        );
-        expect(expandedNode, isNotNull);
-        expect(expandedNode!.isExpanded, isTrue);
+        expect(state.isExpanded('/Users/test/my-project/src'), isTrue);
       });
 
       testWidgets(
@@ -870,12 +783,8 @@ void main() {
           state.toggleExpanded('/Users/test/my-project/src');
           await tester.pump();
 
-          // Verify expanded in state
-          final expandedNode = _findNodeByPath(
-            state.rootNode!,
-            '/Users/test/my-project/src',
-          );
-          expect(expandedNode!.isExpanded, isTrue);
+          // Verify expanded in state (tracked separately from tree nodes)
+          expect(state.isExpanded('/Users/test/my-project/src'), isTrue);
 
           // Click to collapse
           // Must pump past kDoubleTapTimeout (300ms) for single tap to register
@@ -884,17 +793,12 @@ void main() {
           await safePumpAndSettle(tester);
 
           // Now the src node should be collapsed in state
-          final collapsedNode = _findNodeByPath(
-            state.rootNode!,
-            '/Users/test/my-project/src',
-          );
-          expect(collapsedNode, isNotNull);
-          expect(collapsedNode!.isExpanded, isFalse);
+          expect(state.isExpanded('/Users/test/my-project/src'), isFalse);
         },
       );
 
       testWidgets(
-        'double-click on directory toggles expand',
+        'single-click on directory toggles expand immediately',
         (tester) async {
         // Set up nested directory structure
         fakeFileSystem.addDirectory('/Users/test/my-project');
@@ -918,13 +822,11 @@ void main() {
         expect(find.text('main.dart'), findsNothing);
         expect(find.byIcon(Icons.chevron_right), findsOneWidget);
 
-        // Double-tap to expand
+        // Single tap to expand (no delay for double-tap detection)
         await tester.tap(find.text('src'));
-        await tester.pump(const Duration(milliseconds: 50));
-        await tester.tap(find.text('src'));
-        await safePumpAndSettle(tester);
+        await tester.pump();
 
-        // Children should now be visible (double-click expanded)
+        // Children should now be visible immediately
         expect(find.text('main.dart'), findsOneWidget);
         expect(find.byIcon(Icons.expand_more), findsOneWidget);
       });

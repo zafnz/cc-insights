@@ -263,28 +263,21 @@ void main() {
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
 
-        final srcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        check(srcDir.isExpanded).isFalse();
+        // Verify src directory exists and is not expanded
+        check(state.rootNode!.children.any((c) => c.name == 'src')).isTrue();
+        check(state.isExpanded('${tempDir.path}/src')).isFalse();
 
         // Act - expand
         state.toggleExpanded('${tempDir.path}/src');
 
-        // Assert - expanded
-        final expandedSrcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        check(expandedSrcDir.isExpanded).isTrue();
+        // Assert - expanded (tracked separately from tree nodes)
+        check(state.isExpanded('${tempDir.path}/src')).isTrue();
 
         // Act - collapse
         state.toggleExpanded('${tempDir.path}/src');
 
         // Assert - collapsed again
-        final collapsedSrcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        check(collapsedSrcDir.isExpanded).isFalse();
+        check(state.isExpanded('${tempDir.path}/src')).isFalse();
       });
 
       test('complete workflow: select worktree, expand, select file', () async {
@@ -307,18 +300,11 @@ void main() {
 
         // Act - expand src directory
         state.toggleExpanded('${tempDir.path}/src');
-        var srcDir = state.rootNode!.children.firstWhere(
-          (c) => c.name == 'src',
-        );
-        check(srcDir.isExpanded).isTrue();
+        check(state.isExpanded('${tempDir.path}/src')).isTrue();
 
         // Act - expand widgets directory
         state.toggleExpanded('${tempDir.path}/src/widgets');
-        srcDir = state.rootNode!.children.firstWhere((c) => c.name == 'src');
-        final widgetsDir = srcDir.children.firstWhere(
-          (c) => c.name == 'widgets',
-        );
-        check(widgetsDir.isExpanded).isTrue();
+        check(state.isExpanded('${tempDir.path}/src/widgets')).isTrue();
 
         // Act - select button.dart
         state.selectFile('${tempDir.path}/src/widgets/button.dart');
