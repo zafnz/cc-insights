@@ -2,6 +2,10 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/git_service.dart';
+import 'package:cc_insights_v2/services/project_config_service.dart';
+import 'package:cc_insights_v2/services/script_execution_service.dart';
+import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
@@ -12,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_git_service.dart';
 import '../test_helpers.dart';
 
 void main() {
@@ -19,6 +24,9 @@ void main() {
     late ProjectState project;
     late SelectionState selection;
     late MockBackendService mockBackend;
+    late ScriptExecutionService scriptService;
+    late WorktreeWatcherService worktreeWatcher;
+    late GitService gitService;
 
     Widget createTestApp() {
       return MultiProvider(
@@ -28,6 +36,16 @@ void main() {
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
             create: (_) => selection,
             update: (_, __, previous) => previous!,
+          ),
+          Provider<GitService>.value(value: gitService),
+          ChangeNotifierProvider<WorktreeWatcherService>.value(
+            value: worktreeWatcher,
+          ),
+          Provider<ProjectConfigService>(
+            create: (_) => ProjectConfigService(),
+          ),
+          ChangeNotifierProvider<ScriptExecutionService>.value(
+            value: scriptService,
           ),
         ],
         child: MaterialApp(
@@ -40,15 +58,31 @@ void main() {
       project = MockDataFactory.createMockProject();
       selection = SelectionState(project);
       mockBackend = MockBackendService();
+      scriptService = ScriptExecutionService();
+      gitService = FakeGitService();
+      worktreeWatcher = WorktreeWatcherService(
+        gitService: gitService,
+        project: project,
+      );
       await mockBackend.start();
     });
 
+    Future<void> setLargeWindowSize(WidgetTester tester) async {
+      // Set a larger window size to accommodate all panels
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+    }
+
     tearDown(() {
+      worktreeWatcher.dispose();
       mockBackend.dispose();
+      scriptService.dispose();
     });
 
     group('Initial State', () {
       testWidgets('renders all panels in initial layout', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -60,6 +94,7 @@ void main() {
       });
 
       testWidgets('renders navigation rail', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -74,6 +109,7 @@ void main() {
       });
 
       testWidgets('renders status bar with stats', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -88,6 +124,7 @@ void main() {
 
     group('Worktree Panel', () {
       testWidgets('displays worktrees from project state', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -99,6 +136,7 @@ void main() {
       });
 
       testWidgets('selecting worktree updates selection state', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -113,6 +151,7 @@ void main() {
 
     group('Chats Panel', () {
       testWidgets('displays chats when worktree is selected', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -128,6 +167,7 @@ void main() {
       });
 
       testWidgets('shows placeholder when no worktree selected', (tester) async {
+        await setLargeWindowSize(tester);
         // Create project without initial selection
         project.selectWorktree(null);
         selection = SelectionState(project);
@@ -141,6 +181,7 @@ void main() {
 
     group('Agents Panel', () {
       testWidgets('shows Chat as first entry when chat selected', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -158,6 +199,7 @@ void main() {
       });
 
       testWidgets('shows placeholder when no chat selected', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -171,6 +213,7 @@ void main() {
 
     group('Panel Drag Handles', () {
       testWidgets('drag handles are visible in panel headers', (tester) async {
+        await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 

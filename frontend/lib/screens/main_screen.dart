@@ -298,7 +298,7 @@ class _MainScreenState extends State<MainScreen> {
       id: 'root',
       axis: SplitAxis.horizontal,
       children: [
-        // Left sidebar: Worktrees + Information + Chats + Agents stacked
+        // Left sidebar: Worktrees + Information + Chats + Agents + Actions stacked
         SplitNode.branch(
           id: 'sidebar',
           axis: SplitAxis.vertical,
@@ -328,13 +328,33 @@ class _MainScreenState extends State<MainScreen> {
               flex: 1.0,
               widgetBuilder: (context) => const AgentsPanel(),
             ),
+            // Actions panel (bottom)
+            SplitNode.leaf(
+              id: 'actions',
+              flex: 0.5,
+              widgetBuilder: (context) => const ActionsPanel(),
+            ),
           ],
         ),
-        // Right panel: Main content area (flex 3 = ~75% of horizontal space)
-        SplitNode.leaf(
-          id: 'content',
+        // Right panels: Content area and terminal output
+        SplitNode.branch(
+          id: 'content_area',
+          axis: SplitAxis.vertical,
           flex: 3.0,
-          widgetBuilder: (context) => const ContentPanel(),
+          children: [
+            // Main content area
+            SplitNode.leaf(
+              id: 'content',
+              flex: 3.0,
+              widgetBuilder: (context) => const ContentPanel(),
+            ),
+            // Terminal output panel (for script output)
+            SplitNode.leaf(
+              id: 'terminal',
+              flex: 1.0,
+              widgetBuilder: (context) => const TerminalOutputPanel(),
+            ),
+          ],
         ),
       ],
     );
