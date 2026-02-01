@@ -2,10 +2,12 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/project_config_service.dart';
 import 'package:cc_insights_v2/services/script_execution_service.dart';
 import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
+import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
@@ -27,6 +29,10 @@ void main() {
     late ScriptExecutionService scriptService;
     late WorktreeWatcherService worktreeWatcher;
     late GitService gitService;
+    late FakeFileSystemService fakeFileSystem;
+    late FileManagerState fileManagerState;
+
+    final resources = TestResources();
 
     Widget createTestApp() {
       return MultiProvider(
@@ -38,8 +44,12 @@ void main() {
             update: (_, __, previous) => previous!,
           ),
           Provider<GitService>.value(value: gitService),
+          Provider<FileSystemService>.value(value: fakeFileSystem),
           ChangeNotifierProvider<WorktreeWatcherService>.value(
             value: worktreeWatcher,
+          ),
+          ChangeNotifierProvider<FileManagerState>.value(
+            value: fileManagerState,
           ),
           Provider<ProjectConfigService>(
             create: (_) => ProjectConfigService(),
@@ -64,6 +74,10 @@ void main() {
         gitService: gitService,
         project: project,
       );
+      fakeFileSystem = FakeFileSystemService();
+      fileManagerState = resources.track(
+        FileManagerState(project, fakeFileSystem),
+      );
       await mockBackend.start();
     });
 
@@ -74,10 +88,11 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
     }
 
-    tearDown(() {
+    tearDown(() async {
       worktreeWatcher.dispose();
       mockBackend.dispose();
       scriptService.dispose();
+      await resources.disposeAll();
     });
 
     group('Initial State', () {
@@ -118,7 +133,7 @@ void main() {
         // Find worktree count - use findsWidgets since text may appear elsewhere
         expect(find.textContaining('worktrees'), findsWidgets);
         expect(find.textContaining('chats'), findsWidgets);
-        expect(find.textContaining('Total \$'), findsOneWidget);
+        expect(find.textContaining('Total $'), findsOneWidget);
       });
     });
 

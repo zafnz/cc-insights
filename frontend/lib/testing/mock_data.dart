@@ -10,6 +10,19 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import 'message_log_player.dart';
 
+/// Configurable base path for mock data.
+///
+/// Set this before creating mock projects to use a custom path instead of
+/// the default `/tmp/cc-insights`. Useful for integration tests that need
+/// to use a real directory or avoid conflicts with parallel tests.
+///
+/// Example:
+/// ```dart
+/// mockDataProjectPath = '/var/folders/xyz/cc-insights-test';
+/// final project = MockDataFactory.createMockProject();
+/// ```
+String mockDataProjectPath = '/tmp/cc-insights';
+
 /// Factory class for creating mock data for testing purposes.
 ///
 /// Provides static methods to create sample [ProjectState], [WorktreeState],
@@ -54,9 +67,12 @@ class MockDataFactory {
     bool watchFilesystem = false,
     bool autoValidate = false,
   }) {
+    final basePath = mockDataProjectPath;
+    final wtBasePath = '${basePath}-wt';
+
     // Create the primary worktree with 2 chats.
     final primaryWorktree = createMockWorktree(
-      worktreeRoot: '/tmp/cc-insights',
+      worktreeRoot: basePath,
       isPrimary: true,
       branch: 'main',
       uncommittedFiles: 3,
@@ -64,14 +80,14 @@ class MockDataFactory {
       commitsAhead: 2,
       commitsBehind: 0,
       chats: [
-        _createInitialSetupChat('/tmp/cc-insights'),
-        _createAddDarkModeChat('/tmp/cc-insights'),
+        _createInitialSetupChat(basePath),
+        _createAddDarkModeChat(basePath),
       ],
     );
 
     // Create the feat-dark-mode linked worktree with 1 chat.
     final darkModeWorktree = createMockWorktree(
-      worktreeRoot: '/tmp/cc-insights-wt/dark-mode',
+      worktreeRoot: '$wtBasePath/dark-mode',
       isPrimary: false,
       branch: 'feat-dark-mode',
       uncommittedFiles: 5,
@@ -80,14 +96,14 @@ class MockDataFactory {
       commitsBehind: 1,
       chats: [
         _createThemeImplementationChat(
-          '/tmp/cc-insights-wt/dark-mode',
+          '$wtBasePath/dark-mode',
         ),
       ],
     );
 
     // Create the fix-auth-bug linked worktree with no chats.
     final authBugWorktree = createMockWorktree(
-      worktreeRoot: '/tmp/cc-insights-wt/fix-auth',
+      worktreeRoot: '$wtBasePath/fix-auth',
       isPrimary: false,
       branch: 'fix-auth-bug',
       uncommittedFiles: 2,
@@ -99,9 +115,9 @@ class MockDataFactory {
     );
 
     return ProjectState(
-      const ProjectData(
+      ProjectData(
         name: 'CC-Insights',
-        repoRoot: '/tmp/cc-insights',
+        repoRoot: basePath,
       ),
       primaryWorktree,
       linkedWorktrees: [darkModeWorktree, authBugWorktree],
@@ -189,10 +205,9 @@ class MockDataFactory {
       return File(path);
     }
 
-    // Try absolute path first (most reliable for this project)
-    const absolutePath =
-        '/tmp/cc-insights/frontend/$fileName';
-    var file = tryPath(absolutePath);
+    // Try configured mock path first
+    final configuredPath = '$mockDataProjectPath/frontend/$fileName';
+    var file = tryPath(configuredPath);
     if (file.existsSync()) return file;
 
     // Try current directory (works when running from frontend)
@@ -292,8 +307,8 @@ class MockDataFactory {
           timestamp: now.subtract(const Duration(minutes: 27)),
           toolName: 'Read',
           toolUseId: 'tool-read-001',
-          toolInput: const {
-            'file_path': '/tmp/cc-insights/docs/architecture.md',
+          toolInput: {
+            'file_path': '$worktreeRoot/docs/architecture.md',
           },
           result: '# CC-Insights Architecture\n\n## Overview\n...',
           isError: false,
@@ -389,10 +404,8 @@ class MockDataFactory {
         timestamp: now.subtract(const Duration(minutes: 19)),
         toolName: 'Edit',
         toolUseId: 'tool-edit-001',
-        toolInput: const {
-          'file_path':
-              '/tmp/cc-insights-wt/dark-mode/lib/'
-              'providers/theme_provider.dart',
+        toolInput: {
+          'file_path': '$worktreeRoot/lib/providers/theme_provider.dart',
           'old_string': '',
           'new_string':
               'class ThemeProvider extends ChangeNotifier {\n'
