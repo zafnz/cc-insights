@@ -414,10 +414,11 @@ class _ConversationPanelState extends State<ConversationPanel>
           shouldShowPermissionWidget
               ? _buildPermissionWidget(chat!)
               : MessageInput(
+                  key: ValueKey('input-${chat!.data.id}'),
                   onSubmit: (text, images) =>
                       _handleSubmit(context, text, images),
                   isWorking: isWorking,
-                  onInterrupt: isWorking ? () => _handleInterrupt(chat!) : null,
+                  onInterrupt: isWorking ? () => _handleInterrupt(chat) : null,
                 ),
       ],
     );
@@ -1075,6 +1076,7 @@ class _WelcomeCardState extends State<WelcomeCard> {
         ),
         // Message input - creates a new chat on submit
         MessageInput(
+          key: const ValueKey('input-welcome'),
           onSubmit: (text, images) =>
               _createChatAndSendMessage(context, text, images),
         ),
