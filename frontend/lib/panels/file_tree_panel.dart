@@ -262,6 +262,7 @@ class _FileTreeView extends StatelessWidget {
     }
 
     return ListView.builder(
+      physics: const ClampingScrollPhysics(),
       itemCount: flattenedNodes.length,
       itemBuilder: (context, index) {
         final (node, depth) = flattenedNodes[index];
@@ -352,8 +353,8 @@ class _FileTreeItem extends StatefulWidget {
 class _FileTreeItemState extends State<_FileTreeItem> {
   bool _isHovered = false;
 
-  static const double _indentPerLevel = 16.0;
-  static const double _itemHeight = 28.0;
+  static const double _indentPerLevel = 12.0;
+  static const double _itemHeight = 24.0;
   static const double _iconSize = 18.0;
 
   void _handleTap() {
@@ -428,7 +429,8 @@ class _FileTreeItemState extends State<_FileTreeItem> {
                 Expanded(
                   child: Text(
                     widget.node.name,
-                    style: textTheme.bodySmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: 12,
                       color: isSelected
                           ? colorScheme.onPrimaryContainer
                           : colorScheme.onSurface,

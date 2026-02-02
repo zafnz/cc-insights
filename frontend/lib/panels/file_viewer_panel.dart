@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/file_content.dart';
+import '../services/file_type_detector.dart';
 import '../state/file_manager_state.dart';
 import '../widgets/file_viewers/binary_file_message.dart';
 import '../widgets/file_viewers/image_viewer.dart';
@@ -202,6 +203,17 @@ class _FileViewerContent extends StatelessWidget {
         if (textContent == null) {
           return const _ErrorMessage(
             message: 'No content available',
+          );
+        }
+        // Check if there's a known syntax highlighting language for this file
+        final ext = FileTypeDetector.getFileExtension(content.path);
+        final language = ext != null
+            ? FileTypeDetector.getLanguageFromExtension(ext)
+            : null;
+        if (language != null) {
+          return SourceCodeViewer(
+            content: textContent,
+            language: language,
           );
         }
         return PlaintextFileViewer(content: textContent);
