@@ -48,6 +48,10 @@ dependencies:
   # Advanced list widgets
   super_sliver_list: ^0.4.1
 
+  # Terminal emulator
+  xterm: ^4.0.0
+  flutter_pty: ^0.4.0
+
   # Image processing
   image: ^4.0.0
 
