@@ -82,6 +82,7 @@ class MockDataFactory {
       chats: [
         _createInitialSetupChat(basePath),
         _createAddDarkModeChat(basePath),
+        _createLongConversationChat(basePath),
       ],
     );
 
@@ -383,6 +384,61 @@ class MockDataFactory {
         createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
         primaryConversation: ConversationData.primary(
           id: primaryConversationId,
+        ),
+        subagentConversations: const {},
+      ),
+    );
+  }
+
+  /// Creates a "Long Conversation" chat with many entries for scroll testing.
+  ///
+  /// This chat contains enough content to require scrolling, useful for testing
+  /// scroll position preservation and other scroll-related behaviors.
+  static ChatState _createLongConversationChat(String worktreeRoot) {
+    const chatId = 'chat-long-conversation';
+    const primaryConversationId = 'conv-primary-$chatId';
+    final now = DateTime.now();
+
+    // Generate many entries to ensure scrollable content
+    final entries = <OutputEntry>[];
+    for (var i = 0; i < 20; i++) {
+      final offset = Duration(minutes: 60 - i * 3);
+      entries.add(UserInputEntry(
+        timestamp: now.subtract(offset),
+        text: 'User message $i: Can you help me with task number $i?',
+      ));
+      entries.add(TextOutputEntry(
+        timestamp: now.subtract(offset - const Duration(seconds: 30)),
+        text: 'Assistant response $i: Here is my detailed response to your '
+            'question about task $i. This is a longer message to take up more '
+            'vertical space in the conversation view. I want to make sure '
+            'there is enough content here to require scrolling.',
+        contentType: 'text',
+      ));
+      // Add a tool use every few messages to add variety
+      if (i % 3 == 0) {
+        entries.add(ToolUseOutputEntry(
+          timestamp: now.subtract(offset - const Duration(seconds: 45)),
+          toolName: 'Read',
+          toolUseId: 'tool-read-long-$i',
+          toolInput: {'file_path': '$worktreeRoot/file_$i.dart'},
+          result: '// File content for file_$i.dart\nclass Example$i {}',
+          isError: false,
+          isExpanded: false,
+        ));
+      }
+    }
+
+    return ChatState(
+      ChatData(
+        id: chatId,
+        name: 'Long Conversation',
+        worktreeRoot: worktreeRoot,
+        createdAt: now.subtract(const Duration(hours: 1)),
+        primaryConversation: ConversationData(
+          id: primaryConversationId,
+          entries: entries,
+          totalUsage: const UsageInfo.zero(),
         ),
         subagentConversations: const {},
       ),
