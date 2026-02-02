@@ -37,4 +37,7 @@ ehthumbs.db
 Thumbs.db
 tools/_real_claude
 
-_real_claude 
+_real_claude
+
+# CC-Insights config (user-specific)
+.ccinsights/

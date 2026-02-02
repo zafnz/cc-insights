@@ -1,5 +1,0 @@
-{
-  "user-actions": {
-    "Test": "cd frontend && flutter test"
-  }
-}
