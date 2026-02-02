@@ -147,10 +147,13 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     });
     _subscriptions[tab.id] = sub;
 
-    // Handle PTY exit
+    // Handle PTY exit - auto-close the tab when shell exits
     pty.exitCode.then((code) {
       if (mounted) {
-        // Terminal died, could show a message or auto-close
+        final tabIndex = _tabs.indexWhere((t) => t.id == tab.id);
+        if (tabIndex != -1) {
+          _closeTab(tabIndex);
+        }
       }
     });
   }
@@ -301,8 +304,8 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
           ? const _NoTerminalsPlaceholder()
           : Column(
               children: [
-                // Tab bar
-                if (_tabs.length > 1) _buildTabBar(),
+                // Tab bar (always shown when there are tabs)
+                _buildTabBar(),
                 // Terminal view
                 Expanded(
                   child: _buildTerminalView(_tabs[_activeTabIndex]),
@@ -319,7 +322,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     final scriptService = context.watch<ScriptExecutionService>();
 
     return Container(
-      height: 36,
+      height: 28,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: Border(
@@ -356,7 +359,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
               });
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isActive
                     ? Theme.of(context).colorScheme.surface
@@ -375,7 +378,8 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                 children: [
                   Text(
                     tab.name,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontSize: 11,
                           color: isActive
                               ? Theme.of(context).colorScheme.onSurface
                               : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -383,7 +387,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                               isActive ? FontWeight.w600 : FontWeight.normal,
                         ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   if (isScriptTab && isRunning)
                     InkWell(
                       onTap: () {
@@ -393,7 +397,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                       },
                       child: Icon(
                         Icons.stop,
-                        size: 14,
+                        size: 12,
                         color: Theme.of(context).colorScheme.error,
                       ),
                     )
@@ -402,7 +406,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                       onTap: () => _closeTab(index),
                       child: Icon(
                         Icons.close,
-                        size: 14,
+                        size: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
