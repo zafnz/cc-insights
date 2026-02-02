@@ -1,5 +1,6 @@
 {
   "user-actions": {
-    "Test": "./test_colors.sh"
+    "Test": "cd frontend && flutter test",
+    "Run": "./run.sh"
   }
 }
