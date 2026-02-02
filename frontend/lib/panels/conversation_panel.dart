@@ -688,7 +688,7 @@ class _ConversationHeader extends StatelessWidget {
                         onChanged: (value) {
                           final model = ClaudeModel.values.firstWhere(
                             (m) => m.label == value,
-                            orElse: () => ClaudeModel.sonnet,
+                            orElse: () => ClaudeModel.opus,
                           );
                           chat.setModel(model);
                         },
@@ -1024,7 +1024,7 @@ class WelcomeCard extends StatefulWidget {
 }
 
 class _WelcomeCardState extends State<WelcomeCard> {
-  ClaudeModel _selectedModel = ClaudeModel.sonnet;
+  ClaudeModel _selectedModel = ClaudeModel.opus;
   PermissionMode _selectedPermission = PermissionMode.defaultMode;
 
   @override
@@ -1291,7 +1291,7 @@ class _WelcomeHeader extends StatelessWidget {
                     onChanged: (value) {
                       final selected = ClaudeModel.values.firstWhere(
                         (m) => m.label == value,
-                        orElse: () => ClaudeModel.sonnet,
+                        orElse: () => ClaudeModel.opus,
                       );
                       onModelChanged(selected);
                     },

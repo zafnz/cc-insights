@@ -236,7 +236,7 @@ class ProjectRestoreService {
     // Find the matching model enum
     final model = ClaudeModel.values.firstWhere(
       (m) => m.apiName == meta.model,
-      orElse: () => ClaudeModel.sonnet,
+      orElse: () => ClaudeModel.opus,
     );
     chat.setModel(model);
 
