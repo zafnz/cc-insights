@@ -290,6 +290,9 @@ class ClaudeBackend implements AgentBackend {
   }
 
   /// Send a message with content blocks (text + images) to a session.
+  ///
+  /// Ensures there is always at least one non-empty text block, as the API
+  /// rejects messages with empty text content blocks.
   Future<void> _sendToSessionWithContent(
     String sessionId,
     List<ContentBlock> content,
@@ -298,11 +301,21 @@ class ClaudeBackend implements AgentBackend {
       throw const BackendProcessError('Backend has been disposed');
     }
 
+    // Ensure there's at least one non-empty text block.
+    // The API rejects messages where text content blocks are empty.
+    final hasNonEmptyText = content.any(
+      (block) => block is TextBlock && block.text.trim().isNotEmpty,
+    );
+
+    final adjustedContent = hasNonEmptyText
+        ? content
+        : [const TextBlock(text: ' '), ...content];
+
     final id = _uuid.v4();
     _protocol.send(SessionSendMessage(
       id: id,
       sessionId: sessionId,
-      content: content,
+      content: adjustedContent,
     ));
   }
 

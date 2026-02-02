@@ -192,84 +192,102 @@ class _PermissionDialogState extends State<PermissionDialog> {
     // Dark purple background for the permission dialog body
     const dialogBackground = Color(0xFF2D1F3D);
 
-    return Container(
-      key: PermissionDialogKeys.dialog,
-      // No margin, no rounded corners, no border - integrated look
-      decoration: const BoxDecoration(
-        color: dialogBackground,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header
-          _buildHeader(context),
-          // Content area - tool-specific display
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: _buildToolContent(permission),
+    // Use LayoutBuilder to get the available height and limit the content area
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate max content height as roughly half the available space
+        // Account for header (~44px) and footer (~56px) = ~100px
+        // Use a minimum of 100px and maximum of half available height
+        final availableHeight = constraints.maxHeight;
+        final maxContentHeight = availableHeight.isFinite
+            ? (availableHeight * 0.5).clamp(100.0, 400.0)
+            : 300.0;
+
+        return Container(
+          key: PermissionDialogKeys.dialog,
+          // No margin, no rounded corners, no border - integrated look
+          decoration: const BoxDecoration(
+            color: dialogBackground,
           ),
-          // Footer with suggestions and buttons
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-              // No rounded corners - integrated look
-            ),
-            child: Row(
-              children: [
-                // Suggestions on the left (only non-setMode suggestions)
-                if (otherSuggestions.isNotEmpty)
-                  Expanded(
-                    child: _buildSuggestionsRow(otherSuggestions),
-                  )
-                else
-                  const Spacer(),
-                // Buttons on the right
-                const SizedBox(width: 14),
-                // Enable mode button (if setMode suggestion exists)
-                if (hasSetMode) ...[
-                  OutlinedButton(
-                    onPressed: () =>
-                        _handleAllowWithMode(setModeSuggestion.first),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.blue,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      visualDensity: VisualDensity.compact,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              _buildHeader(context),
+              // Content area - tool-specific display with max height constraint
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxContentHeight),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildToolContent(permission),
+                ),
+              ),
+              // Footer with suggestions and buttons
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color:
+                      colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  // No rounded corners - integrated look
+                ),
+                child: Row(
+                  children: [
+                    // Suggestions on the left (only non-setMode suggestions)
+                    if (otherSuggestions.isNotEmpty)
+                      Expanded(
+                        child: _buildSuggestionsRow(otherSuggestions),
+                      )
+                    else
+                      const Spacer(),
+                    // Buttons on the right
+                    const SizedBox(width: 14),
+                    // Enable mode button (if setMode suggestion exists)
+                    if (hasSetMode) ...[
+                      OutlinedButton(
+                        onPressed: () =>
+                            _handleAllowWithMode(setModeSuggestion.first),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text('Enable $modeName'),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    OutlinedButton(
+                      key: PermissionDialogKeys.denyButton,
+                      onPressed: _handleDeny,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Deny'),
                     ),
-                    child: Text('Enable $modeName'),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                OutlinedButton(
-                  key: PermissionDialogKeys.denyButton,
-                  onPressed: _handleDeny,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: const Text('Deny'),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      key: PermissionDialogKeys.allowButton,
+                      onPressed: _handleAllow,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Allow'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  key: PermissionDialogKeys.allowButton,
-                  onPressed: _handleAllow,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: const Text('Allow'),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

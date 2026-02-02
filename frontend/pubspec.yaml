@@ -40,7 +40,9 @@ dependencies:
   local_notifier: ^0.1.6
   audioplayers: ^6.0.0
   drag_split_layout:
-    path: ../packages/drag_split_layout
+    git:
+      url: https://github.com/zafnz/drag_split_layout.git
+      ref: main
   crypto: ^3.0.7
 
   # Advanced list widgets
