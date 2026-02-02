@@ -202,6 +202,58 @@ class FakeGitService implements GitService {
     return mainBranches[repoRoot] ?? 'main';
   }
 
+  /// Map of path -> changed files for [getChangedFiles].
+  final Map<String, List<GitFileChange>> changedFiles = {};
+
+  /// Tracks calls to [stageAll].
+  final List<String> stageAllCalls = [];
+
+  /// Tracks calls to [commit] with (path, message).
+  final List<(String, String)> commitCalls = [];
+
+  /// Tracks calls to [resetIndex].
+  final List<String> resetIndexCalls = [];
+
+  /// If set, [commit] will throw this exception.
+  GitException? commitError;
+
+  /// If set, [stageAll] will throw this exception.
+  GitException? stageAllError;
+
+  @override
+  Future<List<GitFileChange>> getChangedFiles(String path) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return changedFiles[path] ?? [];
+  }
+
+  @override
+  Future<void> stageAll(String path) async {
+    stageAllCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+    if (stageAllError != null) {
+      throw stageAllError!;
+    }
+  }
+
+  @override
+  Future<void> commit(String path, String message) async {
+    commitCalls.add((path, message));
+    await _maybeDelay();
+    _maybeThrow();
+    if (commitError != null) {
+      throw commitError!;
+    }
+  }
+
+  @override
+  Future<void> resetIndex(String path) async {
+    resetIndexCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+  }
+
   // =========================================================================
   // Convenience methods for test setup
   // =========================================================================

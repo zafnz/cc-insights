@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/worktree.dart';
+import '../services/ask_ai_service.dart';
+import '../services/git_service.dart';
 import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/commit_dialog.dart';
 import 'panel_wrapper.dart';
 
 /// Information panel - shows git branch/status info for the selected worktree.
@@ -70,7 +73,14 @@ class _InformationContentState extends State<_InformationContent> {
 
     return ListenableBuilder(
       listenable: worktree,
-      builder: (context, _) => _WorktreeInfo(data: worktree.data),
+      builder: (context, _) => _WorktreeInfo(
+        data: worktree.data,
+        worktreeRoot: worktree.data.worktreeRoot,
+        onStatusChanged: () {
+          // Trigger a refresh of the git status
+          _startWatching(worktree);
+        },
+      ),
     );
   }
 }
@@ -99,9 +109,32 @@ class _NoWorktreeSelected extends StatelessWidget {
 }
 
 class _WorktreeInfo extends StatelessWidget {
-  const _WorktreeInfo({required this.data});
+  const _WorktreeInfo({
+    required this.data,
+    required this.worktreeRoot,
+    required this.onStatusChanged,
+  });
 
   final WorktreeData data;
+  final String worktreeRoot;
+  final VoidCallback onStatusChanged;
+
+  Future<void> _showCommitDialog(BuildContext context) async {
+    // Get services from providers
+    final gitService = context.read<GitService>();
+    final askAiService = context.read<AskAiService>();
+
+    final committed = await showCommitDialog(
+      context: context,
+      worktreePath: worktreeRoot,
+      gitService: gitService,
+      askAiService: askAiService,
+    );
+
+    if (committed) {
+      onStatusChanged();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,9 +156,7 @@ class _WorktreeInfo extends StatelessWidget {
           // Stage and commit button (enabled when there are changes)
           _CompactButton(
             onPressed: data.uncommittedFiles > 0 || data.stagedFiles > 0
-                ? () {
-                    // TODO: Wire up stage and commit functionality
-                  }
+                ? () => _showCommitDialog(context)
                 : null,
             label: 'Stage and commit all',
             icon: Icons.check_circle_outline,

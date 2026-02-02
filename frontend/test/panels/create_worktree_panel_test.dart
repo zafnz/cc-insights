@@ -126,6 +126,27 @@ class TestGitService implements GitService {
     return 'main';
   }
 
+  @override
+  Future<List<GitFileChange>> getChangedFiles(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return [];
+  }
+
+  @override
+  Future<void> stageAll(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
+  Future<void> commit(String path, String message) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
+  Future<void> resetIndex(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;

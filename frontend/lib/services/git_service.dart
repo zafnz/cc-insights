@@ -61,6 +61,37 @@ class WorktreeInfo {
       'WorktreeInfo(path: $path, isPrimary: $isPrimary, branch: $branch)';
 }
 
+/// Status of a file in git.
+enum GitFileStatus {
+  added,
+  modified,
+  deleted,
+  renamed,
+  copied,
+  untracked,
+}
+
+/// Represents a changed file in git status.
+class GitFileChange {
+  /// Path to the file relative to the worktree root.
+  final String path;
+
+  /// Status of the file.
+  final GitFileStatus status;
+
+  /// Whether the file is staged for commit.
+  final bool isStaged;
+
+  const GitFileChange({
+    required this.path,
+    required this.status,
+    required this.isStaged,
+  });
+
+  @override
+  String toString() => 'GitFileChange($path, $status, staged: $isStaged)';
+}
+
 /// Exception thrown when a git operation fails.
 class GitException implements Exception {
   final String message;
@@ -168,6 +199,28 @@ abstract class GitService {
   /// Checks for "main", then "master", then returns the first branch found.
   /// Returns null if no branches exist.
   Future<String?> getMainBranch(String repoRoot);
+
+  /// Gets a list of all changed files (staged, unstaged, untracked).
+  ///
+  /// Returns a list of [GitFileChange] with file paths and statuses.
+  /// Throws [GitException] if [path] is not a git repository.
+  Future<List<GitFileChange>> getChangedFiles(String path);
+
+  /// Stages all changes in the worktree (git add -A).
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> stageAll(String path);
+
+  /// Creates a commit with the given message.
+  ///
+  /// Throws [GitException] if commit fails (e.g., nothing to commit).
+  Future<void> commit(String path, String message);
+
+  /// Resets the index (unstages all files).
+  ///
+  /// Used to restore state on error. Does not modify working tree files.
+  /// Throws [GitException] on failure.
+  Future<void> resetIndex(String path);
 }
 
 /// Real implementation of [GitService] that spawns git processes.
@@ -373,6 +426,32 @@ class RealGitService implements GitService {
     if (branches.contains('master')) return 'master';
     return branches.isNotEmpty ? branches.first : null;
   }
+
+  @override
+  Future<List<GitFileChange>> getChangedFiles(String path) async {
+    final output = await _runGit(
+      ['status', '--porcelain=v2'],
+      workingDirectory: path,
+    );
+    return GitChangedFilesParser.parse(output);
+  }
+
+  @override
+  Future<void> stageAll(String path) async {
+    await _runGit(['add', '-A'], workingDirectory: path);
+  }
+
+  @override
+  Future<void> commit(String path, String message) async {
+    // Use -m for the commit message
+    // For multiline messages, git handles newlines in the string properly
+    await _runGit(['commit', '-m', message], workingDirectory: path);
+  }
+
+  @override
+  Future<void> resetIndex(String path) async {
+    await _runGit(['reset', 'HEAD'], workingDirectory: path);
+  }
 }
 
 // =============================================================================
@@ -499,5 +578,132 @@ class GitWorktreeParser {
   /// Compare paths, normalizing trailing slashes.
   static bool _pathsEqual(String a, String b) {
     return a.replaceAll(RegExp(r'/$'), '') == b.replaceAll(RegExp(r'/$'), '');
+  }
+}
+
+/// Parses `git status --porcelain=v2` output into [GitFileChange] list.
+class GitChangedFilesParser {
+  /// Parses porcelain v2 status output into a list of changed files.
+  static List<GitFileChange> parse(String output) {
+    final files = <GitFileChange>[];
+
+    for (final line in output.split('\n')) {
+      if (line.isEmpty) continue;
+
+      // Skip header lines
+      if (line.startsWith('#')) continue;
+
+      // Untracked files: ? path
+      if (line.startsWith('? ')) {
+        final path = line.substring(2);
+        files.add(GitFileChange(
+          path: path,
+          status: GitFileStatus.untracked,
+          isStaged: false,
+        ));
+        continue;
+      }
+
+      // Ignored files: ! path - skip
+      if (line.startsWith('!')) continue;
+
+      // Changed entries: 1 XY sub mH mI mW hH hI path
+      // Rename entries: 2 XY sub mH mI mW hH hI X<score> path\torigPath
+      if (line.startsWith('1 ') || line.startsWith('2 ')) {
+        final isRename = line.startsWith('2 ');
+        final xy = line.substring(2, 4);
+        final x = xy[0]; // staged status
+        final y = xy[1]; // unstaged status
+
+        // Extract path - it's the last field
+        // For type 1: fields are space-separated, path is last
+        // For type 2 (rename): path\torigPath at end
+        String path;
+        if (isRename) {
+          // Format: 2 XY sub mH mI mW hH hI X<score> path\torigPath
+          final tabIndex = line.indexOf('\t');
+          if (tabIndex != -1) {
+            // The new path is between last space before tab and tab
+            final beforeTab = line.substring(0, tabIndex);
+            final lastSpace = beforeTab.lastIndexOf(' ');
+            path = beforeTab.substring(lastSpace + 1);
+          } else {
+            // Fallback: take everything after last space
+            path = line.substring(line.lastIndexOf(' ') + 1);
+          }
+        } else {
+          // Format: 1 XY sub mH mI mW hH hI path
+          path = line.substring(line.lastIndexOf(' ') + 1);
+        }
+
+        // Determine status based on XY codes
+        final status = _parseStatus(x, y, isRename);
+
+        // A file can appear in both staged and unstaged if it has both types
+        // of changes. We'll report the staged status if staged, else unstaged.
+        if (x != '.') {
+          files.add(GitFileChange(
+            path: path,
+            status: status,
+            isStaged: true,
+          ));
+        }
+        if (y != '.') {
+          files.add(GitFileChange(
+            path: path,
+            status: _parseUnstagedStatus(y),
+            isStaged: false,
+          ));
+        }
+        continue;
+      }
+
+      // Unmerged entries: u XY sub m1 m2 m3 mW h1 h2 h3 path
+      if (line.startsWith('u ')) {
+        final path = line.substring(line.lastIndexOf(' ') + 1);
+        files.add(GitFileChange(
+          path: path,
+          status: GitFileStatus.modified, // Conflict is a type of modification
+          isStaged: false,
+        ));
+        continue;
+      }
+    }
+
+    return files;
+  }
+
+  /// Parse staged status code to [GitFileStatus].
+  static GitFileStatus _parseStatus(String x, String y, bool isRename) {
+    if (isRename) return GitFileStatus.renamed;
+    switch (x) {
+      case 'A':
+        return GitFileStatus.added;
+      case 'M':
+        return GitFileStatus.modified;
+      case 'D':
+        return GitFileStatus.deleted;
+      case 'R':
+        return GitFileStatus.renamed;
+      case 'C':
+        return GitFileStatus.copied;
+      default:
+        // Check unstaged status as fallback
+        return _parseUnstagedStatus(y);
+    }
+  }
+
+  /// Parse unstaged status code to [GitFileStatus].
+  static GitFileStatus _parseUnstagedStatus(String y) {
+    switch (y) {
+      case 'M':
+        return GitFileStatus.modified;
+      case 'D':
+        return GitFileStatus.deleted;
+      case 'A':
+        return GitFileStatus.added;
+      default:
+        return GitFileStatus.modified;
+    }
   }
 }
