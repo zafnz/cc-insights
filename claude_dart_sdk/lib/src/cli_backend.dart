@@ -150,7 +150,11 @@ class ClaudeCliBackend implements AgentBackend {
     adapter._cliSession.process.exitCode.then((exitCode) {
       if (!_disposed) {
         _sessions.remove(adapter.sessionId);
-        if (exitCode != 0) {
+        // Only report as error if:
+        // - Exit code is non-zero AND
+        // - Session wasn't intentionally killed (disposed)
+        // Note: Exit code -15 is SIGTERM, which is expected when kill() is called
+        if (exitCode != 0 && !adapter._disposed) {
           _errorsController.add(BackendError(
             'Session ${adapter.sessionId} exited with code $exitCode',
             code: 'SESSION_EXIT',
