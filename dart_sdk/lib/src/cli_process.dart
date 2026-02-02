@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'sdk_logger.dart';
 import 'types/session_options.dart';
 
 /// Setting sources for the CLI.
@@ -114,6 +115,7 @@ class CliProcess {
     final args = <String>[
       '--output-format',
       'stream-json',
+      '--verbose',
       '--input-format',
       'stream-json',
       '--permission-prompt-tool',
@@ -182,6 +184,8 @@ class CliProcess {
       if (_stderrBuffer.length > _maxStderrBufferSize) {
         _stderrBuffer.removeAt(0);
       }
+      // Log stderr to SDK logger
+      SdkLogger.instance.logStderr(line);
       _stderrController.add(line);
     });
   }
@@ -205,9 +209,15 @@ class CliProcess {
 
       try {
         final json = jsonDecode(line) as Map<String, dynamic>;
+        // Log incoming message
+        SdkLogger.instance.logIncoming(json);
         _messagesController.add(json);
       } catch (e) {
-        // If JSON parsing fails, log it to stderr
+        // If JSON parsing fails, log it as an error
+        SdkLogger.instance.error(
+          'Failed to parse JSON from CLI',
+          data: {'error': e.toString(), 'line': line},
+        );
         _stderrController.add('[cli_process] Failed to parse JSON: $e');
         _stderrController.add('[cli_process] Line: $line');
       }
@@ -219,6 +229,9 @@ class CliProcess {
     if (_disposed) {
       throw StateError('CliProcess has been disposed');
     }
+
+    // Log outgoing message
+    SdkLogger.instance.logOutgoing(message);
 
     var json = jsonEncode(message);
     // Escape Unicode line terminators that could break JSON Lines parsing

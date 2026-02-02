@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'cli_process.dart';
+import 'sdk_logger.dart';
 import 'types/content_blocks.dart';
 import 'types/control_messages.dart';
 import 'types/permission_suggestion.dart';
@@ -66,45 +67,80 @@ class CliSession {
   void _handleMessage(Map<String, dynamic> json) {
     if (_disposed) return;
 
-    final messageType = parseCliMessageType(json);
+    final type = json['type'] as String?;
 
-    switch (messageType) {
-      case CliMessageType.callbackRequest:
-        // Permission request from CLI
-        final callbackRequest = CallbackRequest.fromJson(json);
-        if (callbackRequest.payload.callbackType == 'can_use_tool') {
-          final request = CliPermissionRequest._(
-            session: this,
-            requestId: callbackRequest.id,
-            toolName: callbackRequest.payload.toolName,
-            input: callbackRequest.payload.toolInput,
-            toolUseId: callbackRequest.payload.toolUseId,
-            suggestions: callbackRequest.payload.suggestions,
-            blockedPath: callbackRequest.payload.blockedPath,
+    switch (type) {
+      case 'control_request':
+        // Permission request from CLI (can_use_tool)
+        final request = json['request'] as Map<String, dynamic>?;
+        final subtype = request?['subtype'] as String?;
+        final requestId = json['request_id'] as String? ?? '';
+
+        if (subtype == 'can_use_tool') {
+          final toolName = request?['tool_name'] as String? ?? '';
+          final toolInput = request?['input'] as Map<String, dynamic>? ?? {};
+          final toolUseId = request?['tool_use_id'] as String? ?? '';
+          final blockedPath = request?['blocked_path'] as String?;
+
+          // Parse suggestions if present
+          List<PermissionSuggestion>? suggestions;
+          final suggestionsJson = request?['suggestions'] as List?;
+          if (suggestionsJson != null) {
+            suggestions = suggestionsJson
+                .whereType<Map<String, dynamic>>()
+                .map((s) => PermissionSuggestion.fromJson(s))
+                .toList();
+          }
+
+          SdkLogger.instance.debug(
+            'Permission request received',
+            sessionId: sessionId,
+            data: {'toolName': toolName, 'requestId': requestId},
           );
-          _permissionRequestsController.add(request);
+
+          final permRequest = CliPermissionRequest._(
+            session: this,
+            requestId: requestId,
+            toolName: toolName,
+            input: toolInput,
+            toolUseId: toolUseId,
+            suggestions: suggestions,
+            blockedPath: blockedPath,
+          );
+          _permissionRequestsController.add(permRequest);
         }
 
-      case CliMessageType.sdkMessage:
-        // Regular SDK message - parse and emit
-        final payload = json['payload'] as Map<String, dynamic>?;
-        if (payload != null) {
-          final sdkMessage = SDKMessage.fromJson(payload);
-          _messagesController.add(sdkMessage);
-        }
-
-      case CliMessageType.sessionCreated:
-        // Ignore during normal operation - handled in create()
+      case 'control_response':
+        // Control response - typically handled during initialization
+        // Ignore during normal operation
         break;
 
-      case CliMessageType.unknown:
+      case 'system':
+        // System message - parse and emit
+        final sdkMessage = SDKMessage.fromJson(json);
+        _messagesController.add(sdkMessage);
+
+      case 'assistant':
+      case 'user':
+      case 'result':
+      case 'stream_event':
+        // SDK messages - parse and emit
+        try {
+          final sdkMessage = SDKMessage.fromJson(json);
+          _messagesController.add(sdkMessage);
+        } catch (e) {
+          SdkLogger.instance.error('Failed to parse SDK message',
+              sessionId: sessionId, data: {'error': e.toString(), 'json': json});
+        }
+
+      default:
         // Unknown message type - try to parse as SDK message anyway
-        // This handles cases where the message doesn't have a wrapper
         try {
           final sdkMessage = SDKMessage.fromJson(json);
           _messagesController.add(sdkMessage);
         } catch (_) {
-          // Truly unknown - ignore
+          SdkLogger.instance.debug('Unknown message type ignored',
+              sessionId: sessionId, data: {'type': type});
         }
     }
   }
@@ -136,61 +172,83 @@ class CliSession {
         );
 
     // Spawn the CLI process
+    SdkLogger.instance.info('Spawning CLI process', data: {
+      'cwd': cwd,
+      'model': options?.model,
+      'permissionMode': options?.permissionMode?.value,
+    });
     final process = await CliProcess.spawn(config);
 
     try {
-      // Generate a unique request ID
+      // Generate request ID
       final requestId = _generateRequestId();
 
-      // Send session.create request
-      final createRequest = ControlRequest(
-        type: 'session.create',
-        id: requestId,
-        payload: SessionCreatePayload(
-          prompt: prompt,
-          cwd: cwd,
-          options: _convertToSessionCreateOptions(options),
-        ),
-      );
-      process.send(createRequest.toJson());
+      // Step 1: Send control_request with initialize subtype
+      final initRequest = {
+        'type': 'control_request',
+        'request_id': requestId,
+        'request': {
+          'subtype': 'initialize',
+          if (options?.systemPrompt != null)
+            'system_prompt': options!.systemPrompt!.toJson(),
+          'mcp_servers': options?.mcpServers ?? {},
+          'agents': {},
+          'hooks': {},
+        },
+      };
+      process.send(initRequest);
 
-      // Wait for session.created response
+      // Step 2: Send the initial user message immediately (don't wait for control_response)
+      // Note: session_id is provided but CLI will assign its own
+      SdkLogger.instance.debug('Sending initial user message');
+      final userMessage = {
+        'type': 'user',
+        'message': {
+          'role': 'user',
+          'content': prompt,
+        },
+        'parent_tool_use_id': null,
+      };
+      process.send(userMessage);
+
+      // Step 3: Wait for control_response and system init
       String? sessionId;
       SDKSystemMessage? systemInit;
+      bool controlResponseReceived = false;
 
       await for (final json in process.messages.timeout(timeout)) {
-        final messageType = parseCliMessageType(json);
+        final type = json['type'] as String?;
 
-        if (messageType == CliMessageType.sessionCreated) {
-          final created = SessionCreatedMessage.fromJson(json);
-          if (created.id == requestId) {
-            sessionId = created.sessionId;
-          }
-        } else if (messageType == CliMessageType.sdkMessage) {
-          final payload = json['payload'] as Map<String, dynamic>?;
-          if (payload != null) {
-            final type = payload['type'] as String?;
-            if (type == 'system') {
-              final subtype = payload['subtype'] as String?;
-              if (subtype == 'init') {
-                systemInit = SDKSystemMessage.fromJson(payload);
-              }
-            }
+        if (type == 'control_response') {
+          controlResponseReceived = true;
+          SdkLogger.instance.debug('Received control_response');
+        } else if (type == 'system') {
+          final subtype = json['subtype'] as String?;
+          if (subtype == 'init') {
+            sessionId = json['session_id'] as String?;
+            systemInit = SDKSystemMessage.fromJson(json);
+            SdkLogger.instance.debug('Received system init',
+                sessionId: sessionId);
           }
         }
 
-        // Check if initialization is complete
-        if (sessionId != null && systemInit != null) {
+        // We have everything we need
+        if (controlResponseReceived && sessionId != null && systemInit != null) {
           break;
         }
       }
 
-      if (sessionId == null) {
-        throw StateError('Session creation timed out: no session.created');
+      if (!controlResponseReceived) {
+        SdkLogger.instance.error('Session creation timed out: no control_response');
+        throw StateError('Session creation timed out: no control_response');
       }
-      if (systemInit == null) {
+      if (sessionId == null || systemInit == null) {
+        SdkLogger.instance.error('Session creation timed out: no system init');
         throw StateError('Session creation timed out: no system init');
       }
+
+      SdkLogger.instance.info('Session created successfully',
+          sessionId: sessionId);
 
       return CliSession._(
         process: process,
@@ -199,9 +257,34 @@ class CliSession {
       );
     } catch (e) {
       // Clean up on error
+      SdkLogger.instance.error('Session creation failed: $e');
       await process.dispose();
       rethrow;
     }
+  }
+
+  /// Send a user message in the correct protocol format.
+  void _sendUserMessage(String message) {
+    final json = {
+      'type': 'user',
+      'message': {
+        'role': 'user',
+        'content': message,
+      },
+    };
+    _process.send(json);
+  }
+
+  /// Send content blocks in the correct protocol format.
+  void _sendUserContent(List<ContentBlock> content) {
+    final json = {
+      'type': 'user',
+      'message': {
+        'role': 'user',
+        'content': content.map((c) => c.toJson()).toList(),
+      },
+    };
+    _process.send(json);
   }
 
   /// Send a follow-up message to the session.
@@ -210,14 +293,7 @@ class CliSession {
       throw StateError('Session has been disposed');
     }
 
-    final json = {
-      'type': 'user.message',
-      'session_id': sessionId,
-      'payload': {
-        'message': message,
-      },
-    };
-    _process.send(json);
+    _sendUserMessage(message);
   }
 
   /// Send content blocks (text and images) to the session.
@@ -226,14 +302,7 @@ class CliSession {
       throw StateError('Session has been disposed');
     }
 
-    final json = {
-      'type': 'user.message',
-      'session_id': sessionId,
-      'payload': {
-        'content': content.map((c) => c.toJson()).toList(),
-      },
-    };
-    _process.send(json);
+    _sendUserContent(content);
   }
 
   /// Interrupt the current execution.
@@ -266,6 +335,7 @@ class CliSession {
   void _dispose() {
     if (_disposed) return;
     _disposed = true;
+    SdkLogger.instance.info('Session disposed', sessionId: sessionId);
     _messagesController.close();
     _permissionRequestsController.close();
   }
@@ -361,14 +431,29 @@ class CliPermissionRequest {
     }
     _responded = true;
 
-    final response = CallbackResponse.allow(
-      requestId: requestId,
+    SdkLogger.instance.debug(
+      'Permission allowed',
       sessionId: _session.sessionId,
-      toolUseId: toolUseId,
-      updatedInput: updatedInput,
-      updatedPermissions: updatedPermissions,
+      data: {'toolName': toolName, 'requestId': requestId},
     );
-    _session._sendCallbackResponse(response);
+
+    // Send control_response in the correct format
+    final response = {
+      'type': 'control_response',
+      'response': {
+        'subtype': 'success',
+        'request_id': requestId,
+        'response': {
+          'behavior': 'allow',
+          'tool_use_id': toolUseId,
+          if (updatedInput != null) 'updated_input': updatedInput,
+          if (updatedPermissions != null)
+            'updated_permissions':
+                updatedPermissions.map((p) => p.toJson()).toList(),
+        },
+      },
+    };
+    _session._process.send(response);
   }
 
   /// Deny the tool execution.
@@ -380,12 +465,25 @@ class CliPermissionRequest {
     }
     _responded = true;
 
-    final response = CallbackResponse.deny(
-      requestId: requestId,
+    SdkLogger.instance.debug(
+      'Permission denied',
       sessionId: _session.sessionId,
-      toolUseId: toolUseId,
-      message: message,
+      data: {'toolName': toolName, 'requestId': requestId, 'message': message},
     );
-    _session._sendCallbackResponse(response);
+
+    // Send control_response in the correct format
+    final response = {
+      'type': 'control_response',
+      'response': {
+        'subtype': 'success',
+        'request_id': requestId,
+        'response': {
+          'behavior': 'deny',
+          'tool_use_id': toolUseId,
+          if (message != null) 'message': message,
+        },
+      },
+    };
+    _session._process.send(response);
   }
 }

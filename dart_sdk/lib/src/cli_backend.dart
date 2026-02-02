@@ -3,6 +3,7 @@ import 'dart:async';
 import 'backend_interface.dart';
 import 'cli_process.dart';
 import 'cli_session.dart';
+import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/errors.dart';
@@ -37,8 +38,17 @@ class ClaudeCliBackend implements AgentBackend {
   final _sessions = <String, _CliSessionAdapter>{};
   final _errorsController = StreamController<BackendError>.broadcast();
   final _logsController = StreamController<String>.broadcast();
+  StreamSubscription<LogEntry>? _loggerSubscription;
 
   bool _disposed = false;
+
+  /// Access to the SDK logger for programmatic configuration.
+  ///
+  /// Use this to enable/disable debug logging:
+  /// ```dart
+  /// backend.logger.debugEnabled = true;
+  /// ```
+  SdkLogger get logger => SdkLogger.instance;
 
   @override
   bool get isRunning => !_disposed;
@@ -47,7 +57,15 @@ class ClaudeCliBackend implements AgentBackend {
   Stream<BackendError> get errors => _errorsController.stream;
 
   @override
-  Stream<String> get logs => _logsController.stream;
+  Stream<String> get logs {
+    // Ensure we're forwarding SDK logger entries
+    _loggerSubscription ??= SdkLogger.instance.logs.listen((entry) {
+      if (!_disposed) {
+        _logsController.add(entry.toString());
+      }
+    });
+    return _logsController.stream;
+  }
 
   @override
   List<AgentSession> get sessions => List.unmodifiable(_sessions.values);
@@ -112,16 +130,18 @@ class ClaudeCliBackend implements AgentBackend {
   }
 
   void _setupSessionMonitoring(_CliSessionAdapter adapter) {
-    // Forward stderr logs
+    // Note: stderr is now logged via SdkLogger in CliProcess
+    // We still listen for errors here
     adapter._cliSession.process.stderr.listen(
-      (line) {
-        if (!_disposed) {
-          _logsController.add(line);
-        }
+      (_) {
+        // Stderr lines are logged via SdkLogger.logStderr in CliProcess
       },
       onError: (Object error) {
         if (!_disposed) {
-          _logsController.add('[session ${adapter.sessionId}] stderr error: $error');
+          SdkLogger.instance.error(
+            'stderr stream error: $error',
+            sessionId: adapter.sessionId,
+          );
         }
       },
     );
@@ -156,6 +176,7 @@ class ClaudeCliBackend implements AgentBackend {
     }
     _sessions.clear();
 
+    await _loggerSubscription?.cancel();
     await _errorsController.close();
     await _logsController.close();
   }

@@ -27,6 +27,9 @@ export 'src/backend_factory.dart';
 // Single request (one-shot CLI)
 export 'src/single_request.dart';
 
+// Logging
+export 'src/sdk_logger.dart';
+
 // Types
 export 'src/types/sdk_messages.dart';
 export 'src/types/content_blocks.dart';
