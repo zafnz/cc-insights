@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -8,11 +10,24 @@ import 'package:google_fonts/google_fonts.dart';
 class AppFonts {
   AppFonts._();
 
+  /// Default font features for monospace text.
+  /// Ligatures are disabled by default to ensure characters like === display
+  /// as separate characters rather than combined glyphs.
+  static const _defaultFontFeatures = [
+    FontFeature.disable('liga'),
+    FontFeature.disable('clig'),
+    FontFeature.disable('dlig'),
+    FontFeature.disable('hlig'),
+  ];
+
   /// The monospace font family used throughout the app.
   /// This is used for code, commands, file paths, and technical content.
   ///
   /// To switch to a different font, change this to use a different
   /// GoogleFonts method (e.g., GoogleFonts.firaCode, GoogleFonts.sourceCodePro).
+  ///
+  /// Ligatures are disabled by default. Pass an empty list to [fontFeatures]
+  /// to enable them, or pass custom font features to override.
   static TextStyle monoTextStyle({
     double fontSize = 12.0,
     Color? color,
@@ -20,6 +35,7 @@ class AppFonts {
     FontStyle fontStyle = FontStyle.normal,
     double? height,
     TextDecoration? decoration,
+    List<FontFeature>? fontFeatures,
   }) {
     return GoogleFonts.jetBrainsMono(
       fontSize: fontSize,
@@ -28,6 +44,7 @@ class AppFonts {
       fontStyle: fontStyle,
       height: height,
       decoration: decoration,
+      fontFeatures: fontFeatures ?? _defaultFontFeatures,
     );
   }
 

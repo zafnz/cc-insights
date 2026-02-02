@@ -127,14 +127,15 @@ class _CommitDialogState extends State<CommitDialog>
         .map((f) => '- ${f.path} (${_statusToString(f.status)})')
         .join('\n');
 
-    final prompt = '''Read the following files and generate a git commit message. Start your response directly with the commit summary line - no introduction like "Here is" or "Based on".
+    final prompt = '''Read the following files and generate a git commit message.
 
-Format:
-<summary line 50-72 chars>
+Output the commit message between markers like this:
+===BEGIN===
+Short summary line (50-72 chars)
 
-- bullet point 1
-- bullet point 2
-...
+- Bullet point explaining a change
+- Another bullet point
+===END===
 
 Files to commit:
 $fileList''';
@@ -152,7 +153,9 @@ $fileList''';
       if (!mounted) return;
 
       if (result != null && !result.isError) {
-        final message = result.result?.trim() ?? '';
+        final rawMessage = result.result?.trim() ?? '';
+        // Extract message between ===BEGIN=== and ===END=== markers
+        final message = _extractCommitMessage(rawMessage);
         if (message.isNotEmpty) {
           // Cache the message
           _cachedAiMessage = message;
@@ -183,6 +186,25 @@ $fileList''';
         });
       }
     }
+  }
+
+  /// Extracts the commit message from between ===BEGIN=== and ===END=== markers.
+  /// Falls back to the raw message if markers are not found.
+  String _extractCommitMessage(String raw) {
+    const beginMarker = '===BEGIN===';
+    const endMarker = '===END===';
+
+    final beginIndex = raw.indexOf(beginMarker);
+    final endIndex = raw.indexOf(endMarker);
+
+    if (beginIndex != -1 && endIndex != -1 && endIndex > beginIndex) {
+      return raw
+          .substring(beginIndex + beginMarker.length, endIndex)
+          .trim();
+    }
+
+    // Fallback: return the raw message trimmed
+    return raw.trim();
   }
 
   Future<void> _triggerAiRegenerate() async {
@@ -620,28 +642,34 @@ $fileList''';
   }
 
   Widget _buildPreviewTab(ColorScheme colorScheme) {
-    final message = _messageController.text;
+    // Use ListenableBuilder to rebuild when text changes
+    return ListenableBuilder(
+      listenable: _messageController,
+      builder: (context, _) {
+        final message = _messageController.text;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: SelectionArea(
-        child: message.isEmpty
-            ? Text(
-                'No commit message to preview',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              )
-            : GptMarkdown(
-                message,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-      ),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: SelectionArea(
+            child: message.isEmpty
+                ? Text(
+                    'No commit message to preview',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  )
+                : GptMarkdown(
+                    message,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+          ),
+        );
+      },
     );
   }
 
