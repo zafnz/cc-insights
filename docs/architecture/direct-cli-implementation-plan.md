@@ -24,9 +24,9 @@ This document outlines the implementation plan for migrating the Dart SDK from t
 Add Dart types for the `control_request` and `control_response` messages used by the claude-cli protocol.
 
 ### Deliverables
-- `dart_sdk/lib/src/types/control_messages.dart` - New file with control message types
-- Update `dart_sdk/lib/src/types/sdk_messages.dart` - Add `SDKControlRequest` to the `SDKMessage` sealed class
-- Update `dart_sdk/lib/claude_sdk.dart` - Export new types
+- `claude_dart_sdk/lib/src/types/control_messages.dart` - New file with control message types
+- Update `claude_dart_sdk/lib/src/types/sdk_messages.dart` - Add `SDKControlRequest` to the `SDKMessage` sealed class
+- Update `claude_dart_sdk/lib/claude_sdk.dart` - Export new types
 
 ### Types to Implement
 
@@ -96,7 +96,7 @@ class InitializeResponseData {
 ```
 
 ### Tests
-- `dart_sdk/test/types/control_messages_test.dart`
+- `claude_dart_sdk/test/types/control_messages_test.dart`
   - Test `ControlRequest.toJson()` produces correct JSON for initialize
   - Test `SDKControlRequest.fromJson()` parses can_use_tool request
   - Test `ControlResponse.toJson()` produces correct JSON for allow/deny
@@ -112,11 +112,11 @@ class InitializeResponseData {
 ### Status: ✅ COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/lib/src/types/control_messages.dart` with all control message types
+- Created `claude_dart_sdk/lib/src/types/control_messages.dart` with all control message types
 - Used `CallbackRequest`/`CallbackResponse` naming to match the actual CLI protocol (`callback.request`/`callback.response`)
 - Added `SDKControlRequest` and `SDKControlResponse` to the `SDKMessage` sealed class
 - Added helper types: `SessionCreatedMessage`, `CliMessageType` enum, `parseCliMessageType()`
-- All 51 dart_sdk tests pass, all 955 frontend tests pass
+- All 51 claude_dart_sdk tests pass, all 955 frontend tests pass
 
 ---
 
@@ -126,7 +126,7 @@ class InitializeResponseData {
 Create a class that spawns and manages the claude-cli process with correct arguments.
 
 ### Deliverables
-- `dart_sdk/lib/src/cli_process.dart` - New file with CLI process management
+- `claude_dart_sdk/lib/src/cli_process.dart` - New file with CLI process management
 
 ### API Design
 
@@ -181,7 +181,7 @@ class CliProcess {
 - Forward stderr for logging
 
 ### Tests
-- `dart_sdk/test/cli_process_test.dart`
+- `claude_dart_sdk/test/cli_process_test.dart`
   - Test argument building from config
   - Test JSON Lines parsing with mock process
   - Test partial line buffering
@@ -199,12 +199,12 @@ class CliProcess {
 ### Status: ✅ COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/lib/src/cli_process.dart` with `CliProcess` and `CliProcessConfig` classes
+- Created `claude_dart_sdk/lib/src/cli_process.dart` with `CliProcess` and `CliProcessConfig` classes
 - Added `SettingSource` enum for setting source configuration
 - Handles Unicode line terminators (U+2028, U+2029) that could break JSON Lines parsing
 - Proper stderr buffering with 1000 line limit
 - Comprehensive test coverage with mock process infrastructure
-- All 87 dart_sdk tests pass
+- All 87 claude_dart_sdk tests pass
 
 ---
 
@@ -214,7 +214,7 @@ class CliProcess {
 Create a session class that communicates directly with claude-cli, handling initialization and message flow.
 
 ### Deliverables
-- `dart_sdk/lib/src/cli_session.dart` - New file with direct CLI session
+- `claude_dart_sdk/lib/src/cli_session.dart` - New file with direct CLI session
 
 ### API Design
 
@@ -294,7 +294,7 @@ class CliPermissionRequest {
    - When `allow()` or `deny()` called, send `control_response`
 
 ### Tests
-- `dart_sdk/test/cli_session_test.dart`
+- `claude_dart_sdk/test/cli_session_test.dart`
   - Test initialization sequence with mock process
   - Test message routing (SDK messages vs control requests)
   - Test permission request/response flow
@@ -312,13 +312,13 @@ class CliPermissionRequest {
 ### Status: ✅ COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/lib/src/cli_session.dart` with `CliSession` and `CliPermissionRequest` classes
+- Created `claude_dart_sdk/lib/src/cli_session.dart` with `CliSession` and `CliPermissionRequest` classes
 - Uses `session.create` / `session.created` message flow (matching actual CLI protocol)
 - Routes `callback.request` messages to `permissionRequests` stream
 - Permission double-response protection via `_responded` flag
 - Configurable initialization timeout (default 60 seconds)
 - Comprehensive test coverage with mock process infrastructure
-- All 125 dart_sdk tests pass
+- All 125 claude_dart_sdk tests pass
 
 ---
 
@@ -328,7 +328,7 @@ class CliPermissionRequest {
 Create an abstract interface that both the Node.js backend and direct CLI can implement, enabling future support for alternative backends (e.g., Codex).
 
 ### Deliverables
-- `dart_sdk/lib/src/backend_interface.dart` - Abstract interface
+- `claude_dart_sdk/lib/src/backend_interface.dart` - Abstract interface
 - Update existing `ClaudeBackend` to implement the interface
 
 ### API Design
@@ -392,7 +392,7 @@ abstract class AgentSession {
 ```
 
 ### Tests
-- `dart_sdk/test/backend_interface_test.dart`
+- `claude_dart_sdk/test/backend_interface_test.dart`
   - Verify existing `ClaudeBackend` implements interface
   - Test interface contract with mock implementation
 
@@ -405,13 +405,13 @@ abstract class AgentSession {
 ### Status: ✅ COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/lib/src/backend_interface.dart` with `AgentBackend` and `AgentSession` abstract classes
+- Created `claude_dart_sdk/lib/src/backend_interface.dart` with `AgentBackend` and `AgentSession` abstract classes
 - Updated `ClaudeBackend` in `backend.dart` to implement `AgentBackend`
 - Updated `ClaudeSession` in `session.dart` to implement `AgentSession`
 - Added `sessions` getter to `ClaudeBackend` returning unmodifiable list
 - Added `isActive` getter to `ClaudeSession`
 - Updated frontend fake implementations to include new required members
-- All 143 dart_sdk tests pass, all 955 frontend tests pass
+- All 143 claude_dart_sdk tests pass, all 955 frontend tests pass
 
 ---
 
@@ -421,8 +421,8 @@ abstract class AgentSession {
 Implement `AgentBackend` using direct claude-cli communication.
 
 ### Deliverables
-- `dart_sdk/lib/src/cli_backend.dart` - Direct CLI backend implementation
-- Update `dart_sdk/lib/claude_sdk.dart` - Export new backend
+- `claude_dart_sdk/lib/src/cli_backend.dart` - Direct CLI backend implementation
+- Update `claude_dart_sdk/lib/claude_sdk.dart` - Export new backend
 
 ### API Design
 
@@ -455,7 +455,7 @@ class ClaudeCliBackend implements AgentBackend {
    - Process death → emit on `errors` stream
 
 ### Tests
-- `dart_sdk/test/cli_backend_test.dart`
+- `claude_dart_sdk/test/cli_backend_test.dart`
   - Test session creation with mock CLI process
   - Test multiple concurrent sessions
   - Test session cleanup on dispose
@@ -471,13 +471,13 @@ class ClaudeCliBackend implements AgentBackend {
 ### Status: COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/lib/src/cli_backend.dart` with `ClaudeCliBackend` class
+- Created `claude_dart_sdk/lib/src/cli_backend.dart` with `ClaudeCliBackend` class
 - Created `_CliSessionAdapter` internal class to adapt `CliSession` to `AgentSession` interface
 - Adapts `CliPermissionRequest` to `PermissionRequest` type
 - Forwards permission responses back to CLI via `CallbackResponse`
 - Monitors session stderr for logs and exit codes for errors
 - Comprehensive test coverage with mock session infrastructure
-- All 185 dart_sdk tests pass, all 955 frontend tests pass
+- All 185 claude_dart_sdk tests pass, all 955 frontend tests pass
 
 ---
 
@@ -487,7 +487,7 @@ class ClaudeCliBackend implements AgentBackend {
 Create integration tests that communicate with the real claude-cli using the haiku model.
 
 ### Deliverables
-- `dart_sdk/test/integration/cli_integration_test.dart` - Integration tests
+- `claude_dart_sdk/test/integration/cli_integration_test.dart` - Integration tests
 
 ### Test Environment
 - Tests gated by `CLAUDE_INTEGRATION_TESTS=true` environment variable
@@ -558,12 +558,12 @@ void main() {
 ### Status: ✅ COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/test/integration/cli_integration_test.dart` with 9 integration tests
+- Created `claude_dart_sdk/test/integration/cli_integration_test.dart` with 9 integration tests
 - Tests gated by `CLAUDE_INTEGRATION_TESTS=true` environment variable
 - All tests use haiku model for cost efficiency
 - Each test has proper resource cleanup with try/finally blocks
 - Tests include: session init, message/response, permission request/denial, AskUserQuestion, follow-up, stream events, interrupt, and dispose
-- All 195 dart_sdk tests pass (186 passed, 9 skipped without env var)
+- All 195 claude_dart_sdk tests pass (186 passed, 9 skipped without env var)
 
 ---
 
@@ -573,7 +573,7 @@ void main() {
 Add a feature flag to switch between Node.js backend and direct CLI backend.
 
 ### Deliverables
-- `dart_sdk/lib/src/backend_factory.dart` - Factory for creating backends
+- `claude_dart_sdk/lib/src/backend_factory.dart` - Factory for creating backends
 - Update documentation
 
 ### API Design
@@ -604,7 +604,7 @@ class BackendFactory {
 - `CLAUDE_BACKEND=direct` - Use direct CLI (default)
 
 ### Tests
-- `dart_sdk/test/backend_factory_test.dart`
+- `claude_dart_sdk/test/backend_factory_test.dart`
   - Test factory creates correct backend type
   - Test environment variable override
   - Test default selection
@@ -618,13 +618,13 @@ class BackendFactory {
 ### Status: ✅ COMPLETED (2026-02-01)
 
 **Implementation Notes:**
-- Created `dart_sdk/lib/src/backend_factory.dart` with `BackendType` enum and `BackendFactory` class
+- Created `claude_dart_sdk/lib/src/backend_factory.dart` with `BackendType` enum and `BackendFactory` class
 - Supports multiple aliases: `nodejs`/`node`, `direct`/`directcli`/`cli`
 - Environment variable parsing is case-insensitive
 - Default to `directCli` when no env var is set
 - Throws `ArgumentError` if `nodejs` selected without `nodeBackendPath`
 - 31 tests for the backend factory
-- All 226 dart_sdk tests pass (217 passed, 9 skipped integration tests)
+- All 226 claude_dart_sdk tests pass (217 passed, 9 skipped integration tests)
 
 ---
 
@@ -678,7 +678,7 @@ Update the Flutter frontend to use the new backend abstraction.
 - Added type checks for `ClaudeSession`-specific methods (`setModel`, `setPermissionMode`, `sdkSessionId`)
 - Updated `frontend/test/services/backend_service_test.dart` to return `AgentSession`
 - `_getNodeBackendPath()` now returns `null` when Node.js backend is not found (for env var override support)
-- All 955 frontend tests pass, all 226 dart_sdk tests pass (217 passed, 9 skipped)
+- All 955 frontend tests pass, all 226 claude_dart_sdk tests pass (217 passed, 9 skipped)
 
 ---
 
@@ -728,7 +728,7 @@ Remove Node.js backend code and update documentation.
 - Updated `backend_service.dart` to remove Node.js fallback code
 - Updated `docs/dart-sdk/` documentation (00-overview, 02-protocol, 05-flutter-integration, 07-quick-reference)
 - Deleted obsolete `docs/dart-sdk/04-node-backend.md`
-- All 955 frontend tests pass, all 210 dart_sdk tests pass (201 passed, 9 skipped integration tests)
+- All 955 frontend tests pass, all 210 claude_dart_sdk tests pass (201 passed, 9 skipped integration tests)
 
 ---
 

@@ -28,7 +28,7 @@ Default `updatedInput` to the original tool input when approving and no custom
 input is provided.
 
 Implementation:
-- `dart_sdk/lib/src/types/callbacks.dart`
+- `claude_dart_sdk/lib/src/types/callbacks.dart`
   - `PermissionRequest.allow()` now passes `updatedInput: updatedInput ?? toolInput`.
 
 ## Verification

@@ -3,13 +3,13 @@
 ## Changes Made
 
 ### 1. Dart SDK - Error Message Routing
-**File:** `dart_sdk/lib/src/backend.dart`
+**File:** `claude_dart_sdk/lib/src/backend.dart`
 
 - Modified `_handleError()` to detect session-specific errors
 - Session-specific errors (those with a `session_id`) are now emitted as `SDKErrorMessage` to the session's message stream instead of only to the global error stream
 - This allows sessions to handle their own errors independently
 
-**File:** `dart_sdk/lib/src/types/sdk_messages.dart`
+**File:** `claude_dart_sdk/lib/src/types/sdk_messages.dart`
 
 - Added new `SDKErrorMessage` class to represent error messages in the SDK message stream
 - Allows errors to flow through the same stream as other session messages

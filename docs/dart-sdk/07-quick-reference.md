@@ -168,7 +168,7 @@ CLI continues or aborts
 ## File Structure
 
 ```
-dart_sdk/lib/
+claude_dart_sdk/lib/
 ├── claude_sdk.dart           # Exports
 └── src/
     ├── cli_process.dart      # CliProcess

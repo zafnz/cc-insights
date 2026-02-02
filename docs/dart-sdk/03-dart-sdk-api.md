@@ -5,7 +5,7 @@ This document defines the public API for the Dart SDK.
 ## Package Structure
 
 ```
-dart_sdk/
+claude_dart_sdk/
 ├── lib/
 │   ├── claude_sdk.dart              # Public exports
 │   └── src/

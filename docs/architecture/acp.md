@@ -76,7 +76,7 @@ NEW ARCHITECTURE (ACP):
    - `index.ts`, `session-manager.ts`, `callback-bridge.ts`
    - `protocol.ts`, `message-queue.ts`, `logger.ts`
 
-2. **dart_sdk/** - Replace with ACP client
+2. **claude_dart_sdk/** - Replace with ACP client
    - Current `ClaudeBackend` and `ClaudeSession` classes
    - Custom protocol message types
 
@@ -1098,7 +1098,7 @@ class TerminalHandler {
 ### Phase 4: Remove Legacy Code (Week 3)
 
 1. Remove `backend-node/` directory entirely
-2. Remove `dart_sdk/` (old SDK wrapper)
+2. Remove `claude_dart_sdk/` (old SDK wrapper)
 3. Update all tests to use new ACP layer
 4. Update documentation
 

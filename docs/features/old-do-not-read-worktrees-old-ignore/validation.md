@@ -14,7 +14,7 @@ You are implementing the Git Worktrees feature for CC Insights, a Flutter deskto
 
 **Architecture:**
 - Flutter app (`flutter_app/`) with Provider state management
-- Dart SDK (`dart_sdk/`) wraps Node.js backend
+- Dart SDK (`claude_dart_sdk/`) wraps Node.js backend
 - Configuration patterns in `flutter_app/lib/services/runtime_config.dart`
 
 ## Your Mission 

@@ -776,7 +776,7 @@ process.stdin.writeln(jsonEncode(userMessage));
 ## References
 
 - Protocol captures: `examples/typescript-claude.jsonl`
-- Current Dart protocol: `dart_sdk/lib/src/protocol.dart`
+- Current Dart protocol: `claude_dart_sdk/lib/src/protocol.dart`
 - Current Node.js backend: `backend-node/src/session-manager.ts`
-- SDK message types: `dart_sdk/lib/src/types/sdk_messages.dart`
+- SDK message types: `claude_dart_sdk/lib/src/types/sdk_messages.dart`
 - TypeScript SDK docs: `docs/sdk/typescript.md`

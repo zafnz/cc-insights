@@ -20,7 +20,7 @@ This document describes the architecture for Claude Agent Insights, featuring a 
 └─────────────────────┬───────────────────────────────┘
                       │ imports
 ┌─────────────────────▼───────────────────────────────┐
-│  Dart SDK (dart_sdk/)                               │
+│  Dart SDK (claude_dart_sdk/)                               │
 │  - BackendFactory: backend type selection           │
 │  - ClaudeCliBackend: manages CLI sessions           │
 │  - CliSession: session API, streams                 │
@@ -113,7 +113,7 @@ Session initialization follows the CLI protocol:
 
 ```
 claude-project/
-├── dart_sdk/                        # Dart SDK
+├── claude_dart_sdk/                        # Dart SDK
 │   ├── lib/
 │   │   ├── claude_sdk.dart          # Public exports
 │   │   └── src/

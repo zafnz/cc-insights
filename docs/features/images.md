@@ -32,7 +32,7 @@ The SDK supports images via the Anthropic Messages API. User messages can contai
 
 ## Current State
 
-The Dart SDK already has types for images in `dart_sdk/lib/src/types/content_blocks.dart`:
+The Dart SDK already has types for images in `claude_dart_sdk/lib/src/types/content_blocks.dart`:
 
 ```dart
 class ImageBlock extends ContentBlock {
@@ -115,7 +115,7 @@ private async sendMessage(msg: SessionSendMessage): Promise<void> {
 }
 ```
 
-### 3. Dart SDK Protocol (dart_sdk/lib/src/protocol.dart)
+### 3. Dart SDK Protocol (claude_dart_sdk/lib/src/protocol.dart)
 
 Add method to send content blocks:
 
@@ -136,7 +136,7 @@ Future<void> _sendContentToSession(
 }
 ```
 
-### 4. Dart SDK Session (dart_sdk/lib/src/session.dart)
+### 4. Dart SDK Session (claude_dart_sdk/lib/src/session.dart)
 
 Add public method:
 

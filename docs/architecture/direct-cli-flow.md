@@ -503,5 +503,5 @@ $ claude --output-format stream-json --input-format stream-json \
 ## References
 
 - Protocol captures: `examples/typescript-claude.jsonl`
-- Current Dart SDK types: `dart_sdk/lib/src/types/sdk_messages.dart`
+- Current Dart SDK types: `claude_dart_sdk/lib/src/types/sdk_messages.dart`
 - TypeScript SDK docs: `docs/sdk/typescript.md`

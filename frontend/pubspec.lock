@@ -124,7 +124,7 @@ packages:
   claude_sdk:
     dependency: "direct main"
     description:
-      path: "../dart_sdk"
+      path: "../claude_dart_sdk"
       relative: true
     source: path
     version: "0.1.0"

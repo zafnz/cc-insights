@@ -77,7 +77,7 @@ This document outlines the phased implementation plan for the Dart SDK architect
 **Tasks:**
 
 ### 3.1 Project Setup
-- [ ] Create `dart_sdk/` directory
+- [ ] Create `claude_dart_sdk/` directory
 - [ ] `pubspec.yaml` with minimal dependencies
 - [ ] Directory structure under `lib/src/`
 
@@ -186,7 +186,7 @@ This document outlines the phased implementation plan for the Dart SDK architect
 **Tasks:**
 
 ### 5.1 Dependency Setup
-- [ ] Add `dart_sdk` as path dependency
+- [ ] Add `claude_dart_sdk` as path dependency
 - [ ] Remove old WebSocket dependencies
 
 ### 5.2 App Startup

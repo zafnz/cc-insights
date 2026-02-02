@@ -16,7 +16,7 @@ dependencies:
 
   # Claude SDK (local)
   claude_sdk:
-    path: ../dart_sdk
+    path: ../claude_dart_sdk
 
   # Utilities
   uuid: ^4.5.1

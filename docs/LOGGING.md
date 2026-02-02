@@ -24,7 +24,7 @@ This document describes the comprehensive logging system for debugging the backe
 
 ### Dart SDK
 
-**Protocol Layer** (`dart_sdk/lib/src/protocol.dart`):
+**Protocol Layer** (`claude_dart_sdk/lib/src/protocol.dart`):
 - Captures all stderr from the Node.js backend
 - Exposes stderr as a `Stream<String>` via `ClaudeBackend.logs`
 - Writes logs to `~/tmp/claude-agent-insights/dart-sdk-*.log`

@@ -109,7 +109,7 @@ private async sendMessage(msg: SessionSendMessage): Promise<void> {
 }
 ```
 
-#### 1.3 Dart SDK Protocol (`dart_sdk/lib/src/protocol.dart`)
+#### 1.3 Dart SDK Protocol (`claude_dart_sdk/lib/src/protocol.dart`)
 
 Update `SessionSendMessage` to support content blocks:
 
@@ -461,7 +461,7 @@ Future<void> _pickImages() async {
 |------|--------|
 | `backend-node/src/protocol.ts` | Add ContentBlock types |
 | `backend-node/src/session-manager.ts` | Handle content blocks in sendMessage |
-| `dart_sdk/lib/src/protocol.dart` | Add ContentBlock types and update SessionSendMessage |
+| `claude_dart_sdk/lib/src/protocol.dart` | Add ContentBlock types and update SessionSendMessage |
 | `flutter_app_v2/lib/models/output_entry.dart` | Add images to UserInputEntry |
 | `flutter_app_v2/lib/widgets/message_input.dart` | Add paste handling and image previews |
 | `flutter_app_v2/lib/widgets/output_entries/user_input_entry.dart` | Display images |

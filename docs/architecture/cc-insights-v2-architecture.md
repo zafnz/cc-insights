@@ -607,7 +607,7 @@ Future: Merge operations may involve cross-chat coordination (one Claude session
 
 | Component | Location | Notes |
 |-----------|----------|-------|
-| Dart SDK | `dart_sdk/` | ClaudeBackend, ClaudeSession, Protocol, all types |
+| Dart SDK | `claude_dart_sdk/` | ClaudeBackend, ClaudeSession, Protocol, all types |
 | Session Model | `flutter_app/lib/models/session.dart` | Agent, OutputEntry classes (rename file) |
 | Tool Card | `flutter_app/lib/widgets/tool_card.dart` | Tool rendering with expandable cards |
 | Output Panel | `flutter_app/lib/widgets/output_panel.dart` | Smart scrolling behavior |

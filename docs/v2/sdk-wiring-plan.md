@@ -7,7 +7,7 @@ This plan covers wiring up the Claude SDK so users can send messages and receive
 ## Current State
 
 ### What's Ready
-- **Dart SDK** (`dart_sdk/`): Complete API for spawning backend, creating sessions, sending messages, receiving streams
+- **Dart SDK** (`claude_dart_sdk/`): Complete API for spawning backend, creating sessions, sending messages, receiving streams
 - **Node.js Backend** (`backend-node/`): Complete session management, message routing, permission callbacks
 - **SdkMessageHandler** (`lib/services/sdk_message_handler.dart`): Parses SDK messages and routes to correct conversation, handles tool pairing, Task tool spawning
 - **ChatState**: Data model ready, just needs session lifecycle methods

@@ -34,7 +34,7 @@ This document compares the three protocol layers in the current architecture and
 
 ## Layer 1: Dart ↔ Node.js Protocol
 
-**File:** `backend-node/src/protocol.ts`, `dart_sdk/lib/src/protocol.dart`
+**File:** `backend-node/src/protocol.ts`, `claude_dart_sdk/lib/src/protocol.dart`
 
 ### Dart → Node.js Messages
 

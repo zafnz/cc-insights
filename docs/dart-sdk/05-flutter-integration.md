@@ -24,7 +24,7 @@ dependencies:
 
   # Local Dart SDK
   claude_sdk:
-    path: ../dart_sdk
+    path: ../claude_dart_sdk
 ```
 
 ## App Startup

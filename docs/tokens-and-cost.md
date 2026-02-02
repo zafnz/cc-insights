@@ -278,8 +278,8 @@ void processMessage(SDKAssistantMessage msg) {
 
 ## Related Files
 
-- `dart_sdk/lib/src/types/usage.dart` - Usage and ModelUsage types
-- `dart_sdk/lib/src/types/sdk_messages.dart` - SDKResultMessage with modelUsage
+- `claude_dart_sdk/lib/src/types/usage.dart` - Usage and ModelUsage types
+- `claude_dart_sdk/lib/src/types/sdk_messages.dart` - SDKResultMessage with modelUsage
 - `flutter_app/lib/models/session.dart` - ContextTracker, Agent, UsageInfo
 - `flutter_app/lib/providers/session_provider.dart` - Message handling and cost tracking
 - `docs/sdk/cost-tracking.md` - SDK documentation reference

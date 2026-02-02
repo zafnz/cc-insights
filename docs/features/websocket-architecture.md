@@ -176,7 +176,7 @@ console.log('WebSocket server listening on ws://localhost:8080');
 Add a WebSocket-based backend implementation:
 
 ```dart
-// dart_sdk/lib/src/websocket_backend.dart
+// claude_dart_sdk/lib/src/websocket_backend.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -338,7 +338,7 @@ class ClaudeWebSocketSession implements ClaudeSession {
 Create an interface that both subprocess and WebSocket backends implement:
 
 ```dart
-// dart_sdk/lib/src/backend_interface.dart
+// claude_dart_sdk/lib/src/backend_interface.dart
 abstract class ClaudeBackend {
   Future<ClaudeSession> createSession({
     required String prompt,

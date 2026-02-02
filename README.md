@@ -139,7 +139,7 @@ Those logs go to `~/claude_mitm.log`, and are parsable with `jq`.
 
 ```
 claude-project/
-├── dart_sdk/               # Dart SDK for Flutter
+├── claude_dart_sdk/               # Dart SDK for Flutter
 │   ├── lib/
 │   │   ├── claude_sdk.dart     # Main export
 │   │   ├── src/
@@ -218,7 +218,7 @@ See `docs/dart-sdk/02-protocol.md` for complete protocol specification.
 
 ```bash
 # Dart SDK tests
-cd dart_sdk
+cd claude_dart_sdk
 dart test
 
 # Flutter tests
@@ -226,7 +226,7 @@ cd frontend
 flutter test
 
 # Integration tests (requires Claude CLI and CLAUDE_INTEGRATION_TESTS=true)
-cd dart_sdk
+cd claude_dart_sdk
 CLAUDE_INTEGRATION_TESTS=true dart test test/integration/
 ```
 

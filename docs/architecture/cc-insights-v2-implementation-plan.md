@@ -489,8 +489,8 @@ Create mockups showing real API interaction states:
    - `ChatState.ensureSession()` creates real session
    - SDK messages flow to ConversationData.entries
 
-4. **dart_sdk dependency**:
-   - Add path dependency to `dart_sdk/`
+4. **claude_dart_sdk dependency**:
+   - Add path dependency to `claude_dart_sdk/`
 
 5. **Test helper for programmatic message sending**:
    - Expose method for integration tests to send messages without UI
