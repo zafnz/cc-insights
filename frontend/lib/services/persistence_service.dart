@@ -600,6 +600,84 @@ class PersistenceService {
     }
   }
 
+  /// Removes a worktree from the projects.json index.
+  ///
+  /// This removes the worktree and all its associated chats from projects.json.
+  /// Does not delete the worktree files from disk (that's done via git).
+  /// Also deletes all chat files associated with this worktree.
+  ///
+  /// Returns the list of chat IDs that were in the worktree (for cleanup).
+  ///
+  /// This method throws on failure since worktree deletion is a critical
+  /// operation that should fail visibly.
+  Future<List<String>> removeWorktreeFromIndex({
+    required String projectRoot,
+    required String worktreePath,
+    required String projectId,
+  }) async {
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
+
+    if (project == null) {
+      developer.log(
+        'Project not found for worktree removal: $projectRoot',
+        name: 'PersistenceService',
+        level: 900, // Warning
+      );
+      return [];
+    }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for removal: $worktreePath',
+        name: 'PersistenceService',
+        level: 900, // Warning
+      );
+      return [];
+    }
+
+    // Collect chat IDs for cleanup
+    final chatIds = worktree.chats.map((chat) => chat.chatId).toList();
+
+    // Remove the worktree from the map
+    final updatedWorktrees = Map<String, WorktreeInfo>.from(project.worktrees)
+      ..remove(worktreePath);
+
+    // Rebuild the index without this worktree
+    final updatedProject = project.copyWith(worktrees: updatedWorktrees);
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    // Delete all chat files for this worktree
+    for (final chatId in chatIds) {
+      try {
+        await deleteChat(projectId, chatId);
+      } catch (e) {
+        developer.log(
+          'Failed to delete chat $chatId during worktree removal: $e',
+          name: 'PersistenceService',
+          error: e,
+        );
+        // Continue with other chats
+      }
+    }
+
+    developer.log(
+      'Removed worktree $worktreePath from projects.json '
+      '(${chatIds.length} chats)',
+      name: 'PersistenceService',
+    );
+
+    return chatIds;
+  }
+
   /// Deletes all files associated with a chat.
   ///
   /// Removes both the `.chat.jsonl` and `.meta.json` files.

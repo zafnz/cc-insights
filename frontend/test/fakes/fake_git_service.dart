@@ -254,6 +254,90 @@ class FakeGitService implements GitService {
     _maybeThrow();
   }
 
+  /// Tracks calls to [stash].
+  final List<String> stashCalls = [];
+
+  /// If set, [stash] will throw this exception.
+  GitException? stashError;
+
+  @override
+  Future<void> stash(String path) async {
+    stashCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+    if (stashError != null) {
+      throw stashError!;
+    }
+  }
+
+  /// Tracks calls to [fetch].
+  final List<String> fetchCalls = [];
+
+  /// If set, [fetch] will throw this exception.
+  GitException? fetchError;
+
+  @override
+  Future<void> fetch(String path) async {
+    fetchCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+    if (fetchError != null) {
+      throw fetchError!;
+    }
+  }
+
+  /// Map of (path, branch, targetBranch) -> isMerged for [isBranchMerged].
+  final Map<String, bool> branchMerged = {};
+
+  /// If set, [isBranchMerged] will throw this exception.
+  GitException? isBranchMergedError;
+
+  @override
+  Future<bool> isBranchMerged(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    if (isBranchMergedError != null) {
+      throw isBranchMergedError!;
+    }
+    final key = '$path:$branch:$targetBranch';
+    return branchMerged[key] ?? true; // Default to merged
+  }
+
+  /// Tracks calls to [removeWorktree] with (repoRoot, worktreePath, force).
+  final List<({String repoRoot, String worktreePath, bool force})>
+      removeWorktreeCalls = [];
+
+  /// If set, [removeWorktree] will throw this exception.
+  GitException? removeWorktreeError;
+
+  /// If true, [removeWorktree] will only throw on first call (non-force).
+  bool removeWorktreeOnlyThrowOnNonForce = false;
+
+  @override
+  Future<void> removeWorktree({
+    required String repoRoot,
+    required String worktreePath,
+    bool force = false,
+  }) async {
+    removeWorktreeCalls.add((
+      repoRoot: repoRoot,
+      worktreePath: worktreePath,
+      force: force,
+    ));
+    await _maybeDelay();
+    _maybeThrow();
+    if (removeWorktreeError != null) {
+      if (removeWorktreeOnlyThrowOnNonForce && force) {
+        return; // Force succeeds
+      }
+      throw removeWorktreeError!;
+    }
+  }
+
   // =========================================================================
   // Convenience methods for test setup
   // =========================================================================

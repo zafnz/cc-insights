@@ -221,6 +221,38 @@ abstract class GitService {
   /// Used to restore state on error. Does not modify working tree files.
   /// Throws [GitException] on failure.
   Future<void> resetIndex(String path);
+
+  /// Stashes all uncommitted changes.
+  ///
+  /// Saves both staged and unstaged changes to the stash.
+  /// Throws [GitException] on failure.
+  Future<void> stash(String path);
+
+  /// Fetches updates from the remote.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> fetch(String path);
+
+  /// Checks if a branch has been merged into the target branch.
+  ///
+  /// Uses `git merge-base --is-ancestor` to determine if [branch] is an
+  /// ancestor of [targetBranch]. Returns true if [branch] is fully merged
+  /// into [targetBranch], false otherwise.
+  ///
+  /// [path] is the working directory for the git command.
+  Future<bool> isBranchMerged(String path, String branch, String targetBranch);
+
+  /// Removes a worktree.
+  ///
+  /// If [force] is true, uses `git worktree remove --force` which will
+  /// remove the worktree even if it has uncommitted changes.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> removeWorktree({
+    required String repoRoot,
+    required String worktreePath,
+    bool force = false,
+  });
 }
 
 /// Real implementation of [GitService] that spawns git processes.
@@ -451,6 +483,53 @@ class RealGitService implements GitService {
   @override
   Future<void> resetIndex(String path) async {
     await _runGit(['reset', 'HEAD'], workingDirectory: path);
+  }
+
+  @override
+  Future<void> stash(String path) async {
+    await _runGit(['stash'], workingDirectory: path);
+  }
+
+  @override
+  Future<void> fetch(String path) async {
+    await _runGit(['fetch'], workingDirectory: path);
+  }
+
+  @override
+  Future<bool> isBranchMerged(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    try {
+      // git merge-base --is-ancestor returns 0 if branch is ancestor of target
+      await _runGit(
+        ['merge-base', '--is-ancestor', branch, targetBranch],
+        workingDirectory: path,
+      );
+      return true;
+    } on GitException catch (e) {
+      // Exit code 1 means branch is NOT an ancestor (not merged)
+      if (e.exitCode == 1) {
+        return false;
+      }
+      // Other errors should be rethrown
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> removeWorktree({
+    required String repoRoot,
+    required String worktreePath,
+    bool force = false,
+  }) async {
+    final args = ['worktree', 'remove'];
+    if (force) {
+      args.add('--force');
+    }
+    args.add(worktreePath);
+    await _runGit(args, workingDirectory: repoRoot);
   }
 }
 

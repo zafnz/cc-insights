@@ -363,6 +363,122 @@ branch refs/heads/main''';
       expect(gitService.branches, isEmpty);
       expect(gitService.getVersionCalls, 0);
     });
+
+    test('stash tracks calls', () async {
+      await gitService.stash('/my/repo');
+
+      expect(gitService.stashCalls, ['/my/repo']);
+    });
+
+    test('stash throws configured error', () async {
+      gitService.stashError =
+          const GitException('Stash failed', exitCode: 1);
+
+      expect(
+        () => gitService.stash('/my/repo'),
+        throwsA(isA<GitException>()),
+      );
+    });
+
+    test('fetch tracks calls', () async {
+      await gitService.fetch('/my/repo');
+
+      expect(gitService.fetchCalls, ['/my/repo']);
+    });
+
+    test('fetch throws configured error', () async {
+      gitService.fetchError =
+          const GitException('Fetch failed', exitCode: 1);
+
+      expect(
+        () => gitService.fetch('/my/repo'),
+        throwsA(isA<GitException>()),
+      );
+    });
+
+    test('isBranchMerged returns configured value', () async {
+      gitService.branchMerged['/repo:feature:main'] = true;
+
+      final result = await gitService.isBranchMerged('/repo', 'feature', 'main');
+
+      expect(result, true);
+    });
+
+    test('isBranchMerged returns false when not merged', () async {
+      gitService.branchMerged['/repo:feature:main'] = false;
+
+      final result = await gitService.isBranchMerged('/repo', 'feature', 'main');
+
+      expect(result, false);
+    });
+
+    test('isBranchMerged defaults to true', () async {
+      // No configuration - should default to true
+      final result = await gitService.isBranchMerged('/repo', 'feature', 'main');
+
+      expect(result, true);
+    });
+
+    test('removeWorktree tracks calls', () async {
+      await gitService.removeWorktree(
+        repoRoot: '/repo',
+        worktreePath: '/repo/worktree',
+        force: false,
+      );
+
+      expect(gitService.removeWorktreeCalls.length, 1);
+      expect(gitService.removeWorktreeCalls.first.repoRoot, '/repo');
+      expect(gitService.removeWorktreeCalls.first.worktreePath, '/repo/worktree');
+      expect(gitService.removeWorktreeCalls.first.force, false);
+    });
+
+    test('removeWorktree with force flag', () async {
+      await gitService.removeWorktree(
+        repoRoot: '/repo',
+        worktreePath: '/repo/worktree',
+        force: true,
+      );
+
+      expect(gitService.removeWorktreeCalls.first.force, true);
+    });
+
+    test('removeWorktree throws configured error', () async {
+      gitService.removeWorktreeError =
+          const GitException('Remove failed', exitCode: 1);
+
+      expect(
+        () => gitService.removeWorktree(
+          repoRoot: '/repo',
+          worktreePath: '/repo/worktree',
+        ),
+        throwsA(isA<GitException>()),
+      );
+    });
+
+    test('removeWorktree only throws on non-force when configured', () async {
+      gitService.removeWorktreeError =
+          const GitException('Contains modified files', exitCode: 1);
+      gitService.removeWorktreeOnlyThrowOnNonForce = true;
+
+      // Non-force should throw
+      expect(
+        () => gitService.removeWorktree(
+          repoRoot: '/repo',
+          worktreePath: '/repo/worktree',
+          force: false,
+        ),
+        throwsA(isA<GitException>()),
+      );
+
+      // Force should succeed
+      await gitService.removeWorktree(
+        repoRoot: '/repo',
+        worktreePath: '/repo/worktree',
+        force: true,
+      );
+
+      expect(gitService.removeWorktreeCalls.length, 2);
+    });
   });
 
   // ===========================================================================
