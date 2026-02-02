@@ -49,10 +49,14 @@ export 'src/types/usage.dart';
 
 ## ClaudeBackend
 
-Manages the backend process and session lifecycle.
+Manages the backend process and session lifecycle. This is the legacy Node.js
+backend implementation. For new code, prefer using `BackendFactory` with
+`BackendType.directCli` (the default) which communicates directly with the
+Claude CLI.
 
 ```dart
-/// Manages the Node.js backend process.
+/// Manages the Node.js backend process (legacy implementation).
+/// See BackendFactory for the recommended direct CLI approach.
 class ClaudeBackend {
   /// Spawn a new backend process.
   ///

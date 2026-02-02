@@ -87,6 +87,9 @@ class _FakeClaudeSession implements ClaudeSession {
   Stream<HookRequest> get hookRequests => const Stream.empty();
 
   @override
+  bool get isActive => true;
+
+  @override
   Future<void> send(String message) async {}
 
   @override
@@ -111,7 +114,7 @@ class _FakeClaudeSession implements ClaudeSession {
   Future<void> setModel(String? model) async {}
 
   @override
-  Future<void> setPermissionMode(PermissionMode mode) async {}
+  Future<void> setPermissionMode(String? mode) async {}
 
   // Test-only members
   @override

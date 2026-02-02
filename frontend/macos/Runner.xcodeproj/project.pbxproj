@@ -61,29 +61,6 @@
 		};
 /* End PBXCopyFilesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase - Copy Backend section */
-		CCINSIGHTS0001 /* Copy Backend Bundle */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(PROJECT_DIR)/../../backend-node/dist/bundle.js",
-			);
-			name = "Copy Backend Bundle";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/backend/bundle.js",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Copy bundled Node.js backend to app Resources\nBACKEND_SRC=\"${PROJECT_DIR}/../../backend-node/dist/bundle.js\"\nBACKEND_DEST=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/backend\"\n\necho \"Copying backend bundle...\"\necho \"  Source: ${BACKEND_SRC}\"\necho \"  Destination: ${BACKEND_DEST}\"\n\nif [ -f \"${BACKEND_SRC}\" ]; then\n    mkdir -p \"${BACKEND_DEST}\"\n    cp \"${BACKEND_SRC}\" \"${BACKEND_DEST}/bundle.js\"\n    echo \"Backend bundle copied successfully.\"\nelse\n    echo \"warning: Backend bundle not found at ${BACKEND_SRC}. Run 'npm run bundle' in backend-node directory.\"\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase - Copy Backend section */
-
 /* Begin PBXFileReference section */
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -264,7 +241,6 @@
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
 				79ABBEC68DC9A238F12AC12B /* [CP] Embed Pods Frameworks */,
-				CCINSIGHTS0001 /* Copy Backend Bundle */,
 			);
 			buildRules = (
 			);

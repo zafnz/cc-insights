@@ -28,9 +28,9 @@ This project is still deeeep in development, the only way to run it is clone the
 
 ## Prerequisites
 
-- **Node** (for now)
 - **Flutter 3.10+**
-- **Claude account OR Anthropic API key** (so long as the claude cli program works for you, then CC Insights will work for you).
+- **Claude CLI** - Install with `npm install -g @anthropic-ai/claude-code` or via your package manager
+- **Claude account OR Anthropic API key** - As long as the `claude` CLI works for you, CC-Insights will work for you
 
 ## Installation
 
@@ -64,9 +64,7 @@ cc-insights [project_directory]
 
 ### Architecture
 
-Because I've not yet finished the Dart SDK for Claude, I'm using a typescript bridge to handle the direct talking to claude binary.
-
-It's not beautiful, but it works surprisingly well. The Node.js backend will go away soon, hopefully.
+CC-Insights communicates directly with the Claude CLI using the stream-json protocol. No Node.js backend required.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -81,28 +79,28 @@ It's not beautiful, but it works surprisingly well. The Node.js backend will go 
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                  Dart SDK (claude_sdk)                   │   │
+│  │  - Direct CLI process management                         │   │
 │  │  - Type-safe protocol layer                              │   │
 │  │  - Session management & streaming                        │   │
-│  │  - Subprocess spawning & lifecycle                       │   │
+│  │  - Permission request handling                           │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │ stdin/stdout (JSON lines)
+                              │ --output-format stream-json
+                              │ --input-format stream-json
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│      Node.js Backend (thin subprocess - protocol bridge)        │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  Session Manager + Callback Bridge                       │   │
-│  │  - Forwards SDK messages to Flutter via stdout           │   │
-│  │  - Receives commands from Flutter via stdin              │   │
-│  │  - Bridges callbacks (canUseTool, askUserQuestion, etc.) │   │
-│  └──────────────────────────────────────────────────────────┘   │
+│                      Claude CLI (claude)                        │
+│  - Spawned directly by Dart SDK                                 │
+│  - One process per session                                      │
+│  - Handles tool execution, permissions, MCP servers             │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              │ Claude Agent SDK (TypeScript)
+                              │ Claude API
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Claude API                                 │
+│                      Anthropic API                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -141,34 +139,26 @@ Those logs go to `~/claude_mitm.log`, and are parsable with `jq`.
 
 ```
 claude-project/
-├── backend-node/           # Node.js backend (subprocess)
-│   ├── src/
-│   │   ├── index.ts        # Entry point (stdin/stdout)
-│   │   ├── session-manager.ts  # SDK session lifecycle
-│   │   ├── callback-bridge.ts  # SDK callback handling
-│   │   ├── protocol.ts     # Type-safe message definitions
-│   │   ├── message-queue.ts    # Reliable message delivery
-│   │   └── logger.ts       # Structured logging
-│   ├── test/
-│   │   └── test-client.js  # Protocol testing
-│   └── package.json
-│
 ├── dart_sdk/               # Dart SDK for Flutter
 │   ├── lib/
-│   │   ├── claude_sdk.dart # Main export
+│   │   ├── claude_sdk.dart     # Main export
 │   │   ├── src/
-│   │   │   ├── backend.dart    # Subprocess management
-│   │   │   ├── session.dart    # Session API
-│   │   │   ├── protocol.dart   # Protocol implementation
-│   │   │   └── types/          # Type definitions
+│   │   │   ├── cli_process.dart    # CLI subprocess management
+│   │   │   ├── cli_session.dart    # Direct CLI session
+│   │   │   ├── cli_backend.dart    # Direct CLI backend
+│   │   │   ├── backend_factory.dart # Backend type selection
+│   │   │   ├── backend_interface.dart # Abstract backend interface
+│   │   │   ├── protocol.dart       # Protocol implementation
+│   │   │   └── types/              # Type definitions
+│   │   │       ├── sdk_messages.dart
+│   │   │       ├── control_messages.dart
 │   │   │       ├── callbacks.dart
 │   │   │       ├── content_blocks.dart
-│   │   │       ├── sdk_messages.dart
 │   │   │       ├── session_options.dart
 │   │   │       └── usage.dart
 │   └── pubspec.yaml
 │
-├── flutter_app/            # Flutter desktop UI
+├── frontend/               # Flutter desktop UI
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── models/
@@ -176,7 +166,7 @@ claude-project/
 │   │   ├── providers/
 │   │   │   └── session_provider.dart
 │   │   ├── services/
-│   │   │   └── backend_service.dart  # Backend lifecycle
+│   │   │   └── backend_service.dart  # Uses BackendFactory
 │   │   ├── screens/
 │   │   │   └── home_screen.dart
 │   │   └── widgets/
@@ -190,34 +180,34 @@ claude-project/
 │
 └── docs/
     ├── dart-sdk/           # Dart SDK implementation docs
-    └── sdk/                # Claude Agent SDK reference
+    └── sdk/                # Claude CLI reference
 ```
 
 ## Protocol
 
-Communication between the Dart SDK and Node.js backend uses JSON lines over stdin/stdout.
+The Dart SDK communicates directly with the Claude CLI using the stream-json protocol over stdin/stdout.
 
-### Flutter → Backend (stdin)
+### Dart SDK → Claude CLI (stdin)
 
 | Message Type | Description |
 |--------------|-------------|
-| `session.create` | Create a new Claude session |
+| `control_request` | Initialize session, configure options |
+| `session.create` | Start a new conversation |
 | `session.send` | Send user message to session |
 | `session.interrupt` | Interrupt running session |
-| `session.kill` | Terminate a session |
-| `callback.response` | Response to callback request |
-| `query.call` | Call query method on session |
+| `callback.response` | Response to permission request |
 
-### Backend → Flutter (stdout)
+### Claude CLI → Dart SDK (stdout)
 
 | Message Type | Description |
 |--------------|-------------|
+| `control_response` | Response to control request |
 | `session.created` | Session created successfully |
-| `sdk.message` | SDK message (streaming) |
-| `callback.request` | Request user permission/input |
-| `query.result` | Query method result |
-| `session.interrupted` | Session interrupted |
-| `session.killed` | Session terminated |
+| `system` | System messages (init, tools, etc.) |
+| `assistant` | Assistant responses with content |
+| `user` | User messages and tool results |
+| `result` | Turn completion status |
+| `callback.request` | Permission request (can_use_tool) |
 | `error` | Error occurred |
 
 See `docs/dart-sdk/02-protocol.md` for complete protocol specification.
@@ -227,24 +217,23 @@ See `docs/dart-sdk/02-protocol.md` for complete protocol specification.
 ### Running Tests
 
 ```bash
-# Backend tests
-cd backend-node
-npm test
-
 # Dart SDK tests
 cd dart_sdk
 dart test
 
 # Flutter tests
-cd flutter_app
+cd frontend
 flutter test
+
+# Integration tests (requires Claude CLI and CLAUDE_INTEGRATION_TESTS=true)
+cd dart_sdk
+CLAUDE_INTEGRATION_TESTS=true dart test test/integration/
 ```
 
 ### Debug Logging
 
-- Backend logs all messages to `/tmp/messages.jsonl`
-- Backend structured logs to `/tmp/backend-{timestamp}.log`
-- Access logs in the UI via the log viewer (View → Logs)
+- Use the MITM proxy (see Logging section) to capture CLI communication
+- Access logs in the UI via the log viewer (View -> Logs)
 
 ## Configuration
 
@@ -253,7 +242,7 @@ flutter test
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ANTHROPIC_API_KEY` | Your Anthropic API key (if not using Claude Plan) | Optional |
-| `CLAUDE_CODE_PATH` | Path to claude binary (avoids Node v25 compatibility issues) | Auto-detected |
+| `CLAUDE_CODE_PATH` | Path to the Claude CLI executable | Auto-detected (`claude` in PATH) |
 
 ### Model Selection
 

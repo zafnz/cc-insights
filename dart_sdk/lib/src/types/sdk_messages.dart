@@ -1,4 +1,5 @@
 import 'content_blocks.dart';
+import 'control_messages.dart';
 import 'usage.dart';
 
 /// Base class for all SDK messages.
@@ -27,6 +28,10 @@ sealed class SDKMessage {
         return SDKResultMessage.fromJson(json);
       case 'stream_event':
         return SDKStreamEvent.fromJson(json);
+      case 'control_request':
+        return SDKControlRequest.fromJson(json);
+      case 'control_response':
+        return SDKControlResponse.fromJson(json);
       default:
         return SDKUnknownMessage.fromJson(json);
     }
@@ -363,6 +368,104 @@ class SDKErrorMessage extends SDKMessage {
   final String uuid;
   @override
   final String sessionId;
+}
+
+/// Incoming control request (CLI -> Dart) for permissions.
+///
+/// When the CLI needs permission to use a tool, it sends this message.
+/// The Dart side should respond with a [ControlResponse].
+class SDKControlRequest extends SDKMessage {
+  const SDKControlRequest({
+    required this.requestId,
+    required this.request,
+    required this.sessionId,
+    this.uuid = '',
+    super.rawJson,
+  });
+
+  factory SDKControlRequest.fromJson(Map<String, dynamic> json) {
+    return SDKControlRequest(
+      requestId: json['request_id'] as String? ?? '',
+      request: ControlRequestData.fromJson(
+        json['request'] as Map<String, dynamic>? ?? {},
+      ),
+      sessionId: json['session_id'] as String? ?? '',
+      uuid: json['uuid'] as String? ?? '',
+      rawJson: json,
+    );
+  }
+
+  /// The unique request ID for matching responses.
+  final String requestId;
+
+  /// The request data containing tool use information.
+  final ControlRequestData request;
+
+  @override
+  String get type => 'control_request';
+
+  @override
+  final String uuid;
+
+  @override
+  final String sessionId;
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'request_id': requestId,
+        'request': request.toJson(),
+        'session_id': sessionId,
+        if (uuid.isNotEmpty) 'uuid': uuid,
+      };
+}
+
+/// Incoming control response (CLI -> Dart) for initialization.
+///
+/// Sent by the CLI in response to an initialize request,
+/// containing session configuration data.
+class SDKControlResponse extends SDKMessage {
+  const SDKControlResponse({
+    required this.requestId,
+    required this.response,
+    required this.sessionId,
+    this.uuid = '',
+    super.rawJson,
+  });
+
+  factory SDKControlResponse.fromJson(Map<String, dynamic> json) {
+    return SDKControlResponse(
+      requestId: json['request_id'] as String? ?? '',
+      response: InitializeResponseData.fromJson(
+        json['response'] as Map<String, dynamic>? ?? {},
+      ),
+      sessionId: json['session_id'] as String? ?? '',
+      uuid: json['uuid'] as String? ?? '',
+      rawJson: json,
+    );
+  }
+
+  /// The request ID this response corresponds to.
+  final String requestId;
+
+  /// The initialization response data.
+  final InitializeResponseData response;
+
+  @override
+  String get type => 'control_response';
+
+  @override
+  final String uuid;
+
+  @override
+  final String sessionId;
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'request_id': requestId,
+        'response': response.toJson(),
+        'session_id': sessionId,
+        if (uuid.isNotEmpty) 'uuid': uuid,
+      };
 }
 
 /// API assistant message structure.

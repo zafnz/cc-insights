@@ -12,52 +12,51 @@ A condensed reference for the Dart SDK architecture.
          │ uses
 ┌────────▼─────────┐
 │    Dart SDK      │
-│  ClaudeBackend   │
-│  ClaudeSession   │
+│ ClaudeCliBackend │
+│    CliSession    │
+│    CliProcess    │
 └────────┬─────────┘
-         │ stdin/stdout (JSON lines)
-┌────────▼─────────┐
-│  Node Backend    │
-│  (~200 lines)    │
-└────────┬─────────┘
-         │ spawns via SDK
+         │ stdin/stdout (stream-json)
 ┌────────▼─────────┐
 │   Claude CLI     │
+│ (one per session)│
 └──────────────────┘
 ```
 
 ## Protocol Summary
 
-### Dart → Backend
+### Dart → CLI
 
 | Message | Purpose |
 |---------|---------|
+| `control_request` | Initialize, get commands/models |
 | `session.create` | Start new session |
 | `session.send` | Send follow-up |
 | `session.interrupt` | Stop execution |
-| `session.kill` | Terminate session |
-| `callback.response` | Respond to permission/hook |
-| `query.call` | Call Query method |
+| `callback.response` | Respond to permission request |
 
-### Backend → Dart
+### CLI → Dart
 
 | Message | Purpose |
 |---------|---------|
+| `control_response` | Commands, models, account |
 | `session.created` | Session started |
-| `sdk.message` | Raw SDK message |
-| `callback.request` | Need permission/hook response |
-| `query.result` | Query method result |
-| `session.interrupted` | Interrupted |
-| `session.killed` | Terminated |
+| `system` | Init, tools, MCP servers |
+| `assistant` | Claude's response |
+| `user` | Tool results |
+| `result` | Turn complete |
+| `callback.request` | Need permission response |
 | `error` | Error occurred |
 
 ## Dart SDK API
 
-### Interactive Sessions
+### Using BackendFactory
 
 ```dart
-// Spawn backend
-final backend = await ClaudeBackend.spawn();
+// Create backend (direct CLI)
+final backend = await BackendFactory.create(
+  type: BackendType.directCli,
+);
 
 // Create session
 final session = await backend.createSession(
@@ -79,10 +78,6 @@ await session.send('Do something else');
 
 // Interrupt
 await session.interrupt();
-
-// Query methods
-final models = await session.supportedModels();
-await session.setModel('opus');
 
 // Cleanup
 await backend.dispose();
@@ -119,6 +114,8 @@ if (result != null && !result.isError) {
 | `SDKUserMessage` | User input, tool results |
 | `SDKResultMessage` | Turn complete, usage |
 | `SDKStreamEvent` | Partial streaming |
+| `SDKControlRequest` | Permission request from CLI |
+| `SDKControlResponse` | Initialize response |
 
 ## Content Blocks
 
@@ -150,67 +147,59 @@ SessionOptions(
 )
 ```
 
-## Callback Flow
+## Permission Flow
 
 ```
-SDK calls canUseTool
+CLI sends callback.request
     ↓
-Backend sends callback.request
-    ↓
-Dart receives PermissionRequest
+CliSession emits CliPermissionRequest
     ↓
 UI shows dialog
     ↓
 User clicks allow/deny
     ↓
+App calls request.allow() or request.deny()
+    ↓
 Dart sends callback.response
     ↓
-Backend resolves Promise
-    ↓
-SDK continues
+CLI continues or aborts
 ```
 
 ## File Structure
 
 ```
-backend-node/src/
-├── index.ts           # Entry point
-├── session-manager.ts # Session lifecycle
-├── callback-bridge.ts # Pending callbacks
-└── protocol.ts        # Message types
-
 dart_sdk/lib/
-├── claude_sdk.dart       # Exports
+├── claude_sdk.dart           # Exports
 └── src/
-    ├── backend.dart      # ClaudeBackend
-    ├── session.dart      # ClaudeSession
-    ├── single_request.dart # ClaudeSingleRequest (one-shot)
-    ├── protocol.dart     # JSON line I/O
+    ├── cli_process.dart      # CliProcess
+    ├── cli_session.dart      # CliSession
+    ├── cli_backend.dart      # ClaudeCliBackend
+    ├── backend_factory.dart  # BackendFactory
+    ├── backend_interface.dart # AgentBackend, AgentSession
+    ├── single_request.dart   # ClaudeSingleRequest (one-shot)
     └── types/
         ├── sdk_messages.dart
+        ├── control_messages.dart
         ├── session_options.dart
         ├── callbacks.dart
         └── usage.dart
 
-flutter_app/lib/
-├── main.dart          # Spawn backend
-└── providers/
-    └── app_state.dart # Uses Dart SDK
+frontend/lib/
+├── main.dart
+└── services/
+    └── backend_service.dart  # Uses BackendFactory
 ```
 
-## Implementation Phases
+## Environment Variables
 
-1. **Protocol** - Define JSON messages
-2. **Node Backend** - Thin bridge (~200 lines)
-3. **Dart Types** - SDK message classes
-4. **Dart SDK** - ClaudeBackend, ClaudeSession
-5. **Flutter** - Wire up to new SDK
-6. **Polish** - Error handling, bundling
+| Variable | Description |
+|----------|-------------|
+| `CLAUDE_CODE_PATH` | Path to claude CLI executable |
 
 ## Key Design Principles
 
-1. **Raw forwarding** - SDK messages passed verbatim
-2. **Unified callbacks** - Same mechanism for permissions + hooks
-3. **Subprocess model** - Backend is child process, no ports
-4. **Session multiplexing** - Multiple sessions, one backend
-5. **Dart owns logic** - Backend makes no decisions
+1. **Direct CLI** - No intermediate Node.js process
+2. **Session per process** - Each session spawns own CLI
+3. **Stream-json protocol** - Bidirectional JSON lines
+4. **Permission routing** - CLI requests routed to UI
+5. **Clean lifecycle** - Process death = session end

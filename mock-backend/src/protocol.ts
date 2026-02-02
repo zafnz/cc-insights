@@ -1,5 +1,5 @@
 // Protocol types for mock backend
-// Adapted from backend-node/src/protocol.ts
+// Matches the protocol defined in dart_sdk/lib/src/protocol.dart
 
 // ============================================================================
 // Incoming messages (Dart/Flutter -> Mock Backend)

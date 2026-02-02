@@ -90,6 +90,9 @@ class FakeClaudeSession implements ClaudeSession {
   Stream<HookRequest> get hookRequests => _hookRequestsController.stream;
 
   @override
+  bool get isActive => true;
+
+  @override
   String get sessionId => 'fake-session-id';
 
   @override
@@ -129,7 +132,7 @@ class FakeClaudeSession implements ClaudeSession {
   Future<void> setModel(String? model) async {}
 
   @override
-  Future<void> setPermissionMode(sdk.PermissionMode mode) async {}
+  Future<void> setPermissionMode(String? mode) async {}
 
   // Test-only members
   @override

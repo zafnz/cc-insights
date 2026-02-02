@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
 
+import 'backend_interface.dart';
 import 'protocol.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';

@@ -52,8 +52,8 @@ class _ActionsPanelContent extends StatefulWidget {
 
 class _ActionsPanelContentState extends State<_ActionsPanelContent> {
   final ProjectConfigService _configService = ProjectConfigService();
-  ProjectConfig? _config;
-  bool _isLoading = true;
+  // Start with default config - load from disk only when user interacts
+  ProjectConfig _config = const ProjectConfig.empty();
   String? _lastProjectRoot;
 
   @override
@@ -64,36 +64,29 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
 
     if (projectRoot != _lastProjectRoot) {
       _lastProjectRoot = projectRoot;
-      _loadConfig();
+      // Reset to defaults when project changes - will load on interaction
+      _config = const ProjectConfig.empty();
     }
   }
 
-  Future<void> _loadConfig() async {
-    if (_lastProjectRoot == null) {
-      setState(() {
-        _config = null;
-        _isLoading = false;
-      });
-      return;
+  /// Loads config from disk if not already loaded.
+  /// Call this before any operation that needs the actual config.
+  Future<ProjectConfig> _ensureConfigLoaded() async {
+    if (_lastProjectRoot == null) return _config;
+
+    final config = await _configService.loadConfig(_lastProjectRoot!);
+    if (mounted) {
+      setState(() => _config = config);
     }
+    return config;
+  }
 
-    setState(() => _isLoading = true);
+  Future<void> _reloadConfig() async {
+    if (_lastProjectRoot == null) return;
 
-    try {
-      final config = await _configService.loadConfig(_lastProjectRoot!);
-      if (mounted) {
-        setState(() {
-          _config = config;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _config = const ProjectConfig.empty();
-          _isLoading = false;
-        });
-      }
+    final config = await _configService.loadConfig(_lastProjectRoot!);
+    if (mounted) {
+      setState(() => _config = config);
     }
   }
 
@@ -121,7 +114,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
           name,
           newCommand,
         );
-        await _loadConfig();
+        await _reloadConfig();
 
         // Now run the script
         _runScript(name, newCommand, workingDirectory);
@@ -184,7 +177,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
           name,
           newCommand,
         );
-        await _loadConfig();
+        await _reloadConfig();
       }
     }
   }
@@ -198,16 +191,11 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
       return const _NoWorktreePlaceholder();
     }
 
-    if (_isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
+    return _buildActionButtons(context, _config);
+  }
 
-    final userActions = _config?.effectiveUserActions ?? {};
+  Widget _buildActionButtons(BuildContext context, ProjectConfig config) {
+    final userActions = config.effectiveUserActions;
 
     if (userActions.isEmpty) {
       return const _NoActionsPlaceholder();

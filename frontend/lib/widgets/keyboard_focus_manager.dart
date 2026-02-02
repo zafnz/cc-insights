@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'dialog_observer.dart';
+
 /// Manages keyboard focus for the application.
 ///
 /// Intercepts keyboard input at the app level and redirects typing keys
@@ -25,9 +27,17 @@ class KeyboardFocusManager extends StatefulWidget {
   const KeyboardFocusManager({
     super.key,
     required this.child,
+    this.dialogObserver,
   });
 
   final Widget child;
+
+  /// Optional [DialogObserver] to automatically suspend keyboard interception
+  /// while dialogs are open.
+  ///
+  /// When provided, keyboard interception is automatically suspended when
+  /// a dialog opens and resumed when it closes.
+  final DialogObserver? dialogObserver;
 
   /// Find the nearest [KeyboardFocusManagerState] in the widget tree.
   static KeyboardFocusManagerState? maybeOf(BuildContext context) {
@@ -88,15 +98,76 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
     }
   }
 
+  /// Tracks if we're currently suspended due to a dialog.
+  /// Used to pair suspend/resume calls from the dialog observer.
+  bool _suspendedForDialog = false;
+
   @override
   void initState() {
     super.initState();
     // Register global keyboard handler
     HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
+
+    // Connect to dialog observer if provided
+    _connectDialogObserver();
+  }
+
+  void _connectDialogObserver() {
+    final observer = widget.dialogObserver;
+    if (observer == null) return;
+
+    observer.onDialogOpened = _onDialogOpened;
+    observer.onDialogClosed = _onDialogClosed;
+
+    // If a dialog is already open when we connect, suspend immediately
+    if (observer.hasOpenDialog && !_suspendedForDialog) {
+      _suspendedForDialog = true;
+      _suspendCount++;
+    }
+  }
+
+  void _disconnectDialogObserver() {
+    final observer = widget.dialogObserver;
+    if (observer == null) return;
+
+    observer.onDialogOpened = null;
+    observer.onDialogClosed = null;
+
+    // Clean up any suspension we added
+    if (_suspendedForDialog) {
+      _suspendedForDialog = false;
+      if (_suspendCount > 0) _suspendCount--;
+    }
+  }
+
+  void _onDialogOpened() {
+    if (!_suspendedForDialog) {
+      _suspendedForDialog = true;
+      _suspendCount++;
+    }
+  }
+
+  void _onDialogClosed() {
+    // Only resume if we're the ones who suspended and no more dialogs are open
+    final observer = widget.dialogObserver;
+    if (_suspendedForDialog && (observer == null || !observer.hasOpenDialog)) {
+      _suspendedForDialog = false;
+      if (_suspendCount > 0) _suspendCount--;
+    }
+  }
+
+  @override
+  void didUpdateWidget(KeyboardFocusManager oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dialogObserver != widget.dialogObserver) {
+      _disconnectDialogObserver();
+      _connectDialogObserver();
+    }
   }
 
   @override
   void dispose() {
+    _disconnectDialogObserver();
     HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
     _handledKeys.clear();
     super.dispose();

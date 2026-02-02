@@ -209,8 +209,9 @@ class ChatState extends ChangeNotifier {
 
   /// The SDK session for this chat.
   ///
-  /// Null when no session is active.
-  sdk.ClaudeSession? _session;
+  /// Null when no session is active. This is the abstract [AgentSession]
+  /// interface which works with both the direct CLI and Node.js backends.
+  sdk.AgentSession? _session;
 
   /// Subscription to the session's message stream.
   StreamSubscription<sdk.SDKMessage>? _messageSubscription;
@@ -500,7 +501,8 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the Claude model for this chat.
   ///
-  /// If a session is active, this also updates the model on the running session.
+  /// If a session is active and supports mid-session model changes, this also
+  /// updates the model on the running session.
   void setModel(ClaudeModel model) {
     if (_model != model) {
       _model = model;
@@ -513,14 +515,14 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the permission mode for this chat.
   ///
-  /// If a session is active, this also updates the permission mode on the
-  /// running session.
+  /// If a session is active and supports mid-session permission changes, this
+  /// also updates the permission mode on the running session.
   void setPermissionMode(PermissionMode mode) {
     if (_permissionMode != mode) {
       _permissionMode = mode;
       _scheduleMetaSave();
       // Update the permission mode on the active session if one exists
-      _session?.setPermissionMode(_sdkPermissionMode);
+      _session?.setPermissionMode(_sdkPermissionMode.value);
       notifyListeners();
     }
   }
@@ -765,8 +767,13 @@ class ChatState extends ChangeNotifier {
       content: content,
     );
 
-    // Store the new session ID for future resume
-    final newSessionId = _session!.sdkSessionId;
+    // Store the new session ID for future resume.
+    // For ClaudeSession, use sdkSessionId (the SDK's session ID).
+    // For other AgentSession implementations, use sessionId directly.
+    final session = _session!;
+    final newSessionId = session is sdk.ClaudeSession
+        ? session.sdkSessionId
+        : session.sessionId;
     if (newSessionId != null && newSessionId != _lastSessionId) {
       developer.log(
         'Session created with ID: $newSessionId',
@@ -1077,7 +1084,7 @@ class ChatState extends ChangeNotifier {
   /// This is a low-level method for testing. Prefer [startSession] for
   /// creating sessions in production code.
   @visibleForTesting
-  void setSession(sdk.ClaudeSession? session) {
+  void setSession(sdk.AgentSession? session) {
     _session = session;
     notifyListeners();
   }

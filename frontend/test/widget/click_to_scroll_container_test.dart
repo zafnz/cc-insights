@@ -187,7 +187,7 @@ void main() {
       expect(scrollView.physics, isA<NeverScrollableScrollPhysics>());
     });
 
-    testWidgets('uses ClampingScrollPhysics when active, NeverScrollableScrollPhysics when inactive',
+    testWidgets('uses ClampingScrollPhysics when active',
         (tester) async {
       await tester.pumpWidget(
         MaterialApp(

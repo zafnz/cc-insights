@@ -1,4 +1,9 @@
-# Implementation Plan
+# Implementation Plan (Historical)
+
+> **Note:** This document describes the original Node.js backend implementation plan.
+> The architecture has since evolved to use direct CLI communication as the default.
+> See `BackendFactory` with `BackendType.directCli` for the current recommended approach.
+> The Node.js backend remains available via `BackendType.nodejs` for backwards compatibility.
 
 This document outlines the phased implementation plan for the Dart SDK architecture.
 

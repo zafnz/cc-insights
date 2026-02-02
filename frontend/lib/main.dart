@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:claude_sdk/claude_sdk.dart' show SdkLogger;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -23,6 +26,7 @@ import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
+import 'widgets/dialog_observer.dart';
 
 /// Global flag to force mock data usage in tests.
 ///
@@ -115,6 +119,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The AskAI service for one-shot AI queries.
   AskAiService? _askAiService;
 
+  /// Dialog observer for tracking open dialogs.
+  /// Used to suspend keyboard interception while dialogs are open.
+  final DialogObserver _dialogObserver = DialogObserver();
+
   /// Future for project restoration.
   Future<ProjectState>? _projectFuture;
 
@@ -148,6 +156,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// not on every hot reload.
   void _initializeServices() {
     final shouldUseMock = _shouldUseMockData();
+
+    // Enable SDK debug logging to file
+    _initializeSdkLogging();
 
     // Create or use injected BackendService
     if (widget.backendService != null) {
@@ -183,6 +194,19 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     } else {
       _projectFuture = _restoreProject();
     }
+  }
+
+  /// Initialize SDK debug logging to write all messages to a file.
+  void _initializeSdkLogging() {
+    // Get home directory path
+    final home = Platform.environment['HOME'] ?? '/tmp';
+    final logPath = '$home/ccinsights.debug.jsonl';
+
+    // Enable debug mode and file logging
+    SdkLogger.instance.debugEnabled = true;
+    SdkLogger.instance.enableFileLogging(logPath);
+
+    debugPrint('SDK debug logging enabled: $logPath');
   }
 
   /// Handles app termination by writing session quit markers.
@@ -380,6 +404,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<ScriptExecutionService>(
           create: (_) => ScriptExecutionService(),
         ),
+        // Dialog observer for keyboard focus management
+        Provider<DialogObserver>.value(value: _dialogObserver),
       ],
       child: MaterialApp(
         title: 'CC Insights',
@@ -387,6 +413,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
         themeMode: ThemeMode.system,
+        navigatorObservers: [_dialogObserver],
         home: const MainScreen(),
         routes: {'/replay': (context) => const ReplayDemoScreen()},
       ),
