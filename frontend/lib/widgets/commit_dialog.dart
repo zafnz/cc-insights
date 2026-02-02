@@ -127,7 +127,14 @@ class _CommitDialogState extends State<CommitDialog>
         .map((f) => '- ${f.path} (${_statusToString(f.status)})')
         .join('\n');
 
-    final prompt = '''Generate a commit message based on all of the work done in these files, there may be multiple changes reflected in this commit. Refer to other files for context if needed. The commit message should be detailed and contain multiple sections. Reply with ONLY the commit message, no other text, or reply ERROR if there is an error.
+    final prompt = '''Read the following files and generate a git commit message. Start your response directly with the commit summary line - no introduction like "Here is" or "Based on".
+
+Format:
+<summary line 50-72 chars>
+
+- bullet point 1
+- bullet point 2
+...
 
 Files to commit:
 $fileList''';
@@ -146,7 +153,7 @@ $fileList''';
 
       if (result != null && !result.isError) {
         final message = result.result?.trim() ?? '';
-        if (message.isNotEmpty && message != 'ERROR') {
+        if (message.isNotEmpty) {
           // Cache the message
           _cachedAiMessage = message;
 
@@ -156,7 +163,7 @@ $fileList''';
           }
         } else {
           setState(() {
-            _error = 'AI could not generate a commit message';
+            _error = 'AI returned an empty response';
           });
         }
       } else {
