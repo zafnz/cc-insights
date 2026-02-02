@@ -327,6 +327,10 @@ class TextOutputEntry extends OutputEntry {
   /// Default false for non-streaming mode.
   bool isStreaming;
 
+  /// The error type if this message represents an error (e.g., 'unknown').
+  /// Null for normal messages.
+  final String? errorType;
+
   /// Raw JSON messages associated with this entry for debugging.
   ///
   /// Populated when messages arrive from the SDK. Used by the JSON viewer.
@@ -345,6 +349,7 @@ class TextOutputEntry extends OutputEntry {
     required this.text,
     required this.contentType,
     this.isStreaming = false,
+    this.errorType,
     List<Map<String, dynamic>>? rawMessages,
   }) : _rawMessages = rawMessages;
 
@@ -364,6 +369,7 @@ class TextOutputEntry extends OutputEntry {
     String? text,
     String? contentType,
     bool? isStreaming,
+    String? errorType,
     List<Map<String, dynamic>>? rawMessages,
   }) {
     return TextOutputEntry(
@@ -371,6 +377,7 @@ class TextOutputEntry extends OutputEntry {
       text: text ?? this.text,
       contentType: contentType ?? this.contentType,
       isStreaming: isStreaming ?? this.isStreaming,
+      errorType: errorType ?? this.errorType,
       rawMessages: rawMessages ?? this.rawMessages,
     );
   }
@@ -383,17 +390,19 @@ class TextOutputEntry extends OutputEntry {
         other.text == text &&
         other.contentType == contentType &&
         other.isStreaming == isStreaming &&
+        other.errorType == errorType &&
         listEquals(other.rawMessages, rawMessages);
   }
 
   @override
-  int get hashCode =>
-      Object.hash(timestamp, text, contentType, isStreaming, rawMessages);
+  int get hashCode => Object.hash(
+      timestamp, text, contentType, isStreaming, errorType, rawMessages);
 
   @override
   String toString() {
     return 'TextOutputEntry(timestamp: $timestamp, text: $text, '
-        'contentType: $contentType, isStreaming: $isStreaming)';
+        'contentType: $contentType, isStreaming: $isStreaming, '
+        'errorType: $errorType)';
   }
 
   @override
@@ -403,6 +412,7 @@ class TextOutputEntry extends OutputEntry {
       'timestamp': timestamp.toIso8601String(),
       'text': text,
       'content_type': contentType,
+      if (errorType != null) 'error_type': errorType,
     };
   }
 
@@ -413,6 +423,7 @@ class TextOutputEntry extends OutputEntry {
       text: json['text'] as String,
       contentType: json['content_type'] as String? ?? 'text',
       isStreaming: false, // Restored entries are never streaming
+      errorType: json['error_type'] as String?,
     );
   }
 }

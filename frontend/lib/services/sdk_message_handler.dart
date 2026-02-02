@@ -186,6 +186,7 @@ class SdkMessageHandler {
     final message = msg['message'] as Map<String, dynamic>? ?? {};
     final content = message['content'] as List<dynamic>? ?? [];
     final model = message['model'] as String?;
+    final errorType = msg['error'] as String?;
 
     // Update context tracking from main agent assistant messages only.
     // Subagent messages have their own context which could be confusing
@@ -205,6 +206,7 @@ class SdkMessageHandler {
             timestamp: DateTime.now(),
             text: blockMap['text'] as String? ?? '',
             contentType: 'text',
+            errorType: errorType,
           );
           textEntry.addRawMessage(msg);
           chat.addOutputEntry(conversationId, textEntry);
