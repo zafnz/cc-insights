@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:xterm/xterm.dart';
 
 import '../services/script_execution_service.dart';
 import 'panel_wrapper.dart';
@@ -111,13 +111,14 @@ class _TerminalContentState extends State<_TerminalContent> {
   Timer? _autoCloseTimer;
   bool _userRequestedKeepOpen = false;
   String? _lastScriptId;
-  int _lastOutputLength = 0;
-  final ScrollController _scrollController = ScrollController();
+  Terminal? _terminal;
+  StreamSubscription<List<int>>? _outputSubscription;
 
   @override
   void dispose() {
     _autoCloseTimer?.cancel();
-    _scrollController.dispose();
+    _outputSubscription?.cancel();
+    // Note: Terminal doesn't have a dispose method
     super.dispose();
   }
 
@@ -136,6 +137,21 @@ class _TerminalContentState extends State<_TerminalContent> {
       _autoCloseTimer?.cancel();
       _autoCloseTimer = null;
       _userRequestedKeepOpen = false;
+
+      // Create new terminal and subscribe to output stream
+      _outputSubscription?.cancel();
+      _terminal = Terminal();
+      _outputSubscription = script.outputStream.listen(
+        (data) {
+          // PTY output is raw bytes, decode to string for xterm
+          // PTY already handles proper line endings (\r\n) for terminal emulation
+          final text = String.fromCharCodes(data);
+          _terminal?.write(text);
+        },
+        onDone: () {
+          // Stream closed, script finished
+        },
+      );
     }
 
     // Start auto-close timer when script completes successfully
@@ -147,17 +163,6 @@ class _TerminalContentState extends State<_TerminalContent> {
       });
     }
 
-    // Auto-scroll to bottom only when output actually changes
-    final currentOutputLength = script.output.length;
-    if (currentOutputLength != _lastOutputLength) {
-      _lastOutputLength = currentOutputLength;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -165,8 +170,7 @@ class _TerminalContentState extends State<_TerminalContent> {
         Expanded(
           child: _OutputArea(
             key: TerminalOutputPanelKeys.outputArea,
-            output: script.output,
-            scrollController: _scrollController,
+            terminal: _terminal!,
           ),
         ),
 
@@ -192,31 +196,53 @@ class _TerminalContentState extends State<_TerminalContent> {
 class _OutputArea extends StatelessWidget {
   const _OutputArea({
     super.key,
-    required this.output,
-    required this.scrollController,
+    required this.terminal,
   });
 
-  final String output;
-  final ScrollController scrollController;
+  final Terminal terminal;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       color: colorScheme.surfaceContainerLowest,
-      child: SelectableText.rich(
-        TextSpan(
-          text: output.isEmpty ? '(no output)' : output,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 11,
-            color: output.isEmpty
-                ? colorScheme.onSurfaceVariant
-                : colorScheme.onSurface,
-            height: 1.4,
-          ),
+      child: TerminalView(
+        terminal,
+        theme: TerminalTheme(
+          cursor: colorScheme.primary,
+          selection: colorScheme.primaryContainer,
+          foreground: colorScheme.onSurface,
+          background: colorScheme.surfaceContainerLowest,
+          black: isDark ? const Color(0xFF2E3436) : const Color(0xFF000000),
+          red: isDark ? const Color(0xFFCC0000) : const Color(0xFFCC0000),
+          green: isDark ? const Color(0xFF4E9A06) : const Color(0xFF4E9A06),
+          yellow: isDark ? const Color(0xFFC4A000) : const Color(0xFFC4A000),
+          blue: isDark ? const Color(0xFF3465A4) : const Color(0xFF3465A4),
+          magenta: isDark ? const Color(0xFF75507B) : const Color(0xFF75507B),
+          cyan: isDark ? const Color(0xFF06989A) : const Color(0xFF06989A),
+          white: isDark ? const Color(0xFFD3D7CF) : const Color(0xFFFFFFFF),
+          brightBlack: isDark ? const Color(0xFF555753) : const Color(0xFF555753),
+          brightRed: isDark ? const Color(0xFFEF2929) : const Color(0xFFEF2929),
+          brightGreen: isDark ? const Color(0xFF8AE234) : const Color(0xFF8AE234),
+          brightYellow: isDark ? const Color(0xFFFCE94F) : const Color(0xFFFCE94F),
+          brightBlue: isDark ? const Color(0xFF729FCF) : const Color(0xFF729FCF),
+          brightMagenta: isDark ? const Color(0xFFAD7FA8) : const Color(0xFFAD7FA8),
+          brightCyan: isDark ? const Color(0xFF34E2E2) : const Color(0xFF34E2E2),
+          brightWhite: isDark ? const Color(0xFFEEEEEC) : const Color(0xFFFFFFFF),
+          searchHitBackground: colorScheme.secondaryContainer,
+          searchHitBackgroundCurrent: colorScheme.tertiaryContainer,
+          searchHitForeground: colorScheme.onSecondaryContainer,
         ),
-        scrollPhysics: const ClampingScrollPhysics(),
+        textStyle: const TerminalStyle(
+          fontSize: 11,
+          fontFamily: 'JetBrains Mono',
+          fontFamilyFallback: ['Courier New', 'monospace'],
+        ),
+        padding: const EdgeInsets.all(8),
+        autofocus: false,
+        readOnly: true,
       ),
     );
   }

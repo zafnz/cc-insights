@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_pty/flutter_pty.dart';
 
 /// Represents a script that is currently running or has completed.
 class RunningScript {
@@ -19,16 +21,26 @@ class RunningScript {
   /// The working directory for the script.
   final String workingDirectory;
 
-  /// The underlying process.
-  final Process process;
+  /// The underlying PTY.
+  final Pty pty;
 
-  /// Buffered stdout output.
+  /// The exit code future from the PTY.
+  final Future<int> _exitCodeFuture;
+
+  /// Stream controller for combined terminal output (raw bytes for xterm).
+  final StreamController<Uint8List> _outputController =
+      StreamController<Uint8List>.broadcast();
+
+  /// Stream of raw bytes for xterm terminal.
+  Stream<Uint8List> get outputStream => _outputController.stream;
+
+  /// Buffered stdout output (for legacy text display if needed).
   final StringBuffer _stdout = StringBuffer();
 
-  /// Buffered stderr output.
+  /// Buffered stderr output (for legacy text display if needed).
   final StringBuffer _stderr = StringBuffer();
 
-  /// Combined output (stdout and stderr interleaved).
+  /// Combined output (stdout and stderr interleaved, for legacy text display).
   final StringBuffer _combined = StringBuffer();
 
   /// Exit code, or null if still running.
@@ -42,8 +54,10 @@ class RunningScript {
     required this.name,
     required this.command,
     required this.workingDirectory,
-    required this.process,
-  }) : startTime = DateTime.now();
+    required this.pty,
+    required Future<int> exitCodeFuture,
+  })  : _exitCodeFuture = exitCodeFuture,
+        startTime = DateTime.now();
 
   /// Whether the script is still running.
   bool get isRunning => exitCode == null;
@@ -63,16 +77,30 @@ class RunningScript {
   /// Get combined output.
   String get output => _combined.toString();
 
+  /// Append raw bytes to the output stream (for xterm).
+  void appendBytes(Uint8List data) {
+    _outputController.add(data);
+  }
+
   /// Append to stdout.
   void appendStdout(String data) {
     _stdout.write(data);
     _combined.write(data);
+    // Also send to xterm as bytes
+    _outputController.add(Uint8List.fromList(utf8.encode(data)));
   }
 
   /// Append to stderr.
   void appendStderr(String data) {
     _stderr.write(data);
     _combined.write(data);
+    // Also send to xterm as bytes
+    _outputController.add(Uint8List.fromList(utf8.encode(data)));
+  }
+
+  /// Close the output stream (call when script completes).
+  void closeOutputStream() {
+    _outputController.close();
   }
 
   /// Duration since start.
@@ -132,20 +160,24 @@ class ScriptExecutionService extends ChangeNotifier {
       name: 'ScriptExecutionService',
     );
 
-    // Start the process using shell
-    final process = await Process.start(
+    // Start the process using PTY for proper terminal emulation
+    final pty = Pty.start(
       '/bin/sh',
-      ['-c', command],
+      arguments: ['-c', command],
       workingDirectory: workingDirectory,
       environment: Platform.environment,
     );
+
+    // PTY exitCode is a Future<int>
+    final exitCodeFuture = pty.exitCode;
 
     final script = RunningScript(
       id: id,
       name: name,
       command: command,
       workingDirectory: workingDirectory,
-      process: process,
+      pty: pty,
+      exitCodeFuture: exitCodeFuture,
     );
 
     _scripts[id] = script;
@@ -155,23 +187,23 @@ class ScriptExecutionService extends ChangeNotifier {
     // Track subscriptions for cleanup
     _subscriptions[id] = [];
 
-    // Stream stdout
-    final stdoutSub = process.stdout.transform(utf8.decoder).listen((data) {
-      script.appendStdout(data);
+    // Stream PTY output (combines stdout and stderr)
+    // PTY output is already in raw bytes, perfect for xterm
+    final outputSub = pty.output.listen((data) {
+      // Send raw bytes to xterm
+      script.appendBytes(data);
+      // Also decode for legacy text buffer
+      final text = utf8.decode(data, allowMalformed: true);
+      script._stdout.write(text);
+      script._combined.write(text);
       notifyListeners();
     });
-    _subscriptions[id]!.add(stdoutSub);
-
-    // Stream stderr
-    final stderrSub = process.stderr.transform(utf8.decoder).listen((data) {
-      script.appendStderr(data);
-      notifyListeners();
-    });
-    _subscriptions[id]!.add(stderrSub);
+    _subscriptions[id]!.add(outputSub);
 
     // Handle completion
-    process.exitCode.then((code) {
+    exitCodeFuture.then((code) {
       script.exitCode = code;
+      script.closeOutputStream();
       developer.log(
         'Script "$name" completed with exit code $code',
         name: 'ScriptExecutionService',
@@ -200,8 +232,8 @@ class ScriptExecutionService extends ChangeNotifier {
       workingDirectory: workingDirectory,
     );
 
-    // Wait for process to complete
-    return await script.process.exitCode;
+    // Wait for PTY to complete
+    return await script._exitCodeFuture;
   }
 
   /// Focus on a specific script (show it in TerminalOutputPanel).
@@ -261,7 +293,7 @@ class ScriptExecutionService extends ChangeNotifier {
         'Killing script "${script.name}"',
         name: 'ScriptExecutionService',
       );
-      script.process.kill(ProcessSignal.sigterm);
+      script.pty.kill();
     }
   }
 
@@ -283,10 +315,10 @@ class ScriptExecutionService extends ChangeNotifier {
 
   @override
   void dispose() {
-    // Kill all running processes
+    // Kill all running PTYs
     for (final script in _scripts.values) {
       if (script.isRunning) {
-        script.process.kill();
+        script.pty.kill();
       }
     }
     // Cancel all subscriptions
