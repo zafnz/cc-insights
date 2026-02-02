@@ -50,7 +50,7 @@ class TerminalOutputPanel extends StatefulWidget {
 }
 
 class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
-  static const _autoCloseDelay = Duration(seconds: 2);
+  static const _autoCloseDelay = Duration(seconds: 5);
 
   /// List of all terminal tabs (both script output and interactive shells).
   final List<TerminalTab> _tabs = [];
@@ -64,8 +64,14 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
   /// Stream subscriptions for terminal output.
   final Map<String, StreamSubscription<List<int>>> _subscriptions = {};
 
-  /// Auto-close timers for successful script tabs.
+  /// Auto-close countdown timers for successful script tabs.
   final Map<String, Timer> _autoCloseTimers = {};
+
+  /// Track which scripts have auto-close in progress.
+  final Set<String> _autoClosingScripts = {};
+
+  /// Track remaining seconds for auto-close countdown.
+  final Map<String, int> _autoCloseCountdown = {};
 
   /// Keyboard focus manager resume callback.
   VoidCallback? _keyboardResume;
@@ -167,6 +173,8 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
       // Cancel auto-close timer if it exists
       _autoCloseTimers[scriptId]?.cancel();
       _autoCloseTimers.remove(scriptId);
+      _autoClosingScripts.remove(scriptId);
+      _autoCloseCountdown.remove(scriptId);
 
       // This is a script tab - clear it from the service
       context.read<ScriptExecutionService>().clearScript(scriptId);
@@ -242,14 +250,36 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
       if (scriptForTab != null && !scriptForTab.isRunning && scriptForTab.isSuccess) {
         // Script completed successfully - start auto-close timer if not already started
         if (!_autoCloseTimers.containsKey(scriptId)) {
-          _autoCloseTimers[scriptId] = Timer(_autoCloseDelay, () {
+          _autoClosingScripts.add(scriptId);
+          _autoCloseCountdown[scriptId] = _autoCloseDelay.inSeconds;
+
+          // Create a periodic timer that updates countdown every second
+          var secondsRemaining = _autoCloseDelay.inSeconds;
+          final timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+            if (!mounted || !_autoClosingScripts.contains(scriptId)) {
+              timer.cancel();
+              return;
+            }
+
+            secondsRemaining--;
             if (mounted) {
-              final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
-              if (tabIndex != -1) {
-                _closeTab(tabIndex);
+              setState(() {
+                _autoCloseCountdown[scriptId] = secondsRemaining;
+              });
+            }
+
+            if (secondsRemaining <= 0) {
+              timer.cancel();
+              if (mounted && _autoClosingScripts.contains(scriptId)) {
+                final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
+                if (tabIndex != -1) {
+                  _closeTab(tabIndex);
+                }
               }
             }
           });
+
+          _autoCloseTimers[scriptId] = timer;
         }
       }
     }
@@ -480,6 +510,9 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
       statusIcon = Icons.error;
     }
 
+    // Check if this script is auto-closing
+    final isAutoClosing = _autoClosingScripts.contains(script.id);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -496,9 +529,45 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
             statusText,
             style: textTheme.labelSmall?.copyWith(color: statusColor),
           ),
+          if (isAutoClosing) ...[
+            const SizedBox(width: 12),
+            Text(
+              '• Closing in ${_autoCloseCountdown[script.id] ?? _autoCloseDelay.inSeconds}s',
+              style: textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              key: TerminalOutputPanelKeys.keepOpenButton,
+              onPressed: () => _cancelAutoClose(script.id),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              child: Text(
+                'Keep Open',
+                style: textTheme.labelSmall,
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  void _cancelAutoClose(String scriptId) {
+    // Cancel the timer
+    _autoCloseTimers[scriptId]?.cancel();
+    _autoCloseTimers.remove(scriptId);
+
+    // Remove from auto-closing set and countdown
+    setState(() {
+      _autoClosingScripts.remove(scriptId);
+      _autoCloseCountdown.remove(scriptId);
+    });
   }
 
   bool _isScriptTab(TerminalTab tab) {
