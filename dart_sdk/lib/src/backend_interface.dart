@@ -82,4 +82,16 @@ abstract class AgentSession {
 
   /// Terminate the session.
   Future<void> kill();
+
+  /// Set the model for this session.
+  ///
+  /// Note: This may not be supported by all session implementations.
+  /// Check the specific implementation for availability.
+  Future<void> setModel(String? model);
+
+  /// Set the permission mode for this session.
+  ///
+  /// Note: This may not be supported by all session implementations.
+  /// Check the specific implementation for availability.
+  Future<void> setPermissionMode(String? mode);
 }

@@ -165,18 +165,20 @@ class ClaudeSession implements AgentSession {
   }
 
   /// Set the model for this session.
+  @override
   Future<void> setModel(String? model) async {
     if (_disposed || _isTestSession) return;
     await _backend!._querySession<void>(sessionId, 'setModel', [model]);
   }
 
   /// Set the permission mode for this session.
-  Future<void> setPermissionMode(PermissionMode mode) async {
+  @override
+  Future<void> setPermissionMode(String? mode) async {
     if (_disposed || _isTestSession) return;
     await _backend!._querySession<void>(
       sessionId,
       'setPermissionMode',
-      [mode.value],
+      [mode],
     );
   }
 

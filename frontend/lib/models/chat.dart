@@ -507,12 +507,8 @@ class ChatState extends ChangeNotifier {
     if (_model != model) {
       _model = model;
       _scheduleMetaSave();
-      // Update the model on the active session if one exists and supports it
-      // (only ClaudeSession supports mid-session model changes)
-      final session = _session;
-      if (session is sdk.ClaudeSession) {
-        session.setModel(model.apiName);
-      }
+      // Update the model on the active session if one exists
+      _session?.setModel(model.apiName);
       notifyListeners();
     }
   }
@@ -525,12 +521,8 @@ class ChatState extends ChangeNotifier {
     if (_permissionMode != mode) {
       _permissionMode = mode;
       _scheduleMetaSave();
-      // Update the permission mode on the active session if one exists and
-      // supports it (only ClaudeSession supports mid-session changes)
-      final session = _session;
-      if (session is sdk.ClaudeSession) {
-        session.setPermissionMode(_sdkPermissionMode);
-      }
+      // Update the permission mode on the active session if one exists
+      _session?.setPermissionMode(_sdkPermissionMode.value);
       notifyListeners();
     }
   }

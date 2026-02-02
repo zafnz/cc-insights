@@ -918,4 +918,10 @@ class _MockAgentSession implements AgentSession {
     await _permissionRequestsController.close();
     await _hookRequestsController.close();
   }
+
+  @override
+  Future<void> setModel(String? model) async {}
+
+  @override
+  Future<void> setPermissionMode(String? mode) async {}
 }

@@ -83,8 +83,11 @@ class CliSession {
           final blockedPath = request?['blocked_path'] as String?;
 
           // Parse suggestions if present
+          // CLI sends as 'permission_suggestions' (snake_case)
           List<PermissionSuggestion>? suggestions;
-          final suggestionsJson = request?['suggestions'] as List?;
+          final suggestionsJson =
+              request?['permission_suggestions'] as List? ??
+              request?['suggestions'] as List?;
           if (suggestionsJson != null) {
             suggestions = suggestionsJson
                 .whereType<Map<String, dynamic>>()
@@ -316,6 +319,58 @@ class CliSession {
     });
   }
 
+  /// Set the model for this session.
+  ///
+  /// Sends a control request to change the model mid-session.
+  /// Note: This is only available in streaming input mode.
+  Future<void> setModel(String? model) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+
+    final requestId = _generateRequestId();
+    SdkLogger.instance.debug(
+      'Setting model',
+      sessionId: sessionId,
+      data: {'model': model, 'requestId': requestId},
+    );
+
+    _process.send({
+      'type': 'control_request',
+      'request_id': requestId,
+      'request': {
+        'subtype': 'set_model',
+        'model': model,
+      },
+    });
+  }
+
+  /// Set the permission mode for this session.
+  ///
+  /// Sends a control request to change the permission mode mid-session.
+  /// Note: This is only available in streaming input mode.
+  Future<void> setPermissionMode(String? mode) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+
+    final requestId = _generateRequestId();
+    SdkLogger.instance.debug(
+      'Setting permission mode',
+      sessionId: sessionId,
+      data: {'mode': mode, 'requestId': requestId},
+    );
+
+    _process.send({
+      'type': 'control_request',
+      'request_id': requestId,
+      'request': {
+        'subtype': 'set_permission_mode',
+        'permission_mode': mode,
+      },
+    });
+  }
+
   /// Terminate the session.
   Future<void> kill() async {
     if (_disposed) return;
@@ -420,7 +475,7 @@ class CliPermissionRequest {
 
   /// Allow the tool execution.
   ///
-  /// [updatedInput] - Optional modified input parameters.
+  /// [updatedInput] - Modified input parameters. If null, original input is used.
   /// [updatedPermissions] - Optional permission suggestions to apply.
   void allow({
     Map<String, dynamic>? updatedInput,
@@ -438,6 +493,8 @@ class CliPermissionRequest {
     );
 
     // Send control_response in the correct format
+    // Note: updatedInput is REQUIRED by the CLI - use original input if not modified
+    // CLI expects camelCase field names with toolUseID (capital ID)
     final response = {
       'type': 'control_response',
       'response': {
@@ -445,10 +502,10 @@ class CliPermissionRequest {
         'request_id': requestId,
         'response': {
           'behavior': 'allow',
-          'tool_use_id': toolUseId,
-          if (updatedInput != null) 'updated_input': updatedInput,
+          'updatedInput': updatedInput ?? input,
+          'toolUseID': toolUseId,
           if (updatedPermissions != null)
-            'updated_permissions':
+            'updatedPermissions':
                 updatedPermissions.map((p) => p.toJson()).toList(),
         },
       },
@@ -458,20 +515,28 @@ class CliPermissionRequest {
 
   /// Deny the tool execution.
   ///
-  /// [message] - Optional message explaining the denial.
+  /// [message] - Message explaining the denial. Defaults to "User denied permission".
   void deny([String? message]) {
     if (_responded) {
       throw StateError('Permission request has already been responded to');
     }
     _responded = true;
 
+    final denialMessage = message ?? 'User denied permission';
+
     SdkLogger.instance.debug(
       'Permission denied',
       sessionId: _session.sessionId,
-      data: {'toolName': toolName, 'requestId': requestId, 'message': message},
+      data: {
+        'toolName': toolName,
+        'requestId': requestId,
+        'message': denialMessage
+      },
     );
 
     // Send control_response in the correct format
+    // Note: message is REQUIRED by the CLI - use default if not provided
+    // CLI expects camelCase field names with toolUseID (capital ID)
     final response = {
       'type': 'control_response',
       'response': {
@@ -479,8 +544,8 @@ class CliPermissionRequest {
         'request_id': requestId,
         'response': {
           'behavior': 'deny',
-          'tool_use_id': toolUseId,
-          if (message != null) 'message': message,
+          'message': denialMessage,
+          'toolUseID': toolUseId,
         },
       },
     };

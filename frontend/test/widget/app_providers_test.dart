@@ -114,7 +114,7 @@ class _FakeClaudeSession implements ClaudeSession {
   Future<void> setModel(String? model) async {}
 
   @override
-  Future<void> setPermissionMode(PermissionMode mode) async {}
+  Future<void> setPermissionMode(String? mode) async {}
 
   // Test-only members
   @override

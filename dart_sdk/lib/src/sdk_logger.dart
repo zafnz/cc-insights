@@ -10,33 +10,84 @@ enum LogLevel {
   error,
 }
 
+/// Direction of a logged message.
+enum LogDirection {
+  stdin,
+  stdout,
+  stderr,
+  internal,
+}
+
 /// A log entry from the SDK.
 class LogEntry {
   const LogEntry({
     required this.level,
     required this.message,
     required this.timestamp,
+    this.direction,
     this.sessionId,
     this.data,
+    this.text,
   });
 
   final LogLevel level;
   final String message;
   final DateTime timestamp;
+  final LogDirection? direction;
   final String? sessionId;
   final Map<String, dynamic>? data;
+  final String? text;
+
+  /// Convert to a valid JSON object for JSONL output.
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{
+      'timestamp': timestamp.toIso8601String(),
+      'level': level.name,
+    };
+
+    if (direction != null) {
+      json['direction'] = direction!.name;
+    }
+
+    if (sessionId != null) {
+      json['sessionId'] = sessionId;
+    }
+
+    // If we have structured data (JSON content), include it
+    if (data != null) {
+      json['content'] = data;
+    } else if (text != null) {
+      // For non-JSON content (like stderr), use text field
+      json['text'] = text;
+    } else {
+      // For simple log messages
+      json['message'] = message;
+    }
+
+    return json;
+  }
+
+  /// Convert to JSONL format (single line JSON).
+  String toJsonLine() {
+    return jsonEncode(toJson());
+  }
 
   @override
   String toString() {
     final buffer = StringBuffer();
     buffer.write('[${timestamp.toIso8601String()}]');
     buffer.write('[${level.name.toUpperCase()}]');
+    if (direction != null) {
+      buffer.write('[${direction!.name}]');
+    }
     if (sessionId != null) {
       buffer.write('[session:$sessionId]');
     }
     buffer.write(' $message');
     if (data != null) {
       buffer.write('\n  ${jsonEncode(data)}');
+    } else if (text != null) {
+      buffer.write('\n  $text');
     }
     return buffer.toString();
   }
@@ -80,8 +131,12 @@ class SdkLogger {
   static final SdkLogger instance = SdkLogger._();
 
   bool _debugEnabled = false;
-  IOSink? _logFileSink;
+  File? _logFile;
   String? _logFilePath;
+
+  // Write queue to prevent concurrent write corruption
+  final _writeQueue = <String>[];
+  bool _isWriting = false;
 
   final _logsController = StreamController<LogEntry>.broadcast();
 
@@ -112,9 +167,11 @@ class SdkLogger {
 
   /// Disable file logging.
   Future<void> disableFileLogging() async {
-    await _logFileSink?.flush();
-    await _logFileSink?.close();
-    _logFileSink = null;
+    // Wait for pending writes to complete
+    while (_isWriting || _writeQueue.isNotEmpty) {
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
+    _logFile = null;
     _logFilePath = null;
   }
 
@@ -125,11 +182,36 @@ class SdkLogger {
       if (!parent.existsSync()) {
         parent.createSync(recursive: true);
       }
-      _logFileSink = file.openWrite(mode: FileMode.append);
+      _logFile = file;
       _logFilePath = path;
       info('File logging enabled: $path');
     } catch (e) {
       error('Failed to setup file logging: $e');
+    }
+  }
+
+  /// Queue a line to be written to the log file.
+  void _queueWrite(String line) {
+    if (_logFile == null) return;
+    _writeQueue.add(line);
+    _processWriteQueue();
+  }
+
+  /// Process the write queue sequentially to prevent corruption.
+  Future<void> _processWriteQueue() async {
+    if (_isWriting || _writeQueue.isEmpty || _logFile == null) return;
+
+    _isWriting = true;
+    try {
+      while (_writeQueue.isNotEmpty && _logFile != null) {
+        final line = _writeQueue.removeAt(0);
+        // Use sync append for atomic writes at OS level
+        _logFile!.writeAsStringSync('$line\n', mode: FileMode.append);
+      }
+    } catch (e) {
+      // Silently ignore write errors to avoid disrupting the main app
+    } finally {
+      _isWriting = false;
     }
   }
 
@@ -159,18 +241,80 @@ class SdkLogger {
 
   /// Log a message sent TO the CLI (stdin).
   void logOutgoing(Map<String, dynamic> message, {String? sessionId}) {
-    debug('>>> SEND', sessionId: sessionId, data: message);
+    if (!_debugEnabled) return;
+    _logMessage(
+      LogDirection.stdin,
+      message,
+      sessionId: sessionId,
+    );
   }
 
   /// Log a message received FROM the CLI (stdout).
   void logIncoming(Map<String, dynamic> message, {String? sessionId}) {
-    debug('<<< RECV', sessionId: sessionId, data: message);
+    if (!_debugEnabled) return;
+    _logMessage(
+      LogDirection.stdout,
+      message,
+      sessionId: sessionId,
+    );
   }
 
   /// Log stderr output from the CLI.
   void logStderr(String line, {String? sessionId}) {
-    // Stderr is always logged as info level (it's operational, not debug)
-    info('CLI stderr: $line', sessionId: sessionId);
+    if (!_debugEnabled) return;
+    _logText(
+      LogDirection.stderr,
+      line,
+      sessionId: sessionId,
+    );
+  }
+
+  /// Log a structured JSON message with direction.
+  void _logMessage(
+    LogDirection direction,
+    Map<String, dynamic> content, {
+    String? sessionId,
+  }) {
+    final entry = LogEntry(
+      level: LogLevel.debug,
+      message: direction == LogDirection.stdin ? 'SEND' : 'RECV',
+      timestamp: DateTime.now(),
+      direction: direction,
+      sessionId: sessionId,
+      data: content,
+    );
+
+    // Emit to stream
+    if (!_logsController.isClosed) {
+      _logsController.add(entry);
+    }
+
+    // Queue write to file as JSONL if enabled
+    _queueWrite(entry.toJsonLine());
+  }
+
+  /// Log a text message (non-JSON) with direction.
+  void _logText(
+    LogDirection direction,
+    String text, {
+    String? sessionId,
+  }) {
+    final entry = LogEntry(
+      level: LogLevel.info,
+      message: 'stderr',
+      timestamp: DateTime.now(),
+      direction: direction,
+      sessionId: sessionId,
+      text: text,
+    );
+
+    // Emit to stream
+    if (!_logsController.isClosed) {
+      _logsController.add(entry);
+    }
+
+    // Queue write to file as JSONL if enabled
+    _queueWrite(entry.toJsonLine());
   }
 
   void _log(
@@ -183,6 +327,7 @@ class SdkLogger {
       level: level,
       message: message,
       timestamp: DateTime.now(),
+      direction: LogDirection.internal,
       sessionId: sessionId,
       data: data,
     );
@@ -192,8 +337,8 @@ class SdkLogger {
       _logsController.add(entry);
     }
 
-    // Write to file if enabled
-    _logFileSink?.writeln(entry.toString());
+    // Queue write to file as JSONL if enabled
+    _queueWrite(entry.toJsonLine());
   }
 
   /// Dispose resources.

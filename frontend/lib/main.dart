@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:claude_sdk/claude_sdk.dart' show SdkLogger;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -149,6 +152,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void _initializeServices() {
     final shouldUseMock = _shouldUseMockData();
 
+    // Enable SDK debug logging to file
+    _initializeSdkLogging();
+
     // Create or use injected BackendService
     if (widget.backendService != null) {
       _backend = widget.backendService;
@@ -183,6 +189,19 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     } else {
       _projectFuture = _restoreProject();
     }
+  }
+
+  /// Initialize SDK debug logging to write all messages to a file.
+  void _initializeSdkLogging() {
+    // Get home directory path
+    final home = Platform.environment['HOME'] ?? '/tmp';
+    final logPath = '$home/ccinsights.debug.jsonl';
+
+    // Enable debug mode and file logging
+    SdkLogger.instance.debugEnabled = true;
+    SdkLogger.instance.enableFileLogging(logPath);
+
+    debugPrint('SDK debug logging enabled: $logPath');
   }
 
   /// Handles app termination by writing session quit markers.

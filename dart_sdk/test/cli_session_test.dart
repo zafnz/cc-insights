@@ -373,7 +373,7 @@ void main() {
     });
 
     group('permission request/response flow', () {
-      test('allow sends callback.response with allow behavior', () async {
+      test('allow sends control_response with allow behavior', () async {
         // Arrange
         final session = await helper.createInitializedSession();
         late CliPermissionRequest request;
@@ -394,14 +394,19 @@ void main() {
         request.allow();
         await Future.delayed(Duration.zero);
 
-        // Assert
+        // Assert - CLI expects control_response format
+        // Outer uses request_id (snake_case), inner uses toolUseID (capital ID)
         expect(helper.stdinMessages, hasLength(1));
         final response = helper.stdinMessages[0];
-        expect(response['type'], equals('callback.response'));
-        expect(response['id'], equals('cb-allow-test'));
-        expect(response['session_id'], equals('sess-123'));
-        expect(response['payload']['behavior'], equals('allow'));
-        expect(response['payload']['tool_use_id'], equals('toolu_allow'));
+        expect(response['type'], equals('control_response'));
+        final innerResponse = response['response'] as Map<String, dynamic>;
+        expect(innerResponse['subtype'], equals('success'));
+        expect(innerResponse['request_id'], equals('cb-allow-test'));
+        final payload = innerResponse['response'] as Map<String, dynamic>;
+        expect(payload['behavior'], equals('allow'));
+        expect(payload['toolUseID'], equals('toolu_allow'));
+        // updatedInput should be original input when not provided
+        expect(payload['updatedInput']['command'], equals('echo test'));
 
         await session.dispose();
       });
@@ -425,15 +430,17 @@ void main() {
         request.allow(updatedInput: {'command': 'echo "safe command"'});
         await Future.delayed(Duration.zero);
 
-        // Assert
+        // Assert - CLI expects updatedInput in response
         final response = helper.stdinMessages[0];
-        expect(response['payload']['updated_input']['command'],
+        final innerResponse = response['response'] as Map<String, dynamic>;
+        final payload = innerResponse['response'] as Map<String, dynamic>;
+        expect(payload['updatedInput']['command'],
             equals('echo "safe command"'));
 
         await session.dispose();
       });
 
-      test('deny sends callback.response with deny behavior', () async {
+      test('deny sends control_response with deny behavior', () async {
         // Arrange
         final session = await helper.createInitializedSession();
         late CliPermissionRequest request;
@@ -452,13 +459,16 @@ void main() {
         request.deny('This operation is not allowed');
         await Future.delayed(Duration.zero);
 
-        // Assert
+        // Assert - CLI expects control_response format
+        // Outer uses request_id (snake_case), inner uses toolUseID (capital ID)
         expect(helper.stdinMessages, hasLength(1));
         final response = helper.stdinMessages[0];
-        expect(response['type'], equals('callback.response'));
-        expect(response['id'], equals('cb-deny-test'));
-        expect(response['payload']['behavior'], equals('deny'));
-        expect(response['payload']['message'],
+        expect(response['type'], equals('control_response'));
+        final innerResponse = response['response'] as Map<String, dynamic>;
+        expect(innerResponse['request_id'], equals('cb-deny-test'));
+        final payload = innerResponse['response'] as Map<String, dynamic>;
+        expect(payload['behavior'], equals('deny'));
+        expect(payload['message'],
             equals('This operation is not allowed'));
 
         await session.dispose();
@@ -1359,9 +1369,31 @@ class CliSessionForTestingImpl implements CliSession {
     _permissionRequestsController.close();
   }
 
+  @override
+  Future<void> setModel(String? model) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    // No-op for testing
+  }
+
+  @override
+  Future<void> setPermissionMode(String? mode) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    // No-op for testing
+  }
+
   void sendCallbackResponse(CallbackResponse response) {
     if (_disposed) return;
     _process.send(response.toJson());
+  }
+
+  /// Send a raw JSON response to the process.
+  void sendRawJson(Map<String, dynamic> json) {
+    if (_disposed) return;
+    _process.send(json);
   }
 }
 
@@ -1412,14 +1444,24 @@ class _CliPermissionRequestForTesting implements CliPermissionRequest {
     }
     _responded = true;
 
-    final response = CallbackResponse.allow(
-      requestId: requestId,
-      sessionId: _session.sessionId,
-      toolUseId: toolUseId,
-      updatedInput: updatedInput,
-      updatedPermissions: updatedPermissions,
-    );
-    _session.sendCallbackResponse(response);
+    // Send control_response in the format the CLI expects
+    // Uses request_id (snake_case) in outer response, toolUseID (capital ID) in inner
+    final response = {
+      'type': 'control_response',
+      'response': {
+        'subtype': 'success',
+        'request_id': requestId,
+        'response': {
+          'behavior': 'allow',
+          'updatedInput': updatedInput ?? input,
+          'toolUseID': toolUseId,
+          if (updatedPermissions != null)
+            'updatedPermissions':
+                updatedPermissions.map((p) => p.toJson()).toList(),
+        },
+      },
+    };
+    _session.sendRawJson(response);
   }
 
   @override
@@ -1429,13 +1471,23 @@ class _CliPermissionRequestForTesting implements CliPermissionRequest {
     }
     _responded = true;
 
-    final response = CallbackResponse.deny(
-      requestId: requestId,
-      sessionId: _session.sessionId,
-      toolUseId: toolUseId,
-      message: message,
-    );
-    _session.sendCallbackResponse(response);
+    final denialMessage = message ?? 'User denied permission';
+
+    // Send control_response in the format the CLI expects
+    // Uses request_id (snake_case) in outer response, toolUseID (capital ID) in inner
+    final response = {
+      'type': 'control_response',
+      'response': {
+        'subtype': 'success',
+        'request_id': requestId,
+        'response': {
+          'behavior': 'deny',
+          'message': denialMessage,
+          'toolUseID': toolUseId,
+        },
+      },
+    };
+    _session.sendRawJson(response);
   }
 }
 

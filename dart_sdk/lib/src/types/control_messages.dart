@@ -205,15 +205,27 @@ class CallbackResponsePayload {
   /// Denial message (for 'deny').
   final String? message;
 
-  Map<String, dynamic> toJson() => {
-        'behavior': behavior,
-        'tool_use_id': toolUseId,
-        if (updatedInput != null) 'updated_input': updatedInput,
-        if (updatedPermissions != null)
-          'updated_permissions':
-              updatedPermissions!.map((p) => p.toJson()).toList(),
-        if (message != null) 'message': message,
-      };
+  Map<String, dynamic> toJson() {
+    // CLI expects camelCase field names with toolUseID (capital ID)
+    final json = <String, dynamic>{
+      'behavior': behavior,
+      'toolUseID': toolUseId,
+    };
+
+    if (behavior == 'allow') {
+      // CLI requires updatedInput for allow behavior
+      json['updatedInput'] = updatedInput ?? {};
+      if (updatedPermissions != null) {
+        json['updatedPermissions'] =
+            updatedPermissions!.map((p) => p.toJson()).toList();
+      }
+    } else if (behavior == 'deny') {
+      // CLI requires message for deny behavior
+      json['message'] = message ?? 'User denied permission';
+    }
+
+    return json;
+  }
 
   factory CallbackResponsePayload.fromJson(Map<String, dynamic> json) {
     List<PermissionSuggestion>? updatedPermissions;

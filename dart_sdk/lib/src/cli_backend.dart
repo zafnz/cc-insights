@@ -311,4 +311,20 @@ class _CliSessionAdapter implements AgentSession {
     await _permissionRequestsController.close();
     await _hookRequestsController.close();
   }
+
+  @override
+  Future<void> setModel(String? model) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    await _cliSession.setModel(model);
+  }
+
+  @override
+  Future<void> setPermissionMode(String? mode) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    await _cliSession.setPermissionMode(mode);
+  }
 }

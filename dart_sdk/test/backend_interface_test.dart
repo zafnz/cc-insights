@@ -385,6 +385,12 @@ class MockAgentSession implements AgentSession {
     await _hookRequestsController.close();
   }
 
+  @override
+  Future<void> setModel(String? model) async {}
+
+  @override
+  Future<void> setPermissionMode(String? mode) async {}
+
   /// Emit a message for testing.
   void emitMessage(SDKMessage message) {
     if (_disposed) return;

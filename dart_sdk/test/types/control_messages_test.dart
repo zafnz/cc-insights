@@ -355,13 +355,13 @@ void main() {
         // Act
         final json = response.toJson();
 
-        // Assert
+        // Assert - CLI expects toolUseID (capital ID)
         expect(json['type'], equals('callback.response'));
         expect(json['id'], equals('req-123'));
         expect(json['session_id'], equals('sess-456'));
         expect(json['payload']['behavior'], equals('allow'));
-        expect(json['payload']['tool_use_id'], equals('toolu_abc'));
-        expect(json['payload']['updated_input']['command'], equals('ls -la'));
+        expect(json['payload']['toolUseID'], equals('toolu_abc'));
+        expect(json['payload']['updatedInput']['command'], equals('ls -la'));
       });
 
       test('produces correct JSON for deny response', () {
@@ -376,12 +376,12 @@ void main() {
         // Act
         final json = response.toJson();
 
-        // Assert
+        // Assert - CLI expects toolUseID (capital ID)
         expect(json['type'], equals('callback.response'));
         expect(json['id'], equals('req-789'));
         expect(json['session_id'], equals('sess-012'));
         expect(json['payload']['behavior'], equals('deny'));
-        expect(json['payload']['tool_use_id'], equals('toolu_xyz'));
+        expect(json['payload']['toolUseID'], equals('toolu_xyz'));
         expect(json['payload']['message'], equals('User denied this operation'));
       });
 
@@ -405,33 +405,52 @@ void main() {
         // Act
         final json = response.toJson();
 
-        // Assert
+        // Assert - CLI expects toolUseID (capital ID)
         expect(json['type'], equals('callback.response'));
         expect(json['id'], equals('e3290e54-0000-0000-0000-000000000007'));
         expect(json['session_id'], equals('e3290e54-0000-0000-0000-000000000002'));
         expect(json['payload']['behavior'], equals('allow'));
-        expect(json['payload']['tool_use_id'],
+        expect(json['payload']['toolUseID'],
             equals('toolu_014vCGAxGgw2vETEgDKyXyHA'));
-        expect(json['payload']['updated_input']['command'], equals('ls -l /tmp'));
+        expect(json['payload']['updatedInput']['command'], equals('ls -l /tmp'));
       });
 
-      test('omits null optional fields', () {
-        // Arrange
-        final response = CallbackResponse.allow(
+      test('includes required fields even when not explicitly set', () {
+        // Arrange - allow without explicit updatedInput
+        final allowResponse = CallbackResponse.allow(
           requestId: 'req-123',
           sessionId: 'sess-456',
           toolUseId: 'toolu_abc',
-          // updatedInput and updatedPermissions are null
         );
 
         // Act
-        final json = response.toJson();
-        final payload = json['payload'] as Map<String, dynamic>;
+        final allowJson = allowResponse.toJson();
+        final allowPayload = allowJson['payload'] as Map<String, dynamic>;
 
-        // Assert
-        expect(payload.containsKey('updated_input'), isFalse);
-        expect(payload.containsKey('updated_permissions'), isFalse);
-        expect(payload.containsKey('message'), isFalse);
+        // Assert - CLI requires updatedInput for allow behavior
+        expect(allowPayload.containsKey('updatedInput'), isTrue);
+        expect(allowPayload['updatedInput'], equals({}));
+        // Optional fields should be omitted
+        expect(allowPayload.containsKey('updatedPermissions'), isFalse);
+        expect(allowPayload.containsKey('message'), isFalse);
+
+        // Arrange - deny without explicit message
+        final denyResponse = CallbackResponse.deny(
+          requestId: 'req-456',
+          sessionId: 'sess-789',
+          toolUseId: 'toolu_def',
+        );
+
+        // Act
+        final denyJson = denyResponse.toJson();
+        final denyPayload = denyJson['payload'] as Map<String, dynamic>;
+
+        // Assert - CLI requires message for deny behavior
+        expect(denyPayload.containsKey('message'), isTrue);
+        expect(denyPayload['message'], equals('User denied permission'));
+        // Optional fields should be omitted
+        expect(denyPayload.containsKey('updatedInput'), isFalse);
+        expect(denyPayload.containsKey('updatedPermissions'), isFalse);
       });
     });
 
@@ -524,25 +543,41 @@ void main() {
       });
     });
 
-    group('round-trip serialization', () {
-      test('preserves all data through toJson/fromJson', () {
-        // Arrange
-        final original = CallbackResponsePayload(
+    group('serialization', () {
+      test('toJson uses toolUseID (capital ID) for CLI response format', () {
+        // Note: CLI sends requests with snake_case but expects responses
+        // with toolUseID (capital ID). toJson() produces the response format.
+        final payload = CallbackResponsePayload(
           behavior: 'allow',
           toolUseId: 'toolu_roundtrip',
           updatedInput: {'nested': {'data': true}},
         );
 
         // Act
-        final json = jsonEncode(original.toJson());
-        final restored = CallbackResponsePayload.fromJson(
-          jsonDecode(json) as Map<String, dynamic>,
-        );
+        final json = payload.toJson();
+
+        // Assert - toJson should use toolUseID (capital ID)
+        expect(json['behavior'], equals('allow'));
+        expect(json['toolUseID'], equals('toolu_roundtrip'));
+        expect(json['updatedInput'], isNotNull);
+        expect((json['updatedInput'] as Map)['nested'], isNotNull);
+      });
+
+      test('fromJson uses snake_case for CLI request format', () {
+        // Note: fromJson parses incoming CLI requests which use snake_case
+        final json = {
+          'behavior': 'allow',
+          'tool_use_id': 'toolu_test',
+          'updated_input': {'key': 'value'},
+        };
+
+        // Act
+        final payload = CallbackResponsePayload.fromJson(json);
 
         // Assert
-        expect(restored.behavior, equals(original.behavior));
-        expect(restored.toolUseId, equals(original.toolUseId));
-        expect(restored.updatedInput!['nested'], isNotNull);
+        expect(payload.behavior, equals('allow'));
+        expect(payload.toolUseId, equals('toolu_test'));
+        expect(payload.updatedInput!['key'], equals('value'));
       });
     });
   });
@@ -726,18 +761,20 @@ void main() {
 
       final json = response.toJson();
 
-      // Verify the structure matches what the CLI expects
+      // Verify the structure matches what the CLI expects (toolUseID with capital ID)
       expect(json['type'], equals('callback.response'));
       expect(json['id'], equals('e3290e54-0000-0000-0000-000000000007'));
       expect(json['session_id'], equals('e3290e54-0000-0000-0000-000000000002'));
       expect(json['payload']['behavior'], equals('allow'));
-      expect(json['payload']['tool_use_id'],
+      expect(json['payload']['toolUseID'],
           equals('toolu_014vCGAxGgw2vETEgDKyXyHA'));
+      expect(json['payload']['updatedInput']['command'], equals('ls -l /tmp'));
 
       // The response should be valid JSON that can be sent to CLI
       final jsonString = jsonEncode(json);
       expect(jsonString, contains('callback.response'));
       expect(jsonString, contains('allow'));
+      expect(jsonString, contains('updatedInput'));
     });
 
     test('session.create request matches expected CLI format', () {

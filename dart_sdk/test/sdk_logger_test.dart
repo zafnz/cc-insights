@@ -131,40 +131,49 @@ void main() {
       expect(entry.data!['count'], equals(42));
     });
 
-    test('logOutgoing logs message with debug level', () async {
+    test('logOutgoing logs message with debug level and stdin direction',
+        () async {
       SdkLogger.instance.debugEnabled = true;
 
       SdkLogger.instance.logOutgoing({'type': 'test', 'payload': 'data'});
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      final entry = receivedLogs.firstWhere((e) => e.message == '>>> SEND');
+      final entry = receivedLogs
+          .firstWhere((e) => e.direction == LogDirection.stdin);
       expect(entry.level, equals(LogLevel.debug));
+      expect(entry.message, equals('SEND'));
       expect(entry.data, isNotNull);
       expect(entry.data!['type'], equals('test'));
     });
 
-    test('logIncoming logs message with debug level', () async {
+    test('logIncoming logs message with debug level and stdout direction',
+        () async {
       SdkLogger.instance.debugEnabled = true;
 
       SdkLogger.instance.logIncoming({'type': 'response', 'data': 123});
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      final entry = receivedLogs.firstWhere((e) => e.message == '<<< RECV');
+      final entry = receivedLogs
+          .firstWhere((e) => e.direction == LogDirection.stdout);
       expect(entry.level, equals(LogLevel.debug));
+      expect(entry.message, equals('RECV'));
       expect(entry.data, isNotNull);
       expect(entry.data!['type'], equals('response'));
     });
 
-    test('logStderr logs as info level', () async {
+    test('logStderr logs with stderr direction and text field', () async {
+      SdkLogger.instance.debugEnabled = true;
+
       SdkLogger.instance.logStderr('some stderr output');
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       final entry = receivedLogs
-          .firstWhere((e) => e.message == 'CLI stderr: some stderr output');
+          .firstWhere((e) => e.direction == LogDirection.stderr);
       expect(entry.level, equals(LogLevel.info));
+      expect(entry.text, equals('some stderr output'));
     });
 
     test('LogEntry toString includes all components', () {
