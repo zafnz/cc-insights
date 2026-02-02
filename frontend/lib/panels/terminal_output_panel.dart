@@ -4,11 +4,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_pty/flutter_pty.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 
 import '../models/terminal_tab.dart';
 import '../services/script_execution_service.dart';
+import '../state/selection_state.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import 'panel_wrapper.dart';
 
@@ -82,6 +84,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
   /// Whether a terminal currently has focus.
   bool _terminalHasFocus = false;
 
+
   @override
   void dispose() {
     // Cancel all timers
@@ -109,8 +112,20 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     super.dispose();
   }
 
+  /// Counter for terminal numbers per worktree path.
+  final Map<String, int> _worktreeTerminalCounts = {};
+
   void _createNewTerminal() {
-    final workingDir = Directory.current.path;
+    // Use selected worktree's directory, fallback to current directory
+    final selectionState = context.read<SelectionState>();
+    final selectedWorktree = selectionState.selectedWorktree;
+    final workingDir =
+        selectedWorktree?.data.worktreeRoot ?? Directory.current.path;
+
+    // Generate tab name based on worktree
+    final worktreeName = _getWorktreeName(workingDir);
+    final terminalNumber = _getNextTerminalNumber(workingDir);
+    final tabName = '($worktreeName) $terminalNumber';
 
     // Start a new shell in PTY
     final pty = Pty.start(
@@ -132,7 +147,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     };
 
     final tab = TerminalTab(
-      name: 'Terminal ${_tabs.length + 1}',
+      name: tabName,
       terminal: terminal,
       pty: pty,
       workingDirectory: workingDir,
@@ -157,6 +172,82 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
         if (tabIndex != -1) {
           _closeTab(tabIndex);
         }
+      }
+    });
+  }
+
+  /// Extracts the worktree name from the path (last directory component).
+  String _getWorktreeName(String path) {
+    return p.basename(path);
+  }
+
+  /// Gets the next terminal number for a worktree, incrementing the counter.
+  int _getNextTerminalNumber(String worktreePath) {
+    final count = (_worktreeTerminalCounts[worktreePath] ?? 0) + 1;
+    _worktreeTerminalCounts[worktreePath] = count;
+    return count;
+  }
+
+  /// Shows the rename dialog for a terminal tab.
+  Future<void> _showRenameDialog(TerminalTab tab) async {
+    final controller = TextEditingController(text: tab.name);
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename Terminal'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (newName != null && newName.trim().isNotEmpty) {
+      setState(() {
+        tab.name = newName.trim();
+      });
+    }
+  }
+
+  /// Shows the context menu for a terminal tab.
+  void _showTabContextMenu(TerminalTab tab, TapDownDetails details) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      details.globalPosition & const Size(1, 1),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        const PopupMenuItem<String>(
+          value: 'rename',
+          child: Text('Rename'),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'rename') {
+        _showRenameDialog(tab);
       }
     });
   }
@@ -363,6 +454,11 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                 _activeTabIndex = index;
               });
             },
+            onSecondaryTapDown: isScriptTab
+                ? null
+                : (details) {
+                    _showTabContextMenu(tab, details);
+                  },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
