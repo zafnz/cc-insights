@@ -227,7 +227,14 @@ $fileList''';
 
   Future<void> _commit() async {
     final message = _messageController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty) {
+      stdout.writeln('[CommitDialog] Message is empty, aborting commit');
+      return;
+    }
+
+    stdout.writeln('[CommitDialog] Starting commit...');
+    stdout.writeln('[CommitDialog] Worktree path: ${widget.worktreePath}');
+    stdout.writeln('[CommitDialog] Message length: ${message.length}');
 
     setState(() {
       _isCommitting = true;
@@ -236,24 +243,32 @@ $fileList''';
 
     try {
       // Stage all changes
+      stdout.writeln('[CommitDialog] Staging all changes...');
       await widget.gitService.stageAll(widget.worktreePath);
+      stdout.writeln('[CommitDialog] Staging complete');
 
       // Commit
+      stdout.writeln('[CommitDialog] Creating commit...');
       await widget.gitService.commit(widget.worktreePath, message);
+      stdout.writeln('[CommitDialog] Commit complete');
 
       // Log success
-      stdout.writeln('Commit successful: ${message.split('\n').first}');
+      stdout.writeln(
+        '[CommitDialog] SUCCESS: ${message.split('\n').first}',
+      );
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } catch (e) {
-      stdout.writeln('Commit failed: $e');
+    } catch (e, stackTrace) {
+      stdout.writeln('[CommitDialog] ERROR: $e');
+      stdout.writeln('[CommitDialog] Stack: $stackTrace');
 
       // Try to restore state
       try {
         await widget.gitService.resetIndex(widget.worktreePath);
+        stdout.writeln('[CommitDialog] Reset index complete');
       } catch (resetError) {
-        stdout.writeln('Failed to reset index: $resetError');
+        stdout.writeln('[CommitDialog] Failed to reset index: $resetError');
       }
 
       if (!mounted) return;

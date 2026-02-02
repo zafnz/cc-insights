@@ -77,8 +77,13 @@ class _InformationContentState extends State<_InformationContent> {
         data: worktree.data,
         worktreeRoot: worktree.data.worktreeRoot,
         onStatusChanged: () {
-          // Trigger a refresh of the git status
-          _startWatching(worktree);
+          // Force an immediate refresh of the git status
+          try {
+            final watcherService = context.read<WorktreeWatcherService>();
+            watcherService.forceRefresh();
+          } catch (_) {
+            // Provider not available (e.g., in tests) - silently ignore
+          }
         },
       ),
     );
