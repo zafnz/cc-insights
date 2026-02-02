@@ -459,6 +459,7 @@ class NewChatCard extends StatelessWidget {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.add,
@@ -466,10 +467,13 @@ class NewChatCard extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
-              Text(
-                'New Chat',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+              Flexible(
+                child: Text(
+                  'New Chat',
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],

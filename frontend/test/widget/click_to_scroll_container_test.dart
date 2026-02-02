@@ -187,7 +187,7 @@ void main() {
       expect(scrollView.physics, isA<NeverScrollableScrollPhysics>());
     });
 
-    testWidgets('always uses NeverScrollableScrollPhysics (scroll handled by Listener)',
+    testWidgets('uses ClampingScrollPhysics when active',
         (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -204,15 +204,19 @@ void main() {
       );
       await safePumpAndSettle(tester);
 
+      // Initially inactive - should use NeverScrollableScrollPhysics
+      var scrollView =
+          tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
+      expect(scrollView.physics, isA<NeverScrollableScrollPhysics>());
+
       // Tap to activate
       await tester.tap(find.byType(ClickToScrollContainer));
       await safePumpAndSettle(tester);
 
-      // Find the SingleChildScrollView - should always use NeverScrollableScrollPhysics
-      // because we handle scrolling via Listener.onPointerSignal instead
-      final scrollView =
+      // When active - should use ClampingScrollPhysics for native scroll behavior
+      scrollView =
           tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
-      expect(scrollView.physics, isA<NeverScrollableScrollPhysics>());
+      expect(scrollView.physics, isA<ClampingScrollPhysics>());
     });
 
     testWidgets('applies backgroundColor and borderRadius', (tester) async {

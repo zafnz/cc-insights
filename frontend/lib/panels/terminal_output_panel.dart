@@ -111,6 +111,7 @@ class _TerminalContentState extends State<_TerminalContent> {
   Timer? _autoCloseTimer;
   bool _userRequestedKeepOpen = false;
   String? _lastScriptId;
+  int _lastOutputLength = 0;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -146,12 +147,16 @@ class _TerminalContentState extends State<_TerminalContent> {
       });
     }
 
-    // Auto-scroll to bottom when output updates
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
-    });
+    // Auto-scroll to bottom only when output actually changes
+    final currentOutputLength = script.output.length;
+    if (currentOutputLength != _lastOutputLength) {
+      _lastOutputLength = currentOutputLength;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      });
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
