@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
+import '../widgets/dialog_observer.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
@@ -302,9 +303,9 @@ class _MainScreenState extends State<MainScreen> {
       id: 'root',
       axis: SplitAxis.horizontal,
       children: [
-        // Left sidebar: Worktrees + Information + Chats + Agents + Actions stacked
+        // Left sidebar: Worktrees + Information + Actions stacked
         SplitNode.branch(
-          id: 'sidebar',
+          id: 'left_sidebar',
           axis: SplitAxis.vertical,
           flex: 1.0,
           children: [
@@ -314,23 +315,11 @@ class _MainScreenState extends State<MainScreen> {
               flex: 1.0,
               widgetBuilder: (context) => const WorktreePanel(),
             ),
-            // Information panel (between worktrees and chats)
+            // Information panel
             SplitNode.leaf(
               id: 'information',
               flex: 1.0,
               widgetBuilder: (context) => const InformationPanel(),
-            ),
-            // Chats panel (middle)
-            SplitNode.leaf(
-              id: 'chats',
-              flex: 1.0,
-              widgetBuilder: (context) => const ChatsPanel(),
-            ),
-            // Agents panel (bottom)
-            SplitNode.leaf(
-              id: 'agents',
-              flex: 1.0,
-              widgetBuilder: (context) => const AgentsPanel(),
             ),
             // Actions panel (bottom)
             SplitNode.leaf(
@@ -340,7 +329,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-        // Right panels: Content area and terminal output
+        // Center: Content area and terminal output
         SplitNode.branch(
           id: 'content_area',
           axis: SplitAxis.vertical,
@@ -357,6 +346,26 @@ class _MainScreenState extends State<MainScreen> {
               id: 'terminal',
               flex: 1.0,
               widgetBuilder: (context) => const TerminalOutputPanel(),
+            ),
+          ],
+        ),
+        // Right sidebar: Chats + Agents stacked
+        SplitNode.branch(
+          id: 'right_sidebar',
+          axis: SplitAxis.vertical,
+          flex: 1.0,
+          children: [
+            // Chats panel (top)
+            SplitNode.leaf(
+              id: 'chats',
+              flex: 1.0,
+              widgetBuilder: (context) => const ChatsPanel(),
+            ),
+            // Agents panel (bottom)
+            SplitNode.leaf(
+              id: 'agents',
+              flex: 1.0,
+              widgetBuilder: (context) => const AgentsPanel(),
             ),
           ],
         ),
@@ -396,9 +405,11 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final dialogObserver = context.read<DialogObserver>();
 
     return Scaffold(
       body: KeyboardFocusManager(
+        dialogObserver: dialogObserver,
         child: Column(
           children: [
             // Main content area with nav rail

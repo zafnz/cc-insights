@@ -5,9 +5,13 @@ import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
+import 'package:cc_insights_v2/services/project_config_service.dart';
+import 'package:cc_insights_v2/services/script_execution_service.dart';
+import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
+import 'package:cc_insights_v2/widgets/dialog_observer.dart';
 import 'package:cc_insights_v2/widgets/navigation_rail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +34,10 @@ void main() {
     late FileManagerState fileManagerState;
     late FakeFileSystemService fakeFileSystem;
     late MockBackendService mockBackend;
+    late GitService gitService;
+    late WorktreeWatcherService worktreeWatcher;
+    late ScriptExecutionService scriptService;
+    late DialogObserver dialogObserver;
 
     /// Creates a project with primary and linked worktrees for testing.
     ProjectState createProject() {
@@ -67,11 +75,12 @@ void main() {
     Widget createApp() {
       return MultiProvider(
         providers: [
+          Provider<DialogObserver>.value(value: dialogObserver),
           ChangeNotifierProvider<BackendService>.value(
             value: mockBackend,
           ),
           Provider<GitService>.value(
-            value: FakeGitService(),
+            value: gitService,
           ),
           Provider<FileSystemService>.value(
             value: fakeFileSystem,
@@ -85,6 +94,15 @@ void main() {
           ChangeNotifierProvider<FileManagerState>.value(
             value: fileManagerState,
           ),
+          ChangeNotifierProvider<WorktreeWatcherService>.value(
+            value: worktreeWatcher,
+          ),
+          Provider<ProjectConfigService>(
+            create: (_) => ProjectConfigService(),
+          ),
+          ChangeNotifierProvider<ScriptExecutionService>.value(
+            value: scriptService,
+          ),
         ],
         child: const MaterialApp(
           home: MainScreen(),
@@ -97,11 +115,18 @@ void main() {
       fakeFileSystem = FakeFileSystemService();
       mockBackend = MockBackendService();
       mockBackend.start();
+      gitService = FakeGitService();
+      scriptService = ScriptExecutionService();
+      worktreeWatcher = WorktreeWatcherService(
+        gitService: gitService,
+        project: project,
+      );
 
       selectionState = resources.track(SelectionState(project));
       fileManagerState = resources.track(
         FileManagerState(project, fakeFileSystem),
       );
+      dialogObserver = DialogObserver();
 
       // Set up fake file system
       fakeFileSystem.addDirectory('/Users/test/my-project');
@@ -118,6 +143,8 @@ void main() {
     });
 
     tearDown(() async {
+      worktreeWatcher.dispose();
+      scriptService.dispose();
       await resources.disposeAll();
     });
 
@@ -398,11 +425,12 @@ void main() {
           await tester.pumpWidget(
             MultiProvider(
               providers: [
+                Provider<DialogObserver>.value(value: dialogObserver),
                 ChangeNotifierProvider<BackendService>.value(
                   value: mockBackend,
                 ),
                 Provider<GitService>.value(
-                  value: FakeGitService(),
+                  value: gitService,
                 ),
                 Provider<FileSystemService>.value(
                   value: fakeFileSystem,
@@ -415,6 +443,15 @@ void main() {
                 ),
                 ChangeNotifierProvider<FileManagerState>.value(
                   value: fileManagerState,
+                ),
+                ChangeNotifierProvider<WorktreeWatcherService>.value(
+                  value: worktreeWatcher,
+                ),
+                Provider<ProjectConfigService>(
+                  create: (_) => ProjectConfigService(),
+                ),
+                ChangeNotifierProvider<ScriptExecutionService>.value(
+                  value: scriptService,
                 ),
               ],
               child: MaterialApp(

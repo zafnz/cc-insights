@@ -23,6 +23,7 @@ import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
+import 'widgets/dialog_observer.dart';
 
 /// Global flag to force mock data usage in tests.
 ///
@@ -114,6 +115,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// The AskAI service for one-shot AI queries.
   AskAiService? _askAiService;
+
+  /// Dialog observer for tracking open dialogs.
+  /// Used to suspend keyboard interception while dialogs are open.
+  final DialogObserver _dialogObserver = DialogObserver();
 
   /// Future for project restoration.
   Future<ProjectState>? _projectFuture;
@@ -380,6 +385,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<ScriptExecutionService>(
           create: (_) => ScriptExecutionService(),
         ),
+        // Dialog observer for keyboard focus management
+        Provider<DialogObserver>.value(value: _dialogObserver),
       ],
       child: MaterialApp(
         title: 'CC Insights',
@@ -387,6 +394,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
         themeMode: ThemeMode.system,
+        navigatorObservers: [_dialogObserver],
         home: const MainScreen(),
         routes: {'/replay': (context) => const ReplayDemoScreen()},
       ),

@@ -342,6 +342,43 @@ The `get_test_result` tool is specifically designed to parse and return the rele
 
 ---
 
+## Keyboard Focus & Dialogs
+
+The app uses `KeyboardFocusManager` to provide a terminal-like typing experience - users can start typing from anywhere and keystrokes go to the message input. This is implemented via `HardwareKeyboard` interception.
+
+### DialogObserver Integration
+
+Dialogs need keyboard input for their text fields, so the keyboard interception is automatically suspended when dialogs are open. This is handled by `DialogObserver` - a `NavigatorObserver` that tracks modal routes.
+
+**How it works:**
+1. `DialogObserver` is created in `main.dart` and registered as both a Provider and a `navigatorObserver` on `MaterialApp`
+2. `MainScreen` passes the observer to `KeyboardFocusManager`
+3. When a dialog opens (`showDialog`, `showMenu`, `showModalBottomSheet`), keyboard interception suspends
+4. When the dialog closes, interception resumes
+
+**For new dialogs:** Standard Flutter dialogs (`showDialog`, `showMenu`, etc.) work automatically - no special handling needed. The `DialogObserver` detects `DialogRoute`, `PopupRoute`, and `RawDialogRoute` automatically.
+
+**For tests using MainScreen:** Include `DialogObserver` in the test providers:
+```dart
+late DialogObserver dialogObserver;
+
+setUp(() {
+  dialogObserver = DialogObserver();
+});
+
+Widget createTestApp() {
+  return MultiProvider(
+    providers: [
+      Provider<DialogObserver>.value(value: dialogObserver),
+      // ... other providers
+    ],
+    child: MaterialApp(home: const MainScreen()),
+  );
+}
+```
+
+---
+
 ## Debug Tools
 
 - **Dart SDK logs**: Flutter console shows backend stderr

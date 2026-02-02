@@ -11,6 +11,7 @@ import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
+import 'package:cc_insights_v2/widgets/dialog_observer.dart';
 import 'package:checks/checks.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/gestures.dart';
@@ -31,12 +32,14 @@ void main() {
     late GitService gitService;
     late FakeFileSystemService fakeFileSystem;
     late FileManagerState fileManagerState;
+    late DialogObserver dialogObserver;
 
     final resources = TestResources();
 
     Widget createTestApp() {
       return MultiProvider(
         providers: [
+          Provider<DialogObserver>.value(value: dialogObserver),
           ChangeNotifierProvider<BackendService>.value(value: mockBackend),
           ChangeNotifierProvider<ProjectState>.value(value: project),
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
@@ -78,6 +81,7 @@ void main() {
       fileManagerState = resources.track(
         FileManagerState(project, fakeFileSystem),
       );
+      dialogObserver = DialogObserver();
       await mockBackend.start();
     });
 
@@ -133,7 +137,7 @@ void main() {
         // Find worktree count - use findsWidgets since text may appear elsewhere
         expect(find.textContaining('worktrees'), findsWidgets);
         expect(find.textContaining('chats'), findsWidgets);
-        expect(find.textContaining('Total $'), findsOneWidget);
+        expect(find.textContaining('Total \$'), findsOneWidget);
       });
     });
 
