@@ -147,11 +147,19 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     _subscriptions[tab.id]?.cancel();
     _subscriptions.remove(tab.id);
 
-    // Remove from script mapping if it's a script tab
-    _scriptToTabId.removeWhere((key, value) => value == tab.id);
+    // If it's a script tab, find and clear the script from the service
+    final scriptId = _scriptToTabId.entries
+        .firstWhere((e) => e.value == tab.id, orElse: () => const MapEntry('', ''))
+        .key;
 
-    // Kill PTY if still alive
-    if (tab.isAlive) {
+    if (scriptId.isNotEmpty) {
+      // This is a script tab - clear it from the service
+      context.read<ScriptExecutionService>().clearScript(scriptId);
+      _scriptToTabId.remove(scriptId);
+    }
+
+    // Kill PTY if still alive (for non-script tabs)
+    if (tab.isAlive && scriptId.isEmpty) {
       tab.pty.kill();
     }
 
@@ -212,21 +220,14 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
       key: TerminalOutputPanelKeys.panel,
       title: 'Terminal',
       icon: Icons.terminal,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            key: TerminalOutputPanelKeys.newTerminalButton,
-            icon: const Icon(Icons.add, size: 16),
-            onPressed: _createNewTerminal,
-            tooltip: 'New Terminal',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          ),
-          if (script != null && _tabs.isNotEmpty)
-            _buildScriptActions(context, script),
-        ],
+      trailing: IconButton(
+        key: TerminalOutputPanelKeys.newTerminalButton,
+        icon: const Icon(Icons.add, size: 16),
+        onPressed: _createNewTerminal,
+        tooltip: 'New Terminal',
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
       ),
       child: _tabs.isEmpty
           ? const _NoTerminalsPlaceholder()
@@ -247,6 +248,8 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
   }
 
   Widget _buildTabBar() {
+    final scriptService = context.watch<ScriptExecutionService>();
+
     return Container(
       height: 36,
       decoration: BoxDecoration(
@@ -263,6 +266,20 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
         itemBuilder: (context, index) {
           final tab = _tabs[index];
           final isActive = index == _activeTabIndex;
+          final isScriptTab = _isScriptTab(tab);
+
+          // Check if this script tab is running
+          final scriptId = isScriptTab
+              ? _scriptToTabId.entries
+                  .firstWhere((e) => e.value == tab.id,
+                      orElse: () => const MapEntry('', ''))
+                  .key
+              : '';
+          final script = scriptId.isNotEmpty
+              ? scriptService.scripts.firstWhere((s) => s.id == scriptId,
+                  orElse: () => scriptService.scripts.first)
+              : null;
+          final isRunning = script?.isRunning ?? false;
 
           return GestureDetector(
             onTap: () {
@@ -299,14 +316,28 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                         ),
                   ),
                   const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () => _closeTab(index),
-                    child: Icon(
-                      Icons.close,
-                      size: 14,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  if (isScriptTab && isRunning)
+                    InkWell(
+                      onTap: () {
+                        if (scriptId.isNotEmpty) {
+                          scriptService.killScript(scriptId);
+                        }
+                      },
+                      child: Icon(
+                        Icons.stop,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    )
+                  else
+                    InkWell(
+                      onTap: () => _closeTab(index),
+                      child: Icon(
+                        Icons.close,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -386,47 +417,6 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     );
   }
 
-  Widget _buildScriptActions(BuildContext context, RunningScript script) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (script.isRunning)
-          IconButton(
-            key: TerminalOutputPanelKeys.killButton,
-            icon: Icon(
-              Icons.stop,
-              size: 14,
-              color: colorScheme.error,
-            ),
-            onPressed: () {
-              context.read<ScriptExecutionService>().killFocusedScript();
-            },
-            tooltip: 'Stop script',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          )
-        else
-          IconButton(
-            key: TerminalOutputPanelKeys.closeButton,
-            icon: Icon(
-              Icons.close,
-              size: 14,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            onPressed: () {
-              context.read<ScriptExecutionService>().clearOutput();
-            },
-            tooltip: 'Close',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          ),
-      ],
-    );
-  }
 
   Widget _buildScriptStatusBar(BuildContext context, RunningScript? script) {
     if (script == null) return const SizedBox.shrink();
