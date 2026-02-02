@@ -50,6 +50,8 @@ class TerminalOutputPanel extends StatefulWidget {
 }
 
 class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
+  static const _autoCloseDelay = Duration(seconds: 2);
+
   /// List of all terminal tabs (both script output and interactive shells).
   final List<TerminalTab> _tabs = [];
 
@@ -62,6 +64,9 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
   /// Stream subscriptions for terminal output.
   final Map<String, StreamSubscription<List<int>>> _subscriptions = {};
 
+  /// Auto-close timers for successful script tabs.
+  final Map<String, Timer> _autoCloseTimers = {};
+
   /// Keyboard focus manager resume callback.
   VoidCallback? _keyboardResume;
 
@@ -70,6 +75,12 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
 
   @override
   void dispose() {
+    // Cancel all timers
+    for (final timer in _autoCloseTimers.values) {
+      timer.cancel();
+    }
+    _autoCloseTimers.clear();
+
     // Clean up all subscriptions
     for (final sub in _subscriptions.values) {
       sub.cancel();
@@ -153,6 +164,10 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
         .key;
 
     if (scriptId.isNotEmpty) {
+      // Cancel auto-close timer if it exists
+      _autoCloseTimers[scriptId]?.cancel();
+      _autoCloseTimers.remove(scriptId);
+
       // This is a script tab - clear it from the service
       context.read<ScriptExecutionService>().clearScript(scriptId);
       _scriptToTabId.remove(scriptId);
@@ -213,6 +228,29 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
             });
           }
         });
+      }
+    }
+
+    // Handle auto-close for successful script tabs
+    for (final entry in _scriptToTabId.entries) {
+      final scriptId = entry.key;
+      final tabId = entry.value;
+      final scriptForTab = scriptService.scripts
+          .where((s) => s.id == scriptId)
+          .firstOrNull;
+
+      if (scriptForTab != null && !scriptForTab.isRunning && scriptForTab.isSuccess) {
+        // Script completed successfully - start auto-close timer if not already started
+        if (!_autoCloseTimers.containsKey(scriptId)) {
+          _autoCloseTimers[scriptId] = Timer(_autoCloseDelay, () {
+            if (mounted) {
+              final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
+              if (tabIndex != -1) {
+                _closeTab(tabIndex);
+              }
+            }
+          });
+        }
       }
     }
 
