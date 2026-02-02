@@ -312,10 +312,20 @@ class CliSession {
   Future<void> interrupt() async {
     if (_disposed) return;
 
-    // Send SIGINT to the process
+    final requestId = _generateRequestId();
+    SdkLogger.instance.debug(
+      'Interrupting session',
+      sessionId: sessionId,
+      data: {'requestId': requestId},
+    );
+
+    // Send control request with interrupt subtype
     _process.send({
-      'type': 'session.interrupt',
-      'session_id': sessionId,
+      'type': 'control_request',
+      'request_id': requestId,
+      'request': {
+        'subtype': 'interrupt',
+      },
     });
   }
 

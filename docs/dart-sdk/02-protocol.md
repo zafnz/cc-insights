@@ -106,17 +106,21 @@ Send a follow-up message to an existing conversation.
 
 ---
 
-### `session.interrupt`
+### `control_request` (Interrupt)
 
 Interrupt the current execution.
 
 ```json
 {
-  "type": "session.interrupt"
+  "type": "control_request",
+  "request_id": "uuid",
+  "request": {
+    "subtype": "interrupt"
+  }
 }
 ```
 
-**Response:** `session.interrupted`
+**Response:** `control_response` and the session stops processing
 
 ---
 
