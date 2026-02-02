@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_pty/flutter_pty.dart';
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 
+import '../models/terminal_tab.dart';
 import '../services/script_execution_service.dart';
+import '../widgets/keyboard_focus_manager.dart';
 import 'panel_wrapper.dart';
 
 /// Keys for testing TerminalOutputPanel widgets.
@@ -25,37 +30,363 @@ class TerminalOutputPanelKeys {
 
   /// The keep open button.
   static const keepOpenButton = Key('terminal_keep_open_button');
+
+  /// The new terminal button.
+  static const newTerminalButton = Key('terminal_new_button');
 }
 
-/// Panel that displays script execution output.
+/// Panel that displays script execution output with tabbed terminals.
 ///
 /// Shows:
-/// - Real-time stdout/stderr output from running scripts
-/// - Exit code and status when complete
-/// - Auto-closes after 2 seconds on success (exit code 0)
-/// - Stays open on error
-class TerminalOutputPanel extends StatelessWidget {
+/// - Tabbed interface for multiple terminals
+/// - Script execution output in read-only terminals
+/// - Interactive shell terminals
+/// - Auto-closes after 2 seconds on success (exit code 0) for script tabs
+class TerminalOutputPanel extends StatefulWidget {
   const TerminalOutputPanel({super.key});
+
+  @override
+  State<TerminalOutputPanel> createState() => _TerminalOutputPanelState();
+}
+
+class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
+  /// List of all terminal tabs (both script output and interactive shells).
+  final List<TerminalTab> _tabs = [];
+
+  /// Currently active tab index.
+  int _activeTabIndex = 0;
+
+  /// Map of script IDs to terminal tab IDs (for script execution output).
+  final Map<String, String> _scriptToTabId = {};
+
+  /// Stream subscriptions for terminal output.
+  final Map<String, StreamSubscription<List<int>>> _subscriptions = {};
+
+  /// Keyboard focus manager resume callback.
+  VoidCallback? _keyboardResume;
+
+  /// Whether a terminal currently has focus.
+  bool _terminalHasFocus = false;
+
+  @override
+  void dispose() {
+    // Clean up all subscriptions
+    for (final sub in _subscriptions.values) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+
+    // Kill all PTYs
+    for (final tab in _tabs) {
+      if (tab.isAlive) {
+        tab.pty.kill();
+      }
+    }
+
+    // Resume keyboard interception if we suspended it
+    _keyboardResume?.call();
+
+    super.dispose();
+  }
+
+  void _createNewTerminal() {
+    final workingDir = Directory.current.path;
+
+    // Start a new shell in PTY
+    final pty = Pty.start(
+      Platform.environment['SHELL'] ?? '/bin/sh',
+      workingDirectory: workingDir,
+      environment: Platform.environment,
+    );
+
+    final terminal = Terminal();
+
+    // Wire up terminal input to PTY
+    terminal.onOutput = (data) {
+      pty.write(const Utf8Encoder().convert(data));
+    };
+
+    // Wire up terminal resize to PTY
+    terminal.onResize = (width, height, pixelWidth, pixelHeight) {
+      pty.resize(height, width);
+    };
+
+    final tab = TerminalTab(
+      name: 'Terminal ${_tabs.length + 1}',
+      terminal: terminal,
+      pty: pty,
+      workingDirectory: workingDir,
+    );
+
+    setState(() {
+      _tabs.add(tab);
+      _activeTabIndex = _tabs.length - 1;
+    });
+
+    // Subscribe to PTY output
+    final sub = pty.output.listen((data) {
+      final text = String.fromCharCodes(data);
+      terminal.write(text);
+    });
+    _subscriptions[tab.id] = sub;
+
+    // Handle PTY exit
+    pty.exitCode.then((code) {
+      if (mounted) {
+        // Terminal died, could show a message or auto-close
+      }
+    });
+  }
+
+  void _closeTab(int index) {
+    if (index < 0 || index >= _tabs.length) return;
+
+    final tab = _tabs[index];
+
+    // Cancel subscription
+    _subscriptions[tab.id]?.cancel();
+    _subscriptions.remove(tab.id);
+
+    // Remove from script mapping if it's a script tab
+    _scriptToTabId.removeWhere((key, value) => value == tab.id);
+
+    // Kill PTY if still alive
+    if (tab.isAlive) {
+      tab.pty.kill();
+    }
+
+    setState(() {
+      _tabs.removeAt(index);
+      if (_tabs.isEmpty) {
+        _activeTabIndex = 0;
+      } else if (_activeTabIndex >= _tabs.length) {
+        _activeTabIndex = _tabs.length - 1;
+      }
+    });
+  }
+
+  void _onTerminalFocusChanged(bool hasFocus) {
+    if (hasFocus == _terminalHasFocus) return;
+
+    setState(() {
+      _terminalHasFocus = hasFocus;
+    });
+
+    if (hasFocus) {
+      // Terminal got focus - suspend keyboard interception
+      final manager = KeyboardFocusManager.maybeOf(context);
+      _keyboardResume = manager?.suspend();
+    } else {
+      // Terminal lost focus - resume keyboard interception
+      _keyboardResume?.call();
+      _keyboardResume = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scriptService = context.watch<ScriptExecutionService>();
     final script = scriptService.focusedScript;
 
-    final title = script != null
-        ? 'Terminal - ${script.name}'
-        : 'Terminal Output';
+    // If there's a focused script and we don't have a tab for it, create one
+    if (script != null && !_scriptToTabId.containsKey(script.id)) {
+      _createScriptTab(script);
+    }
+
+    // If there's a focused script, switch to its tab
+    if (script != null && _scriptToTabId.containsKey(script.id)) {
+      final tabId = _scriptToTabId[script.id]!;
+      final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
+      if (tabIndex != -1 && tabIndex != _activeTabIndex) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _activeTabIndex = tabIndex;
+            });
+          }
+        });
+      }
+    }
 
     return PanelWrapper(
       key: TerminalOutputPanelKeys.panel,
-      title: title,
+      title: 'Terminal',
       icon: Icons.terminal,
-      trailing: script != null ? _buildTrailingActions(context, script) : null,
-      child: const _TerminalContent(),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: TerminalOutputPanelKeys.newTerminalButton,
+            icon: const Icon(Icons.add, size: 16),
+            onPressed: _createNewTerminal,
+            tooltip: 'New Terminal',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+          if (script != null && _tabs.isNotEmpty)
+            _buildScriptActions(context, script),
+        ],
+      ),
+      child: _tabs.isEmpty
+          ? const _NoTerminalsPlaceholder()
+          : Column(
+              children: [
+                // Tab bar
+                if (_tabs.length > 1) _buildTabBar(),
+                // Terminal view
+                Expanded(
+                  child: _buildTerminalView(_tabs[_activeTabIndex]),
+                ),
+                // Status bar for script tabs
+                if (_isScriptTab(_tabs[_activeTabIndex]))
+                  _buildScriptStatusBar(context, script),
+              ],
+            ),
     );
   }
 
-  Widget _buildTrailingActions(BuildContext context, RunningScript script) {
+  Widget _buildTabBar() {
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _tabs.length,
+        itemBuilder: (context, index) {
+          final tab = _tabs[index];
+          final isActive = index == _activeTabIndex;
+
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _activeTabIndex = index;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? Theme.of(context).colorScheme.surface
+                    : Colors.transparent,
+                border: Border(
+                  bottom: BorderSide(
+                    color: isActive
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    tab.name,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isActive
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () => _closeTab(index),
+                    child: Icon(
+                      Icons.close,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTerminalView(TerminalTab tab) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isScriptTab = _isScriptTab(tab);
+
+    return Focus(
+      onFocusChange: _onTerminalFocusChanged,
+      child: GestureDetector(
+        onTap: !isScriptTab
+            ? () {
+                // Ensure focus when terminal is tapped
+                _onTerminalFocusChanged(true);
+              }
+            : null,
+        child: Container(
+          color: colorScheme.surfaceContainerLowest,
+          child: TerminalView(
+            tab.terminal,
+            theme: TerminalTheme(
+              cursor: colorScheme.primary,
+              selection: colorScheme.primaryContainer,
+              foreground: colorScheme.onSurface,
+              background: colorScheme.surfaceContainerLowest,
+              black:
+                  isDark ? const Color(0xFF2E3436) : const Color(0xFF000000),
+              red: isDark ? const Color(0xFFCC0000) : const Color(0xFFCC0000),
+              green:
+                  isDark ? const Color(0xFF4E9A06) : const Color(0xFF4E9A06),
+              yellow:
+                  isDark ? const Color(0xFFC4A000) : const Color(0xFFC4A000),
+              blue: isDark ? const Color(0xFF3465A4) : const Color(0xFF3465A4),
+              magenta:
+                  isDark ? const Color(0xFF75507B) : const Color(0xFF75507B),
+              cyan: isDark ? const Color(0xFF06989A) : const Color(0xFF06989A),
+              white:
+                  isDark ? const Color(0xFFD3D7CF) : const Color(0xFFFFFFFF),
+              brightBlack:
+                  isDark ? const Color(0xFF555753) : const Color(0xFF555753),
+              brightRed:
+                  isDark ? const Color(0xFFEF2929) : const Color(0xFFEF2929),
+              brightGreen:
+                  isDark ? const Color(0xFF8AE234) : const Color(0xFF8AE234),
+              brightYellow:
+                  isDark ? const Color(0xFFFCE94F) : const Color(0xFFFCE94F),
+              brightBlue:
+                  isDark ? const Color(0xFF729FCF) : const Color(0xFF729FCF),
+              brightMagenta:
+                  isDark ? const Color(0xFFAD7FA8) : const Color(0xFFAD7FA8),
+              brightCyan:
+                  isDark ? const Color(0xFF34E2E2) : const Color(0xFF34E2E2),
+              brightWhite:
+                  isDark ? const Color(0xFFEEEEEC) : const Color(0xFFFFFFFF),
+              searchHitBackground: colorScheme.secondaryContainer,
+              searchHitBackgroundCurrent: colorScheme.tertiaryContainer,
+              searchHitForeground: colorScheme.onSecondaryContainer,
+            ),
+            textStyle: const TerminalStyle(
+              fontSize: 11,
+              fontFamily: 'JetBrains Mono',
+              fontFamilyFallback: ['Courier New', 'monospace'],
+            ),
+            padding: const EdgeInsets.all(8),
+            autofocus: !isScriptTab,
+            readOnly: isScriptTab,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScriptActions(BuildContext context, RunningScript script) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Row(
@@ -96,173 +427,10 @@ class TerminalOutputPanel extends StatelessWidget {
       ],
     );
   }
-}
 
-class _TerminalContent extends StatefulWidget {
-  const _TerminalContent();
+  Widget _buildScriptStatusBar(BuildContext context, RunningScript? script) {
+    if (script == null) return const SizedBox.shrink();
 
-  @override
-  State<_TerminalContent> createState() => _TerminalContentState();
-}
-
-class _TerminalContentState extends State<_TerminalContent> {
-  static const _autoCloseDelay = Duration(seconds: 2);
-
-  Timer? _autoCloseTimer;
-  bool _userRequestedKeepOpen = false;
-  String? _lastScriptId;
-  Terminal? _terminal;
-  StreamSubscription<List<int>>? _outputSubscription;
-
-  @override
-  void dispose() {
-    _autoCloseTimer?.cancel();
-    _outputSubscription?.cancel();
-    // Note: Terminal doesn't have a dispose method
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scriptService = context.watch<ScriptExecutionService>();
-    final script = scriptService.focusedScript;
-
-    if (script == null) {
-      return const _NoOutputPlaceholder();
-    }
-
-    // Reset state when script changes
-    if (script.id != _lastScriptId) {
-      _lastScriptId = script.id;
-      _autoCloseTimer?.cancel();
-      _autoCloseTimer = null;
-      _userRequestedKeepOpen = false;
-
-      // Create new terminal and subscribe to output stream
-      _outputSubscription?.cancel();
-      _terminal = Terminal();
-      _outputSubscription = script.outputStream.listen(
-        (data) {
-          // PTY output is raw bytes, decode to string for xterm
-          // PTY already handles proper line endings (\r\n) for terminal emulation
-          final text = String.fromCharCodes(data);
-          _terminal?.write(text);
-        },
-        onDone: () {
-          // Stream closed, script finished
-        },
-      );
-    }
-
-    // Start auto-close timer when script completes successfully
-    if (!script.isRunning && script.isSuccess && !_userRequestedKeepOpen) {
-      _autoCloseTimer ??= Timer(_autoCloseDelay, () {
-        if (mounted) {
-          context.read<ScriptExecutionService>().clearOutput();
-        }
-      });
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Output area
-        Expanded(
-          child: _OutputArea(
-            key: TerminalOutputPanelKeys.outputArea,
-            terminal: _terminal!,
-          ),
-        ),
-
-        // Status bar
-        _StatusBar(
-          script: script,
-          isAutoClosing: _autoCloseTimer != null && !_userRequestedKeepOpen,
-          onKeepOpen: () {
-            _autoCloseTimer?.cancel();
-            _autoCloseTimer = null;
-            setState(() => _userRequestedKeepOpen = true);
-          },
-          onClose: () {
-            _autoCloseTimer?.cancel();
-            context.read<ScriptExecutionService>().clearOutput();
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _OutputArea extends StatelessWidget {
-  const _OutputArea({
-    super.key,
-    required this.terminal,
-  });
-
-  final Terminal terminal;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      color: colorScheme.surfaceContainerLowest,
-      child: TerminalView(
-        terminal,
-        theme: TerminalTheme(
-          cursor: colorScheme.primary,
-          selection: colorScheme.primaryContainer,
-          foreground: colorScheme.onSurface,
-          background: colorScheme.surfaceContainerLowest,
-          black: isDark ? const Color(0xFF2E3436) : const Color(0xFF000000),
-          red: isDark ? const Color(0xFFCC0000) : const Color(0xFFCC0000),
-          green: isDark ? const Color(0xFF4E9A06) : const Color(0xFF4E9A06),
-          yellow: isDark ? const Color(0xFFC4A000) : const Color(0xFFC4A000),
-          blue: isDark ? const Color(0xFF3465A4) : const Color(0xFF3465A4),
-          magenta: isDark ? const Color(0xFF75507B) : const Color(0xFF75507B),
-          cyan: isDark ? const Color(0xFF06989A) : const Color(0xFF06989A),
-          white: isDark ? const Color(0xFFD3D7CF) : const Color(0xFFFFFFFF),
-          brightBlack: isDark ? const Color(0xFF555753) : const Color(0xFF555753),
-          brightRed: isDark ? const Color(0xFFEF2929) : const Color(0xFFEF2929),
-          brightGreen: isDark ? const Color(0xFF8AE234) : const Color(0xFF8AE234),
-          brightYellow: isDark ? const Color(0xFFFCE94F) : const Color(0xFFFCE94F),
-          brightBlue: isDark ? const Color(0xFF729FCF) : const Color(0xFF729FCF),
-          brightMagenta: isDark ? const Color(0xFFAD7FA8) : const Color(0xFFAD7FA8),
-          brightCyan: isDark ? const Color(0xFF34E2E2) : const Color(0xFF34E2E2),
-          brightWhite: isDark ? const Color(0xFFEEEEEC) : const Color(0xFFFFFFFF),
-          searchHitBackground: colorScheme.secondaryContainer,
-          searchHitBackgroundCurrent: colorScheme.tertiaryContainer,
-          searchHitForeground: colorScheme.onSecondaryContainer,
-        ),
-        textStyle: const TerminalStyle(
-          fontSize: 11,
-          fontFamily: 'JetBrains Mono',
-          fontFamilyFallback: ['Courier New', 'monospace'],
-        ),
-        padding: const EdgeInsets.all(8),
-        autofocus: false,
-        readOnly: true,
-      ),
-    );
-  }
-}
-
-class _StatusBar extends StatelessWidget {
-  const _StatusBar({
-    required this.script,
-    required this.isAutoClosing,
-    required this.onKeepOpen,
-    required this.onClose,
-  });
-
-  final RunningScript script;
-  final bool isAutoClosing;
-  final VoidCallback onKeepOpen;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -300,42 +468,43 @@ class _StatusBar extends StatelessWidget {
             statusText,
             style: textTheme.labelSmall?.copyWith(color: statusColor),
           ),
-          const Spacer(),
-          if (isAutoClosing) ...[
-            Text(
-              'Closing...',
-              style: textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(
-              key: TerminalOutputPanelKeys.keepOpenButton,
-              onPressed: onKeepOpen,
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: const Text('Keep Open'),
-            ),
-          ],
-          if (!script.isRunning && !isAutoClosing)
-            TextButton(
-              onPressed: onClose,
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: const Text('Close'),
-            ),
         ],
       ),
     );
   }
+
+  bool _isScriptTab(TerminalTab tab) {
+    return _scriptToTabId.containsValue(tab.id);
+  }
+
+  void _createScriptTab(RunningScript script) {
+    final terminal = Terminal();
+
+    // Get PTY from script and connect to terminal
+    final tab = TerminalTab(
+      name: script.name,
+      terminal: terminal,
+      pty: script.pty,
+      workingDirectory: script.workingDirectory,
+    );
+
+    setState(() {
+      _tabs.add(tab);
+      _activeTabIndex = _tabs.length - 1;
+      _scriptToTabId[script.id] = tab.id;
+    });
+
+    // Subscribe to script output stream (already has data)
+    final sub = script.outputStream.listen((data) {
+      final text = String.fromCharCodes(data);
+      terminal.write(text);
+    });
+    _subscriptions[tab.id] = sub;
+  }
 }
 
-class _NoOutputPlaceholder extends StatelessWidget {
-  const _NoOutputPlaceholder();
+class _NoTerminalsPlaceholder extends StatelessWidget {
+  const _NoTerminalsPlaceholder();
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +524,7 @@ class _NoOutputPlaceholder extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'No script output',
+              'No terminals open',
               style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -363,7 +532,7 @@ class _NoOutputPlaceholder extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Run an action to see output here',
+              'Click + to open a new terminal',
               style: textTheme.labelSmall?.copyWith(
                 color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
