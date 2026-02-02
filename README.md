@@ -25,6 +25,31 @@ This project is still deeeep in development, the only way to run it is clone the
 - **Context management** - Continiously keep an eye on context usage, so you can compact or clear when you want, and not be surprised by Claude.
 - **Cost tracking** - Monitor token usage and costs per session
 
+## Proudly Self Hoisted
+
+Only the first day or so involved running the claude cli. As soon as a functioning window was established ALL of the development was done using itself. Whats more is this app is entirely vibe coded. I have made zero code changes by hand. It probablt show, I'm good and many languages, Dart isn't one of them, but regardless this app works well enough to build itself.
+
+The majority of the large feature work was done with a multi agent approach, telling one chat it is an architect and getting the plan developed, telling another it is the project planner and dividing all the work into a detaioed plan broken down into discrete chunks, specifying goals. 
+
+Finally another chat session I tell it that it is a project manager, and that its workflow is as follows:
+
+For each task:
+1) Create a flutter programming expert subagent, and have that agent read FLUTTER.md and TESTING.md. 
+2) Give that agent the task and tell them to work until they have produced all deliverables.
+3) Have a _different_ subagent perform the tests and validate they work. Ensure this agent also reads TESTING.md. There are no pre-existing issues, all test failures must be reported.
+4) Any test failures go to step 1. after they are fixed go to step 2 again.
+5) Once all tests pass have a code reviewer agent inspect the code and ensure that it meets all the deliverables and meets the FLUTTER.md style guide.
+6) If there are any issues go back to step 1.
+7) Once all issued are fixed commit the code.
+
+At the end of each phase have an architect review the plan and implementation and confirm they still make sense. Stop if the plan should be altered.
+
+And that's it. That's how most of this app was produced. Once worktrees were functional things went MUCH faster. Having multiple features being worked on at once made things very fast.
+
+And once the merge assist was working it was easy.
+
+I hope you too can use Claude to its maximum potential 
+(Btw -- I might be adding a new backend soon).
 
 ## Prerequisites
 
