@@ -35,6 +35,13 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to use mock data (--mock flag).
   bool _useMockData = false;
 
+  /// Whether the app was launched from CLI (has TERM env var and no
+  /// FORCE_WELCOME).
+  ///
+  /// When true, the app skips the welcome screen and goes directly to
+  /// the main view.
+  bool _launchedFromCli = false;
+
   /// The working directory (primary worktree root).
   ///
   /// This is the path to a git repository passed as the first positional
@@ -59,6 +66,18 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to use mock data (set via --mock flag).
   bool get useMockData => _useMockData;
 
+  /// Whether the app was launched from CLI (TERM env var is set and
+  /// FORCE_WELCOME is not set).
+  ///
+  /// When launched from CLI, the app skips the welcome screen and goes
+  /// directly to the main view with the working directory.
+  bool get launchedFromCli => _launchedFromCli;
+
+  /// Whether to show the welcome screen.
+  ///
+  /// Returns false if launched from CLI (unless FORCE_WELCOME=1 is set).
+  bool get showWelcome => !_launchedFromCli;
+
   /// Initialize runtime config from command line arguments.
   ///
   /// Should be called once at app startup, before [runApp].
@@ -72,6 +91,12 @@ class RuntimeConfig extends ChangeNotifier {
     }
 
     _instance._initialized = true;
+
+    // Detect if launched from CLI by checking TERM env var
+    // FORCE_WELCOME=1 overrides this to show welcome screen
+    final hasTerm = Platform.environment.containsKey('TERM');
+    final forceWelcome = Platform.environment['FORCE_WELCOME'] == '1';
+    _instance._launchedFromCli = hasTerm && !forceWelcome;
 
     // Parse flags and collect positional args
     final positionalArgs = <String>[];
@@ -164,5 +189,19 @@ class RuntimeConfig extends ChangeNotifier {
       _showRawMessages = value;
       notifyListeners();
     }
+  }
+
+  /// Updates the working directory.
+  ///
+  /// This is called when the user selects a project from the welcome screen.
+  void setWorkingDirectory(String path) {
+    // Canonicalize the path
+    final dir = Directory(path);
+    if (dir.isAbsolute) {
+      _workingDirectory = p.canonicalize(path);
+    } else {
+      _workingDirectory = p.canonicalize(dir.absolute.path);
+    }
+    notifyListeners();
   }
 }

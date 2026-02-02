@@ -10,6 +10,7 @@ import 'models/project.dart';
 import 'models/worktree.dart';
 import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'services/ask_ai_service.dart';
 import 'services/backend_service.dart';
 import 'services/file_system_service.dart';
@@ -132,6 +133,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The project state - cached for app lifecycle callbacks.
   ProjectState? _project;
 
+  /// Whether a project has been selected (either from CLI or welcome screen).
+  bool _projectSelected = false;
+
   @override
   void initState() {
     super.initState();
@@ -188,12 +192,17 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _handler =
         widget.messageHandler ?? SdkMessageHandler(askAiService: _askAiService);
 
-    // Initialize project (sync for mock, async for real)
+    // Initialize project (sync for mock, async for CLI launch)
+    // If showing welcome screen, defer project loading until user selects one
     if (shouldUseMock) {
       _mockProject = _createMockProject();
-    } else {
+      _projectSelected = true;
+    } else if (RuntimeConfig.instance.launchedFromCli) {
+      // Launched from CLI - restore project for the working directory
       _projectFuture = _restoreProject();
+      _projectSelected = true;
     }
+    // Otherwise, show welcome screen and wait for user to select a project
   }
 
   /// Initialize SDK debug logging to write all messages to a file.
@@ -283,27 +292,32 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       // Synchronous path for mock data
       _project = _mockProject!;
       return _buildApp(_project!);
-    } else {
-      // Async path for restoring from persistence
-      return FutureBuilder<ProjectState>(
-        future: _projectFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return _buildLoadingScreen();
-          }
-
-          if (snapshot.hasError) {
-            debugPrint('Error restoring project: ${snapshot.error}');
-            // Fall back to creating a new project synchronously
-            _project = _createFallbackProject();
-            return _buildApp(_project!);
-          }
-
-          _project = snapshot.data ?? _createFallbackProject();
-          return _buildApp(_project!);
-        },
-      );
     }
+
+    // Show welcome screen if not launched from CLI and no project selected
+    if (!_projectSelected) {
+      return _buildWelcomeApp();
+    }
+
+    // Async path for restoring from persistence
+    return FutureBuilder<ProjectState>(
+      future: _projectFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingScreen();
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('Error restoring project: ${snapshot.error}');
+          // Fall back to creating a new project synchronously
+          _project = _createFallbackProject();
+          return _buildApp(_project!);
+        }
+
+        _project = snapshot.data ?? _createFallbackProject();
+        return _buildApp(_project!);
+      },
+    );
   }
 
   /// Restores the project from persistence.
@@ -320,6 +334,32 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     }
 
     return project;
+  }
+
+  /// Handles project selection from the welcome screen.
+  void _onProjectSelected(String projectPath) {
+    // Update the RuntimeConfig with the selected directory
+    RuntimeConfig.instance.setWorkingDirectory(projectPath);
+
+    // Start loading the project
+    setState(() {
+      _projectSelected = true;
+      _projectFuture = _restoreProject();
+    });
+  }
+
+  /// Builds the welcome screen app (before a project is selected).
+  Widget _buildWelcomeApp() {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      home: WelcomeScreen(
+        onProjectSelected: _onProjectSelected,
+      ),
+    );
   }
 
   /// Builds the loading screen shown while restoring project.

@@ -74,3 +74,4 @@ flutter:
 
   assets:
     - assets/appicon.png
+    - assets/title.png
