@@ -707,15 +707,28 @@ void main() {
       await tester.tap(find.text('Log Replay'));
       await safePumpAndSettle(tester);
 
-      // Find the Bash tool card by looking for 'Bash' text in a tool card
-      final bashToolFinder = find.text('Bash');
-      expect(bashToolFinder, findsWidgets);
+      // Wait for content to load
+      await pumpUntilFound(tester, find.textContaining('pubspec.yaml'));
 
-      // Scroll to ensure the Bash tool is visible (it's near the end of the log)
+      // Find the scrollable INSIDE the ConversationPanel
+      final allConversationScrollables = find.descendant(
+        of: find.byType(ConversationPanel),
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is Scrollable) {
+            return widget.axisDirection == AxisDirection.down;
+          }
+          return false;
+        }),
+      );
+      expect(allConversationScrollables, findsWidgets);
+      final conversationScrollable = allConversationScrollables.first;
+
+      // Scroll to find the Bash tool (it's near the end of the log)
+      final bashToolFinder = find.text('Bash');
       await tester.scrollUntilVisible(
-        bashToolFinder.first,
-        200,
-        scrollable: find.byType(Scrollable).last,
+        bashToolFinder,
+        200, // Scroll down to find it (it's near the end)
+        scrollable: conversationScrollable,
       );
       await safePumpAndSettle(tester);
 
@@ -748,15 +761,28 @@ void main() {
       await tester.tap(find.text('Log Replay'));
       await safePumpAndSettle(tester);
 
-      // Find the Write tool card
-      final writeToolFinder = find.text('Write');
-      expect(writeToolFinder, findsWidgets);
+      // Wait for content to load
+      await pumpUntilFound(tester, find.textContaining('pubspec.yaml'));
 
-      // Scroll to ensure the Write tool is visible
+      // Find the scrollable INSIDE the ConversationPanel
+      final allConversationScrollables = find.descendant(
+        of: find.byType(ConversationPanel),
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is Scrollable) {
+            return widget.axisDirection == AxisDirection.down;
+          }
+          return false;
+        }),
+      );
+      expect(allConversationScrollables, findsWidgets);
+      final conversationScrollable = allConversationScrollables.first;
+
+      // Scroll to find the Write tool (it's in the middle of the conversation)
+      final writeToolFinder = find.text('Write');
       await tester.scrollUntilVisible(
-        writeToolFinder.first,
-        200,
-        scrollable: find.byType(Scrollable).last,
+        writeToolFinder,
+        -200, // Scroll up to find it
+        scrollable: conversationScrollable,
       );
       await safePumpAndSettle(tester);
 
@@ -833,15 +859,28 @@ void main() {
       await tester.tap(find.text('Log Replay'));
       await safePumpAndSettle(tester);
 
-      // Find the Edit tool card
-      final editToolFinder = find.text('Edit');
-      expect(editToolFinder, findsWidgets);
+      // Wait for content to load
+      await pumpUntilFound(tester, find.textContaining('pubspec.yaml'));
 
-      // Scroll to ensure the Edit tool is visible
+      // Find the scrollable INSIDE the ConversationPanel
+      final allConversationScrollables = find.descendant(
+        of: find.byType(ConversationPanel),
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is Scrollable) {
+            return widget.axisDirection == AxisDirection.down;
+          }
+          return false;
+        }),
+      );
+      expect(allConversationScrollables, findsWidgets);
+      final conversationScrollable = allConversationScrollables.first;
+
+      // Scroll to find the Edit tool (it's in the middle of the conversation)
+      final editToolFinder = find.text('Edit');
       await tester.scrollUntilVisible(
-        editToolFinder.first,
-        200,
-        scrollable: find.byType(Scrollable).last,
+        editToolFinder,
+        200, // Scroll down to find it
+        scrollable: conversationScrollable,
       );
       await safePumpAndSettle(tester);
 
