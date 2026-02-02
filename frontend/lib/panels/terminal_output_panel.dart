@@ -73,6 +73,9 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
   /// Track remaining seconds for auto-close countdown.
   final Map<String, int> _autoCloseCountdown = {};
 
+  /// Track scripts that user explicitly chose to keep open (don't auto-close again).
+  final Set<String> _keptOpenScripts = {};
+
   /// Keyboard focus manager resume callback.
   VoidCallback? _keyboardResume;
 
@@ -178,6 +181,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
       _autoCloseTimers.remove(scriptId);
       _autoClosingScripts.remove(scriptId);
       _autoCloseCountdown.remove(scriptId);
+      _keptOpenScripts.remove(scriptId);
 
       // This is a script tab - clear it from the service
       context.read<ScriptExecutionService>().clearScript(scriptId);
@@ -252,7 +256,8 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
 
       if (scriptForTab != null && !scriptForTab.isRunning && scriptForTab.isSuccess) {
         // Script completed successfully - start auto-close timer if not already started
-        if (!_autoCloseTimers.containsKey(scriptId)) {
+        // Skip if user explicitly chose to keep this script open
+        if (!_autoCloseTimers.containsKey(scriptId) && !_keptOpenScripts.contains(scriptId)) {
           _autoClosingScripts.add(scriptId);
           _autoCloseCountdown[scriptId] = _autoCloseDelay.inSeconds;
 
@@ -567,10 +572,11 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
     _autoCloseTimers[scriptId]?.cancel();
     _autoCloseTimers.remove(scriptId);
 
-    // Remove from auto-closing set and countdown
+    // Remove from auto-closing set and countdown, mark as kept open
     setState(() {
       _autoClosingScripts.remove(scriptId);
       _autoCloseCountdown.remove(scriptId);
+      _keptOpenScripts.add(scriptId);
     });
   }
 
