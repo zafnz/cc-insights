@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/ask_ai_service.dart';
+import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
 import 'commit_dialog.dart';
@@ -44,6 +45,7 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
   required GitService gitService,
   required PersistenceService persistenceService,
   required AskAiService askAiService,
+  required FileSystemService fileSystemService,
 }) async {
   final result = await showDialog<DeleteWorktreeResult>(
     context: context,
@@ -56,6 +58,7 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
       gitService: gitService,
       persistenceService: persistenceService,
       askAiService: askAiService,
+      fileSystemService: fileSystemService,
     ),
   );
   return result ?? DeleteWorktreeResult.cancelled;
@@ -145,6 +148,7 @@ class DeleteWorktreeDialog extends StatefulWidget {
     required this.gitService,
     required this.persistenceService,
     required this.askAiService,
+    required this.fileSystemService,
   });
 
   final String worktreePath;
@@ -154,6 +158,7 @@ class DeleteWorktreeDialog extends StatefulWidget {
   final GitService gitService;
   final PersistenceService persistenceService;
   final AskAiService askAiService;
+  final FileSystemService fileSystemService;
 
   @override
   State<DeleteWorktreeDialog> createState() => _DeleteWorktreeDialogState();
@@ -284,6 +289,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
       worktreePath: widget.worktreePath,
       gitService: widget.gitService,
       askAiService: widget.askAiService,
+      fileSystemService: widget.fileSystemService,
     );
 
     if (!mounted) return;

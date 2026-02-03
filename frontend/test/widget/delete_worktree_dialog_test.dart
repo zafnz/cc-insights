@@ -1,3 +1,4 @@
+import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/widgets/delete_worktree_dialog.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ void main() {
   late FakeGitService gitService;
   late FakePersistenceService persistenceService;
   late FakeAskAiService askAiService;
+  late FakeFileSystemService fileSystemService;
 
   const testWorktreePath = '/repo/worktrees/feature';
   const testRepoRoot = '/repo';
@@ -22,6 +24,7 @@ void main() {
     gitService = FakeGitService();
     persistenceService = FakePersistenceService();
     askAiService = FakeAskAiService();
+    fileSystemService = FakeFileSystemService();
 
     // Set up default clean worktree
     gitService.statuses[testWorktreePath] = const GitStatus();
@@ -43,6 +46,7 @@ void main() {
                 gitService: gitService,
                 persistenceService: persistenceService,
                 askAiService: askAiService,
+                fileSystemService: fileSystemService,
               );
             },
             child: const Text('Open Dialog'),

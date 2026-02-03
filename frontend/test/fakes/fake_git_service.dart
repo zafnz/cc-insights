@@ -57,6 +57,7 @@ class FakeGitService implements GitService {
     getStatusCalls = 0;
     discoverWorktreesCalls = 0;
     findRepoRootCalls = 0;
+    fileAtRefContents.clear();
   }
 
   Future<void> _maybeDelay() async {
@@ -225,6 +226,21 @@ class FakeGitService implements GitService {
     await _maybeDelay();
     _maybeThrow();
     return changedFiles[path] ?? [];
+  }
+
+  /// Map of (worktreePath:filePath:ref) -> content for [getFileAtRef].
+  final Map<String, String?> fileAtRefContents = {};
+
+  @override
+  Future<String?> getFileAtRef(
+    String worktreePath,
+    String filePath,
+    String ref,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    final key = '$worktreePath:$filePath:$ref';
+    return fileAtRefContents[key];
   }
 
   @override

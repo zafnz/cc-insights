@@ -133,6 +133,16 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<String?> getFileAtRef(
+    String worktreePath,
+    String filePath,
+    String ref,
+  ) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return null;
+  }
+
+  @override
   Future<void> stageAll(String path) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
   }

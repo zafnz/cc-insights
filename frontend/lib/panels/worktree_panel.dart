@@ -7,6 +7,7 @@ import '../models/chat.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/ask_ai_service.dart';
+import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
 import '../state/selection_state.dart';
@@ -543,6 +544,7 @@ class _WorktreeListItem extends StatelessWidget {
     final gitService = context.read<GitService>();
     final persistenceService = context.read<PersistenceService>();
     final askAiService = context.read<AskAiService>();
+    final fileSystemService = context.read<FileSystemService>();
 
     final result = await showDeleteWorktreeDialog(
       context: context,
@@ -553,6 +555,7 @@ class _WorktreeListItem extends StatelessWidget {
       gitService: gitService,
       persistenceService: persistenceService,
       askAiService: askAiService,
+      fileSystemService: fileSystemService,
     );
 
     if (result == DeleteWorktreeResult.deleted && context.mounted) {

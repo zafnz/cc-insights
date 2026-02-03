@@ -9,6 +9,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/ask_ai_service.dart';
 import '../services/backend_service.dart';
+import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/sdk_message_handler.dart';
@@ -119,12 +120,14 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     // Get services from providers
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
+    final fileSystemService = context.read<FileSystemService>();
 
     final committed = await showCommitDialog(
       context: context,
       worktreePath: worktreeRoot,
       gitService: gitService,
       askAiService: askAiService,
+      fileSystemService: fileSystemService,
     );
 
     if (committed) {

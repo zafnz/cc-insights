@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../config/fonts.dart';
+import '../models/file_content.dart';
 import '../services/ask_ai_service.dart';
+import '../services/file_system_service.dart';
+import '../services/file_type_detector.dart';
 import '../services/git_service.dart';
+import 'code_line_view.dart';
+import 'file_viewers/binary_file_message.dart';
+import 'file_viewers/image_viewer.dart';
+import 'file_viewers/markdown_viewer.dart';
 
 /// Keys for testing CommitDialog widgets.
 class CommitDialogKeys {
@@ -19,6 +26,15 @@ class CommitDialogKeys {
   static const cancelButton = Key('commit_dialog_cancel_button');
   static const spinner = Key('commit_dialog_spinner');
   static const errorMessage = Key('commit_dialog_error');
+  static const resizeDivider =
+      Key('commit_dialog_resize_divider');
+  static const commitMessageItem =
+      Key('commit_dialog_commit_message_item');
+  static const fileContentView =
+      Key('commit_dialog_file_content_view');
+  static const diffToggle = Key('commit_dialog_diff_toggle');
+  static const diffView = Key('commit_dialog_diff_view');
+  static const codeLineView = Key('commit_dialog_code_line_view');
 }
 
 /// Shows the commit dialog and returns true if a commit was made.
@@ -27,6 +43,7 @@ Future<bool> showCommitDialog({
   required String worktreePath,
   required GitService gitService,
   required AskAiService askAiService,
+  required FileSystemService fileSystemService,
 }) async {
   final result = await showDialog<bool>(
     context: context,
@@ -35,6 +52,7 @@ Future<bool> showCommitDialog({
       worktreePath: worktreePath,
       gitService: gitService,
       askAiService: askAiService,
+      fileSystemService: fileSystemService,
     ),
   );
   return result ?? false;
@@ -47,11 +65,13 @@ class CommitDialog extends StatefulWidget {
     required this.worktreePath,
     required this.gitService,
     required this.askAiService,
+    required this.fileSystemService,
   });
 
   final String worktreePath;
   final GitService gitService;
   final AskAiService askAiService;
+  final FileSystemService fileSystemService;
 
   @override
   State<CommitDialog> createState() => _CommitDialogState();
@@ -59,6 +79,7 @@ class CommitDialog extends StatefulWidget {
 
 class _CommitDialogState extends State<CommitDialog>
     with SingleTickerProviderStateMixin {
+  // --- Existing state ---
   List<GitFileChange> _files = [];
   final _messageController = TextEditingController();
   bool _isLoadingFiles = true;
@@ -68,6 +89,30 @@ class _CommitDialogState extends State<CommitDialog>
   String? _error;
   bool _isCommitting = false;
   late TabController _tabController;
+
+  // --- New state for file viewing ---
+  /// Selected item index: 0 = commit message, 1+ = file at index-1.
+  int _selectedIndex = 0;
+
+  /// Width of the left panel (resizable).
+  double _leftPanelWidth = 280.0;
+  static const double _minLeftPanelWidth = 180.0;
+  static const double _maxLeftPanelWidth = 500.0;
+
+  /// Loaded file content for the selected file.
+  FileContent? _selectedFileContent;
+
+  /// Whether we're currently loading file content.
+  bool _isLoadingFileContent = false;
+
+  /// Whether to show diff view vs file content view.
+  bool _showDiff = false;
+
+  /// The content of the file at HEAD (old version for diff).
+  String? _oldFileContent;
+
+  /// The current working tree content (new version for diff).
+  String? _currentFileContent;
 
   @override
   void initState() {
@@ -95,7 +140,8 @@ class _CommitDialogState extends State<CommitDialog>
 
   Future<void> _loadFiles() async {
     try {
-      final files = await widget.gitService.getChangedFiles(widget.worktreePath);
+      final files =
+          await widget.gitService.getChangedFiles(widget.worktreePath);
       if (!mounted) return;
       setState(() {
         _files = files;
@@ -125,7 +171,8 @@ class _CommitDialogState extends State<CommitDialog>
         .map((f) => '- ${f.path} (${_statusToString(f.status)})')
         .join('\n');
 
-    final prompt = '''Read the following files and generate a git commit message.
+    final prompt =
+        '''Read the following files and generate a git commit message.
 
 Output the commit message between markers like this:
 ===BEGIN===
@@ -169,7 +216,8 @@ $fileList''';
         }
       } else {
         setState(() {
-          _error = 'AI generation failed: ${result?.result ?? 'Unknown error'}';
+          _error =
+              'AI generation failed: ${result?.result ?? 'Unknown error'}';
         });
       }
     } catch (e) {
@@ -186,8 +234,8 @@ $fileList''';
     }
   }
 
-  /// Extracts the commit message from between ===BEGIN=== and ===END=== markers.
-  /// Falls back to the raw message if markers are not found.
+  /// Extracts the commit message from between ===BEGIN=== and ===END===
+  /// markers. Falls back to the raw message if markers are not found.
   String _extractCommitMessage(String raw) {
     const beginMarker = '===BEGIN===';
     const endMarker = '===END===';
@@ -257,6 +305,85 @@ $fileList''';
     }
   }
 
+  // --- Selection & file loading ---
+
+  void _onItemSelected(int index) {
+    if (index == _selectedIndex) return;
+    setState(() {
+      _selectedIndex = index;
+      _showDiff = true;
+      _selectedFileContent = null;
+      _oldFileContent = null;
+      _currentFileContent = null;
+    });
+    if (index > 0) {
+      _loadSelectedFileContent(_files[index - 1]);
+    }
+  }
+
+  Future<void> _loadSelectedFileContent(GitFileChange file) async {
+    setState(() => _isLoadingFileContent = true);
+    try {
+      final fullPath = '${widget.worktreePath}/${file.path}';
+
+      // Load current file content for viewing
+      FileContent content;
+      if (file.status == GitFileStatus.deleted) {
+        // File doesn't exist on disk - create an error-like content
+        content = FileContent.error(
+          path: fullPath,
+          message: 'File has been deleted',
+        );
+      } else {
+        content = await widget.fileSystemService.readFile(fullPath);
+      }
+
+      // Load old and current text for diff
+      String? oldContent;
+      String? currentContent;
+
+      if (file.status == GitFileStatus.untracked ||
+          file.status == GitFileStatus.added) {
+        oldContent = '';
+        currentContent = content.textContent ?? '';
+      } else if (file.status == GitFileStatus.deleted) {
+        oldContent = await widget.gitService.getFileAtRef(
+          widget.worktreePath,
+          file.path,
+          'HEAD',
+        );
+        currentContent = '';
+      } else {
+        // Modified, renamed, copied
+        oldContent = await widget.gitService.getFileAtRef(
+          widget.worktreePath,
+          file.path,
+          'HEAD',
+        );
+        currentContent = content.textContent;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _selectedFileContent = content;
+        _oldFileContent = oldContent;
+        _currentFileContent = currentContent;
+        _isLoadingFileContent = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _selectedFileContent = FileContent.error(
+          path: '${widget.worktreePath}/${file.path}',
+          message: 'Failed to load: $e',
+        );
+        _isLoadingFileContent = false;
+      });
+    }
+  }
+
+  // --- Status helpers ---
+
   String _statusToString(GitFileStatus status) {
     switch (status) {
       case GitFileStatus.added:
@@ -306,6 +433,8 @@ $fileList''';
     }
   }
 
+  // --- Build methods ---
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -347,7 +476,8 @@ $fileList''';
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: colorScheme.primaryContainer,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(12)),
       ),
       child: Row(
         children: [
@@ -376,8 +506,9 @@ $fileList''';
                 color: colorScheme.onPrimaryContainer,
                 size: 20,
               ),
-              onPressed:
-                  _isGeneratingMessage || _isCommitting ? null : _triggerAiRegenerate,
+              onPressed: _isGeneratingMessage || _isCommitting
+                  ? null
+                  : _triggerAiRegenerate,
             ),
           ),
         ],
@@ -389,22 +520,38 @@ $fileList''';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Left panel: File list
+        // Left panel: File list (resizable width)
         SizedBox(
-          width: 280,
+          width: _leftPanelWidth,
           child: _buildFileList(colorScheme),
         ),
-        // Divider
-        VerticalDivider(
-          width: 1,
-          thickness: 1,
-          color: colorScheme.outlineVariant,
-        ),
-        // Right panel: Commit message
+        // Resizable divider
+        _buildResizableDivider(colorScheme),
+        // Right panel: Content area
         Expanded(
-          child: _buildMessageEditor(colorScheme),
+          child: _buildRightPanel(colorScheme),
         ),
       ],
+    );
+  }
+
+  Widget _buildResizableDivider(ColorScheme colorScheme) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        key: CommitDialogKeys.resizeDivider,
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            _leftPanelWidth = (_leftPanelWidth + details.delta.dx)
+                .clamp(_minLeftPanelWidth, _maxLeftPanelWidth);
+          });
+        },
+        child: Container(
+          width: 4,
+          color: colorScheme.outlineVariant,
+        ),
+      ),
     );
   }
 
@@ -412,29 +559,20 @@ $fileList''';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(
-            'Files to commit (${_files.length})',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        Divider(height: 1, color: colorScheme.outlineVariant),
-        // File list
+        // File list with commit message item first
         Expanded(
           child: _isLoadingFiles
               ? const Center(child: CircularProgressIndicator())
               : ListView.builder(
                   key: CommitDialogKeys.fileList,
-                  itemCount: _files.length,
+                  itemCount: _files.length + 1, // +1 for commit message
                   itemBuilder: (context, index) {
-                    final file = _files[index];
-                    return _buildFileItem(file, colorScheme);
+                    if (index == 0) {
+                      return _buildCommitMessageItem(colorScheme);
+                    }
+                    final file = _files[index - 1];
+                    return _buildFileItem(
+                        file, colorScheme, index);
                   },
                 ),
         ),
@@ -442,33 +580,192 @@ $fileList''';
     );
   }
 
-  Widget _buildFileItem(GitFileChange file, ColorScheme colorScheme) {
-    final statusColor = _statusColor(file.status, colorScheme);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Row(
-        children: [
-          // Status badge
-          Container(
-            width: 20,
-            height: 20,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _statusToShortString(file.status),
-              style: AppFonts.monoTextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: statusColor,
-              ),
+  Widget _buildCommitMessageItem(ColorScheme colorScheme) {
+    final isSelected = _selectedIndex == 0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          key: CommitDialogKeys.commitMessageItem,
+          onTap: () => _onItemSelected(0),
+          child: Container(
+            color: isSelected
+                ? colorScheme.primary.withValues(alpha: 0.12)
+                : null,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit_note,
+                  size: 20,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Commit Message',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          // File path
+        ),
+        // Section divider with file count
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Divider(
+                  height: 1,
+                  color: colorScheme.outlineVariant,
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  'Files (${_files.length})',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Divider(
+                  height: 1,
+                  color: colorScheme.outlineVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFileItem(
+    GitFileChange file,
+    ColorScheme colorScheme,
+    int index,
+  ) {
+    final isSelected = _selectedIndex == index;
+    final statusColor = _statusColor(file.status, colorScheme);
+
+    return InkWell(
+      onTap: () => _onItemSelected(index),
+      child: Container(
+        color: isSelected
+            ? colorScheme.primary.withValues(alpha: 0.12)
+            : null,
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(
+          children: [
+            // Status badge
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _statusToShortString(file.status),
+                style: AppFonts.monoTextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // File path
+            Expanded(
+              child: Text(
+                file.path,
+                style: AppFonts.monoTextStyle(
+                  fontSize: 12,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurface,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Staged indicator
+            if (file.isStaged)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  'staged',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: Colors.green[300],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Right panel ---
+
+  Widget _buildRightPanel(ColorScheme colorScheme) {
+    if (_selectedIndex == 0) {
+      return _buildMessageEditor(colorScheme);
+    }
+    return _buildFileViewer(colorScheme);
+  }
+
+  Widget _buildFileViewer(ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Toolbar with file name and diff toggle
+        _buildFileViewerToolbar(colorScheme),
+        Divider(height: 1, color: colorScheme.outlineVariant),
+        // Content
+        Expanded(
+          key: CommitDialogKeys.fileContentView,
+          child: _buildFileViewerContent(colorScheme),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFileViewerToolbar(ColorScheme colorScheme) {
+    final file = _files[_selectedIndex - 1];
+    final canShowDiff = _selectedFileContent != null &&
+        !_selectedFileContent!.isError &&
+        _oldFileContent != null;
+
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color:
+          colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      child: Row(
+        children: [
           Expanded(
             child: Text(
               file.path,
@@ -479,26 +776,133 @@ $fileList''';
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Staged indicator
-          if (file.isStaged)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(3),
+          if (canShowDiff)
+            IconButton(
+              key: CommitDialogKeys.diffToggle,
+              icon: Icon(
+                _showDiff ? Icons.description : Icons.difference,
+                size: 18,
               ),
-              child: Text(
-                'staged',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: Colors.green[300],
-                ),
-              ),
+              iconSize: 18,
+              padding: EdgeInsets.zero,
+              constraints:
+                  const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: _showDiff
+                  ? 'Show file content'
+                  : 'Show diff',
+              onPressed: () {
+                setState(() => _showDiff = !_showDiff);
+              },
             ),
         ],
       ),
     );
   }
+
+  Widget _buildFileViewerContent(ColorScheme colorScheme) {
+    if (_isLoadingFileContent) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final content = _selectedFileContent;
+    if (content == null) {
+      return Center(
+        child: Text(
+          'Select a file to view',
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
+      );
+    }
+
+    // For non-text types, use specialized viewers
+    if (content.type == FileContentType.image) {
+      return ImageViewer(path: content.path);
+    }
+    if (content.type == FileContentType.binary) {
+      return BinaryFileMessage(file: content);
+    }
+    if (content.type == FileContentType.markdown && !_showDiff) {
+      final text = content.textContent;
+      if (text == null) return _noContentMessage();
+      return MarkdownViewer(content: text);
+    }
+
+    if (content.isError && !_showDiff) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48,
+                color: colorScheme.error),
+            const SizedBox(height: 12),
+            Text(
+              content.error ?? 'Unknown error',
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Detect language for syntax highlighting
+    final language = _detectLanguage(content);
+
+    if (_showDiff) {
+      return CodeLineView(
+        key: CommitDialogKeys.diffView,
+        source: _currentFileContent ?? '',
+        oldSource: _oldFileContent ?? '',
+        isDiff: true,
+        language: language,
+      );
+    }
+
+    // File view mode
+    final text = content.textContent;
+    if (text == null) return _noContentMessage();
+
+    return CodeLineView(
+      key: CommitDialogKeys.codeLineView,
+      source: text,
+      language: language,
+    );
+  }
+
+  /// Detects the syntax highlighting language for the given content.
+  String? _detectLanguage(FileContent content) {
+    switch (content.type) {
+      case FileContentType.dart:
+        return 'dart';
+      case FileContentType.json:
+        return 'json';
+      case FileContentType.markdown:
+        return 'markdown';
+      case FileContentType.plaintext:
+        final ext =
+            FileTypeDetector.getFileExtension(content.path);
+        if (ext != null) {
+          return FileTypeDetector.getLanguageFromExtension(ext);
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  Widget _noContentMessage() {
+    return Center(
+      child: Text(
+        'No content available',
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+    );
+  }
+
+  // --- Message editor (unchanged) ---
 
   Widget _buildMessageEditor(ColorScheme colorScheme) {
     return Column(
@@ -506,7 +910,8 @@ $fileList''';
       children: [
         // Tabs
         Container(
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          color: colorScheme.surfaceContainerHighest
+              .withValues(alpha: 0.3),
           child: TabBar(
             controller: _tabController,
             tabs: [
@@ -574,15 +979,18 @@ $fileList''';
                   : 'Enter your commit message...',
               hintStyle: AppFonts.monoTextStyle(
                 fontSize: 13,
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                color: colorScheme.onSurfaceVariant
+                    .withValues(alpha: 0.6),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: colorScheme.outline),
+                borderSide:
+                    BorderSide(color: colorScheme.outline),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: colorScheme.primary, width: 2),
+                borderSide: BorderSide(
+                    color: colorScheme.primary, width: 2),
               ),
               contentPadding: const EdgeInsets.all(12),
             ),
@@ -666,10 +1074,13 @@ $fileList''';
     );
   }
 
+  // --- Error and footer ---
+
   Widget _buildError(ColorScheme colorScheme) {
     return Container(
       key: CommitDialogKeys.errorMessage,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: colorScheme.errorContainer,
       child: Row(
         children: [
@@ -696,7 +1107,8 @@ $fileList''';
             ),
             onPressed: () => setState(() => _error = null),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            constraints:
+                const BoxConstraints(minWidth: 24, minHeight: 24),
           ),
         ],
       ),
@@ -710,15 +1122,19 @@ $fileList''';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+        color: colorScheme.surfaceContainerHighest
+            .withValues(alpha: 0.3),
+        borderRadius:
+            const BorderRadius.vertical(bottom: Radius.circular(12)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           TextButton(
             key: CommitDialogKeys.cancelButton,
-            onPressed: _isCommitting ? null : () => Navigator.of(context).pop(false),
+            onPressed: _isCommitting
+                ? null
+                : () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
           ),
           const SizedBox(width: 12),

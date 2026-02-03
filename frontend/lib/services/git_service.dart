@@ -234,6 +234,18 @@ abstract class GitService {
   /// Throws [GitException] if [path] is not a git repository.
   Future<List<GitFileChange>> getChangedFiles(String path);
 
+  /// Gets the content of a file at a specific git ref (e.g., "HEAD").
+  ///
+  /// Runs `git show <ref>:<filePath>` to retrieve the file content.
+  /// Returns null if the file doesn't exist at that ref.
+  /// [worktreePath] is the working directory.
+  /// [filePath] is relative to the worktree root.
+  Future<String?> getFileAtRef(
+    String worktreePath,
+    String filePath,
+    String ref,
+  );
+
   /// Stages all changes in the worktree (git add -A).
   ///
   /// Throws [GitException] on failure.
@@ -614,6 +626,23 @@ class RealGitService implements GitService {
       workingDirectory: path,
     );
     return GitChangedFilesParser.parse(output);
+  }
+
+  @override
+  Future<String?> getFileAtRef(
+    String worktreePath,
+    String filePath,
+    String ref,
+  ) async {
+    try {
+      final output = await _runGit(
+        ['show', '$ref:$filePath'],
+        workingDirectory: worktreePath,
+      );
+      return output;
+    } on GitException {
+      return null;
+    }
   }
 
   @override
