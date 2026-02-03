@@ -7,6 +7,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../state/selection_state.dart';
 import '../widgets/editable_label.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 import 'worktree_panel.dart';
 
@@ -28,7 +29,7 @@ class WorktreesChatsAgentsPanel extends StatelessWidget {
       title: 'Worktrees',
       icon: Icons.account_tree,
       contextMenuItems: [
-        PopupMenuItem<String>(
+        styledMenuItem(
           value: 'separate_chats',
           onTap: onSeparateChats,
           child: const Row(

@@ -1,7 +1,7 @@
 name: cc_insights_v2
-description: "CC-Insights V2 - Desktop application for monitoring Claude Code agents"
+description: "GUI control plane for coordinating Claude agents across git worktrees"
 publish_to: 'none'
-version: 0.1.0
+version: 0.0.2
 
 environment:
   sdk: ^3.10.4

@@ -1,6 +1,8 @@
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/styled_popup_menu.dart';
+
 /// A generic panel wrapper that provides a header with drag handle.
 ///
 /// When used with [DraggablePaneConfig.dragHandleBuilder], the drag handle
@@ -99,14 +101,9 @@ class PanelWrapper extends StatelessWidget {
   }
 
   void _showContextMenu(BuildContext context, Offset position) {
-    showMenu<String>(
+    showStyledMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
+      position: menuPositionFromOffset(position),
       items: contextMenuItems!,
     );
   }

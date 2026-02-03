@@ -12,6 +12,7 @@ import '../models/terminal_tab.dart';
 import '../services/script_execution_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/keyboard_focus_manager.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
 /// Keys for testing TerminalOutputPanel widgets.
@@ -229,20 +230,13 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
 
   /// Shows the context menu for a terminal tab.
   void _showTabContextMenu(TerminalTab tab, TapDownDetails details) {
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final position = RelativeRect.fromRect(
-      details.globalPosition & const Size(1, 1),
-      Offset.zero & overlay.size,
-    );
-
-    showMenu<String>(
+    showStyledMenu<String>(
       context: context,
-      position: position,
+      position: menuPositionFromOffset(details.globalPosition),
       items: [
-        const PopupMenuItem<String>(
+        styledMenuItem(
           value: 'rename',
-          child: Text('Rename'),
+          child: const Text('Rename'),
         ),
       ],
     ).then((value) {

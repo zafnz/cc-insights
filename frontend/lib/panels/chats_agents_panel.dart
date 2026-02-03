@@ -5,6 +5,7 @@ import '../models/chat.dart';
 import '../models/conversation.dart';
 import '../state/selection_state.dart';
 import '../widgets/editable_label.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 import 'shared_tree_widgets.dart';
 
@@ -27,7 +28,7 @@ class ChatsAgentsPanel extends StatelessWidget {
       title: 'Chats',
       icon: Icons.forum_outlined,
       contextMenuItems: [
-        PopupMenuItem<String>(
+        styledMenuItem(
           value: 'separate_agents',
           onTap: onSeparateAgents,
           child: const Row(

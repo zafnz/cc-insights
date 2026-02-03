@@ -7,6 +7,7 @@ import '../services/project_config_service.dart';
 import '../services/script_execution_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/edit_action_dialog.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
 /// Keys for testing ActionsPanel widgets.
@@ -141,18 +142,13 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     final worktree = selection.selectedWorktree;
     final workingDirectory = worktree?.data.worktreeRoot;
 
-    final result = await showMenu<String>(
+    final result = await showStyledMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
-      items: const [
-        PopupMenuItem(
+      position: menuPositionFromOffset(position),
+      items: [
+        styledMenuItem(
           value: 'edit',
-          child: Row(
+          child: const Row(
             children: [
               Icon(Icons.edit, size: 16),
               SizedBox(width: 8),

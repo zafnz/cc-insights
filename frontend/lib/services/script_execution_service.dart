@@ -244,8 +244,15 @@ class ScriptExecutionService extends ChangeNotifier {
     }
   }
 
-  /// Clear a completed script from the list.
+  /// Clear a script from the list.
+  ///
+  /// If the script is still running, it will be killed first.
   void clearScript(String id) {
+    final script = _scripts[id];
+    // Kill the PTY if still running
+    if (script != null && script.isRunning) {
+      script.pty.kill();
+    }
     _cleanupSubscriptions(id);
     _scripts.remove(id);
     if (_focusedScriptId == id) {
