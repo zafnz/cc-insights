@@ -428,5 +428,181 @@ void main() {
         focusNode.dispose();
       });
     });
+
+    group('keyboard shortcuts', () {
+      testWidgets('Escape key fires onEscapePressed callback',
+          (tester) async {
+        var escapeCalled = false;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: KeyboardFocusManager(
+              onEscapePressed: () => escapeCalled = true,
+              child: const Scaffold(
+                body: TextField(key: Key('other_field')),
+              ),
+            ),
+          ),
+        );
+        await safePumpAndSettle(tester);
+
+        // Focus a field so the app has focus
+        await tester.tap(find.byKey(const Key('other_field')));
+        await safePumpAndSettle(tester);
+
+        // Send Escape
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await safePumpAndSettle(tester);
+
+        expect(escapeCalled, isTrue);
+      });
+
+      testWidgets('Cmd+N fires onNewChatShortcut callback',
+          (tester) async {
+        var newChatCalled = false;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: KeyboardFocusManager(
+              onNewChatShortcut: () => newChatCalled = true,
+              child: const Scaffold(
+                body: TextField(key: Key('other_field')),
+              ),
+            ),
+          ),
+        );
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.byKey(const Key('other_field')));
+        await safePumpAndSettle(tester);
+
+        // Send Cmd+N
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+        await safePumpAndSettle(tester);
+
+        expect(newChatCalled, isTrue);
+      });
+
+      testWidgets('Cmd+W fires onNewWorktreeShortcut callback',
+          (tester) async {
+        var newWorktreeCalled = false;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: KeyboardFocusManager(
+              onNewWorktreeShortcut: () => newWorktreeCalled = true,
+              child: const Scaffold(
+                body: TextField(key: Key('other_field')),
+              ),
+            ),
+          ),
+        );
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.byKey(const Key('other_field')));
+        await safePumpAndSettle(tester);
+
+        // Send Cmd+W
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+        await safePumpAndSettle(tester);
+
+        expect(newWorktreeCalled, isTrue);
+      });
+
+      testWidgets('shortcuts do not fire when suspended', (tester) async {
+        var escapeCalled = false;
+        var newChatCalled = false;
+        KeyboardFocusManagerState? managerState;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: KeyboardFocusManager(
+              onEscapePressed: () => escapeCalled = true,
+              onNewChatShortcut: () => newChatCalled = true,
+              child: Scaffold(
+                body: Builder(
+                  builder: (context) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      managerState =
+                          KeyboardFocusManager.maybeOf(context);
+                    });
+                    return const TextField(key: Key('other_field'));
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.byKey(const Key('other_field')));
+        await safePumpAndSettle(tester);
+
+        // Suspend
+        managerState!.suspend();
+
+        // Send Escape
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await safePumpAndSettle(tester);
+        expect(escapeCalled, isFalse);
+
+        // Send Cmd+N
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+        await safePumpAndSettle(tester);
+        expect(newChatCalled, isFalse);
+      });
+
+      testWidgets(
+          'shortcuts fire even when message input has focus',
+          (tester) async {
+        var escapeCalled = false;
+        final controller = TextEditingController();
+        final focusNode = FocusNode();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: KeyboardFocusManager(
+              onEscapePressed: () => escapeCalled = true,
+              child: Scaffold(
+                body: Builder(
+                  builder: (context) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      KeyboardFocusManager.maybeOf(context)
+                          ?.registerMessageInput(focusNode, controller);
+                    });
+                    return TextField(
+                      key: const Key('message_input'),
+                      controller: controller,
+                      focusNode: focusNode,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        await safePumpAndSettle(tester);
+
+        // Focus the message input directly
+        await tester.tap(find.byKey(const Key('message_input')));
+        await safePumpAndSettle(tester);
+        expect(focusNode.hasFocus, isTrue);
+
+        // Send Escape - should still fire shortcut
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await safePumpAndSettle(tester);
+
+        expect(escapeCalled, isTrue);
+
+        controller.dispose();
+        focusNode.dispose();
+      });
+    });
   });
 }

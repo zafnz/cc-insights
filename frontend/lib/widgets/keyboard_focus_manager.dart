@@ -28,6 +28,9 @@ class KeyboardFocusManager extends StatefulWidget {
     super.key,
     required this.child,
     this.dialogObserver,
+    this.onEscapePressed,
+    this.onNewChatShortcut,
+    this.onNewWorktreeShortcut,
   });
 
   final Widget child;
@@ -38,6 +41,18 @@ class KeyboardFocusManager extends StatefulWidget {
   /// When provided, keyboard interception is automatically suspended when
   /// a dialog opens and resumed when it closes.
   final DialogObserver? dialogObserver;
+
+  /// Called when the Escape key is pressed (no modifiers).
+  /// Typically used to interrupt the active chat session.
+  final VoidCallback? onEscapePressed;
+
+  /// Called when Cmd+N (macOS) or Ctrl+N is pressed.
+  /// Typically used to create a new chat session.
+  final VoidCallback? onNewChatShortcut;
+
+  /// Called when Cmd+W (macOS) or Ctrl+W is pressed.
+  /// Typically used to show the create worktree panel.
+  final VoidCallback? onNewWorktreeShortcut;
 
   /// Find the nearest [KeyboardFocusManagerState] in the widget tree.
   static KeyboardFocusManagerState? maybeOf(BuildContext context) {
@@ -195,6 +210,13 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
       return false;
     }
 
+    // Handle app-level keyboard shortcuts before typing-key logic.
+    // These work regardless of message input focus state.
+    if (event is KeyDownEvent) {
+      final handled = _handleShortcut(event);
+      if (handled) return true;
+    }
+
     final messageInput = _messageInputFocusNode;
     final controller = _messageInputController;
     if (messageInput == null || controller == null) return false;
@@ -298,6 +320,38 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
 
     // We handled the event - don't let it propagate further
     return true;
+  }
+
+  /// Handle app-level keyboard shortcuts.
+  /// Returns true if a shortcut was consumed.
+  bool _handleShortcut(KeyDownEvent event) {
+    final key = event.logicalKey;
+    final isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
+    final isControlPressed = HardwareKeyboard.instance.isControlPressed;
+    final isCmdOrCtrl = isMetaPressed || isControlPressed;
+
+    // Escape (no modifiers) - interrupt active chat
+    if (key == LogicalKeyboardKey.escape &&
+        !isMetaPressed &&
+        !isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed) {
+      widget.onEscapePressed?.call();
+      return widget.onEscapePressed != null;
+    }
+
+    // Cmd+N / Ctrl+N - new chat
+    if (key == LogicalKeyboardKey.keyN && isCmdOrCtrl) {
+      widget.onNewChatShortcut?.call();
+      return widget.onNewChatShortcut != null;
+    }
+
+    // Cmd+W / Ctrl+W - new worktree
+    if (key == LogicalKeyboardKey.keyW && isCmdOrCtrl) {
+      widget.onNewWorktreeShortcut?.call();
+      return widget.onNewWorktreeShortcut != null;
+    }
+
+    return false;
   }
 
   /// Check if a key event represents a "typing" key that should be

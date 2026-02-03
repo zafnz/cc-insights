@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
+import '../services/project_restore_service.dart';
+import '../state/selection_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
@@ -97,6 +99,33 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
+  }
+
+  /// Handles Escape shortcut - interrupts the active chat session.
+  void _handleEscapeShortcut() {
+    final selection = context.read<SelectionState>();
+    final chat = selection.selectedChat;
+    if (chat != null && chat.isWorking) {
+      chat.interrupt();
+    }
+  }
+
+  /// Handles Cmd+N shortcut - creates a new chat session.
+  void _handleNewChatShortcut() {
+    final selection = context.read<SelectionState>();
+    if (selection.selectedWorktree == null) return;
+    final restoreService = context.read<ProjectRestoreService>();
+    final now = DateTime.now();
+    final name =
+        'Chat ${now.month}/${now.day} '
+        '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    selection.createChat(name, restoreService);
+  }
+
+  /// Handles Cmd+W shortcut - shows the create worktree panel.
+  void _handleNewWorktreeShortcut() {
+    final selection = context.read<SelectionState>();
+    selection.showCreateWorktreePanel();
   }
 
   @override
@@ -410,6 +439,9 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: KeyboardFocusManager(
         dialogObserver: dialogObserver,
+        onEscapePressed: _handleEscapeShortcut,
+        onNewChatShortcut: _handleNewChatShortcut,
+        onNewWorktreeShortcut: _handleNewWorktreeShortcut,
         child: Column(
           children: [
             // Main content area with nav rail
