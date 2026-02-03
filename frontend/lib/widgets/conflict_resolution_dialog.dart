@@ -76,6 +76,9 @@ enum _ActionState {
 
   /// Operation complete.
   complete,
+
+  /// Operation failed (error occurred before performing).
+  failed,
 }
 
 /// Dialog for handling merge/rebase conflict resolution.
@@ -184,11 +187,14 @@ class _ConflictResolutionDialogState
       if (uncommitted > 0) {
         _updateLastLog(
           LogEntryStatus.error,
-          message: 'Working tree has $uncommitted uncommitted '
+          message: '${widget.branch} has $uncommitted uncommitted '
               '${uncommitted == 1 ? 'change' : 'changes'}',
           detail: 'Commit or stash your changes before '
-              '${_operationVerb}ing',
+              '${_operationVerb == 'merge' ? 'merging' : 'rebasing'}',
         );
+        setState(() {
+          _actionState = _ActionState.failed;
+        });
         return;
       }
 
@@ -203,6 +209,9 @@ class _ConflictResolutionDialogState
         message: 'Failed to check status',
         detail: e.toString(),
       );
+      setState(() {
+        _actionState = _ActionState.failed;
+      });
       return;
     }
 
@@ -529,13 +538,15 @@ class _ConflictResolutionDialogState
       case _ActionState.performing:
       case _ActionState.executing:
       case _ActionState.complete:
+      case _ActionState.failed:
         buttons.add(
           SizedBox(
             height: 36,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_actionState != _ActionState.complete) ...[
+                if (_actionState != _ActionState.complete &&
+                    _actionState != _ActionState.failed) ...[
                   SizedBox(
                     width: 16,
                     height: 16,
@@ -549,7 +560,9 @@ class _ConflictResolutionDialogState
                 Text(
                   _actionState == _ActionState.complete
                       ? 'Complete'
-                      : 'Processing...',
+                      : _actionState == _ActionState.failed
+                          ? 'Failed'
+                          : 'Processing...',
                   style: TextStyle(
                     color: colorScheme.onPrimaryContainer,
                     fontSize: 13,
