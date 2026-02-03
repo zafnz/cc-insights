@@ -70,6 +70,19 @@ dev_dependencies:
   test: ^1.26.3
   msix: ^3.16.8
 
+msix_config:
+  display_name: CC-Insights
+  publisher_display_name: CC-Insights
+  identity_name: com.ccinsights.app
+  publisher: CN=CC-Insights
+  msix_version: 0.0.5.0
+  logo_path: assets/appicon.png
+  capabilities: internetClient,privateNetworkClientServer
+  architecture: x64
+  output_name: CC-Insights-Setup
+  sign_msix: false
+  install_certificate: false
+
 flutter:
   uses-material-design: true
 
