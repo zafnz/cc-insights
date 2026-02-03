@@ -204,4 +204,20 @@ class RuntimeConfig extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// Resets the RuntimeConfig to its uninitialized state.
+  ///
+  /// This is intended for use in tests only. It allows tests to
+  /// reinitialize the config with different arguments.
+  @visibleForTesting
+  static void resetForTesting() {
+    _instance._initialized = false;
+    _instance._useMockData = false;
+    _instance._launchedFromCli = false;
+    _instance._workingDirectory = Directory.current.path;
+    _instance._bashToolSummary = BashToolSummary.description;
+    _instance._toolSummaryRelativeFilePaths = true;
+    _instance._monoFontFamily = 'JetBrains Mono';
+    _instance._showRawMessages = true;
+  }
 }

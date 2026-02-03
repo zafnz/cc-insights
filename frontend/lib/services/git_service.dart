@@ -276,6 +276,71 @@ abstract class GitService {
     String path,
     String targetBranch,
   );
+
+  /// Analyzes a directory to determine its git repository status.
+  ///
+  /// Returns a [DirectoryGitInfo] containing:
+  /// - Whether the directory is inside a git repository
+  /// - The repository root (primary worktree)
+  /// - Whether the directory is a linked worktree
+  /// - Whether the directory is at the top of its worktree
+  ///
+  /// Uses `git rev-parse --git-dir --git-common-dir --show-toplevel --show-prefix`
+  /// to determine the relationship between the directory and any git repo.
+  Future<DirectoryGitInfo> analyzeDirectory(String path);
+}
+
+/// Result of analyzing a directory's git repository status.
+class DirectoryGitInfo {
+  /// The path that was analyzed.
+  final String analyzedPath;
+
+  /// Whether the path is inside a git repository.
+  final bool isInGitRepo;
+
+  /// The root of the current worktree (where `git status` operates).
+  /// Null if not in a git repo.
+  final String? worktreeRoot;
+
+  /// The root of the primary worktree (where .git directory lives).
+  /// For primary worktrees, this equals [worktreeRoot].
+  /// For linked worktrees, this is the parent repository root.
+  /// Null if not in a git repo.
+  final String? repoRoot;
+
+  /// Whether this is a linked worktree (not the primary).
+  final bool isLinkedWorktree;
+
+  /// Whether the analyzed path is at the worktree root.
+  /// False if inside a subdirectory of the worktree.
+  final bool isAtWorktreeRoot;
+
+  /// The path prefix within the worktree (empty string if at root).
+  final String prefix;
+
+  const DirectoryGitInfo({
+    required this.analyzedPath,
+    required this.isInGitRepo,
+    this.worktreeRoot,
+    this.repoRoot,
+    required this.isLinkedWorktree,
+    required this.isAtWorktreeRoot,
+    this.prefix = '',
+  });
+
+  /// Convenient check: is this the ideal case (primary worktree at root)?
+  bool get isPrimaryWorktreeRoot =>
+      isInGitRepo && !isLinkedWorktree && isAtWorktreeRoot;
+
+  @override
+  String toString() => 'DirectoryGitInfo('
+      'analyzedPath: $analyzedPath, '
+      'isInGitRepo: $isInGitRepo, '
+      'worktreeRoot: $worktreeRoot, '
+      'repoRoot: $repoRoot, '
+      'isLinkedWorktree: $isLinkedWorktree, '
+      'isAtWorktreeRoot: $isAtWorktreeRoot, '
+      'prefix: $prefix)';
 }
 
 /// Real implementation of [GitService] that spawns git processes.
@@ -615,6 +680,76 @@ class RealGitService implements GitService {
       return commits;
     } on GitException {
       return [];
+    }
+  }
+
+  @override
+  Future<DirectoryGitInfo> analyzeDirectory(String path) async {
+    try {
+      // Run git rev-parse with multiple queries in one call
+      // This gives us: git-dir, git-common-dir, toplevel, and prefix
+      final output = await _runGit(
+        [
+          'rev-parse',
+          '--git-dir',
+          '--git-common-dir',
+          '--show-toplevel',
+          '--show-prefix',
+        ],
+        workingDirectory: path,
+      );
+
+      final lines = output.split('\n');
+      // Output format:
+      // line 0: git-dir (e.g., ".git" or "/path/to/repo/.git/worktrees/branch")
+      // line 1: git-common-dir (e.g., ".git" or "/path/to/repo/.git")
+      // line 2: toplevel (e.g., "/path/to/worktree")
+      // line 3: prefix (e.g., "" or "subdir/")
+
+      final gitDir = lines.isNotEmpty ? lines[0].trim() : '';
+      final gitCommonDir = lines.length > 1 ? lines[1].trim() : '';
+      final toplevel = lines.length > 2 ? lines[2].trim() : '';
+      final prefix = lines.length > 3 ? lines[3].trim() : '';
+
+      // Determine if this is a linked worktree by checking if git-dir contains /worktrees/
+      // For primary worktree: git-dir is ".git" or "/path/to/.git"
+      // For linked worktree: git-dir is "/path/to/.git/worktrees/name"
+      // Note: We can't just compare gitDir to gitCommonDir because git-common-dir
+      // may be a relative path (e.g., "../../.git") when run from a subdirectory.
+      final isLinked = gitDir.contains('/.git/worktrees/');
+
+      // The repo root is the parent of the git-common-dir
+      // We need to resolve git-common-dir to an absolute path
+      String repoRoot;
+      if (gitCommonDir == '.git') {
+        repoRoot = toplevel;
+      } else {
+        // git-common-dir is an absolute path like "/path/to/repo/.git"
+        // Strip the "/.git" suffix to get the repo root
+        if (gitCommonDir.endsWith('/.git')) {
+          repoRoot = gitCommonDir.substring(0, gitCommonDir.length - 5);
+        } else {
+          repoRoot = gitCommonDir;
+        }
+      }
+
+      return DirectoryGitInfo(
+        analyzedPath: path,
+        isInGitRepo: true,
+        worktreeRoot: toplevel,
+        repoRoot: repoRoot,
+        isLinkedWorktree: isLinked,
+        isAtWorktreeRoot: prefix.isEmpty,
+        prefix: prefix,
+      );
+    } on GitException {
+      // Not a git repository
+      return DirectoryGitInfo(
+        analyzedPath: path,
+        isInGitRepo: false,
+        isLinkedWorktree: false,
+        isAtWorktreeRoot: false,
+      );
     }
   }
 }

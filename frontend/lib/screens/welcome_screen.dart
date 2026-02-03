@@ -3,10 +3,11 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:path/path.dart' as p;
 
+import '../services/git_service.dart';
 import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
+import '../widgets/directory_validation_dialog.dart';
 
 /// Callback when a project directory is selected.
 typedef OnProjectSelected = void Function(String projectPath);
@@ -67,20 +68,58 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
 
     if (result != null) {
-      // Verify it's a git repository
-      final gitDir = Directory(p.join(result, '.git'));
-      if (!gitDir.existsSync()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Selected folder is not a git repository'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+      await _validateAndOpenDirectory(result);
+    }
+  }
+
+  /// Validates a directory and either opens it or shows the validation dialog.
+  Future<void> _validateAndOpenDirectory(String path) async {
+    // Analyze the directory using git service
+    const gitService = RealGitService();
+    final gitInfo = await gitService.analyzeDirectory(path);
+
+    if (!mounted) return;
+
+    // Check if the directory is ideal (primary worktree at root)
+    if (gitInfo.isPrimaryWorktreeRoot) {
+      // Ideal case - proceed directly
+      widget.onProjectSelected(path);
+      return;
+    }
+
+    // Show validation dialog for problematic directories
+    final dialogResult = await showDirectoryValidationDialog(
+      context: context,
+      gitInfo: gitInfo,
+    );
+
+    if (!mounted) return;
+
+    switch (dialogResult) {
+      case DirectoryValidationResult.openPrimary:
+        // User chose to open the primary/repo root
+        final targetPath = gitInfo.isLinkedWorktree
+            ? gitInfo.repoRoot
+            : gitInfo.worktreeRoot;
+
+        if (targetPath != null) {
+          widget.onProjectSelected(targetPath);
         }
-        return;
-      }
-      widget.onProjectSelected(result);
+        break;
+
+      case DirectoryValidationResult.chooseDifferent:
+        // User wants to choose a different folder - re-show the picker
+        await _selectFolder();
+        break;
+
+      case DirectoryValidationResult.openAnyway:
+        // User chose to proceed with the current directory
+        widget.onProjectSelected(path);
+        break;
+
+      case DirectoryValidationResult.cancelled:
+        // User cancelled - do nothing, stay on welcome screen
+        break;
     }
   }
 
