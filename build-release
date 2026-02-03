@@ -120,6 +120,7 @@ TAG="v${NEW_VERSION}"
 gh release create "$TAG" \
     --title "CC Insights ${NEW_VERSION}" \
     --generate-notes \
+    --draft \
     "$ZIP_NAME"
 
 # 13. Output results
