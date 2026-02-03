@@ -145,6 +145,7 @@ class SdkLogger {
 
   /// Enable or disable debug logging.
   set debugEnabled(bool value) {
+    if (_debugEnabled == value) return;
     _debugEnabled = value;
     if (value) {
       info('Debug logging enabled');
@@ -162,6 +163,7 @@ class SdkLogger {
 
   /// Enable file logging to the specified path.
   void enableFileLogging(String path) {
+    if (_logFilePath == path) return;
     _setupFileLogging(path);
   }
 
