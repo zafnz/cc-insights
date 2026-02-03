@@ -207,6 +207,43 @@ class TestGitService implements GitService {
     );
   }
 
+  @override
+  Future<bool> wouldMergeConflict(
+    String path,
+    String targetBranch,
+  ) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return false;
+  }
+
+  @override
+  Future<MergeResult> merge(String path, String targetBranch) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return const MergeResult(
+      hasConflicts: false,
+      operation: MergeOperationType.merge,
+    );
+  }
+
+  @override
+  Future<MergeResult> rebase(String path, String targetBranch) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return const MergeResult(
+      hasConflicts: false,
+      operation: MergeOperationType.rebase,
+    );
+  }
+
+  @override
+  Future<void> mergeAbort(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
+  Future<void> rebaseAbort(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;

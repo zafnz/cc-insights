@@ -393,6 +393,84 @@ class FakeGitService implements GitService {
     }
   }
 
+  // =========================================================================
+  // Merge/Rebase operations
+  // =========================================================================
+
+  /// Result for [wouldMergeConflict]. Key is path.
+  final Map<String, bool> wouldConflict = {};
+
+  /// Result for [merge]. Key is path.
+  final Map<String, MergeResult> mergeResults = {};
+
+  /// Result for [rebase]. Key is path.
+  final Map<String, MergeResult> rebaseResults = {};
+
+  /// Tracks calls to [mergeAbort].
+  final List<String> mergeAbortCalls = [];
+
+  /// Tracks calls to [rebaseAbort].
+  final List<String> rebaseAbortCalls = [];
+
+  /// Tracks calls to [merge] with (path, targetBranch).
+  final List<(String, String)> mergeCalls = [];
+
+  /// Tracks calls to [rebase] with (path, targetBranch).
+  final List<(String, String)> rebaseCalls = [];
+
+  /// If set, [merge] will throw this exception.
+  GitException? mergeError;
+
+  /// If set, [rebase] will throw this exception.
+  GitException? rebaseError;
+
+  @override
+  Future<bool> wouldMergeConflict(String path, String targetBranch) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return wouldConflict[path] ?? false;
+  }
+
+  @override
+  Future<MergeResult> merge(String path, String targetBranch) async {
+    mergeCalls.add((path, targetBranch));
+    await _maybeDelay();
+    _maybeThrow();
+    if (mergeError != null) throw mergeError!;
+    return mergeResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.merge,
+        );
+  }
+
+  @override
+  Future<MergeResult> rebase(String path, String targetBranch) async {
+    rebaseCalls.add((path, targetBranch));
+    await _maybeDelay();
+    _maybeThrow();
+    if (rebaseError != null) throw rebaseError!;
+    return rebaseResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+        );
+  }
+
+  @override
+  Future<void> mergeAbort(String path) async {
+    mergeAbortCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+  }
+
+  @override
+  Future<void> rebaseAbort(String path) async {
+    rebaseAbortCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+  }
+
   /// Map of path -> directory git info for [analyzeDirectory].
   final Map<String, DirectoryGitInfo> directoryInfos = {};
 

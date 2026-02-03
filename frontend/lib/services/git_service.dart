@@ -92,6 +92,27 @@ class GitFileChange {
   String toString() => 'GitFileChange($path, $status, staged: $isStaged)';
 }
 
+/// Type of merge operation.
+enum MergeOperationType { merge, rebase }
+
+/// Result of a merge or rebase operation.
+class MergeResult {
+  /// Whether the operation resulted in conflicts.
+  final bool hasConflicts;
+
+  /// The type of operation performed.
+  final MergeOperationType operation;
+
+  /// Error message if the operation failed for a non-conflict reason.
+  final String? error;
+
+  const MergeResult({
+    required this.hasConflicts,
+    required this.operation,
+    this.error,
+  });
+}
+
 /// Exception thrown when a git operation fails.
 class GitException implements Exception {
   final String message;
@@ -276,6 +297,38 @@ abstract class GitService {
     String path,
     String targetBranch,
   );
+
+  /// Checks if merging [targetBranch] into the current branch would
+  /// produce conflicts, without actually performing the merge.
+  ///
+  /// Performs `git merge --no-commit --no-ff targetBranch` then
+  /// aborts via `git merge --abort` to restore the original state.
+  /// Returns true if the dry-run detected conflicts.
+  Future<bool> wouldMergeConflict(String path, String targetBranch);
+
+  /// Merges [targetBranch] into the current branch.
+  ///
+  /// Returns a [MergeResult] indicating success or conflicts.
+  /// If conflicts occur, the working tree is left in a conflicted state
+  /// for the user or Claude to resolve.
+  Future<MergeResult> merge(String path, String targetBranch);
+
+  /// Rebases the current branch onto [targetBranch].
+  ///
+  /// Returns a [MergeResult] indicating success or conflicts.
+  /// If conflicts occur, the rebase is paused for the user or Claude
+  /// to resolve.
+  Future<MergeResult> rebase(String path, String targetBranch);
+
+  /// Aborts a merge in progress.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> mergeAbort(String path);
+
+  /// Aborts a rebase in progress.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> rebaseAbort(String path);
 
   /// Analyzes a directory to determine its git repository status.
   ///
@@ -681,6 +734,131 @@ class RealGitService implements GitService {
     } on GitException {
       return [];
     }
+  }
+
+  /// Longer timeout for merge/rebase operations on large repos.
+  static const _mergeTimeout = Duration(seconds: 30);
+
+  @override
+  Future<bool> wouldMergeConflict(
+    String path,
+    String targetBranch,
+  ) async {
+    try {
+      await _runGit(
+        ['merge', '--no-commit', '--no-ff', targetBranch],
+        workingDirectory: path,
+      );
+      // Merge succeeded without conflicts - abort to restore state
+      try {
+        await _runGit(['merge', '--abort'], workingDirectory: path);
+      } catch (_) {
+        // If abort fails, the merge was clean so reset instead
+        await _runGit(['reset', '--merge'], workingDirectory: path);
+      }
+      return false;
+    } on GitException catch (e) {
+      // Merge failed - conflicts detected. Abort to restore state.
+      try {
+        await _runGit(['merge', '--abort'], workingDirectory: path);
+      } catch (_) {
+        // Abort may also fail if in a weird state, ignore
+      }
+      if (e.exitCode == 1 ||
+          (e.stderr?.contains('CONFLICT') ?? false) ||
+          (e.stderr?.contains('Automatic merge failed') ?? false)) {
+        return true;
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<MergeResult> merge(String path, String targetBranch) async {
+    try {
+      await Process.run(
+        'git',
+        ['merge', targetBranch],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+      // Check if there are conflicts by looking at status
+      final status = await getStatus(path);
+      if (status.hasConflicts) {
+        return const MergeResult(
+          hasConflicts: true,
+          operation: MergeOperationType.merge,
+        );
+      }
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+      );
+    } on TimeoutException {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+        error: 'Merge timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<MergeResult> rebase(String path, String targetBranch) async {
+    try {
+      final result = await Process.run(
+        'git',
+        ['rebase', targetBranch],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('could not apply')) {
+          return const MergeResult(
+            hasConflicts: true,
+            operation: MergeOperationType.rebase,
+          );
+        }
+        return MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+          error: stderr.isNotEmpty ? stderr : 'Rebase failed',
+        );
+      }
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+      );
+    } on TimeoutException {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Rebase timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<void> mergeAbort(String path) async {
+    await _runGit(['merge', '--abort'], workingDirectory: path);
+  }
+
+  @override
+  Future<void> rebaseAbort(String path) async {
+    await _runGit(['rebase', '--abort'], workingDirectory: path);
   }
 
   @override
