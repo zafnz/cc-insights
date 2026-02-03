@@ -4,7 +4,7 @@ project(cc_insights_v2 LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "CC Insights")
+set(BINARY_NAME "cc-insights")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
