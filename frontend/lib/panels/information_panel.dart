@@ -122,7 +122,7 @@ class _NoWorktreeSelected extends StatelessWidget {
   }
 }
 
-class _WorktreeInfo extends StatelessWidget {
+class _WorktreeInfo extends StatefulWidget {
   const _WorktreeInfo({
     required this.data,
     required this.worktreeRoot,
@@ -132,6 +132,17 @@ class _WorktreeInfo extends StatelessWidget {
   final WorktreeData data;
   final String worktreeRoot;
   final VoidCallback onStatusChanged;
+
+  @override
+  State<_WorktreeInfo> createState() => _WorktreeInfoState();
+}
+
+class _WorktreeInfoState extends State<_WorktreeInfo> {
+  String _updateSource = 'main';
+
+  WorktreeData get data => widget.data;
+  String get worktreeRoot => widget.worktreeRoot;
+  VoidCallback get onStatusChanged => widget.onStatusChanged;
 
   Future<void> _showCommitDialog(BuildContext context) async {
     // Get services from providers
@@ -157,25 +168,31 @@ class _WorktreeInfo extends StatelessWidget {
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
-    // Detect main branch
+    // Use selected source or auto-detect main branch
     String? mainBranch;
-    try {
-      mainBranch =
-          await gitService.getMainBranch(project.data.repoRoot);
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to detect main branch: $e')),
-      );
-      return;
-    }
+    if (_updateSource == 'origin/main') {
+      mainBranch = 'origin/main';
+    } else {
+      try {
+        mainBranch =
+            await gitService.getMainBranch(project.data.repoRoot);
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to detect main branch: $e')),
+        );
+        return;
+      }
 
-    if (mainBranch == null) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not detect main branch')),
-      );
-      return;
+      if (mainBranch == null) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Could not detect main branch')),
+        );
+        return;
+      }
     }
 
     if (!context.mounted) return;
@@ -402,8 +419,11 @@ class _WorktreeInfo extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Update from main section
-          _SectionDivider(
-            label: 'Update from main',
+          _SectionDividerWithDropdown(
+            prefix: 'Update from ',
+            value: _updateSource,
+            options: const ['main', 'origin/main'],
+            onChanged: (v) => setState(() => _updateSource = v),
             colorScheme: colorScheme,
           ),
           const SizedBox(height: 6),
@@ -580,6 +600,80 @@ class _SectionDivider extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ],
+    );
+  }
+}
+
+/// Section divider with an inline popup menu for selecting a value.
+class _SectionDividerWithDropdown extends StatelessWidget {
+  const _SectionDividerWithDropdown({
+    required this.prefix,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    required this.colorScheme,
+  });
+
+  final String prefix;
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final style = textTheme.labelSmall?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+    );
+
+    return GestureDetector(
+      onTap: () {
+        final renderBox =
+            context.findRenderObject() as RenderBox;
+        final offset = renderBox.localToGlobal(Offset.zero);
+        final size = renderBox.size;
+        showMenu<String>(
+          context: context,
+          position: RelativeRect.fromLTRB(
+            offset.dx + size.width / 2,
+            offset.dy + size.height,
+            offset.dx + size.width / 2,
+            offset.dy + size.height,
+          ),
+          items: options
+              .map(
+                (o) => PopupMenuItem<String>(
+                  height: 32,
+                  value: o,
+                  child: Text(o, style: textTheme.bodySmall),
+                ),
+              )
+              .toList(),
+        ).then((selected) {
+          if (selected != null) {
+            onChanged(selected);
+          }
+        });
+      },
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              '$prefix$value',
+              style: style,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Icon(
+            Icons.arrow_drop_down,
+            size: 14,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
     );
   }
 }
