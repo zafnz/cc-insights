@@ -149,11 +149,13 @@ jobs:
           path: cc-insights-linux-x64.AppImage
           retention-days: 90
 
-  # Create GitHub Release when all builds complete
+  # Upload artifacts to GitHub Release when all builds complete
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Download all artifacts
@@ -161,13 +163,28 @@ jobs:
         with:
           path: artifacts
 
+      - name: List downloaded artifacts
+        run: find artifacts -type f
+
       - name: Upload to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            artifacts/cc-insights-windows-portable/cc-insights-windows-portable.zip
-            artifacts/cc-insights-windows-installer/*.msix
-            artifacts/cc-insights-linux-tarball/cc-insights-linux-x64.tar.gz
-            artifacts/cc-insights-linux-appimage/cc-insights-linux-x64.AppImage
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          for file in \
+            artifacts/cc-insights-windows-portable/cc-insights-windows-portable.zip \
+            artifacts/cc-insights-linux-tarball/cc-insights-linux-x64.tar.gz \
+            artifacts/cc-insights-linux-appimage/cc-insights-linux-x64.AppImage
+          do
+            if [ -f "$file" ]; then
+              echo "Uploading $file..."
+              gh release upload "$TAG" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+            else
+              echo "Warning: $file not found, skipping"
+            fi
+          done
+          # Upload any MSIX files found
+          for file in $(find artifacts/cc-insights-windows-installer -name "*.msix" 2>/dev/null); do
+            echo "Uploading $file..."
+            gh release upload "$TAG" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+          done
