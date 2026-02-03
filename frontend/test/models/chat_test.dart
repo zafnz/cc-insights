@@ -462,6 +462,59 @@ void main() {
       });
     });
 
+    group('resetSession()', () {
+      test('clears session, sessionId, context, and adds marker entry',
+          () async {
+        // Arrange
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setHasActiveSessionForTesting(true);
+        state.setLastSessionIdFromRestore('session-123');
+        state.setWorking(true);
+        state.setCompacting(true);
+        state.addSubagentConversation('agent-1', 'Explore', null);
+        var notifyCount = 0;
+        state.addListener(() => notifyCount++);
+
+        // Act
+        await state.resetSession();
+
+        // Assert
+        check(state.hasActiveSession).isFalse();
+        check(state.lastSessionId).isNull();
+        check(state.activeAgents).isEmpty();
+        check(state.isWorking).isFalse();
+        check(state.isCompacting).isFalse();
+        check(notifyCount).isGreaterThan(0);
+
+        // Should have added a ContextClearedEntry
+        final entries = state.data.primaryConversation.entries;
+        check(entries).isNotEmpty();
+        check(entries.last).isA<ContextClearedEntry>();
+      });
+
+      test('works when no session is active', () async {
+        // Arrange
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+
+        // Act
+        await state.resetSession();
+
+        // Assert
+        check(state.hasActiveSession).isFalse();
+        check(state.lastSessionId).isNull();
+
+        final entries = state.data.primaryConversation.entries;
+        check(entries).length.equals(1);
+        check(entries.last).isA<ContextClearedEntry>();
+      });
+    });
+
     group('interrupt()', () {
       test('sets isWorking to false', () async {
         // Arrange

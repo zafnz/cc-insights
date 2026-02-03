@@ -148,7 +148,7 @@ class ContextClearedEntryWidget extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
-                  'Context Cleared',
+                  'Context cleared',
                   style: TextStyle(
                     fontSize: 18,
                     color: colorScheme.outline,
@@ -161,7 +161,7 @@ class ContextClearedEntryWidget extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Claude remembers nothing above this line.',
+            'Claude does not know anything above this line.',
             style: TextStyle(
               fontSize: 11,
               fontStyle: FontStyle.italic,

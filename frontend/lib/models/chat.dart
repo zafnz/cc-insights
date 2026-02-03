@@ -1132,6 +1132,23 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resets the session completely for the /clear command.
+  ///
+  /// Stops the current session, clears the session ID so the next
+  /// session starts fresh (no resume), resets the context tracker,
+  /// and adds a [ContextClearedEntry] marker to the conversation.
+  Future<void> resetSession() async {
+    await stopSession();
+    _lastSessionId = null;
+    _persistSessionId(null);
+    _testHasActiveSession = false;
+    _isWorking = false;
+    _isCompacting = false;
+    resetContext();
+    addEntry(ContextClearedEntry(timestamp: DateTime.now()));
+    notifyListeners();
+  }
+
   /// Clears all entries from the primary conversation.
   ///
   /// Useful for testing/replay scenarios where we want to reset state.

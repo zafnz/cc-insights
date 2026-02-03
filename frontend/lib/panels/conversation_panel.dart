@@ -576,6 +576,13 @@ class _ConversationPanelState extends State<ConversationPanel>
     final chat = selection.selectedChat;
     if (chat == null) return;
 
+    // Handle /clear command - reset session without sending to SDK
+    if (text.trim() == '/clear') {
+      chat.draftText = '';
+      await chat.resetSession();
+      return;
+    }
+
     // Clear the draft text since it's being submitted
     chat.draftText = '';
 
