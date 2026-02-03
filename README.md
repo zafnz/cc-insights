@@ -1,16 +1,16 @@
 # CC Insights - Insights into Claude Code
 
-Yet another Claude Code coordinater desktop GUI application.
+Yet 8TEST another Claude Code coordinator desktop GUI application.
 
-## Whats different this time?
+## What's different this time?
 <img align=right width="500" height="458" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
-- Designed specifically for **Vibe coding**, your almost exclusive focus is on Claude and what it is doing. 
+- Designed specifically for **Vibe coding** - your almost exclusive focus is on Claude and what it is doing.
 - **FULL** context tracking, cost tracking, token reporting. You get to see way more!
 - See exactly what **subagents** are doing (each agent gets its own window, or you can have them integrated)
-- Works with your **existing Claude subscription**, uses authorised SDK so won't be blocked by Anthropic.
-- This program does not require subscription or an account beyond what Claude requires. 
+- Works with your **existing Claude subscription** - uses the authorised SDK so won't be blocked by Anthropic.
+- This program does not require a subscription or an account beyond what Claude requires.
 
 
 ## More features
@@ -20,7 +20,7 @@ Yet another Claude Code coordinater desktop GUI application.
 - **Tool execution monitoring** - View tool inputs, outputs, and results
 - **Interactive Q&A** - Answer questions from Claude directly in the UI
 - **Session management** - Create, monitor, and terminate multiple sessions
-- **Context management** - Continiously keep an eye on context usage, so you can compact or clear when you want, and not be surprised by Claude.
+- **Context management** - Continuously keep an eye on context usage, so you can compact or clear when you want, and not be surprised by Claude.
 - **Cost tracking** - Monitor token usage and costs per session
 
 <table>
@@ -45,9 +45,9 @@ Yet another Claude Code coordinater desktop GUI application.
 
 ## 30 second HOWTO
 
-Open up the app, either from whatever menu you have (Start Menu/App menu/etc) or from a terminal as `cc-insights`. Select a git repo. You can immediately start chatting in the middle. When you're ready to work on a feature branch, click "New Worktree" on the top left and everything you develop in there will not interfere with your main branch until you are ready. You can also wireup the Run/Test action buttons by right clicking on them so you can run your app from the worktree direct.
+Open up the app, either from whatever menu you have (Start Menu/App menu/etc) or from a terminal as `cc-insights`. Select a git repo. You can immediately start chatting in the middle. When you're ready to work on a feature branch, click "New Worktree" on the top left and everything you develop in there will not interfere with your main branch until you are ready. You can also wire up the Run/Test action buttons by right-clicking on them so you can run your app from the worktree directly.
 
-When you are ready to merge your feature in you can use standard git tools, or the UI to commit all changes, rebase onto main, and then merge into main. Super easy, barely an inconvienence. 
+When you are ready to merge your feature in you can use standard git tools, or the UI to commit all changes, rebase onto main, and then merge into main. Super easy, barely an inconvenience.
 
 ## Installation
 
@@ -76,7 +76,7 @@ If you want there is the [installer here](https://github.com/zafnz/cc-insights/r
 
 ## Feature readiness
 
-This is in serious pre-alpha release, it's only for those who really want to see what is going on, lots of features aren't actually there or barely work:
+This is in serious pre-alpha release. It's only for those who really want to see what is going on - lots of features aren't actually there or barely work:
 | Feature | Status | Notes |
 |---------|--------|-------|
 | 🌳 Create git worktree | ✅ | |
@@ -98,11 +98,11 @@ Only the first day or so involved running the claude cli. As soon as a functioni
 
 ### Development methodology 
 
-As noted this application was entirely vibe coded and done using this app from very early days. Bugfixes are done with a new chat window, but large feature work has a more indepth process:
+As noted, this application was entirely vibe coded and done using this app from very early days. Bug fixes are done with a new chat window, but large feature work has a more in-depth process:
 
 #### Bigger features
 
-The majority of the large feature work was done with a multi agent approach, telling one chat it is an architect and getting the plan developed, telling another it is the project planner and dividing all the work into a detaioed plan broken down into discrete chunks, specifying goals. 
+The majority of the large feature work was done with a multi-agent approach, telling one chat it is an architect and getting the plan developed, telling another it is the project planner and dividing all the work into a detailed plan broken down into discrete chunks, specifying goals.
 
 Finally another chat session I tell it that it is a project manager, and that its workflow is as follows:
 
@@ -113,22 +113,22 @@ For each task:
 4) Any test failures go to step 1. after they are fixed go to step 2 again.
 5) Once all tests pass have a code reviewer agent inspect the code and ensure that it meets all the deliverables and meets the FLUTTER.md style guide.
 6) If there are any issues go back to step 1.
-7) Once all issued are fixed commit the code.
+7) Once all issues are fixed commit the code.
 
-At the end of each phase have an architect review the plan and implementation and confirm they still make sense. Stop if the plan should be altered.
+At the end of each phase, have an architect review the plan and implementation and confirm they still make sense. Stop if the plan should be altered.
 
 And that's it. That's how most of this app was produced. Once worktrees were functional things went MUCH faster. Having multiple features being worked on at once made things very fast.
 
 And once the merge assist was working it was easy.
 
-I hope you too can use Claude to its maximum potential 
-(Btw -- I might be adding a new backend soon).
+I hope you too can use Claude to its maximum potential.
+(Btw -- I might be adding a new backend soon.)
 
 
 
 ## Development
 
-If you wish to contribute this section is for you
+If you wish to contribute, this section is for you.
 
 ### Prerequisites
 
@@ -197,16 +197,16 @@ flutter run --dart-entrypoint-args="<your-project-dir>"
 
 ### Logging
 
-Seeing whats happening is exciting. There is inbuilt logging window in the app that shows logs from the backend, but not detailed communications messages.
+Seeing what's happening is exciting. There is an inbuilt logging window in the app that shows logs from the backend, but not detailed communication messages.
 
-There is a Man-in-the-Middle script in tools/mitm.py, you use it by copying the actual claude binary (use `which claude` on macOS/Linux to find it) into `tools/_real_claude`, then start the app as:
+There is a man-in-the-middle script in tools/mitm.py. You use it by copying the actual claude binary (use `which claude` on macOS/Linux to find it) into `tools/_real_claude`, then start the app as:
 
 ```bash
 CLAUDE_CODE_PATH="<path-to-tools-dir>/claude-mitm.py" flutter run \
      --dart-entrypoint-args="<your-project-dir>" 
 ```
 
-Those logs go to `~/claude_mitm.log`, and are parsable with `jq`. 
+Those logs go to `~/claude_mitm.log` and are parsable with `jq`.
 
 
 ## Project Structure
