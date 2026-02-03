@@ -51,34 +51,50 @@ When you are ready to merge your feature in you can use standard git tools, or t
 
 ## Installation
 
-Note: This is still in very early development, if you find something doesn't work PLEASE file a github issue ticket.
+Note: This is still in very early development, if you find something doesn't work PLEASE [file an issue](https://github.com/zafnz/cc-insights/issues) ticket.
 
 **MacOS**
 ```bash
 brew tap zafnz/cc-insights
 brew install --cask cc-insights
 ```
+Or download the .dmg from the [latest releases](https://github.com/zafnz/cc-insights/releases/latest/download/cc-insights-macos.dmg)
+
+**Linux**
+```bash
+wget https://github.com/zafnz/cc-insights/releases/latest/download/cc-insights-linux-x64.AppImage
+chmod +x cc-insights-linux-x64.AppImage
+./cc-insights-linux-x64.AppImage
+```
+Or download the tarball from [latest release](https://github.com/zafnz/cc-insights/releases/latest/download/cc-insights-linux-x64.tar.gz)
+
+**Windows**
+
+Apparently with an unsigned application the installer is problematic, so the easiest way is to download the [latest zip release](https://github.com/zafnz/cc-insights/releases/latest/download/cc-insights-windows-portable.zip) and extract it.
+
+If you want there is the [installer here](https://github.com/zafnz/cc-insights/releases/latest/download//CC-Insights-Setup.msix) but apparently it presents code sign warnings.
 
 ## Feature readiness
 
 This is in serious pre-alpha release, it's only for those who really want to see what is going on, lots of features aren't actually there or barely work:
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Create git worktree | ✅ | |
-| Delete git worktree | ✅ | |
-| Commit all | ✅ | |
+| 🌳 Create git worktree | ✅ | |
+| ␡ Delete git worktree | ✅ | |
+| 📝 Commit all | ✅ | |
 | ⤵️ Rebase on main | ❌ | Not yet there |
 | 🔁 Merge main into branch | ❌ | Needs merge resolution |
 | 🧙 Merge resolution wizard | ❌ | |
 | ⚙️ Settings Screen | ❌ | |
 | 📁 File Manager | ✅ | Basic view only |
-| Session Resume | ✅ | Full automatic resume of chat session |
-| Claude Dart SDK | ✅ | Can talk direct to claude cli |
-
+| 🖥️ Session Resume | ✅ | Full automatic resume of chat session |
+| 👾 Claude Dart SDK | ✅ | Can talk direct to claude cli |
+| 🪵 Logging | ❌ | UI not working, file logging is |
+| 🤖 Z.ai GLM subscription | ❌ | Coming soon |
 
 ## Proudly Self Hoisted
 
-Only the first day or so involved running the claude cli. As soon as a functioning window was established ALL of the development was done using itself. What's more is this app is entirely vibe coded. I have made zero code changes by hand. It probably shows -- I'm good and many languages, but Dart isn't one of them.
+Only the first day or so involved running the claude cli. As soon as a functioning window was established ALL of the development was done using itself. What's more is this app is entirely vibe coded. I have made zero code changes by hand. It probably shows -- I'm good at many languages, but Dart isn't one of them.
 
 ### Development methodology 
 
