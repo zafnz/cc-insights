@@ -178,7 +178,10 @@ class _ToolCardState extends State<ToolCard> {
 
     // For any tool with an error, show the error message after the summary
     if (isError) {
-      final errorMessage = _extractErrorMessage(entry.result?.toString());
+      final resultText = entry.toolName == 'Bash'
+          ? _extractBashOutput(entry.result)
+          : entry.result?.toString();
+      final errorMessage = _extractErrorMessage(resultText);
       if (errorMessage != null) {
         return Text.rich(
           TextSpan(
@@ -349,6 +352,7 @@ class _ToolCardState extends State<ToolCard> {
 
     // Special rendering for Bash results (black box with grey text)
     if (entry.toolName == 'Bash' && !isError) {
+      final bashOutput = _extractBashOutput(entry.result);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -367,7 +371,7 @@ class _ToolCardState extends State<ToolCard> {
             backgroundColor: Colors.black87,
             borderRadius: BorderRadius.circular(4),
             child: SelectableText(
-              entry.result?.toString() ?? '',
+              bashOutput,
               style: GoogleFonts.getFont(
                 monoFont,
                 fontSize: 11,
@@ -380,6 +384,9 @@ class _ToolCardState extends State<ToolCard> {
     }
 
     // Default result rendering
+    final resultText = entry.toolName == 'Bash'
+        ? _extractBashOutput(entry.result)
+        : entry.result?.toString() ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -401,7 +408,7 @@ class _ToolCardState extends State<ToolCard> {
               : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(4),
           child: SelectableText(
-            entry.result?.toString() ?? '',
+            resultText,
             style: GoogleFonts.getFont(
               monoFont,
               fontSize: 11,
@@ -413,6 +420,26 @@ class _ToolCardState extends State<ToolCard> {
         ),
       ],
     );
+  }
+
+  /// Extracts displayable output from a Bash tool result.
+  ///
+  /// The result can be either:
+  /// - A [Map] with `stdout`, `stderr`, `interrupted`, `isImage` fields
+  /// - A plain [String]
+  /// - null
+  String _extractBashOutput(dynamic result) {
+    if (result == null) return '';
+    if (result is Map) {
+      final stdout = result['stdout'] as String? ?? '';
+      final stderr = result['stderr'] as String? ?? '';
+      final parts = <String>[
+        if (stdout.isNotEmpty) stdout,
+        if (stderr.isNotEmpty) stderr,
+      ];
+      return parts.join('\n');
+    }
+    return result.toString();
   }
 }
 
