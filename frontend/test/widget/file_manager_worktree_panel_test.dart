@@ -3,6 +3,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/file_manager_worktree_panel.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,7 @@ void main() {
   group('FileManagerWorktreePanel', () {
     final resources = TestResources();
     late ProjectState project;
+    late SelectionState selectionState;
     late FakeFileSystemService fakeFileSystem;
     late FileManagerState fileManagerState;
 
@@ -82,9 +84,10 @@ void main() {
 
     setUp(() {
       project = createProject();
+      selectionState = SelectionState(project);
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(
-        FileManagerState(project, fakeFileSystem),
+        FileManagerState(project, fakeFileSystem, selectionState),
       );
     });
 
@@ -97,7 +100,7 @@ void main() {
         // Create project with primary + 2 linked worktrees
         project = createProject(linkedCount: 2);
         fileManagerState = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp());
@@ -164,7 +167,7 @@ void main() {
         (tester) async {
           project = createProject(linkedCount: 1);
           fileManagerState = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp());
@@ -182,18 +185,24 @@ void main() {
     });
 
     group('Selection', () {
-      testWidgets('click selects worktree', (tester) async {
+      testWidgets('clicking worktree maintains selection', (tester) async {
+        // FileManagerState syncs with SelectionState which uses ProjectState's
+        // selectedWorktree (defaults to primaryWorktree)
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Initially no worktree selected
-        expect(fileManagerState.selectedWorktree, isNull);
+        // Initially primary worktree is selected (default behavior)
+        expect(fileManagerState.selectedWorktree, isNotNull);
+        expect(
+          fileManagerState.selectedWorktree!.data.branch,
+          'main',
+        );
 
         // Click on the worktree (click the branch name)
         await tester.tap(find.text('main'));
         await tester.pump();
 
-        // Worktree should be selected
+        // Worktree should still be selected
         expect(fileManagerState.selectedWorktree, isNotNull);
         expect(
           fileManagerState.selectedWorktree!.data.branch,
@@ -202,6 +211,8 @@ void main() {
       });
 
       testWidgets('selection highlighting works', (tester) async {
+        // FileManagerState syncs with SelectionState which uses ProjectState's
+        // selectedWorktree (defaults to primaryWorktree)
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
@@ -212,17 +223,17 @@ void main() {
           matching: find.byType(Material),
         );
 
-        // Before selection, color should be transparent
+        // Initially selected (default), so should be highlighted
         final materialBefore = tester.widget<Material>(
           materialFinder.first,
         );
-        expect(materialBefore.color, Colors.transparent);
+        expect(materialBefore.color, isNot(Colors.transparent));
 
-        // Click to select
+        // Click again to confirm it stays selected
         await tester.tap(branchFinder);
         await tester.pump();
 
-        // After selection, color should be highlighted
+        // After click, color should still be highlighted
         final materialAfter = tester.widget<Material>(
           materialFinder.first,
         );
@@ -232,7 +243,7 @@ void main() {
       testWidgets('previous selection cleared', (tester) async {
         project = createProject(linkedCount: 1);
         fileManagerState = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp());
@@ -283,25 +294,26 @@ void main() {
         expect(feature0Material.color, isNot(Colors.transparent));
       });
 
-      testWidgets('selection triggers file tree load', (tester) async {
-        // Set up fake file system with directory
+      testWidgets('worktree selection loads file tree automatically', (tester) async {
+        // Set up fake file system with directory FIRST
         fakeFileSystem.addDirectory('/Users/test/my-project');
         fakeFileSystem.addTextFile(
           '/Users/test/my-project/test.dart',
           'content',
         );
 
+        // Create FileManagerState AFTER setting up fake file system
+        // so the automatic tree load finds the files
+        fileManagerState = resources.track(
+          FileManagerState(project, fakeFileSystem, selectionState),
+        );
+
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Initially no tree loaded
-        expect(fileManagerState.rootNode, isNull);
-
-        // Click to select worktree
-        await tester.tap(find.text('main'));
-        await safePumpAndSettle(tester);
-
-        // File tree should be loaded
+        // FileManagerState syncs with SelectionState which uses ProjectState's
+        // selectedWorktree (defaults to primaryWorktree). Since a worktree is
+        // selected by default, the file tree should already be loaded.
         expect(fileManagerState.rootNode, isNotNull);
         expect(fileManagerState.rootNode!.children.length, greaterThan(0));
       });
@@ -379,7 +391,7 @@ void main() {
       testWidgets('uses ListView.builder for efficiency', (tester) async {
         project = createProject(linkedCount: 5);
         fileManagerState = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp());
@@ -392,7 +404,7 @@ void main() {
       testWidgets('shows all worktrees in correct order', (tester) async {
         project = createProject(linkedCount: 3);
         fileManagerState = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp());
@@ -412,7 +424,7 @@ void main() {
         // Create many worktrees
         project = createProject(linkedCount: 20);
         fileManagerState = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp());
@@ -469,7 +481,7 @@ void main() {
         // Project with only primary worktree
         project = createProject(linkedCount: 0);
         fileManagerState = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp());

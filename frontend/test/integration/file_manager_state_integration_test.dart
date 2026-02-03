@@ -9,6 +9,7 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -103,12 +104,15 @@ void main() {
           await createFile('src/main.dart', 'void main() {}');
 
           final project = createProjectState(tempDir.path);
-          final state = FileManagerState(project, fileSystemService);
+          final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
-          // Assert
-          check(state.selectedWorktree).isNull();
-          check(state.rootNode).isNull();
-          check(state.isLoadingTree).isFalse();
+          // Assert - FileManagerState syncs with SelectionState, which uses
+          // ProjectState's selectedWorktree (defaults to primaryWorktree)
+          check(state.selectedWorktree).isNotNull();
+          check(state.selectedWorktree!.data.worktreeRoot).equals(tempDir.path);
+          // Root node is built asynchronously, so it may be null initially
+          // or loading may be in progress
           check(state.error).isNull();
         },
       );
@@ -121,7 +125,8 @@ void main() {
         await createFile('README.md', '# Test Project');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -154,7 +159,8 @@ void main() {
         await createFile('src/services/api.dart', 'class ApiService {}');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -189,7 +195,8 @@ void main() {
         await createFile('README.md', '# My Project\n\nDescription here.');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -212,7 +219,8 @@ void main() {
         await createFile('README.md', '# Title\n\n## Section\n\nContent.');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -236,7 +244,8 @@ void main() {
         );
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -258,7 +267,8 @@ void main() {
         await createFile('src/main.dart', 'void main() {}');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -288,7 +298,8 @@ void main() {
         await createFile('pubspec.yaml', 'name: test_app');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act - select worktree
         state.selectWorktree(project.primaryWorktree);
@@ -331,7 +342,8 @@ void main() {
         await createFile('original.dart', 'void original() {}');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -357,7 +369,8 @@ void main() {
         await createBinaryFile('binary.bin', binaryBytes);
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -378,7 +391,8 @@ void main() {
         await createFile('src/main.dart', 'void main() {}');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -398,7 +412,8 @@ void main() {
       test("worktree path doesn't exist", () async {
         // Arrange
         final project = createProjectState('/nonexistent/path/to/worktree');
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -416,7 +431,8 @@ void main() {
         await createFile('temp_file.dart', 'void temp() {}');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -442,7 +458,8 @@ void main() {
 
         final project =
             createProjectState('${tempDir.path}/not_a_directory.txt');
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -460,7 +477,8 @@ void main() {
         // Arrange - tempDir is already created but empty
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -477,7 +495,8 @@ void main() {
         await createDirectory('some_dir');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -521,7 +540,8 @@ void main() {
         final wt2State = WorktreeState(wt2Data);
         project.addLinkedWorktree(wt2State);
 
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act - select first worktree and wait for it to load
         state.selectWorktree(wt1State);
@@ -576,7 +596,8 @@ void main() {
         final wt2State = WorktreeState(wt2Data);
         project.addLinkedWorktree(wt2State);
 
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Select worktree 1 and load a file
         state.selectWorktree(wt1State);
@@ -622,7 +643,8 @@ void main() {
         }
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 20);
@@ -655,7 +677,8 @@ void main() {
         }
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -684,7 +707,8 @@ void main() {
         await createDirectory('beta');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -717,7 +741,8 @@ void main() {
         await createFile('BANANA.dart', 'BANANA');
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -738,7 +763,8 @@ void main() {
         await createFile('sized.txt', content);
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -757,7 +783,8 @@ void main() {
         final now = DateTime.now();
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -796,7 +823,8 @@ void main() {
         }
 
         final project = createProjectState(tempDir.path);
-        final state = FileManagerState(project, fileSystemService);
+        final selectionState = SelectionState(project);
+          final state = FileManagerState(project, fileSystemService, selectionState);
 
         // Act
         state.selectWorktree(project.primaryWorktree);

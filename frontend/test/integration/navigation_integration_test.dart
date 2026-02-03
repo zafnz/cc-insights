@@ -124,7 +124,7 @@ void main() {
 
       selectionState = resources.track(SelectionState(project));
       fileManagerState = resources.track(
-        FileManagerState(project, fakeFileSystem),
+        FileManagerState(project, fakeFileSystem, selectionState),
       );
       dialogObserver = DialogObserver();
 
@@ -491,9 +491,13 @@ void main() {
       );
     });
 
-    group('State Isolation (Task 5.4)', () {
+    group('State Synchronization (Task 5.4)', () {
+      // Note: FileManagerState now synchronizes with SelectionState.
+      // When a worktree is selected in SelectionState, FileManagerState
+      // automatically picks it up and vice versa.
+
       testWidgets(
-        'SelectionState independent from FileManagerState',
+        'SelectionState and FileManagerState are synchronized',
         (tester) async {
           await tester.pumpWidget(createApp());
           await safePumpAndSettle(tester);
@@ -502,8 +506,9 @@ void main() {
           await tester.tap(find.text('main').first);
           await safePumpAndSettle(tester);
 
+          // Both states should have the same selection (synchronized)
           expect(selectionState.selectedWorktree?.data.branch, 'main');
-          expect(fileManagerState.selectedWorktree, isNull);
+          expect(fileManagerState.selectedWorktree?.data.branch, 'main');
 
           // Switch to file manager and select 'feature'
           await tester.tap(find.byTooltip('File Manager'));
@@ -512,19 +517,17 @@ void main() {
           await tester.tap(find.text('feature'));
           await safePumpAndSettle(tester);
 
-          // FileManagerState should now have 'feature' selected
+          // Both states should now have 'feature' selected (synchronized)
           expect(
             fileManagerState.selectedWorktree?.data.branch,
             'feature',
           );
-
-          // But SelectionState should still have 'main'
-          expect(selectionState.selectedWorktree?.data.branch, 'main');
+          expect(selectionState.selectedWorktree?.data.branch, 'feature');
         },
       );
 
       testWidgets(
-        'selecting worktree in main screen does not affect file manager',
+        'selecting worktree in main screen updates file manager',
         (tester) async {
           await tester.pumpWidget(createApp());
           await safePumpAndSettle(tester);
@@ -533,23 +536,22 @@ void main() {
           await tester.tap(find.text('main').first);
           await safePumpAndSettle(tester);
 
-          final initialFileManagerWorktree =
-              fileManagerState.selectedWorktree;
-          expect(initialFileManagerWorktree, isNull);
+          // Both should be synchronized
+          expect(selectionState.selectedWorktree?.data.branch, 'main');
+          expect(fileManagerState.selectedWorktree?.data.branch, 'main');
 
           // Select different worktree on main screen
           await tester.tap(find.text('feature').first);
           await safePumpAndSettle(tester);
 
+          // Both should update together
           expect(selectionState.selectedWorktree?.data.branch, 'feature');
-
-          // FileManagerState should still be null
-          expect(fileManagerState.selectedWorktree, isNull);
+          expect(fileManagerState.selectedWorktree?.data.branch, 'feature');
         },
       );
 
       testWidgets(
-        'selecting worktree in file manager does not affect main screen',
+        'selecting worktree in file manager updates main screen',
         (tester) async {
           await tester.pumpWidget(createApp());
           await safePumpAndSettle(tester);
@@ -568,22 +570,24 @@ void main() {
           await tester.tap(find.text('feature'));
           await safePumpAndSettle(tester);
 
+          // Both should be synchronized to 'feature'
           expect(
             fileManagerState.selectedWorktree?.data.branch,
             'feature',
           );
+          expect(selectionState.selectedWorktree?.data.branch, 'feature');
 
           // Switch back to main screen
           await tester.tap(find.byTooltip('Main View'));
           await safePumpAndSettle(tester);
 
-          // Main screen selection should still be 'main'
-          expect(selectionState.selectedWorktree?.data.branch, 'main');
+          // Main screen should also show 'feature'
+          expect(selectionState.selectedWorktree?.data.branch, 'feature');
         },
       );
 
       testWidgets(
-        'both can have different selections simultaneously',
+        'worktree selection persists across screen switches',
         (tester) async {
           await tester.pumpWidget(createApp());
           await safePumpAndSettle(tester);
@@ -599,17 +603,17 @@ void main() {
           await tester.tap(find.text('feature'));
           await safePumpAndSettle(tester);
 
-          // Both states should have different selections
-          expect(selectionState.selectedWorktree?.data.branch, 'main');
+          // Both states should have 'feature' selected
+          expect(selectionState.selectedWorktree?.data.branch, 'feature');
           expect(
             fileManagerState.selectedWorktree?.data.branch,
             'feature',
           );
 
-          // Switch back and forth - selections should persist
+          // Switch back and forth - selection should persist
           await tester.tap(find.byTooltip('Main View'));
           await safePumpAndSettle(tester);
-          expect(selectionState.selectedWorktree?.data.branch, 'main');
+          expect(selectionState.selectedWorktree?.data.branch, 'feature');
 
           await tester.tap(find.byTooltip('File Manager'));
           await safePumpAndSettle(tester);
@@ -669,12 +673,12 @@ void main() {
       );
 
       testWidgets(
-        'state isolation maintained during rapid switching',
+        'synchronized state maintained during rapid switching',
         (tester) async {
           await tester.pumpWidget(createApp());
           await safePumpAndSettle(tester);
 
-          // Set up different selections
+          // Select worktree
           await tester.tap(find.text('main').first);
           await safePumpAndSettle(tester);
 
@@ -697,8 +701,8 @@ void main() {
 
           await safePumpAndSettle(tester);
 
-          // Selections should still be different and correct
-          expect(selectionState.selectedWorktree?.data.branch, 'main');
+          // Both states should have the same selection (synchronized)
+          expect(selectionState.selectedWorktree?.data.branch, 'feature');
           expect(
             fileManagerState.selectedWorktree?.data.branch,
             'feature',

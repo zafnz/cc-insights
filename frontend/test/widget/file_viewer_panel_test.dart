@@ -6,6 +6,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/file_viewer_panel.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/widgets/file_viewers/binary_file_message.dart';
 import 'package:cc_insights_v2/widgets/file_viewers/image_viewer.dart';
 import 'package:cc_insights_v2/widgets/file_viewers/markdown_viewer.dart';
@@ -29,7 +30,11 @@ class _TestableFileManagerState extends FileManagerState {
   bool _testIsLoadingFile = false;
   FileContent? _testFileContent;
 
-  _TestableFileManagerState(super.project, super.fileSystemService);
+  _TestableFileManagerState(
+    super.project,
+    super.fileSystemService,
+    super.selectionState,
+  );
 
   @override
   bool get isLoadingFile => _testIsLoadingFile || super.isLoadingFile;
@@ -54,6 +59,7 @@ void main() {
   group('FileViewerPanel', () {
     final resources = TestResources();
     late ProjectState project;
+    late SelectionState selectionState;
     late FakeFileSystemService fakeFileSystem;
 
     /// Creates a project with a primary worktree.
@@ -99,6 +105,7 @@ void main() {
 
     setUp(() {
       project = createProject();
+      selectionState = SelectionState(project);
       fakeFileSystem = FakeFileSystemService();
     });
 
@@ -109,7 +116,7 @@ void main() {
     group('Initial State', () {
       testWidgets('renders "Select a file" when no file', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -129,7 +136,7 @@ void main() {
       testWidgets('shows loading indicator during load', (tester) async {
         // Use testable state to control loading state
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -159,7 +166,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -186,7 +193,7 @@ void main() {
       testWidgets('shows error message on error', (tester) async {
         // Use testable state to manually set error content
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -213,7 +220,7 @@ void main() {
 
       testWidgets('shows full error message', (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -240,7 +247,7 @@ void main() {
       testWidgets('renders PlaintextFileViewer for plaintext',
           (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -265,7 +272,7 @@ void main() {
 
       testWidgets('renders SourceCodeViewer for dart', (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -287,7 +294,7 @@ void main() {
 
       testWidgets('renders SourceCodeViewer for json', (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -309,7 +316,7 @@ void main() {
 
       testWidgets('renders MarkdownViewer for markdown', (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -331,7 +338,7 @@ void main() {
 
       testWidgets('renders ImageViewer for image', (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -354,7 +361,7 @@ void main() {
         'renders BinaryFileMessage for binary',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -382,7 +389,7 @@ void main() {
     group('Header', () {
       testWidgets('displays file name and type in header', (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -403,7 +410,7 @@ void main() {
 
       testWidgets('shows default title when no file', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -415,7 +422,7 @@ void main() {
 
       testWidgets('has file icon in header', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -429,7 +436,7 @@ void main() {
         'header title updates when file changes',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -467,7 +474,7 @@ void main() {
         'toggle button appears for markdown files',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -495,7 +502,7 @@ void main() {
         'no toggle button for non-markdown files',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -518,7 +525,7 @@ void main() {
       testWidgets('toggle switches between preview and raw mode',
           (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -558,7 +565,7 @@ void main() {
       testWidgets('shows error when plaintext has no textContent',
           (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -582,7 +589,7 @@ void main() {
       testWidgets('shows error when dart has no textContent',
           (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -605,7 +612,7 @@ void main() {
       testWidgets('shows error when json has no textContent',
           (tester) async {
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -629,7 +636,7 @@ void main() {
         'shows error when markdown has no textContent',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -654,7 +661,7 @@ void main() {
     group('PanelWrapper Integration', () {
       testWidgets('renders with drag handle from provider', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -671,7 +678,7 @@ void main() {
         'transitions from no selection to content',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -700,7 +707,7 @@ void main() {
         'transitions from loading to content',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -732,7 +739,7 @@ void main() {
         'transitions from content to error',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -769,7 +776,7 @@ void main() {
         'transitions between different content types',
         (tester) async {
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -827,7 +834,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -851,7 +858,7 @@ void main() {
       testWidgets('handles file read error', (tester) async {
         // Don't add the file to the fake filesystem - read will fail
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));

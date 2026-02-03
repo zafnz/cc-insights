@@ -6,6 +6,7 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,6 +52,10 @@ void main() {
       );
     }
 
+    SelectionState createSelectionState(ProjectState project) {
+      return SelectionState(project);
+    }
+
     FakeFileSystemService createFakeFileSystem() {
       final service = FakeFileSystemService();
       // Set up a basic file tree
@@ -68,7 +73,7 @@ void main() {
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
         check(state.project).equals(project);
@@ -76,16 +81,18 @@ void main() {
     });
 
     group('initial state', () {
-      test('selectedWorktree is null initially', () {
+      test('selectedWorktree syncs with SelectionState on construction', () {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
-        check(state.selectedWorktree).isNull();
+        // ProjectState defaults to selecting the primary worktree, so
+        // FileManagerState should sync with that selection on construction
+        check(state.selectedWorktree).equals(project.primaryWorktree);
       });
 
       test('rootNode is null initially', () {
@@ -94,7 +101,7 @@ void main() {
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
         check(state.rootNode).isNull();
@@ -106,7 +113,7 @@ void main() {
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
         check(state.selectedFilePath).isNull();
@@ -118,21 +125,25 @@ void main() {
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
         check(state.fileContent).isNull();
       });
 
-      test('isLoadingTree is false initially', () {
+      test('isLoadingTree starts loading since synced with SelectionState', () async {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
+        // Since ProjectState defaults to selecting the primary worktree,
+        // FileManagerState will sync with SelectionState and start loading
+        // the tree immediately. After the event queue processes, it completes.
+        await pumpEventQueue();
         check(state.isLoadingTree).isFalse();
       });
 
@@ -142,7 +153,7 @@ void main() {
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
         check(state.isLoadingFile).isFalse();
@@ -154,7 +165,7 @@ void main() {
         final fileService = createFakeFileSystem();
 
         // Act
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Assert
         check(state.error).isNull();
@@ -165,17 +176,23 @@ void main() {
       test('sets selectedWorktree and notifies listeners', () async {
         // Arrange
         final project = createProjectState();
+        final linkedWorktree = createWorktreeState(
+          path: '/repo-linked',
+          isPrimary: false,
+        );
+        project.addLinkedWorktree(linkedWorktree);
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
-        final worktree = project.primaryWorktree;
+        fileService.addDirectory('/repo-linked');
+        final state = FileManagerState(project, fileService, createSelectionState(project));
+
         var notifyCount = 0;
         state.addListener(() => notifyCount++);
 
-        // Act
-        state.selectWorktree(worktree);
+        // Act - select a DIFFERENT worktree (not the default primary)
+        state.selectWorktree(linkedWorktree);
 
         // Assert
-        check(state.selectedWorktree).equals(worktree);
+        check(state.selectedWorktree).equals(linkedWorktree);
         check(notifyCount).isGreaterOrEqual(1);
       });
 
@@ -191,7 +208,7 @@ void main() {
         fileService.addDirectory('/repo-linked');
         fileService.addTextFile('/repo-linked/file.txt', 'content');
 
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Select first worktree and file
         state.selectWorktree(project.primaryWorktree);
@@ -216,7 +233,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
         final worktree = project.primaryWorktree;
 
         // Act
@@ -233,7 +250,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
         final worktree = project.primaryWorktree;
 
         state.selectWorktree(worktree);
@@ -254,7 +271,7 @@ void main() {
         final project = createProjectState();
         final fileService = FakeFileSystemService();
         // Do not add the directory to simulate error
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -286,7 +303,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -303,21 +320,24 @@ void main() {
         check(fileNames).contains('new_file.txt');
       });
 
-      test('does nothing when no worktree is selected', () async {
+      test('refreshFileTree works when worktree is selected via SelectionState', () async {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
+
+        // Wait for initial sync to complete
+        await pumpEventQueue();
 
         var notifyCount = 0;
         state.addListener(() => notifyCount++);
 
-        // Act
+        // Act - refresh the already loaded tree
         await state.refreshFileTree();
 
-        // Assert
-        check(state.rootNode).isNull();
-        check(notifyCount).equals(0);
+        // Assert - tree should be loaded since worktree is selected by default
+        check(state.rootNode).isNotNull();
+        check(notifyCount).isGreaterOrEqual(1);
       });
 
       test('sets isLoadingTree during operation', () async {
@@ -326,7 +346,7 @@ void main() {
         final fileService = FakeFileSystemService();
         fileService.addDirectory('/repo');
         fileService.delay = const Duration(milliseconds: 50);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
 
@@ -343,7 +363,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -364,7 +384,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -384,7 +404,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -403,7 +423,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -428,7 +448,7 @@ void main() {
         fileService.addTextFile('/repo/file1.dart', 'content 1');
         fileService.addTextFile('/repo/file2.dart', 'content 2');
         fileService.delay = const Duration(milliseconds: 10);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 5);
@@ -457,7 +477,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -482,7 +502,7 @@ void main() {
         fileService.addDirectory('/repo');
         fileService.addTextFile('/repo/file.txt', 'content');
         fileService.delay = const Duration(milliseconds: 50);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 10);
@@ -501,7 +521,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -524,7 +544,7 @@ void main() {
         fileService.addTextFile('/repo/file1.txt', 'content 1');
         fileService.addTextFile('/repo/file2.txt', 'content 2');
         fileService.delay = const Duration(milliseconds: 50);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 15);
@@ -549,7 +569,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -569,7 +589,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -589,7 +609,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -608,7 +628,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         var notifyCount = 0;
         state.addListener(() => notifyCount++);
@@ -624,7 +644,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -648,7 +668,7 @@ void main() {
         fileService.addDirectory('/repo/src');
         fileService.addDirectory('/repo/src/widgets');
         fileService.addTextFile('/repo/src/widgets/button.dart', 'button');
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -666,7 +686,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -688,7 +708,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -707,11 +727,11 @@ void main() {
     });
 
     group('clearSelection()', () {
-      test('clears all state', () async {
+      test('clears file manager internal state but not worktree selection', () async {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -722,7 +742,8 @@ void main() {
         state.clearSelection();
 
         // Assert
-        check(state.selectedWorktree).isNull();
+        // Note: selectedWorktree is NOT cleared because it's managed by SelectionState
+        // clearSelection only clears file manager's internal state (file tree, file content, etc.)
         check(state.rootNode).isNull();
         check(state.selectedFilePath).isNull();
         check(state.fileContent).isNull();
@@ -735,7 +756,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -757,7 +778,7 @@ void main() {
         final project = createProjectState();
         final fileService = FakeFileSystemService();
         // Do not add directory to cause error
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -774,7 +795,7 @@ void main() {
         final project = createProjectState();
         final fileService = FakeFileSystemService();
         // Do not add directory to cause error
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Act
         state.selectWorktree(project.primaryWorktree);
@@ -788,7 +809,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -806,7 +827,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -824,20 +845,36 @@ void main() {
       test('isLoadingTree is true while building tree', () async {
         // Arrange
         final project = createProjectState();
+        // Add a linked worktree so we can switch to it later
+        final linkedWorktree = createWorktreeState(
+          path: '/repo-linked',
+          isPrimary: false,
+        );
+        project.addLinkedWorktree(linkedWorktree);
+
         final fileService = FakeFileSystemService();
         fileService.addDirectory('/repo');
+        fileService.addDirectory('/repo-linked');
         fileService.delay = const Duration(milliseconds: 100);
-        final state = FileManagerState(project, fileService);
 
         final loadingStates = <bool>[];
+
+        // Create state - it will immediately sync with SelectionState and
+        // start loading the tree for the primary worktree
+        final selectionState = createSelectionState(project);
+        final state = FileManagerState(project, fileService, selectionState);
+
+        // Now add listener and switch to a different worktree to trigger
+        // a new tree load that we can observe
         state.addListener(() {
           loadingStates.add(state.isLoadingTree);
         });
 
-        // Act
-        state.selectWorktree(project.primaryWorktree);
+        // Switch to linked worktree to trigger a new tree load
+        state.selectWorktree(linkedWorktree);
 
-        await pumpEventQueue(times: 15);
+        // Wait for the async tree build to complete
+        await pumpEventQueue(times: 20);
 
         // Should have seen loading = true at some point during the operation
         check(loadingStates.contains(true)).isTrue();
@@ -853,7 +890,7 @@ void main() {
         fileService.addDirectory('/repo');
         fileService.addTextFile('/repo/file.txt', 'content');
         fileService.delay = const Duration(milliseconds: 100);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 15);
@@ -877,17 +914,26 @@ void main() {
     });
 
     group('notifyListeners', () {
-      test('notifies on selectWorktree', () async {
+      test('notifies on selectWorktree for a different worktree', () async {
         // Arrange
         final project = createProjectState();
+        final linkedWorktree = createWorktreeState(
+          path: '/repo-linked',
+          isPrimary: false,
+        );
+        project.addLinkedWorktree(linkedWorktree);
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        fileService.addDirectory('/repo-linked');
+        final state = FileManagerState(project, fileService, createSelectionState(project));
+
+        // Wait for initial sync to complete
+        await pumpEventQueue();
 
         var notifyCount = 0;
         state.addListener(() => notifyCount++);
 
-        // Act
-        state.selectWorktree(project.primaryWorktree);
+        // Act - select a different worktree
+        state.selectWorktree(linkedWorktree);
 
         // Assert - at least one notification for selection change
         check(notifyCount).isGreaterOrEqual(1);
@@ -897,7 +943,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -916,7 +962,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -935,7 +981,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -956,7 +1002,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fileService = createFakeFileSystem();
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue();
@@ -981,7 +1027,7 @@ void main() {
         fileService.addTextFile('/repo/slow.dart', 'slow content');
         fileService.addTextFile('/repo/fast.dart', 'fast content');
         fileService.delay = const Duration(milliseconds: 50);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         state.selectWorktree(project.primaryWorktree);
         await pumpEventQueue(times: 10);
@@ -1016,7 +1062,7 @@ void main() {
         fileService.addDirectory('/linked');
         fileService.addTextFile('/linked/file.txt', 'linked content');
         fileService.delay = const Duration(milliseconds: 50);
-        final state = FileManagerState(project, fileService);
+        final state = FileManagerState(project, fileService, createSelectionState(project));
 
         // Act - start loading repo tree
         state.selectWorktree(project.primaryWorktree);

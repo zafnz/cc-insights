@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -84,7 +86,8 @@ class _FileViewerPanelState extends State<FileViewerPanel> {
 
   /// Builds trailing widgets for the panel header based on file type.
   ///
-  /// Shows copy button for text content and toggle for markdown.
+  /// Shows copy button for text content, toggle for markdown, and open in
+  /// external editor button.
   Widget? _buildTrailingWidgets(BuildContext context, FileContent? fileContent) {
     if (fileContent == null || fileContent.isError) {
       return null;
@@ -133,14 +136,44 @@ class _FileViewerPanelState extends State<FileViewerPanel> {
       );
     }
 
-    if (widgets.isEmpty) {
-      return null;
-    }
+    // Open in external editor button
+    widgets.add(
+      IconButton(
+        icon: const Icon(Icons.open_in_new, size: 18),
+        iconSize: 18,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        tooltip: 'Open in External Editor',
+        onPressed: () => _openInExternalEditor(context, fileContent.path),
+      ),
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: widgets,
     );
+  }
+
+  /// Opens the file in the system's default external editor.
+  Future<void> _openInExternalEditor(BuildContext context, String path) async {
+    try {
+      if (Platform.isMacOS) {
+        await Process.run('open', [path]);
+      } else if (Platform.isWindows) {
+        await Process.run('start', ['', path], runInShell: true);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [path]);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open file: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 }
 

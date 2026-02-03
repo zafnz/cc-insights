@@ -7,15 +7,16 @@ import '../models/file_tree_node.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/file_system_service.dart';
+import 'selection_state.dart';
 
 /// State management for the File Manager feature.
 ///
-/// Manages worktree selection, file tree building, and file content loading.
-/// This state is separate from [SelectionState] to avoid cross-contamination
-/// between the main screen and file manager screen.
+/// Manages file tree building and file content loading for the currently
+/// selected worktree. The worktree selection is synchronized with
+/// [SelectionState] - when the user selects a worktree in either the main
+/// screen or file manager, both update together.
 ///
-/// Use [selectWorktree] to choose a worktree, which triggers file tree
-/// building. Use [selectFile] to load a file's content for viewing.
+/// Use [selectFile] to load a file's content for viewing.
 ///
 /// The expanded state of directories is tracked separately from the tree
 /// structure in [_expandedPaths] to avoid rebuilding the entire tree on
@@ -23,8 +24,9 @@ import '../services/file_system_service.dart';
 class FileManagerState extends ChangeNotifier {
   final ProjectState _project;
   final FileSystemService _fileSystemService;
+  final SelectionState _selectionState;
 
-  WorktreeState? _selectedWorktree;
+  WorktreeState? _lastKnownWorktree;
   FileTreeNode? _rootNode;
   String? _selectedFilePath;
   FileContent? _fileContent;
@@ -36,17 +38,81 @@ class FileManagerState extends ChangeNotifier {
   /// Tracked separately from tree nodes for performance.
   final Set<String> _expandedPaths = {};
 
-  /// Creates a [FileManagerState] with the given project and file service.
+  /// Creates a [FileManagerState] with the given project, file service, and
+  /// selection state.
   ///
   /// The [project] provides access to worktrees. The [fileSystemService]
-  /// handles file tree building and file reading operations.
-  FileManagerState(this._project, this._fileSystemService);
+  /// handles file tree building and file reading operations. The
+  /// [selectionState] is used to synchronize worktree selection with the
+  /// main screen.
+  FileManagerState(
+    this._project,
+    this._fileSystemService,
+    this._selectionState,
+  ) {
+    // Listen to selection state changes to sync worktree selection
+    _selectionState.addListener(_onSelectionChanged);
+    // Initialize with current selection if any
+    _syncWithSelectionState();
+  }
+
+  /// Called when SelectionState changes.
+  void _onSelectionChanged() {
+    _syncWithSelectionState();
+  }
+
+  /// Syncs our state with the current SelectionState worktree.
+  void _syncWithSelectionState() {
+    final newWorktree = _selectionState.selectedWorktree;
+    if (newWorktree != _lastKnownWorktree) {
+      _handleWorktreeChanged(newWorktree);
+    }
+  }
+
+  /// Handles a worktree change from SelectionState.
+  void _handleWorktreeChanged(WorktreeState? worktree) {
+    if (worktree == null) {
+      // Worktree was deselected
+      _lastKnownWorktree = null;
+      _rootNode = null;
+      _selectedFilePath = null;
+      _fileContent = null;
+      _error = null;
+      _expandedPaths.clear();
+      notifyListeners();
+      return;
+    }
+
+    developer.log(
+      'Syncing to worktree: ${worktree.data.worktreeRoot}',
+      name: 'FileManagerState',
+    );
+
+    _lastKnownWorktree = worktree;
+    _rootNode = null;
+    _selectedFilePath = null;
+    _fileContent = null;
+    _error = null;
+    _expandedPaths.clear();
+    notifyListeners();
+
+    // Trigger async tree build
+    refreshFileTree();
+  }
+
+  @override
+  void dispose() {
+    _selectionState.removeListener(_onSelectionChanged);
+    super.dispose();
+  }
 
   /// The project this file manager operates on.
   ProjectState get project => _project;
 
   /// The currently selected worktree, if any.
-  WorktreeState? get selectedWorktree => _selectedWorktree;
+  ///
+  /// This is synchronized with [SelectionState.selectedWorktree].
+  WorktreeState? get selectedWorktree => _selectionState.selectedWorktree;
 
   /// The root node of the file tree for the selected worktree.
   ///
@@ -83,29 +149,21 @@ class FileManagerState extends ChangeNotifier {
 
   /// Selects a worktree and builds its file tree.
   ///
-  /// Clears the previous tree and file selection, then triggers an async
-  /// file tree build. Listeners are notified immediately when selection
-  /// changes, and again when the tree build completes.
+  /// This delegates to [SelectionState.selectWorktree], which will trigger
+  /// [_onSelectionChanged] to update our internal state and build the file
+  /// tree. This ensures the main screen and file manager stay in sync.
   void selectWorktree(WorktreeState worktree) {
-    if (_selectedWorktree == worktree) {
+    if (_selectionState.selectedWorktree == worktree) {
       return;
     }
 
     developer.log(
-      'Selecting worktree: ${worktree.data.worktreeRoot}',
+      'Selecting worktree via SelectionState: ${worktree.data.worktreeRoot}',
       name: 'FileManagerState',
     );
 
-    _selectedWorktree = worktree;
-    _rootNode = null;
-    _selectedFilePath = null;
-    _fileContent = null;
-    _error = null;
-    _expandedPaths.clear();
-    notifyListeners();
-
-    // Trigger async tree build
-    refreshFileTree();
+    // Delegate to SelectionState - our listener will handle the rest
+    _selectionState.selectWorktree(worktree);
   }
 
   /// Rebuilds the file tree for the currently selected worktree.
@@ -115,11 +173,12 @@ class FileManagerState extends ChangeNotifier {
   ///
   /// Does nothing if no worktree is selected.
   Future<void> refreshFileTree() async {
-    if (_selectedWorktree == null) {
+    final worktree = selectedWorktree;
+    if (worktree == null) {
       return;
     }
 
-    final rootPath = _selectedWorktree!.data.worktreeRoot;
+    final rootPath = worktree.data.worktreeRoot;
     developer.log(
       'Building file tree for: $rootPath',
       name: 'FileManagerState',
@@ -266,8 +325,12 @@ class FileManagerState extends ChangeNotifier {
   }
 
   /// Clears the current worktree selection and all associated state.
+  ///
+  /// Note: This clears the file manager's internal state but does not
+  /// change the SelectionState's worktree selection. Use this for clearing
+  /// file-related state only.
   void clearSelection() {
-    _selectedWorktree = null;
+    _lastKnownWorktree = null;
     _rootNode = null;
     _selectedFilePath = null;
     _fileContent = null;

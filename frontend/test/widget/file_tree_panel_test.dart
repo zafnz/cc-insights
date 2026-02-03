@@ -6,6 +6,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/file_tree_panel.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +21,11 @@ import '../test_helpers.dart';
 class _TestableFileManagerState extends FileManagerState {
   bool _testIsLoadingTree = false;
 
-  _TestableFileManagerState(super.project, super.fileSystemService);
+  _TestableFileManagerState(
+    super.project,
+    super.fileSystemService,
+    super.selectionState,
+  );
 
   @override
   bool get isLoadingTree => _testIsLoadingTree || super.isLoadingTree;
@@ -36,6 +41,7 @@ void main() {
   group('FileTreePanel', () {
     final resources = TestResources();
     late ProjectState project;
+    late SelectionState selectionState;
     late FakeFileSystemService fakeFileSystem;
 
     /// Creates a project with a primary worktree.
@@ -81,6 +87,7 @@ void main() {
 
     setUp(() {
       project = createProject();
+      selectionState = SelectionState(project);
       fakeFileSystem = FakeFileSystemService();
     });
 
@@ -89,21 +96,23 @@ void main() {
     });
 
     group('Initial State', () {
-      testWidgets('renders "No worktree selected" initially', (tester) async {
+      testWidgets('shows loading or error when worktree synced from SelectionState', (tester) async {
+        // With the new synced selection behavior, FileManagerState syncs with
+        // SelectionState on construction. Since ProjectState defaults to
+        // selecting the primary worktree, FileManagerState will try to load
+        // the tree immediately. Without the directory added, this results
+        // in an error state.
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
         await safePumpAndSettle(tester);
 
-        // Should show the no worktree selected message
-        expect(find.text('No worktree selected'), findsOneWidget);
-        expect(
-          find.text('Select a worktree to browse files'),
-          findsOneWidget,
-        );
-        expect(find.byIcon(Icons.folder_off_outlined), findsOneWidget);
+        // Since selectionState has a worktree selected (ProjectState defaults
+        // to selecting the primary worktree), and the directory doesn't exist
+        // in fakeFileSystem, we expect an error state.
+        expect(find.text('Failed to load file tree'), findsOneWidget);
       });
     });
 
@@ -115,7 +124,7 @@ void main() {
         // Create state and manually set loading state for testing
         // (testing the UI response to isLoadingTree = true)
         final state = resources.track(
-          _TestableFileManagerState(project, fakeFileSystem),
+          _TestableFileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -141,7 +150,7 @@ void main() {
       testWidgets('shows error message on failure', (tester) async {
         // Do NOT add the directory - this will cause buildFileTree to fail
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -176,7 +185,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -218,7 +227,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -248,7 +257,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -276,7 +285,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -332,7 +341,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -366,7 +375,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -400,7 +409,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -449,7 +458,7 @@ void main() {
     group('PanelWrapper Integration', () {
       testWidgets('has title "Files"', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -461,7 +470,7 @@ void main() {
 
       testWidgets('has folder icon', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -473,7 +482,7 @@ void main() {
 
       testWidgets('renders with drag handle from provider', (tester) async {
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -495,7 +504,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -530,7 +539,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -576,7 +585,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -618,7 +627,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -658,7 +667,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -695,7 +704,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -736,7 +745,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -770,7 +779,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -809,7 +818,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -843,7 +852,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -889,7 +898,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -945,7 +954,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -985,7 +994,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1016,7 +1025,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1062,7 +1071,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1125,7 +1134,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1168,7 +1177,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1205,7 +1214,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1247,7 +1256,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1286,7 +1295,7 @@ void main() {
         fakeFileSystem.addDirectory('/Users/test/my-project');
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1318,7 +1327,7 @@ void main() {
 
           // Use testable state to control loading state
           final state = resources.track(
-            _TestableFileManagerState(project, fakeFileSystem),
+            _TestableFileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -1368,7 +1377,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
@@ -1411,7 +1420,7 @@ void main() {
         );
 
         final state = resources.track(
-          FileManagerState(project, fakeFileSystem),
+          FileManagerState(project, fakeFileSystem, selectionState),
         );
 
         await tester.pumpWidget(createTestApp(state));
@@ -1439,7 +1448,7 @@ void main() {
 
     group('State Transitions', () {
       testWidgets(
-        'transitions from no selection to tree after worktree selected',
+        'shows tree immediately when synced with SelectionState',
         (tester) async {
           // Set up fake file system with directory
           fakeFileSystem.addDirectory('/Users/test/my-project');
@@ -1449,20 +1458,15 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));
           await safePumpAndSettle(tester);
 
-          // Initially shows no selection
-          expect(find.text('No worktree selected'), findsOneWidget);
-
-          // Select worktree and wait for load to complete
-          state.selectWorktree(project.primaryWorktree);
-          await safePumpAndSettle(tester);
-
-          // Now shows file tree with the file
+          // Since FileManagerState syncs with SelectionState on construction,
+          // and ProjectState defaults to selecting the primary worktree,
+          // the file tree should load immediately
           expect(find.byType(ListView), findsOneWidget);
           expect(find.text('file.txt'), findsOneWidget);
         },
@@ -1479,7 +1483,7 @@ void main() {
           );
 
           final state = resources.track(
-            FileManagerState(project, fakeFileSystem),
+            FileManagerState(project, fakeFileSystem, selectionState),
           );
 
           await tester.pumpWidget(createTestApp(state));

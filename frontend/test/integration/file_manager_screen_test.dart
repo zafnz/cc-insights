@@ -6,6 +6,7 @@ import 'package:cc_insights_v2/panels/file_viewer_panel.dart';
 import 'package:cc_insights_v2/screens/file_manager_screen.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,7 @@ void main() {
   group('FileManagerScreen', () {
     final resources = TestResources();
     late ProjectState project;
+    late SelectionState selectionState;
     late FakeFileSystemService fakeFileSystem;
     late FileManagerState fileManagerState;
 
@@ -69,9 +71,10 @@ void main() {
 
     setUp(() {
       project = createProject();
+      selectionState = SelectionState(project);
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(
-        FileManagerState(project, fakeFileSystem),
+        FileManagerState(project, fakeFileSystem, selectionState),
       );
     });
 
@@ -177,8 +180,8 @@ void main() {
     });
 
     group('End-to-End Workflow (Task 4.3)', () {
-      testWidgets('select worktree → tree loads', (tester) async {
-        // Set up fake file system with directory structure
+      testWidgets('worktree selected by default loads tree', (tester) async {
+        // Set up fake file system with directory structure FIRST
         fakeFileSystem.addDirectory('/Users/test/my-project');
         fakeFileSystem.addDirectory('/Users/test/my-project/lib');
         fakeFileSystem.addTextFile(
@@ -190,38 +193,39 @@ void main() {
           '# Project',
         );
 
+        // Recreate FileManagerState AFTER setting up fake file system
+        fileManagerState = resources.track(
+          FileManagerState(project, fakeFileSystem, selectionState),
+        );
+
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Initially, file tree panel shows "No worktree selected"
-        expect(find.text('No worktree selected'), findsOneWidget);
-
-        // Click on worktree in the worktree panel
-        await tester.tap(find.text('main'));
-        await safePumpAndSettle(tester);
-
-        // File tree should now be loaded and visible
+        // FileManagerState syncs with SelectionState, which uses ProjectState's
+        // selectedWorktree (defaults to primaryWorktree). So the tree should
+        // already be loaded.
         expect(find.text('lib'), findsOneWidget);
         expect(find.text('README.md'), findsOneWidget);
         expect(find.text('No worktree selected'), findsNothing);
       });
 
       testWidgets('select file → content loads', (tester) async {
-        // Set up fake file system with files
+        // Set up fake file system with files FIRST
         fakeFileSystem.addDirectory('/Users/test/my-project');
         fakeFileSystem.addTextFile(
           '/Users/test/my-project/config.yaml',
           'key: value',
         );
 
+        // Recreate FileManagerState AFTER setting up fake file system
+        fileManagerState = resources.track(
+          FileManagerState(project, fakeFileSystem, selectionState),
+        );
+
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Select worktree first
-        await tester.tap(find.text('main'));
-        await safePumpAndSettle(tester);
-
-        // File tree should show the file
+        // Worktree is already selected (default), file tree should show the file
         expect(find.text('config.yaml'), findsOneWidget);
 
         // File viewer should show "Select a file to view" initially
@@ -241,7 +245,7 @@ void main() {
       });
 
       testWidgets('expand directory → children appear', (tester) async {
-        // Set up nested directory structure
+        // Set up nested directory structure FIRST
         fakeFileSystem.addDirectory('/Users/test/my-project');
         fakeFileSystem.addDirectory('/Users/test/my-project/src');
         fakeFileSystem.addTextFile(
@@ -249,13 +253,15 @@ void main() {
           'class App {}',
         );
 
+        // Recreate FileManagerState AFTER setting up fake file system
+        fileManagerState = resources.track(
+          FileManagerState(project, fakeFileSystem, selectionState),
+        );
+
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Select worktree
-        await tester.tap(find.text('main'));
-        await safePumpAndSettle(tester);
-
+        // Worktree is already selected (default), tree should be loaded
         // Directory should be visible but not expanded
         expect(find.text('src'), findsOneWidget);
         expect(find.text('app.dart'), findsNothing);
@@ -273,7 +279,7 @@ void main() {
       testWidgets(
         'select different files updates viewer',
         (tester) async {
-          // Set up multiple files
+          // Set up multiple files FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addTextFile(
             '/Users/test/my-project/file1.txt',
@@ -284,12 +290,15 @@ void main() {
             'Content of file 2',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select worktree
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
+          // Worktree is already selected (default), tree should be loaded
 
           // Select first file
           // Must pump past kDoubleTapTimeout for single tap to register
@@ -315,7 +324,7 @@ void main() {
       testWidgets(
         'worktree selection persists during file browsing',
         (tester) async {
-          // Set up file system
+          // Set up file system FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addDirectory('/Users/test/my-project/folder');
           fakeFileSystem.addTextFile(
@@ -323,13 +332,15 @@ void main() {
             'class Nested {}',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select worktree
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
-
+          // Worktree is already selected (default)
           final selectedWorktree = fileManagerState.selectedWorktree;
           expect(selectedWorktree, isNotNull);
 
@@ -361,11 +372,8 @@ void main() {
     group('Error Handling', () {
       testWidgets('tree load fails → error message', (tester) async {
         // Do NOT add directory to fake file system - will cause error
+        // Worktree is selected by default, so tree load will fail immediately
         await tester.pumpWidget(createTestApp());
-        await safePumpAndSettle(tester);
-
-        // Select worktree (will trigger failed tree load)
-        await tester.tap(find.text('main'));
         await safePumpAndSettle(tester);
 
         // Error message should be visible in file tree panel
@@ -381,12 +389,9 @@ void main() {
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Select worktree first
-        await tester.tap(find.text('main'));
-        await safePumpAndSettle(tester);
-
-        // Now add a file to the tree (simulates race condition where file
-        // appears but is immediately deleted or becomes unreadable)
+        // Worktree is already selected (default), tree should be loaded but
+        // empty. Now add a file to the tree (simulates race condition where
+        // file appears but is immediately deleted or becomes unreadable)
         fakeFileSystem.addTextFile(
           '/Users/test/my-project/exists.txt',
           'content',
@@ -418,21 +423,22 @@ void main() {
       testWidgets(
         'error in one panel does not affect others',
         (tester) async {
-          // Set up successful directory
+          // Set up successful directory FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addTextFile(
             '/Users/test/my-project/good.txt',
             'good content',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select worktree successfully
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
-
-          // File tree should be loaded
+          // Worktree is already selected (default), tree should be loaded
           expect(find.text('good.txt'), findsOneWidget);
 
           // Remove file content to simulate read failure
@@ -467,12 +473,9 @@ void main() {
       );
 
       testWidgets('refresh after error recovers', (tester) async {
-        // Start with no directory (will fail)
+        // Start with no directory (will fail). Worktree is selected by default
+        // so tree load will fail immediately.
         await tester.pumpWidget(createTestApp());
-        await safePumpAndSettle(tester);
-
-        // Select worktree (will fail)
-        await tester.tap(find.text('main'));
         await safePumpAndSettle(tester);
 
         // Error should be shown
@@ -503,16 +506,18 @@ void main() {
       testWidgets(
         'worktree selection syncs across all panels',
         (tester) async {
+          // Set up file system FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
+
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
 
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select worktree in worktree panel
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
-
-          // State should be updated
+          // Worktree is already selected (default)
           expect(
             fileManagerState.selectedWorktree!.data.branch,
             'main',
@@ -537,18 +542,22 @@ void main() {
       testWidgets(
         'file selection syncs between tree and viewer',
         (tester) async {
+          // Set up file system FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addTextFile(
             '/Users/test/my-project/sync.txt',
             'synced content',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select worktree
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
+          // Worktree is already selected (default), tree should be loaded
 
           // Select file in tree
           await tester.tap(find.text('sync.txt'));
@@ -577,6 +586,7 @@ void main() {
       );
 
       testWidgets('tree expansion state persists', (tester) async {
+        // Set up file system FIRST
         fakeFileSystem.addDirectory('/Users/test/my-project');
         fakeFileSystem.addDirectory('/Users/test/my-project/folder');
         fakeFileSystem.addTextFile(
@@ -584,12 +594,15 @@ void main() {
           'content',
         );
 
+        // Recreate FileManagerState AFTER setting up fake file system
+        fileManagerState = resources.track(
+          FileManagerState(project, fakeFileSystem, selectionState),
+        );
+
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Select worktree
-        await tester.tap(find.text('main'));
-        await safePumpAndSettle(tester);
+        // Worktree is already selected (default), tree should be loaded
 
         // Expand folder
         await tester.tap(find.text('folder'));
@@ -626,7 +639,7 @@ void main() {
           );
           project.addWorktree(linkedWorktree);
 
-          // Set up file systems for both
+          // Set up file systems for both FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addTextFile(
             '/Users/test/my-project/file1.txt',
@@ -638,13 +651,16 @@ void main() {
             'content2',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select first worktree and file
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
-
+          // Worktree is already selected (default), tree should be loaded
+          // Select a file
           await tester.tap(find.text('file1.txt'));
           await tester.pump(const Duration(milliseconds: 350));
           await safePumpAndSettle(tester);
@@ -716,9 +732,9 @@ void main() {
 
     group('Complex Workflows', () {
       testWidgets(
-        'complete workflow: select worktree, expand, select file, view',
+        'complete workflow: expand directories, select file, view',
         (tester) async {
-          // Set up complex directory structure
+          // Set up complex directory structure FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addDirectory('/Users/test/my-project/src');
           fakeFileSystem.addDirectory('/Users/test/my-project/src/models');
@@ -727,32 +743,35 @@ void main() {
             'class User {}',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Step 1: Select worktree
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
+          // Worktree is already selected (default), tree should be loaded
           expect(find.text('src'), findsOneWidget);
 
-          // Step 2: Expand src
+          // Step 1: Expand src
           await tester.tap(find.text('src'));
           await tester.pump(const Duration(milliseconds: 350));
           await safePumpAndSettle(tester);
           expect(find.text('models'), findsOneWidget);
 
-          // Step 3: Expand models
+          // Step 2: Expand models
           await tester.tap(find.text('models'));
           await tester.pump(const Duration(milliseconds: 350));
           await safePumpAndSettle(tester);
           expect(find.text('user.dart'), findsOneWidget);
 
-          // Step 4: Select file
+          // Step 3: Select file
           await tester.tap(find.text('user.dart'));
           await tester.pump(const Duration(milliseconds: 350));
           await safePumpAndSettle(tester);
 
-          // Step 5: Verify content displayed
+          // Step 4: Verify content displayed
           expect(find.textContaining('class User'), findsWidgets);
         },
       );
@@ -760,6 +779,7 @@ void main() {
       testWidgets(
         'navigate tree, select multiple files sequentially',
         (tester) async {
+          // Set up file system FIRST
           fakeFileSystem.addDirectory('/Users/test/my-project');
           fakeFileSystem.addTextFile(
             '/Users/test/my-project/a.txt',
@@ -774,12 +794,15 @@ void main() {
             'Content C',
           );
 
+          // Recreate FileManagerState AFTER setting up fake file system
+          fileManagerState = resources.track(
+            FileManagerState(project, fakeFileSystem, selectionState),
+          );
+
           await tester.pumpWidget(createTestApp());
           await safePumpAndSettle(tester);
 
-          // Select worktree
-          await tester.tap(find.text('main'));
-          await safePumpAndSettle(tester);
+          // Worktree is already selected (default), tree should be loaded
 
           // Select files in sequence
           final files = ['a.txt', 'b.txt', 'c.txt'];

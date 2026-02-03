@@ -519,18 +519,21 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           update: (context, project, previous) =>
               previous ?? SelectionState(project),
         ),
-        // File manager state depends on project and file system service
-        ChangeNotifierProxyProvider2<
+        // File manager state depends on project, file system service, and
+        // selection state (for synchronized worktree selection)
+        ChangeNotifierProxyProvider3<
           ProjectState,
           FileSystemService,
+          SelectionState,
           FileManagerState
         >(
           create: (context) => FileManagerState(
             context.read<ProjectState>(),
             context.read<FileSystemService>(),
+            context.read<SelectionState>(),
           ),
-          update: (context, project, fileService, previous) =>
-              previous ?? FileManagerState(project, fileService),
+          update: (context, project, fileService, selectionState, previous) =>
+              previous ?? FileManagerState(project, fileService, selectionState),
         ),
         // Worktree watcher service for monitoring git status changes
         ChangeNotifierProxyProvider2<

@@ -79,13 +79,13 @@ void main() {
       );
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(
-        FileManagerState(project, fakeFileSystem),
+        FileManagerState(project, fakeFileSystem, selection),
       );
       dialogObserver = DialogObserver();
       await mockBackend.start();
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(
-        FileManagerState(project, fakeFileSystem),
+        FileManagerState(project, fakeFileSystem, selection),
       );
     });
 
