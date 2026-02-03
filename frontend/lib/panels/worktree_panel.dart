@@ -711,9 +711,31 @@ class InlineStatusIndicators extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: RichText(text: TextSpan(children: parts)),
+    final tooltipLines = <String>[];
+    if (data.commitsAhead > 0) {
+      final s = data.commitsAhead == 1 ? '' : 's';
+      tooltipLines.add('↑ ${data.commitsAhead} commit$s ahead');
+    }
+    if (data.commitsBehind > 0) {
+      final s = data.commitsBehind == 1 ? '' : 's';
+      tooltipLines.add('↓ ${data.commitsBehind} commit$s behind');
+    }
+    if (data.uncommittedFiles > 0) {
+      final s = data.uncommittedFiles == 1 ? '' : 's';
+      tooltipLines.add(
+        '~ ${data.uncommittedFiles} uncommitted file$s',
+      );
+    }
+    if (data.hasMergeConflict) {
+      tooltipLines.add('! Merge conflict');
+    }
+
+    return Tooltip(
+      message: tooltipLines.join('\n'),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: RichText(text: TextSpan(children: parts)),
+      ),
     );
   }
 }
