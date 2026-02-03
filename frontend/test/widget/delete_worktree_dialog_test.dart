@@ -257,7 +257,7 @@ void main() {
         find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
         findsOneWidget,
       );
-      expect(find.textContaining('has changes'), findsOneWidget);
+      expect(find.textContaining('Failed to remove worktree'), findsOneWidget);
     });
 
     testWidgets('force deletes when Force Delete is clicked', (tester) async {

@@ -127,6 +127,9 @@ enum _ActionState {
   /// Commit dialog is open.
   committing,
 
+  /// Deletion failed with an unrecoverable error.
+  failed,
+
   /// Deletion complete.
   complete,
 }
@@ -163,7 +166,6 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
   String? _mainBranch;
   int _uncommittedCount = 0;
   int _unmergedCommitsCount = 0;
-  String? _forceDeleteError;
 
   @override
   void initState() {
@@ -514,38 +516,34 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           Navigator.of(context).pop(DeleteWorktreeResult.deleted);
         }
       });
-    } on GitException catch (e) {
+    } catch (e) {
       if (!mounted) return;
 
-      // Check if this is a "dirty worktree" error that can be forced
-      final needsForce = e.stderr?.contains('contains modified') == true ||
-          e.stderr?.contains('contains untracked') == true ||
-          e.stderr?.contains('is dirty') == true;
+      final detail = e is GitException
+          ? (e.stderr ?? e.message)
+          : e.toString();
 
-      if (needsForce && !force) {
+      if (!force) {
+        // Normal delete failed - offer force delete
         _updateLastLog(
           LogEntryStatus.error,
-          message: 'Git reports worktree has changes',
-          detail: e.stderr ?? e.message,
+          message: 'Failed to remove worktree',
+          detail: detail,
         );
-        _forceDeleteError = e.stderr ?? e.message;
         setState(() {
           _actionState = _ActionState.needsForce;
         });
       } else {
+        // Force delete also failed - nothing more we can do
         _updateLastLog(
           LogEntryStatus.error,
-          message: 'Failed to remove worktree',
-          detail: e.stderr ?? e.message,
+          message: 'Force delete failed',
+          detail: detail,
         );
+        setState(() {
+          _actionState = _ActionState.failed;
+        });
       }
-    } catch (e) {
-      if (!mounted) return;
-      _updateLastLog(
-        LogEntryStatus.error,
-        message: 'Failed to remove worktree',
-        detail: e.toString(),
-      );
     }
   }
 
@@ -694,6 +692,21 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         ]);
         break;
 
+      case _ActionState.failed:
+        buttons.add(
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(DeleteWorktreeResult.failed),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.onErrorContainer,
+              side: BorderSide(
+                color: colorScheme.onErrorContainer.withValues(alpha: 0.5),
+              ),
+            ),
+            child: const Text('Close'),
+          ),
+        );
+        break;
+
       case _ActionState.checking:
       case _ActionState.processing:
       case _ActionState.deleting:
@@ -734,7 +747,8 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     // Always add cancel button (except when complete or when Abort is shown)
     if (_actionState != _ActionState.complete &&
         _actionState != _ActionState.hasUnmergedCommits &&
-        _actionState != _ActionState.needsForce) {
+        _actionState != _ActionState.needsForce &&
+        _actionState != _ActionState.failed) {
       buttons.addAll([
         const Spacer(),
         TextButton(
