@@ -1,0 +1,170 @@
+name: Build Desktop Releases
+
+on:
+  # Manual trigger from GitHub UI
+  workflow_dispatch:
+  # Or trigger on version tags
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Build Windows release
+        working-directory: frontend
+        run: flutter build windows --release
+
+      - name: Create MSIX installer
+        working-directory: frontend
+        run: dart run msix:create --build-windows false
+
+      - name: Create ZIP archive (portable)
+        run: |
+          Compress-Archive -Path frontend/build/windows/x64/runner/Release/* -DestinationPath cc-insights-windows-portable.zip
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: cc-insights-windows-portable
+          path: cc-insights-windows-portable.zip
+          retention-days: 90
+
+      - name: Upload MSIX installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cc-insights-windows-installer
+          path: frontend/build/windows/x64/installer/*.msix
+          retention-days: 90
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Build Linux release
+        working-directory: frontend
+        run: flutter build linux --release
+
+      - name: Create tarball
+        run: |
+          cd frontend/build/linux/x64/release
+          tar -czvf ../../../../../cc-insights-linux-x64.tar.gz bundle
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: cc-insights-linux-tarball
+          path: cc-insights-linux-x64.tar.gz
+          retention-days: 90
+
+      - name: Install AppImage tools
+        run: |
+          sudo apt-get install -y libfuse2
+          sudo wget -O /usr/local/bin/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+
+      - name: Create AppImage structure
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p AppDir/usr/share/applications
+
+          # Copy the bundle
+          cp -r frontend/build/linux/x64/release/bundle/* AppDir/usr/bin/
+
+          # Copy icon
+          cp frontend/linux/icons/app_icon.png AppDir/usr/share/icons/hicolor/256x256/apps/cc-insights.png
+          cp frontend/linux/icons/app_icon.png AppDir/cc-insights.png
+
+          # Create desktop entry
+          cat > AppDir/cc-insights.desktop << 'EOF'
+          [Desktop Entry]
+          Name=CC-Insights
+          Comment=GUI control plane for coordinating Claude agents
+          Exec=cc_insights_v2
+          Icon=cc-insights
+          Type=Application
+          Categories=Development;
+          Terminal=false
+          EOF
+
+          cp AppDir/cc-insights.desktop AppDir/usr/share/applications/
+
+          # Create AppRun script
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/bin/lib:${LD_LIBRARY_PATH}"
+          exec "${HERE}/usr/bin/cc_insights_v2" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+      - name: Build AppImage
+        run: |
+          appimagetool AppDir cc-insights-linux-x64.AppImage
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: cc-insights-linux-appimage
+          path: cc-insights-linux-x64.AppImage
+          retention-days: 90
+
+  # Create GitHub Release when all builds complete
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/cc-insights-windows-portable/cc-insights-windows-portable.zip
+            artifacts/cc-insights-windows-installer/*.msix
+            artifacts/cc-insights-linux-tarball/cc-insights-linux-x64.tar.gz
+            artifacts/cc-insights-linux-appimage/cc-insights-linux-x64.AppImage
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
