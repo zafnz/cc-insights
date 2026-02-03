@@ -136,7 +136,7 @@ jobs:
 
       - name: Build AppImage
         run: |
-          appimagetool AppDir cc-insights-linux-x64.AppImage
+          ARCH=x86_64 appimagetool AppDir cc-insights-linux-x64.AppImage
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
