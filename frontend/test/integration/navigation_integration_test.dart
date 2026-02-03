@@ -120,6 +120,7 @@ void main() {
       worktreeWatcher = WorktreeWatcherService(
         gitService: gitService,
         project: project,
+        enablePeriodicPolling: false,
       );
 
       selectionState = resources.track(SelectionState(project));

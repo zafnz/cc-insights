@@ -15,25 +15,36 @@ import 'git_service.dart';
 /// throttle interval before polling git status, ensuring we don't poll more
 /// than once every [pollInterval].
 class WorktreeWatcherService extends ChangeNotifier {
-  /// Minimum interval between git status polls.
+  /// Minimum interval between git status polls triggered by filesystem events.
   static const pollInterval = Duration(seconds: 10);
+
+  /// Interval for periodic background polling (catches changes not visible
+  /// to the filesystem watcher, e.g. `git fetch`).
+  static const periodicInterval = Duration(seconds: 30);
 
   final GitService _gitService;
   final ProjectState _project;
+  final bool _enablePeriodicPolling;
 
   WorktreeState? _currentWorktree;
   StreamSubscription<FileSystemEvent>? _watcherSubscription;
   Timer? _pollTimer;
+  Timer? _periodicTimer;
   DateTime? _lastPollTime;
   bool _pollPending = false;
   bool _disposed = false;
 
   /// Creates a [WorktreeWatcherService] with the given dependencies.
+  ///
+  /// Set [enablePeriodicPolling] to false to disable the background timer
+  /// (useful in tests to avoid interfering with pumpAndSettle).
   WorktreeWatcherService({
     required GitService gitService,
     required ProjectState project,
+    bool enablePeriodicPolling = true,
   })  : _gitService = gitService,
-        _project = project;
+        _project = project,
+        _enablePeriodicPolling = enablePeriodicPolling;
 
   /// The worktree currently being watched.
   WorktreeState? get currentWorktree => _currentWorktree;
@@ -54,6 +65,11 @@ class WorktreeWatcherService extends ChangeNotifier {
     // Start filesystem watcher
     _startWatcher(worktree.data.worktreeRoot);
 
+    // Start periodic background polling
+    if (_enablePeriodicPolling) {
+      _startPeriodicPolling();
+    }
+
     // Trigger immediate poll
     _pollGitStatus();
   }
@@ -64,8 +80,21 @@ class WorktreeWatcherService extends ChangeNotifier {
     _watcherSubscription = null;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
     _currentWorktree = null;
     _pollPending = false;
+  }
+
+  /// Starts a repeating timer that polls git status every [periodicInterval].
+  ///
+  /// This catches changes that don't trigger filesystem events, such as
+  /// `git fetch` updating remote tracking refs inside `.git/`.
+  void _startPeriodicPolling() {
+    _periodicTimer?.cancel();
+    _periodicTimer = Timer.periodic(periodicInterval, (_) {
+      _pollGitStatus();
+    });
   }
 
   /// Starts the filesystem watcher for the given path.

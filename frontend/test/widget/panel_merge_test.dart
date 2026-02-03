@@ -76,6 +76,7 @@ void main() {
       worktreeWatcher = WorktreeWatcherService(
         gitService: gitService,
         project: project,
+        enablePeriodicPolling: false,
       );
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(
