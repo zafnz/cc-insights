@@ -1,0 +1,51 @@
+name: Update Homebrew Cask
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-cask:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get version and SHA256
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Download the macOS zip from the release and compute SHA256
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "cc-insights-macos.zip" \
+            --dir .
+          SHA256=$(sha256sum cc-insights-macos.zip | awk '{print $1}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: zafnz/homebrew-cc-insights
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update cask version and sha256
+        run: |
+          cd homebrew-tap/Casks
+          sed -i 's/^  version ".*"/  version "${{ steps.release.outputs.version }}"/' cc-insights.rb
+          sed -i 's/^  sha256 ".*"/  sha256 "${{ steps.release.outputs.sha256 }}"/' cc-insights.rb
+          echo "Updated cask:"
+          head -5 cc-insights.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/cc-insights.rb
+          git commit -m "Update cc-insights to ${{ steps.release.outputs.version }}"
+          git push
