@@ -161,7 +161,7 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -169,6 +169,5 @@ jobs:
             artifacts/cc-insights-windows-installer/*.msix
             artifacts/cc-insights-linux-tarball/cc-insights-linux-x64.tar.gz
             artifacts/cc-insights-linux-appimage/cc-insights-linux-x64.AppImage
-          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
