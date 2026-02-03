@@ -757,6 +757,161 @@ void main() {
       });
     });
 
+    group('Task tool result rendering', () {
+      testWidgets('shows Task and Result section headers', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Task',
+          toolInput: {
+            'description': 'Explore codebase',
+            'prompt': 'Find the main entry point',
+            'subagent_type': 'Explore',
+          },
+          result: {
+            'status': 'completed',
+            'prompt': 'Find the main entry point',
+            'agentId': 'abc123',
+            'content': [
+              {'type': 'text', 'text': 'The main entry point is in lib/main.dart'},
+            ],
+            'totalDurationMs': 5000,
+            'totalTokens': 1000,
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // 'Task' appears in header and as section divider
+        expect(find.text('Task'), findsNWidgets(2));
+        expect(find.text('Result'), findsOneWidget);
+      });
+
+      testWidgets('shows prompt text in Task section', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Task',
+          toolInput: {
+            'description': 'Explore codebase',
+            'prompt': 'Find the main entry point',
+            'subagent_type': 'Explore',
+          },
+          result: {
+            'status': 'completed',
+            'prompt': 'Find the main entry point',
+            'agentId': 'abc123',
+            'content': [
+              {'type': 'text', 'text': 'Found it in lib/main.dart'},
+            ],
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Prompt text should be displayed
+        expect(
+          find.textContaining('Find the main entry point'),
+          findsWidgets,
+        );
+      });
+
+      testWidgets('shows result content as markdown', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Task',
+          toolInput: {
+            'description': 'Analyze code',
+            'prompt': 'Check for issues',
+            'subagent_type': 'Explore',
+          },
+          result: {
+            'status': 'completed',
+            'prompt': 'Check for issues',
+            'agentId': 'def456',
+            'content': [
+              {'type': 'text', 'text': 'Found it in lib/main.dart'},
+            ],
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Result content should be displayed
+        expect(
+          find.textContaining('Found it in lib/main.dart'),
+          findsWidgets,
+        );
+      });
+
+      testWidgets('does not show raw JSON metadata fields',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Task',
+          toolInput: {
+            'description': 'Run task',
+            'prompt': 'Do something',
+            'subagent_type': 'Explore',
+          },
+          result: {
+            'status': 'completed',
+            'prompt': 'Do something',
+            'agentId': 'ghi789',
+            'content': [
+              {'type': 'text', 'text': 'Done'},
+            ],
+            'totalDurationMs': 3000,
+            'totalTokens': 500,
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Should NOT show raw metadata fields
+        expect(find.textContaining('totalDurationMs'), findsNothing);
+        expect(find.textContaining('totalTokens'), findsNothing);
+        expect(find.textContaining('agentId'), findsNothing);
+      });
+
+      testWidgets('falls back to default for non-map Task result',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Task',
+          toolInput: {
+            'description': 'Run task',
+            'prompt': 'Do something',
+            'subagent_type': 'Explore',
+          },
+          result: 'plain string result',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Falls back to default rendering with Result: label
+        expect(find.text('Result:'), findsOneWidget);
+      });
+    });
+
     group('Card structure', () {
       testWidgets('renders as a Card widget', (tester) async {
         final entry = createToolEntry(

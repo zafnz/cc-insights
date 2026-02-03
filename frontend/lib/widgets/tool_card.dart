@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/output_entry.dart';
@@ -84,6 +85,26 @@ class _ToolCardState extends State<ToolCard> {
                       fontSize: 13,
                     ),
                   ),
+                  if (entry.toolName == 'Task') ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        entry.toolInput['subagent_type'] as String? ?? '',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildToolSummaryWidget(context, entry),
@@ -113,12 +134,17 @@ class _ToolCardState extends State<ToolCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildToolInput(
-                    context,
-                    entry.toolName,
-                    entry.toolInput,
-                    entry: entry,
-                  ),
+                  // Skip input widget for Task with structured result
+                  // (the _TaskResultWidget already shows the prompt)
+                  if (!(entry.toolName == 'Task' &&
+                      hasResult &&
+                      entry.result is Map))
+                    _buildToolInput(
+                      context,
+                      entry.toolName,
+                      entry.toolInput,
+                      entry: entry,
+                    ),
                   if (hasResult) ...[
                     const SizedBox(height: 8),
                     _buildToolResult(context, entry),
@@ -341,6 +367,13 @@ class _ToolCardState extends State<ToolCard> {
     // Special rendering for TodoWrite
     if (entry.toolName == 'TodoWrite' && entry.result is Map) {
       return _TodoWriteResultWidget(
+        result: entry.result as Map<String, dynamic>,
+      );
+    }
+
+    // Special rendering for Task tool results
+    if (entry.toolName == 'Task' && entry.result is Map) {
+      return _TaskResultWidget(
         result: entry.result as Map<String, dynamic>,
       );
     }
@@ -862,6 +895,110 @@ class _TaskInputWidget extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Renders Task tool result with structured prompt and markdown content.
+class _TaskResultWidget extends StatelessWidget {
+  final Map<String, dynamic> result;
+
+  const _TaskResultWidget({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final monoFont = RuntimeConfig.instance.monoFontFamily;
+
+    final prompt = result['prompt'] as String? ?? '';
+    final contentBlocks = result['content'];
+    final resultText = _extractResultText(contentBlocks);
+
+    return ClickToScrollContainer(
+      maxHeight: 400,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Task section header
+          _SectionDivider(label: 'Task'),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: SelectableText(
+              prompt,
+              style: GoogleFonts.getFont(
+                monoFont,
+                fontSize: 11,
+                color: colorScheme.onSurface,
+              ),
+            ),
+          ),
+          // Result section header
+          if (resultText.isNotEmpty) ...[
+            _SectionDivider(label: 'Result'),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: SelectionArea(
+                child: GptMarkdown(
+                  resultText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurface,
+                  ),
+                  onLinkTap: (url, title) {
+                    launchUrl(Uri.parse(url));
+                  },
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _extractResultText(dynamic contentBlocks) {
+    if (contentBlocks is List) {
+      final texts = <String>[];
+      for (final item in contentBlocks) {
+        if (item is Map && item['type'] == 'text') {
+          final text = item['text'] as String?;
+          if (text != null) texts.add(text);
+        }
+      }
+      return texts.join('\n\n');
+    }
+    if (contentBlocks is String) return contentBlocks;
+    return '';
+  }
+}
+
+/// Section divider header used within Task result widget.
+class _SectionDivider extends StatelessWidget {
+  final String label;
+
+  const _SectionDivider({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: colorScheme.onSurface.withValues(alpha: 0.7),
+        ),
+      ),
     );
   }
 }
