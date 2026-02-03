@@ -3,15 +3,15 @@
 Yet another Claude Code coordinater desktop GUI application.
 
 ## Whats different this time?
+<img align=right width="500" height="458" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
 
-- Worktrees are the first class and primary method of working (though you can just do multiple chats if you like pain)
-- Designed specifically for Vibe coding, your almost exclusive focus is on Claude and what it is doing. 
+- **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
+- Designed specifically for **Vibe coding**, your almost exclusive focus is on Claude and what it is doing. 
 - **FULL** context tracking, cost tracking, token reporting. You get to see way more!
-- See exactly what subagents are doing (each agent gets its own window, or you can have them integrated)
+- See exactly what **subagents** are doing (each agent gets its own window, or you can have them integrated)
 - Works with your **existing Claude subscription**, uses authorised SDK so won't be blocked by Anthropic.
 - This program does not require subscription or an account beyond what Claude requires. 
 
-<img style="float: right;" width="600" height="498" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
 
 ## More features
 
@@ -23,6 +23,32 @@ Yet another Claude Code coordinater desktop GUI application.
 - **Context management** - Continiously keep an eye on context usage, so you can compact or clear when you want, and not be surprised by Claude.
 - **Cost tracking** - Monitor token usage and costs per session
 
+<table>
+  <tr>
+     <td>Token cost tracking</td>
+     <td>Context tracking</td>
+    <td>Context output</td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <img width="180" height="252" alt="token-cost-tracking" src="https://github.com/user-attachments/assets/c1ed42e4-606c-418b-bbf3-20b1c6f27515" />
+    </td>
+    <td valign="top">
+      <img width="200" height="171" alt="context-tracking" src="https://github.com/user-attachments/assets/a90d483a-5d5c-4508-8b08-3fc9de8335f2" />
+    </td>
+    <td valign="top">
+      <img width="200" height="193" alt="Screenshot 2026-02-03 at 16 59 33" src="https://github.com/user-attachments/assets/735f3c86-ad83-43cb-ab07-70af5ce97458" />
+    </td>
+    
+  </tr>
+</table>
+
+## 30 second HOWTO
+
+Open up the app, either from whatever menu you have (Start Menu/App menu/etc) or from a terminal as `cc-insights`. Select a git repo. You can immediately start chatting in the middle. When you're ready to work on a feature branch, click "New Worktree" on the top left and everything you develop in there will not interfere with your main branch until you are ready. You can also wireup the Run/Test action buttons by right clicking on them so you can run your app from the worktree direct.
+
+When you are ready to merge your feature in you can use standard git tools, or the UI to commit all changes, rebase onto main, and then merge into main. Super easy, barely an inconvienence. 
+
 ## Installation
 
 Note: This is still in very early development, if you find something doesn't work PLEASE file a github issue ticket.
@@ -33,6 +59,21 @@ brew tap zafnz/cc-insights
 brew install --cask cc-insights
 ```
 
+## Feature readiness
+
+This is in serious pre-alpha release, it's only for those who really want to see what is going on, lots of features aren't actually there or barely work:
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Create git worktree | ✅ | |
+| Delete git worktree | ✅ | |
+| Commit all | ✅ | |
+| ⤵️ Rebase on main | ❌ | Not yet there |
+| 🔁 Merge main into branch | ❌ | Needs merge resolution |
+| 🧙 Merge resolution wizard | ❌ | |
+| ⚙️ Settings Screen | ❌ | |
+| 📁 File Manager | ✅ | Basic view only |
+| Session Resume | ✅ | Full automatic resume of chat session |
+| Claude Dart SDK | ✅ | Can talk direct to claude cli |
 
 
 ## Proudly Self Hoisted
