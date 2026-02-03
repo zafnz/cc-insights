@@ -8,6 +8,16 @@ import '../services/persistence_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 
+/// Keys for testing CreateWorktreePanel widgets.
+class CreateWorktreePanelKeys {
+  CreateWorktreePanelKeys._();
+
+  static const branchField = Key('create_worktree_branch_field');
+  static const rootField = Key('create_worktree_root_field');
+  static const createButton = Key('create_worktree_create_button');
+  static const cancelButton = Key('create_worktree_cancel_button');
+}
+
 /// Panel for creating a new git worktree.
 ///
 /// Displays a form with:
@@ -727,11 +737,13 @@ class _ActionBar extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         TextButton(
+          key: CreateWorktreePanelKeys.cancelButton,
           onPressed: isCreating ? null : onCancel,
           child: const Text('Cancel'),
         ),
         const SizedBox(width: 12),
         FilledButton.icon(
+          key: CreateWorktreePanelKeys.createButton,
           onPressed: isCreating ? null : onCreate,
           icon: isCreating
               ? const SizedBox(
