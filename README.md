@@ -2,10 +2,6 @@
 
 Yet another Claude Code coordinater desktop GUI application.
 
-## WARNING
-
-This project is still deeeep in development, the only way to run it is clone the repo, this is in PoC stage. 
-
 ## Whats different this time?
 
 - Worktrees are the first class and primary method of working (though you can just do multiple chats if you like pain)
@@ -25,9 +21,27 @@ This project is still deeeep in development, the only way to run it is clone the
 - **Context management** - Continiously keep an eye on context usage, so you can compact or clear when you want, and not be surprised by Claude.
 - **Cost tracking** - Monitor token usage and costs per session
 
+## Installation
+
+Note: This is still in very early development, if you find something doesn't work PLEASE file a github issue ticket.
+
+**MacOS**
+```bash
+brew tap zafnz/cc-insights
+brew install --cask cc-insights
+```
+
+
+
 ## Proudly Self Hoisted
 
-Only the first day or so involved running the claude cli. As soon as a functioning window was established ALL of the development was done using itself. Whats more is this app is entirely vibe coded. I have made zero code changes by hand. It probablt show, I'm good and many languages, Dart isn't one of them, but regardless this app works well enough to build itself.
+Only the first day or so involved running the claude cli. As soon as a functioning window was established ALL of the development was done using itself. What's more is this app is entirely vibe coded. I have made zero code changes by hand. It probably shows -- I'm good and many languages, but Dart isn't one of them.
+
+### Development methodology 
+
+As noted this application was entirely vibe coded and done using this app from very early days. Bugfixes are done with a new chat window, but large feature work has a more indepth process:
+
+#### Bigger features
 
 The majority of the large feature work was done with a multi agent approach, telling one chat it is an architect and getting the plan developed, telling another it is the project planner and dividing all the work into a detaioed plan broken down into discrete chunks, specifying goals. 
 
@@ -51,41 +65,17 @@ And once the merge assist was working it was easy.
 I hope you too can use Claude to its maximum potential 
 (Btw -- I might be adding a new backend soon).
 
-## Prerequisites
+
+
+## Development
+
+If you wish to contribute this section is for you
+
+### Prerequisites
 
 - **Flutter 3.10+**
 - **Claude CLI** - Install with `npm install -g @anthropic-ai/claude-code` or via your package manager
 - **Claude account OR Anthropic API key** - As long as the `claude` CLI works for you, CC-Insights will work for you
-
-## Installation
-
-In all cases if you are using your Claude Plan (eg Pro) you need to have the CLI installed and logged in at least once. 
-
-### MacOS 
-
-**COMING SOON**
-(This isn't yet done, this is pre-alpha release)
-```bash
-brew install cc-insights
-```
-
-### Linux 
-
-TBA
-
-### Windows
-
-TBA
-
-## Usage
-```
-cc-insights [project_directory]
-```
-
-
-## Troubleshooting
-
-## Developer Setup
 
 ### Architecture
 
