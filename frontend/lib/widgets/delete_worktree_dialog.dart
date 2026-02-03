@@ -10,10 +10,12 @@ class DeleteWorktreeDialogKeys {
   DeleteWorktreeDialogKeys._();
 
   static const dialog = Key('delete_worktree_dialog');
-  static const progressIndicator = Key('delete_worktree_progress');
-  static const errorMessage = Key('delete_worktree_error');
+  static const logList = Key('delete_worktree_log_list');
   static const cancelButton = Key('delete_worktree_cancel');
   static const deleteButton = Key('delete_worktree_delete');
+  static const discardButton = Key('delete_worktree_discard');
+  static const commitButton = Key('delete_worktree_commit');
+  static const forceDeleteButton = Key('delete_worktree_force_delete');
 }
 
 /// Result of the delete worktree operation.
@@ -59,7 +61,74 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
   return result ?? DeleteWorktreeResult.cancelled;
 }
 
-/// Dialog for deleting a worktree with confirmation steps.
+/// Status of a log entry.
+enum LogEntryStatus {
+  /// Operation is currently running.
+  running,
+
+  /// Operation completed successfully.
+  success,
+
+  /// Operation completed with a warning.
+  warning,
+
+  /// Operation failed with an error.
+  error,
+}
+
+/// A single log entry in the delete worktree dialog.
+class LogEntry {
+  final String message;
+  final LogEntryStatus status;
+  final String? detail;
+
+  const LogEntry({
+    required this.message,
+    required this.status,
+    this.detail,
+  });
+
+  LogEntry copyWith({
+    String? message,
+    LogEntryStatus? status,
+    String? detail,
+  }) {
+    return LogEntry(
+      message: message ?? this.message,
+      status: status ?? this.status,
+      detail: detail ?? this.detail,
+    );
+  }
+}
+
+/// Current action state of the dialog.
+enum _ActionState {
+  /// Initial state, checking worktree status.
+  checking,
+
+  /// Waiting for user to handle uncommitted changes.
+  waitingUncommitted,
+
+  /// Processing (stashing, fetching, checking merge status).
+  processing,
+
+  /// Ready to delete worktree.
+  readyToDelete,
+
+  /// Deleting worktree.
+  deleting,
+
+  /// Deletion failed, needs force.
+  needsForce,
+
+  /// Commit dialog is open.
+  committing,
+
+  /// Deletion complete.
+  complete,
+}
+
+/// Dialog for deleting a worktree with a running log of operations.
 class DeleteWorktreeDialog extends StatefulWidget {
   const DeleteWorktreeDialog({
     super.key,
@@ -84,106 +153,124 @@ class DeleteWorktreeDialog extends StatefulWidget {
   State<DeleteWorktreeDialog> createState() => _DeleteWorktreeDialogState();
 }
 
-enum _DialogStep {
-  checkingStatus,
-  promptUncommittedChanges,
-  commitInProgress,
-  checkingMergeStatus,
-  promptUnmergedBranch,
-  deleting,
-  promptForceDelete,
-  complete,
-}
-
 class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
-  _DialogStep _step = _DialogStep.checkingStatus;
-  String? _error;
-  bool _isProcessing = false;
-  GitStatus? _gitStatus;
+  final List<LogEntry> _log = [];
+  final ScrollController _scrollController = ScrollController();
+  _ActionState _actionState = _ActionState.checking;
   String? _mainBranch;
+  int _uncommittedCount = 0;
+  String? _forceDeleteError;
 
   @override
   void initState() {
     super.initState();
-    _checkStatus();
+    _startWorkflow();
   }
 
-  Future<void> _checkStatus() async {
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _addLog(String message, LogEntryStatus status, {String? detail}) {
     setState(() {
-      _step = _DialogStep.checkingStatus;
-      _isProcessing = true;
-      _error = null;
+      _log.add(LogEntry(message: message, status: status, detail: detail));
     });
+    _scrollToBottom();
+  }
+
+  void _updateLastLog(LogEntryStatus status, {String? message, String? detail}) {
+    if (_log.isEmpty) return;
+    setState(() {
+      _log[_log.length - 1] = _log.last.copyWith(
+        status: status,
+        message: message,
+        detail: detail,
+      );
+    });
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _startWorkflow() async {
+    await _checkUncommittedChanges();
+  }
+
+  Future<void> _checkUncommittedChanges() async {
+    _addLog('Checking for uncommitted changes...', LogEntryStatus.running);
 
     try {
-      // Check for uncommitted changes
-      _gitStatus = await widget.gitService.getStatus(widget.worktreePath);
+      final status = await widget.gitService.getStatus(widget.worktreePath);
 
       if (!mounted) return;
 
-      final hasUncommitted =
-          _gitStatus!.uncommittedFiles > 0 || _gitStatus!.staged > 0;
+      _uncommittedCount = status.uncommittedFiles + status.staged;
 
-      if (hasUncommitted) {
+      if (_uncommittedCount > 0) {
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: 'Found $_uncommittedCount uncommitted '
+              '${_uncommittedCount == 1 ? 'file' : 'files'}',
+        );
         setState(() {
-          _step = _DialogStep.promptUncommittedChanges;
-          _isProcessing = false;
+          _actionState = _ActionState.waitingUncommitted;
         });
       } else {
-        // No uncommitted changes, proceed to merge check
-        await _checkMergeStatus();
+        _updateLastLog(LogEntryStatus.success, message: 'Worktree is clean');
+        await _continueAfterUncommitted();
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = 'Failed to check worktree status: $e';
-        _isProcessing = false;
-      });
+      _updateLastLog(
+        LogEntryStatus.error,
+        message: 'Failed to check status',
+        detail: e.toString(),
+      );
     }
   }
 
-  Future<void> _handleUncommittedAction(String action) async {
-    switch (action) {
-      case 'discard':
-        await _discardChanges();
-        break;
-      case 'commit':
-        await _showCommitDialog();
-        break;
-      case 'cancel':
-        if (mounted) {
-          Navigator.of(context).pop(DeleteWorktreeResult.cancelled);
-        }
-        break;
-    }
-  }
-
-  Future<void> _discardChanges() async {
+  Future<void> _handleDiscard() async {
     setState(() {
-      _isProcessing = true;
-      _error = null;
+      _actionState = _ActionState.processing;
     });
 
+    _addLog('Stashing changes for recovery...', LogEntryStatus.running);
+
     try {
-      // Stash changes so they can be recovered if needed
       await widget.gitService.stash(widget.worktreePath);
 
       if (!mounted) return;
 
-      // Proceed to merge check
-      await _checkMergeStatus();
+      _updateLastLog(
+        LogEntryStatus.success,
+        message: 'Changes stashed (recover with `git stash pop`)',
+      );
+
+      await _continueAfterUncommitted();
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = 'Failed to stash changes: $e';
-        _isProcessing = false;
-      });
+      _updateLastLog(
+        LogEntryStatus.error,
+        message: 'Failed to stash changes',
+        detail: e.toString(),
+      );
     }
   }
 
-  Future<void> _showCommitDialog() async {
+  Future<void> _handleCommit() async {
     setState(() {
-      _step = _DialogStep.commitInProgress;
+      _actionState = _ActionState.committing;
     });
 
     final committed = await showCommitDialog(
@@ -196,42 +283,135 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     if (!mounted) return;
 
     if (committed) {
-      // Re-check status after commit
-      await _checkStatus();
+      _addLog('Changes committed', LogEntryStatus.success);
+      await _continueAfterUncommitted();
     } else {
-      // User cancelled commit, go back to uncommitted prompt
+      // User cancelled commit, go back to waiting
       setState(() {
-        _step = _DialogStep.promptUncommittedChanges;
+        _actionState = _ActionState.waitingUncommitted;
       });
     }
   }
 
-  Future<void> _checkMergeStatus() async {
+  Future<void> _continueAfterUncommitted() async {
     setState(() {
-      _step = _DialogStep.checkingMergeStatus;
-      _isProcessing = true;
-      _error = null;
+      _actionState = _ActionState.processing;
     });
 
+    // Fetch from origin
+    await _fetchOrigin();
+
+    if (!mounted) return;
+
+    // Get main branch
+    await _detectMainBranch();
+
+    if (!mounted) return;
+
+    // Check commits ahead
+    await _checkCommitsAhead();
+
+    if (!mounted) return;
+
+    // Ready to delete
+    _addLog('Ready to remove worktree', LogEntryStatus.success);
+    setState(() {
+      _actionState = _ActionState.readyToDelete;
+    });
+  }
+
+  Future<void> _fetchOrigin() async {
+    _addLog('Fetching from origin...', LogEntryStatus.running);
+
     try {
-      // Fetch to ensure we have latest remote state
       await widget.gitService.fetch(widget.worktreePath);
 
       if (!mounted) return;
 
-      // Find the main branch
+      _updateLastLog(LogEntryStatus.success, message: 'Fetched latest from origin');
+    } catch (e) {
+      if (!mounted) return;
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Could not fetch (continuing anyway)',
+        detail: e.toString(),
+      );
+    }
+  }
+
+  Future<void> _detectMainBranch() async {
+    _addLog('Detecting main branch...', LogEntryStatus.running);
+
+    try {
       _mainBranch = await widget.gitService.getMainBranch(widget.repoRoot);
 
       if (!mounted) return;
 
-      if (_mainBranch == null) {
-        // No main branch found, proceed with deletion anyway
-        await _proceedWithDeletion();
+      if (_mainBranch != null) {
+        _updateLastLog(
+          LogEntryStatus.success,
+          message: "Main branch is '$_mainBranch'",
+        );
+      } else {
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: 'Could not detect main branch',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Could not detect main branch',
+        detail: e.toString(),
+      );
+    }
+  }
+
+  Future<void> _checkCommitsAhead() async {
+    if (_mainBranch == null) return;
+
+    _addLog('Checking commits ahead of $_mainBranch...', LogEntryStatus.running);
+
+    try {
+      final commits = await widget.gitService.getCommitsAhead(
+        widget.worktreePath,
+        _mainBranch!,
+      );
+
+      if (!mounted) return;
+
+      if (commits.isEmpty) {
+        _updateLastLog(
+          LogEntryStatus.success,
+          message: 'Branch has no new commits',
+        );
         return;
       }
 
-      // Check if branch is merged into main
-      final isMerged = await widget.gitService.isBranchMerged(
+      _updateLastLog(
+        LogEntryStatus.success,
+        message: 'Branch is ${commits.length} '
+            '${commits.length == 1 ? 'commit' : 'commits'} ahead of $_mainBranch',
+      );
+
+      // Check if commits are already on main (squash merged)
+      await _checkCommitsOnMain(commits.length);
+    } catch (e) {
+      if (!mounted) return;
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Could not check commits',
+        detail: e.toString(),
+      );
+    }
+  }
+
+  Future<void> _checkCommitsOnMain(int totalCommits) async {
+    _addLog('Checking if commits are already on $_mainBranch...', LogEntryStatus.running);
+
+    try {
+      final unmerged = await widget.gitService.getUnmergedCommits(
         widget.worktreePath,
         widget.branch,
         _mainBranch!,
@@ -239,35 +419,40 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
 
       if (!mounted) return;
 
-      if (isMerged) {
-        // Branch is merged, safe to delete
-        await _proceedWithDeletion();
+      if (unmerged.isEmpty) {
+        _updateLastLog(
+          LogEntryStatus.success,
+          message: 'All commits appear to be on $_mainBranch',
+        );
+      } else if (unmerged.length < totalCommits) {
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: '${unmerged.length} of $totalCommits commits not yet on $_mainBranch',
+        );
       } else {
-        // Branch not merged, prompt user
-        setState(() {
-          _step = _DialogStep.promptUnmergedBranch;
-          _isProcessing = false;
-        });
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: '${unmerged.length} commits not yet on $_mainBranch',
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      // If merge-base check fails, just proceed with deletion but warn user
-      setState(() {
-        _step = _DialogStep.promptUnmergedBranch;
-        _isProcessing = false;
-      });
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Could not verify commits on $_mainBranch',
+        detail: e.toString(),
+      );
     }
   }
 
-  Future<void> _proceedWithDeletion({bool force = false}) async {
+  Future<void> _handleDelete({bool force = false}) async {
     setState(() {
-      _step = _DialogStep.deleting;
-      _isProcessing = true;
-      _error = null;
+      _actionState = _ActionState.deleting;
     });
 
+    _addLog('Removing worktree...', LogEntryStatus.running);
+
     try {
-      // Remove the worktree via git
       await widget.gitService.removeWorktree(
         repoRoot: widget.repoRoot,
         worktreePath: widget.worktreePath,
@@ -276,16 +461,42 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
 
       if (!mounted) return;
 
+      _updateLastLog(LogEntryStatus.success, message: 'Worktree removed');
+
       // Remove from persistence
-      await widget.persistenceService.removeWorktreeFromIndex(
-        projectRoot: widget.repoRoot,
-        worktreePath: widget.worktreePath,
-        projectId: widget.projectId,
-      );
+      _addLog('Cleaning up...', LogEntryStatus.running);
 
-      if (!mounted) return;
+      try {
+        await widget.persistenceService.removeWorktreeFromIndex(
+          projectRoot: widget.repoRoot,
+          worktreePath: widget.worktreePath,
+          projectId: widget.projectId,
+        );
 
-      Navigator.of(context).pop(DeleteWorktreeResult.deleted);
+        if (!mounted) return;
+
+        _updateLastLog(LogEntryStatus.success, message: 'Cleanup complete');
+      } catch (e) {
+        if (!mounted) return;
+
+        // Cleanup failed but worktree is deleted, continue anyway
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: 'Cleanup had issues (worktree still deleted)',
+          detail: e.toString(),
+        );
+      }
+
+      setState(() {
+        _actionState = _ActionState.complete;
+      });
+
+      // Close dialog - use post-frame callback to ensure state update is processed
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop(DeleteWorktreeResult.deleted);
+        }
+      });
     } on GitException catch (e) {
       if (!mounted) return;
 
@@ -295,23 +506,29 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           e.stderr?.contains('is dirty') == true;
 
       if (needsForce && !force) {
+        _updateLastLog(
+          LogEntryStatus.error,
+          message: 'Git reports worktree has changes',
+          detail: e.stderr ?? e.message,
+        );
+        _forceDeleteError = e.stderr ?? e.message;
         setState(() {
-          _step = _DialogStep.promptForceDelete;
-          _isProcessing = false;
-          _error = e.stderr ?? e.message;
+          _actionState = _ActionState.needsForce;
         });
       } else {
-        setState(() {
-          _error = 'Failed to remove worktree: ${e.stderr ?? e.message}';
-          _isProcessing = false;
-        });
+        _updateLastLog(
+          LogEntryStatus.error,
+          message: 'Failed to remove worktree',
+          detail: e.stderr ?? e.message,
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = 'Failed to remove worktree: $e';
-        _isProcessing = false;
-      });
+      _updateLastLog(
+        LogEntryStatus.error,
+        message: 'Failed to remove worktree',
+        detail: e.toString(),
+      );
     }
   }
 
@@ -322,8 +539,8 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     return Dialog(
       key: DeleteWorktreeDialogKeys.dialog,
       child: Container(
-        width: 450,
-        constraints: const BoxConstraints(maxHeight: 350),
+        width: 550,
+        constraints: const BoxConstraints(maxHeight: 450),
         decoration: BoxDecoration(
           color: colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
@@ -332,15 +549,9 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(colorScheme),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildContent(colorScheme),
-                ),
-              ),
+            Expanded(
+              child: _buildLogList(colorScheme),
             ),
-            if (_error != null) _buildError(colorScheme),
             _buildFooter(colorScheme),
           ],
         ),
@@ -355,440 +566,345 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         color: colorScheme.errorContainer,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.delete_outline,
-            color: colorScheme.onErrorContainer,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Delete Worktree',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+          Row(
+            children: [
+              Icon(
+                Icons.delete_outline,
                 color: colorScheme.onErrorContainer,
+                size: 20,
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Delete Worktree',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
+          _buildActionButtons(colorScheme),
         ],
       ),
     );
   }
 
-  Widget _buildContent(ColorScheme colorScheme) {
-    switch (_step) {
-      case _DialogStep.checkingStatus:
-        return _buildCheckingStatus(colorScheme);
-      case _DialogStep.promptUncommittedChanges:
-        return _buildUncommittedPrompt(colorScheme);
-      case _DialogStep.commitInProgress:
-        return _buildCommitInProgress(colorScheme);
-      case _DialogStep.checkingMergeStatus:
-        return _buildCheckingMergeStatus(colorScheme);
-      case _DialogStep.promptUnmergedBranch:
-        return _buildUnmergedPrompt(colorScheme);
-      case _DialogStep.deleting:
-        return _buildDeleting(colorScheme);
-      case _DialogStep.promptForceDelete:
-        return _buildForceDeletePrompt(colorScheme);
-      case _DialogStep.complete:
-        return _buildComplete(colorScheme);
-    }
-  }
+  Widget _buildActionButtons(ColorScheme colorScheme) {
+    final buttons = <Widget>[];
 
-  Widget _buildCheckingStatus(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(
-          key: DeleteWorktreeDialogKeys.progressIndicator,
-          color: colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Checking worktree status...',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUncommittedPrompt(ColorScheme colorScheme) {
-    final uncommittedCount =
-        (_gitStatus?.uncommittedFiles ?? 0) + (_gitStatus?.staged ?? 0);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.warning_amber, color: Colors.orange, size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Uncommitted Changes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'This worktree has $uncommittedCount uncommitted '
-          '${uncommittedCount == 1 ? 'file' : 'files'}.',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'What would you like to do?',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _isProcessing
-                    ? null
-                    : () => _handleUncommittedAction('discard'),
-                icon: const Icon(Icons.delete_sweep, size: 18),
-                label: const Text('Discard'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _isProcessing
-                    ? null
-                    : () => _handleUncommittedAction('commit'),
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text('Commit All'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Note: Discard will stash your changes for potential recovery.',
-          style: TextStyle(
-            fontSize: 11,
-            color: colorScheme.onSurfaceVariant,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommitInProgress(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(
-          key: DeleteWorktreeDialogKeys.progressIndicator,
-          color: colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Committing changes...',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCheckingMergeStatus(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(
-          key: DeleteWorktreeDialogKeys.progressIndicator,
-          color: colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Checking if branch has been merged...',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUnmergedPrompt(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.error_outline, color: Colors.orange, size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Unmerged Branch',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        RichText(
-          text: TextSpan(
-            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
-            children: [
-              const TextSpan(text: 'The branch '),
-              TextSpan(
-                text: widget.branch,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const TextSpan(text: ' may not have been merged into '),
-              TextSpan(
-                text: _mainBranch ?? 'main',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const TextSpan(text: '.'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Are you sure you want to delete this worktree? '
-          'Any unmerged commits will be lost.',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDeleting(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(
-          key: DeleteWorktreeDialogKeys.progressIndicator,
-          color: colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Removing worktree...',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildForceDeletePrompt(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.error, color: Colors.red, size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Worktree Has Changes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Git reports that the worktree still has changes:',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
-        if (_error != null)
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: colorScheme.errorContainer.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _error!,
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-                color: colorScheme.onErrorContainer,
-              ),
-            ),
-          ),
-        const SizedBox(height: 12),
-        Text(
-          'Do you want to force remove the worktree?',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildComplete(ColorScheme colorScheme) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.check_circle, color: Colors.green, size: 48),
-        const SizedBox(height: 16),
-        Text(
-          'Worktree deleted successfully.',
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildError(ColorScheme colorScheme) {
-    // Only show error bar for unexpected errors, not force-delete prompts
-    if (_step == _DialogStep.promptForceDelete) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      key: DeleteWorktreeDialogKeys.errorMessage,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: colorScheme.errorContainer,
-      child: Row(
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 16,
-            color: colorScheme.onErrorContainer,
+    switch (_actionState) {
+      case _ActionState.waitingUncommitted:
+        buttons.addAll([
+          _ActionButton(
+            key: DeleteWorktreeDialogKeys.discardButton,
+            label: 'Discard',
+            icon: Icons.delete_sweep,
+            onPressed: _handleDiscard,
+            colorScheme: colorScheme,
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _error!,
-              style: TextStyle(
-                fontSize: 12,
-                color: colorScheme.onErrorContainer,
-              ),
+          _ActionButton(
+            key: DeleteWorktreeDialogKeys.commitButton,
+            label: 'Commit All',
+            icon: Icons.check_circle_outline,
+            onPressed: _handleCommit,
+            colorScheme: colorScheme,
+          ),
+        ]);
+        break;
+
+      case _ActionState.readyToDelete:
+        buttons.add(
+          _ActionButton(
+            key: DeleteWorktreeDialogKeys.deleteButton,
+            label: 'Delete Worktree',
+            icon: Icons.delete_forever,
+            onPressed: () => _handleDelete(),
+            colorScheme: colorScheme,
+            isPrimary: true,
+          ),
+        );
+        break;
+
+      case _ActionState.needsForce:
+        buttons.add(
+          _ActionButton(
+            key: DeleteWorktreeDialogKeys.forceDeleteButton,
+            label: 'Force Delete',
+            icon: Icons.warning,
+            onPressed: () => _handleDelete(force: true),
+            colorScheme: colorScheme,
+            isPrimary: true,
+          ),
+        );
+        break;
+
+      case _ActionState.checking:
+      case _ActionState.processing:
+      case _ActionState.deleting:
+      case _ActionState.committing:
+      case _ActionState.complete:
+        // No action buttons, show processing indicator
+        buttons.add(
+          SizedBox(
+            height: 36,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.onErrorContainer,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _actionState == _ActionState.complete
+                      ? 'Complete'
+                      : 'Processing...',
+                  style: TextStyle(
+                    color: colorScheme.onErrorContainer,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.close,
-              size: 16,
-              color: colorScheme.onErrorContainer,
-            ),
-            onPressed: () => setState(() => _error = null),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+        );
+        break;
+    }
+
+    // Always add cancel button (except when complete)
+    if (_actionState != _ActionState.complete) {
+      buttons.addAll([
+        const Spacer(),
+        TextButton(
+          key: DeleteWorktreeDialogKeys.cancelButton,
+          onPressed: _actionState == _ActionState.deleting ||
+                  _actionState == _ActionState.committing
+              ? null
+              : () => Navigator.of(context).pop(DeleteWorktreeResult.cancelled),
+          style: TextButton.styleFrom(
+            foregroundColor: colorScheme.onErrorContainer,
           ),
-        ],
+          child: const Text('Cancel'),
+        ),
+      ]);
+    }
+
+    return Row(children: buttons);
+  }
+
+  Widget _buildLogList(ColorScheme colorScheme) {
+    return Container(
+      margin: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: ListView.builder(
+        key: DeleteWorktreeDialogKeys.logList,
+        controller: _scrollController,
+        padding: const EdgeInsets.all(12),
+        itemCount: _log.length,
+        itemBuilder: (context, index) {
+          final entry = _log[index];
+          return _LogEntryWidget(entry: entry, colorScheme: colorScheme);
+        },
       ),
     );
   }
 
   Widget _buildFooter(ColorScheme colorScheme) {
+    // Show note about stash recovery if we stashed
+    final hasStashed = _log.any((e) =>
+        e.message.contains('stashed') && e.status == LogEntryStatus.success);
+
+    if (!hasStashed) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: _buildFooterButtons(colorScheme),
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 14,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Stashed changes can be recovered with `git stash pop`',
+              style: TextStyle(
+                fontSize: 11,
+                color: colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single log entry widget.
+class _LogEntryWidget extends StatelessWidget {
+  const _LogEntryWidget({
+    required this.entry,
+    required this.colorScheme,
+  });
+
+  final LogEntry entry;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildIcon(),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.message,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _getTextColor(),
+                    fontWeight: entry.status == LogEntryStatus.running
+                        ? FontWeight.w500
+                        : FontWeight.normal,
+                  ),
+                ),
+                if (entry.detail != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    entry.detail!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurfaceVariant,
+                      fontFamily: 'monospace',
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  List<Widget> _buildFooterButtons(ColorScheme colorScheme) {
-    switch (_step) {
-      case _DialogStep.checkingStatus:
-      case _DialogStep.checkingMergeStatus:
-      case _DialogStep.deleting:
-      case _DialogStep.commitInProgress:
-        return [
-          TextButton(
-            key: DeleteWorktreeDialogKeys.cancelButton,
-            onPressed: null,
-            child: const Text('Cancel'),
+  Widget _buildIcon() {
+    switch (entry.status) {
+      case LogEntryStatus.running:
+        return SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: colorScheme.primary,
           ),
-        ];
-
-      case _DialogStep.promptUncommittedChanges:
-        return [
-          TextButton(
-            key: DeleteWorktreeDialogKeys.cancelButton,
-            onPressed: _isProcessing
-                ? null
-                : () => _handleUncommittedAction('cancel'),
-            child: const Text('Cancel'),
-          ),
-        ];
-
-      case _DialogStep.promptUnmergedBranch:
-        return [
-          TextButton(
-            key: DeleteWorktreeDialogKeys.cancelButton,
-            onPressed:
-                _isProcessing ? null : () => Navigator.of(context).pop(
-                  DeleteWorktreeResult.cancelled,
-                ),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 12),
-          FilledButton(
-            key: DeleteWorktreeDialogKeys.deleteButton,
-            onPressed: _isProcessing ? null : () => _proceedWithDeletion(),
-            style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.error,
-              foregroundColor: colorScheme.onError,
-            ),
-            child: const Text('Delete Anyway'),
-          ),
-        ];
-
-      case _DialogStep.promptForceDelete:
-        return [
-          TextButton(
-            key: DeleteWorktreeDialogKeys.cancelButton,
-            onPressed:
-                _isProcessing ? null : () => Navigator.of(context).pop(
-                  DeleteWorktreeResult.cancelled,
-                ),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 12),
-          FilledButton(
-            key: DeleteWorktreeDialogKeys.deleteButton,
-            onPressed:
-                _isProcessing ? null : () => _proceedWithDeletion(force: true),
-            style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.error,
-              foregroundColor: colorScheme.onError,
-            ),
-            child: const Text('Force Delete'),
-          ),
-        ];
-
-      case _DialogStep.complete:
-        return [
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(DeleteWorktreeResult.deleted),
-            child: const Text('Close'),
-          ),
-        ];
+        );
+      case LogEntryStatus.success:
+        return Icon(
+          Icons.check_circle,
+          size: 16,
+          color: Colors.green,
+        );
+      case LogEntryStatus.warning:
+        return Icon(
+          Icons.warning_amber,
+          size: 16,
+          color: Colors.orange,
+        );
+      case LogEntryStatus.error:
+        return Icon(
+          Icons.error,
+          size: 16,
+          color: Colors.red,
+        );
     }
+  }
+
+  Color _getTextColor() {
+    switch (entry.status) {
+      case LogEntryStatus.running:
+        return colorScheme.onSurface;
+      case LogEntryStatus.success:
+        return colorScheme.onSurface;
+      case LogEntryStatus.warning:
+        return Colors.orange.shade800;
+      case LogEntryStatus.error:
+        return Colors.red.shade700;
+    }
+  }
+}
+
+/// An action button in the dialog header.
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    required this.colorScheme,
+    this.isPrimary = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final ColorScheme colorScheme;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isPrimary) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+          backgroundColor: colorScheme.error,
+          foregroundColor: colorScheme.onError,
+        ),
+      );
+    }
+
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: colorScheme.onErrorContainer,
+        side: BorderSide(color: colorScheme.onErrorContainer.withValues(alpha: 0.5)),
+      ),
+    );
   }
 }

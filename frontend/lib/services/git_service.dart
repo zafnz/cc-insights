@@ -253,6 +253,29 @@ abstract class GitService {
     required String worktreePath,
     bool force = false,
   });
+
+  /// Gets commits on [branch] that aren't on [targetBranch] by patch-id.
+  ///
+  /// Uses `git cherry -v targetBranch branch` to find commits whose changes
+  /// are not yet on the target branch. This handles squash merges where
+  /// commit SHAs differ but the changes are the same.
+  ///
+  /// Returns a list of commit messages for commits NOT on target.
+  /// Empty list means all commits are on target (or branch has no new commits).
+  Future<List<String>> getUnmergedCommits(
+    String path,
+    String branch,
+    String targetBranch,
+  );
+
+  /// Gets commits on current branch that aren't on [targetBranch].
+  ///
+  /// Uses `git log targetBranch..HEAD --oneline` to list commits.
+  /// Returns a list of (sha, message) pairs.
+  Future<List<({String sha, String message})>> getCommitsAhead(
+    String path,
+    String targetBranch,
+  );
 }
 
 /// Real implementation of [GitService] that spawns git processes.
@@ -530,6 +553,69 @@ class RealGitService implements GitService {
     }
     args.add(worktreePath);
     await _runGit(args, workingDirectory: repoRoot);
+  }
+
+  @override
+  Future<List<String>> getUnmergedCommits(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    try {
+      // git cherry -v marks commits with '-' if already on target, '+' if not
+      final output = await _runGit(
+        ['cherry', '-v', targetBranch, branch],
+        workingDirectory: path,
+      );
+
+      final unmerged = <String>[];
+      for (final line in output.split('\n')) {
+        if (line.isEmpty) continue;
+        // Format: "+ sha message" or "- sha message"
+        if (line.startsWith('+ ')) {
+          // This commit is NOT on target branch
+          // Extract message (skip "+ sha ")
+          final parts = line.substring(2).split(' ');
+          if (parts.length > 1) {
+            unmerged.add(parts.sublist(1).join(' '));
+          }
+        }
+        // Lines starting with "- " are already on target, skip them
+      }
+      return unmerged;
+    } on GitException {
+      // If cherry fails, return empty (assume merged)
+      return [];
+    }
+  }
+
+  @override
+  Future<List<({String sha, String message})>> getCommitsAhead(
+    String path,
+    String targetBranch,
+  ) async {
+    try {
+      final output = await _runGit(
+        ['log', '$targetBranch..HEAD', '--oneline'],
+        workingDirectory: path,
+      );
+
+      final commits = <({String sha, String message})>[];
+      for (final line in output.split('\n')) {
+        if (line.isEmpty) continue;
+        // Format: "sha message"
+        final spaceIndex = line.indexOf(' ');
+        if (spaceIndex > 0) {
+          commits.add((
+            sha: line.substring(0, spaceIndex),
+            message: line.substring(spaceIndex + 1),
+          ));
+        }
+      }
+      return commits;
+    } on GitException {
+      return [];
+    }
   }
 }
 

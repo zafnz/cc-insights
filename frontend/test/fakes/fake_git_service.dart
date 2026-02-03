@@ -338,6 +338,35 @@ class FakeGitService implements GitService {
     }
   }
 
+  /// Map of (path, branch, targetBranch) -> unmerged commits for [getUnmergedCommits].
+  final Map<String, List<String>> unmergedCommits = {};
+
+  @override
+  Future<List<String>> getUnmergedCommits(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    final key = '$path:$branch:$targetBranch';
+    return unmergedCommits[key] ?? [];
+  }
+
+  /// Map of (path, targetBranch) -> commits ahead for [getCommitsAhead].
+  final Map<String, List<({String sha, String message})>> commitsAhead = {};
+
+  @override
+  Future<List<({String sha, String message})>> getCommitsAhead(
+    String path,
+    String targetBranch,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    final key = '$path:$targetBranch';
+    return commitsAhead[key] ?? [];
+  }
+
   // =========================================================================
   // Convenience methods for test setup
   // =========================================================================

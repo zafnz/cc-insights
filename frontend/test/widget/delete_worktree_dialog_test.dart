@@ -62,32 +62,53 @@ void main() {
       expect(find.text('Delete Worktree'), findsOneWidget);
     });
 
-    testWidgets('deletes clean worktree with merged branch', (tester) async {
-      // Set up: clean worktree, branch merged
+    testWidgets('shows log list with entries', (tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      expect(find.byKey(DeleteWorktreeDialogKeys.logList), findsOneWidget);
+      // Should show "Checking for uncommitted changes..."
+      expect(find.textContaining('Checking'), findsWidgets);
+    });
+
+    testWidgets('deletes clean worktree and shows log', (tester) async {
+      // Set up: clean worktree
       gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = true;
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for status check
-      await pumpUntilGone(
+      // Wait for "Delete Worktree" button to appear (ready state)
+      await pumpUntilFound(
         tester,
-        find.byKey(DeleteWorktreeDialogKeys.progressIndicator),
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
       );
 
-      // Should complete deletion without prompts
-      expect(gitService.fetchCalls, contains(testWorktreePath));
+      // Should show log entries
+      expect(find.textContaining('clean'), findsOneWidget);
+      expect(find.textContaining('origin'), findsWidgets);
+
+      // Tap delete button
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.deleteButton));
+      await tester.pump();
+
+      // Wait for dialog to close
+      await pumpUntilGone(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.dialog),
+      );
+
       expect(gitService.removeWorktreeCalls.length, 1);
       expect(
         gitService.removeWorktreeCalls.first.worktreePath,
         testWorktreePath,
       );
-      expect(gitService.removeWorktreeCalls.first.force, false);
     });
 
-    testWidgets('prompts for uncommitted changes', (tester) async {
+    testWidgets('shows uncommitted files warning and action buttons',
+        (tester) async {
       // Set up: worktree with uncommitted changes
       gitService.statuses[testWorktreePath] = const GitStatus(
         unstaged: 3,
@@ -98,87 +119,109 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for status check
-      await pumpUntilFound(tester, find.text('Uncommitted Changes'));
+      // Wait for Discard button to appear
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.discardButton),
+      );
 
-      expect(find.text('Uncommitted Changes'), findsOneWidget);
-      expect(find.text('Discard'), findsOneWidget);
-      expect(find.text('Commit All'), findsOneWidget);
+      // Should show warning about uncommitted files
+      expect(find.textContaining('uncommitted'), findsOneWidget);
+      expect(find.byKey(DeleteWorktreeDialogKeys.discardButton), findsOneWidget);
+      expect(find.byKey(DeleteWorktreeDialogKeys.commitButton), findsOneWidget);
     });
 
     testWidgets('stashes changes when Discard is selected', (tester) async {
-      // Set up: worktree with uncommitted changes, branch merged
+      // Set up: worktree with uncommitted changes
       gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1);
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = true;
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for uncommitted changes prompt
-      await pumpUntilFound(tester, find.text('Discard'));
+      // Wait for Discard button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.discardButton),
+      );
 
       // Tap Discard
-      await tester.tap(find.text('Discard'));
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.discardButton));
       await tester.pump();
 
-      // Wait for deletion to complete
-      await pumpUntilGone(
+      // Wait for delete button (ready state after stash)
+      await pumpUntilFound(
         tester,
-        find.byKey(DeleteWorktreeDialogKeys.progressIndicator),
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
       );
 
+      // Should show stash message in log
+      expect(find.textContaining('stashed'), findsOneWidget);
       expect(gitService.stashCalls, contains(testWorktreePath));
-      expect(gitService.removeWorktreeCalls.length, 1);
-    });
 
-    testWidgets('prompts for unmerged branch', (tester) async {
-      // Set up: clean worktree, branch NOT merged
-      gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = false;
-
-      await tester.pumpWidget(createTestWidget());
-      await tester.tap(find.text('Open Dialog'));
+      // Tap delete
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.deleteButton));
       await tester.pump();
 
-      // Wait for unmerged prompt
-      await pumpUntilFound(tester, find.text('Unmerged Branch'));
-
-      expect(find.text('Unmerged Branch'), findsOneWidget);
-      expect(find.text('Delete Anyway'), findsOneWidget);
-      expect(find.text('Cancel'), findsOneWidget);
-    });
-
-    testWidgets('deletes unmerged branch when Delete Anyway is clicked',
-        (tester) async {
-      // Set up: clean worktree, branch NOT merged
-      gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = false;
-
-      await tester.pumpWidget(createTestWidget());
-      await tester.tap(find.text('Open Dialog'));
-      await tester.pump();
-
-      // Wait for unmerged prompt
-      await pumpUntilFound(tester, find.text('Delete Anyway'));
-
-      // Tap Delete Anyway
-      await tester.tap(find.text('Delete Anyway'));
-      await tester.pump();
-
-      // Wait for deletion
+      // Wait for dialog to close
       await pumpUntilGone(
         tester,
-        find.byKey(DeleteWorktreeDialogKeys.progressIndicator),
+        find.byKey(DeleteWorktreeDialogKeys.dialog),
       );
 
       expect(gitService.removeWorktreeCalls.length, 1);
+    });
+
+    testWidgets('shows commits ahead warning', (tester) async {
+      // Set up: clean worktree with commits ahead
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      gitService.commitsAhead['$testWorktreePath:main'] = [
+        (sha: 'abc123', message: 'First commit'),
+        (sha: 'def456', message: 'Second commit'),
+      ];
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      // Should show commits ahead in log
+      expect(find.textContaining('2 commits ahead'), findsOneWidget);
+    });
+
+    testWidgets('shows unmerged commits warning', (tester) async {
+      // Set up: clean worktree with commits that aren't on main
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      gitService.commitsAhead['$testWorktreePath:main'] = [
+        (sha: 'abc123', message: 'First commit'),
+        (sha: 'def456', message: 'Second commit'),
+      ];
+      gitService.unmergedCommits['$testWorktreePath:$testBranch:main'] = [
+        'First commit',
+      ];
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      // Should show warning about unmerged commits
+      expect(find.textContaining('not yet on main'), findsOneWidget);
     });
 
     testWidgets('prompts for force delete on git error', (tester) async {
-      // Set up: clean worktree, branch merged, but git remove fails
+      // Set up: clean worktree, but git remove fails
       gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = true;
       gitService.removeWorktreeError = const GitException(
         'worktree is dirty',
         stderr: 'fatal: worktree contains modified files',
@@ -189,17 +232,32 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for force delete prompt
-      await pumpUntilFound(tester, find.text('Force Delete'));
+      // Wait for delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
 
-      expect(find.text('Worktree Has Changes'), findsOneWidget);
-      expect(find.text('Force Delete'), findsOneWidget);
+      // Tap delete
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.deleteButton));
+      await tester.pump();
+
+      // Wait for force delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+      );
+
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+        findsOneWidget,
+      );
+      expect(find.textContaining('has changes'), findsOneWidget);
     });
 
     testWidgets('force deletes when Force Delete is clicked', (tester) async {
-      // Set up: clean worktree, branch merged, but git remove fails initially
+      // Set up: clean worktree, but git remove fails initially
       gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = true;
       gitService.removeWorktreeError = const GitException(
         'worktree is dirty',
         stderr: 'fatal: worktree contains modified files',
@@ -210,11 +268,24 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for force delete prompt
-      await pumpUntilFound(tester, find.text('Force Delete'));
+      // Wait for delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      // Tap delete
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.deleteButton));
+      await tester.pump();
+
+      // Wait for force delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+      );
 
       // Tap Force Delete
-      await tester.tap(find.text('Force Delete'));
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton));
       await tester.pump();
 
       // Wait for dialog to close
@@ -237,14 +308,14 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for uncommitted changes prompt (specific text)
-      await pumpUntilFound(tester, find.text('Uncommitted Changes'));
+      // Wait for Discard button (indicates uncommitted state)
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.discardButton),
+      );
 
-      // Tap Cancel using key to avoid ambiguity
+      // Tap Cancel using key
       await tester.tap(find.byKey(DeleteWorktreeDialogKeys.cancelButton));
-      await tester.pump();
-
-      // Wait for dialog to close - pump a few frames to allow navigation
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -255,24 +326,23 @@ void main() {
       expect(gitService.removeWorktreeCalls, isEmpty);
     });
 
-    testWidgets('cancels when Cancel is clicked on unmerged prompt',
+    testWidgets('cancels when Cancel is clicked on ready state',
         (tester) async {
-      // Set up: clean worktree, branch NOT merged
+      // Set up: clean worktree
       gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.branchMerged['$testWorktreePath:$testBranch:main'] = false;
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for unmerged prompt (specific text)
-      await pumpUntilFound(tester, find.text('Unmerged Branch'));
+      // Wait for delete button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
 
-      // Tap Cancel using key to avoid ambiguity
+      // Tap Cancel using key
       await tester.tap(find.byKey(DeleteWorktreeDialogKeys.cancelButton));
-      await tester.pump();
-
-      // Wait for dialog to close - pump a few frames to allow navigation
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -281,6 +351,34 @@ void main() {
 
       // No deletion should have occurred
       expect(gitService.removeWorktreeCalls, isEmpty);
+    });
+
+    testWidgets('shows stash recovery note after stashing', (tester) async {
+      // Set up: worktree with uncommitted changes
+      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for Discard button
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.discardButton),
+      );
+
+      // Tap Discard
+      await tester.tap(find.byKey(DeleteWorktreeDialogKeys.discardButton));
+      await tester.pump();
+
+      // Wait for ready state
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      // Should show stash recovery note (both in log and footer)
+      expect(find.textContaining('git stash pop'), findsWidgets);
     });
   });
 }

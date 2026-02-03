@@ -176,6 +176,25 @@ class TestGitService implements GitService {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
   }
 
+  @override
+  Future<List<String>> getUnmergedCommits(
+    String path,
+    String branch,
+    String targetBranch,
+  ) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return [];
+  }
+
+  @override
+  Future<List<({String sha, String message})>> getCommitsAhead(
+    String path,
+    String targetBranch,
+  ) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return [];
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;
