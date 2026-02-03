@@ -71,10 +71,15 @@ echo -e "${GREEN}New version: ${NEW_VERSION}${NC}"
 echo -e "\n${YELLOW}Updating pubspec.yaml...${NC}"
 sed -i '' "s/^version: .*/version: ${NEW_VERSION}/" "$PUBSPEC"
 
-# 4. Commit the version bump
+# 4. Commit the version bump and push (triggers Windows/Linux CI builds)
 echo -e "\n${YELLOW}Committing version bump...${NC}"
 git add "$PUBSPEC"
 git commit -m "Bump version to ${NEW_VERSION}"
+TAG="v${NEW_VERSION}"
+git tag "$TAG"
+
+echo -e "\n${YELLOW}Pushing commit and tag (triggers Windows/Linux CI builds)...${NC}"
+git push && git push origin "$TAG"
 
 # 5. Build the release
 echo -e "\n${YELLOW}Building macOS release...${NC}"
@@ -110,23 +115,52 @@ echo -e "\n${YELLOW}Creating final zip with stapled app...${NC}"
 rm -f "$ZIP_NAME"
 zip -ry "$ZIP_NAME" "CC Insights.app"
 
-# 11. Calculate SHA256 checksum
-echo -e "\n${YELLOW}Calculating SHA256 checksum...${NC}"
-SHA256=$(shasum -a 256 "$ZIP_NAME" | awk '{print $1}')
+# 11. Create DMG
+echo -e "\n${YELLOW}Creating DMG installer...${NC}"
+DMG_NAME="cc-insights-macos.dmg"
+rm -f "$DMG_NAME"
+create-dmg \
+    --volname "CC Insights" \
+    --window-pos 200 120 \
+    --window-size 600 400 \
+    --icon-size 100 \
+    --icon "CC Insights.app" 150 190 \
+    --app-drop-link 450 190 \
+    "$DMG_NAME" \
+    "CC Insights.app" \
+    || true  # create-dmg returns non-zero when it can't sign the DMG, but the DMG is still created
 
-# 12. Create GitHub release and upload
+# Verify DMG was created
+if [ ! -f "$DMG_NAME" ]; then
+    echo -e "${RED}Error: DMG creation failed.${NC}"
+    exit 1
+fi
+
+# 12. Notarize and staple the DMG
+echo -e "\n${YELLOW}Notarizing DMG...${NC}"
+xcrun notarytool submit "$DMG_NAME" --keychain-profile "$NOTARIZE_KEYCHAIN_PROFILE" --wait
+xcrun stapler staple "$DMG_NAME"
+
+# 13. Calculate SHA256 checksums
+echo -e "\n${YELLOW}Calculating SHA256 checksums...${NC}"
+SHA256_ZIP=$(shasum -a 256 "$ZIP_NAME" | awk '{print $1}')
+SHA256_DMG=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')
+
+# 14. Create GitHub release and upload
 echo -e "\n${YELLOW}Creating GitHub release v${NEW_VERSION}...${NC}"
-TAG="v${NEW_VERSION}"
 gh release create "$TAG" \
     --title "CC Insights ${NEW_VERSION}" \
     --generate-notes \
     --draft \
-    "$ZIP_NAME"
+    "$ZIP_NAME" \
+    "$DMG_NAME"
 
-# 13. Output results
+# 15. Output results
 echo -e "\n${GREEN}=== Release Complete ===${NC}"
 echo -e "Version: ${NEW_VERSION}"
 echo -e "Tag: ${TAG}"
 echo -e "Zip: ${ZIP_NAME}"
-echo -e "\n${YELLOW}SHA256 checksum for Homebrew cask:${NC}"
-echo -e "${GREEN}${SHA256}${NC}"
+echo -e "DMG: ${DMG_NAME}"
+echo -e "\n${YELLOW}SHA256 checksums:${NC}"
+echo -e "  ZIP (Homebrew): ${GREEN}${SHA256_ZIP}${NC}"
+echo -e "  DMG:            ${GREEN}${SHA256_DMG}${NC}"
