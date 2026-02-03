@@ -1,6 +1,6 @@
 # CC Insights - Insights into Claude Code
 
-Yet 8TEST another Claude Code coordinator desktop GUI application.
+Yet another Claude Code coordinator desktop GUI application.
 
 ## What's different this time?
 <img align=right width="500" height="458" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
@@ -90,6 +90,11 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 🖥️ Session Resume | ✅ | Full automatic resume of chat session |
 | 👾 Claude Dart SDK | ✅ | Can talk direct to claude cli |
 | 🪵 Logging | ❌ | UI not working, file logging is |
+| 💰 Cost & token tracking | ✅ | Per-session and per-model breakdown |
+| 📊 Context usage monitoring | ✅ | Live context window usage with warnings |
+| 🖼️ Message input with image attachments | ✅ | Paste, drag-and-drop, or pick images |
+| 🧩 Drag-and-drop panel layout | ✅ | Flexible resizable panels |
+| 📦 Auto containerisation | ❌ | |
 | 🤖 Z.ai GLM subscription | ❌ | Coming soon |
 
 ## Proudly Self Hoisted
