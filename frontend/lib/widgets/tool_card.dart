@@ -1,3 +1,4 @@
+import 'dart:convert' show base64Decode;
 import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart';
@@ -339,6 +340,11 @@ class _ToolCardState extends State<ToolCard> {
       return _TodoWriteResultWidget(
         result: entry.result as Map<String, dynamic>,
       );
+    }
+
+    // Special rendering for Read tool with image content
+    if (entry.toolName == 'Read' && _isImageResult(entry.result)) {
+      return _ImageResultWidget(content: entry.result as List<dynamic>);
     }
 
     // Special rendering for Bash results (black box with grey text)
@@ -1168,6 +1174,163 @@ class _TodoWriteResultWidget extends StatelessWidget {
       ],
     );
   }
+}
+
+// -----------------------------------------------------------------------------
+// Image result widget for Read tool
+// -----------------------------------------------------------------------------
+
+/// Renders an image result from the Read tool.
+///
+/// The Read tool returns image content as a list with a single image block:
+/// ```json
+/// [{"type": "image", "source": {"type": "base64", "data": "...", "media_type": "image/png"}}]
+/// ```
+class _ImageResultWidget extends StatelessWidget {
+  final List<dynamic> content;
+
+  const _ImageResultWidget({required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    // Extract the image block from the content list
+    final imageBlock = content.firstWhere(
+      (block) => block is Map && block['type'] == 'image',
+      orElse: () => null,
+    );
+
+    if (imageBlock == null) {
+      return const SizedBox.shrink();
+    }
+
+    final source = imageBlock['source'] as Map<String, dynamic>?;
+    if (source == null) {
+      return const SizedBox.shrink();
+    }
+
+    final base64Data = source['data'] as String?;
+    final mediaType = source['media_type'] as String? ?? 'image/png';
+
+    if (base64Data == null || base64Data.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Decode the base64 image data
+    final imageBytes = base64Decode(base64Data);
+
+    // Get original size if available
+    final originalSize = imageBlock['originalSize'] as int?;
+    final sizeInfo = originalSize != null ? _formatFileSize(originalSize) : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Image Preview:',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              mediaType,
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.4),
+              ),
+            ),
+            if (sizeInfo != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                sizeInfo,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 300),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: Theme.of(context)
+                  .colorScheme
+                  .outline
+                  .withValues(alpha: 0.2),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.memory(
+              imageBytes,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.broken_image,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Failed to load image',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Formats file size in human-readable format.
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+/// Checks if a tool result contains image content.
+///
+/// Returns true if the result is a List containing an image block with
+/// base64 source data.
+bool _isImageResult(dynamic result) {
+  if (result is! List) return false;
+  return result.any((block) {
+    if (block is! Map) return false;
+    if (block['type'] != 'image') return false;
+    final source = block['source'];
+    if (source is! Map) return false;
+    return source['type'] == 'base64' && source['data'] != null;
+  });
 }
 
 // -----------------------------------------------------------------------------
