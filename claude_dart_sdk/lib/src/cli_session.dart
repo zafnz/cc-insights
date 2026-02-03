@@ -161,6 +161,7 @@ class CliSession {
     required String prompt,
     SessionOptions? options,
     CliProcessConfig? processConfig,
+    List<ContentBlock>? content,
     Duration timeout = const Duration(seconds: 60),
   }) async {
     // Build CLI process config
@@ -202,13 +203,16 @@ class CliSession {
       process.send(initRequest);
 
       // Step 2: Send the initial user message immediately (don't wait for control_response)
-      // Note: session_id is provided but CLI will assign its own
+      // Use content blocks if provided, otherwise send prompt as plain text
       SdkLogger.instance.debug('Sending initial user message');
+      final dynamic messageContent = content != null && content.isNotEmpty
+          ? content.map((c) => c.toJson()).toList()
+          : prompt;
       final userMessage = {
         'type': 'user',
         'message': {
           'role': 'user',
-          'content': prompt,
+          'content': messageContent,
         },
         'parent_tool_use_id': null,
       };

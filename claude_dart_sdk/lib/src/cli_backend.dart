@@ -87,6 +87,7 @@ class ClaudeCliBackend implements AgentBackend {
         cwd: cwd,
         prompt: prompt,
         options: options,
+        content: content,
         processConfig: _executablePath != null
             ? CliProcessConfig(
                 executablePath: _executablePath,
@@ -110,11 +111,6 @@ class ClaudeCliBackend implements AgentBackend {
 
       // Monitor for session errors and completion
       _setupSessionMonitoring(adapter);
-
-      // If content was provided, send it after initialization
-      if (content != null && content.isNotEmpty) {
-        await adapter.sendWithContent(content);
-      }
 
       return adapter;
     } catch (e) {

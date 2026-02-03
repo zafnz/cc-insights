@@ -740,7 +740,7 @@ class ChatState extends ChangeNotifier {
     List<sdk.ContentBlock>? content;
     if (images.isNotEmpty) {
       content = <sdk.ContentBlock>[
-        sdk.TextBlock(text: prompt),
+        if (prompt.trim().isNotEmpty) sdk.TextBlock(text: prompt),
         ...images.map((img) => sdk.ImageBlock(
               source: sdk.ImageSource(
                 type: 'base64',
@@ -858,7 +858,7 @@ class ChatState extends ChangeNotifier {
     // Send to SDK - use content blocks if images are attached
     if (images.isNotEmpty) {
       final content = <sdk.ContentBlock>[
-        sdk.TextBlock(text: text),
+        if (text.trim().isNotEmpty) sdk.TextBlock(text: text),
         ...images.map((img) => sdk.ImageBlock(
               source: sdk.ImageSource(
                 type: 'base64',
