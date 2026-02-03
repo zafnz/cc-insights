@@ -11,6 +11,29 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load environment variables from .env file
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+else
+    echo -e "${RED}Error: .env file not found.${NC}"
+    echo "Please create a .env file with CODESIGN_IDENTITY and NOTARIZE_KEYCHAIN_PROFILE."
+    echo "See .env.example for reference."
+    exit 1
+fi
+
+# Validate required environment variables
+if [ -z "$CODESIGN_IDENTITY" ]; then
+    echo -e "${RED}Error: CODESIGN_IDENTITY not set in .env${NC}"
+    exit 1
+fi
+
+if [ -z "$NOTARIZE_KEYCHAIN_PROFILE" ]; then
+    echo -e "${RED}Error: NOTARIZE_KEYCHAIN_PROFILE not set in .env${NC}"
+    exit 1
+fi
+
 echo -e "${YELLOW}=== CC Insights Release Build ===${NC}"
 
 # 1. Check for uncommitted or unstaged changes
@@ -58,18 +81,40 @@ echo -e "\n${YELLOW}Building macOS release...${NC}"
 cd "$SCRIPT_DIR/frontend"
 flutter build macos --release
 
-# 6. Create the zip file
-echo -e "\n${YELLOW}Creating zip archive...${NC}"
+# 6. Code sign the app
+APP_PATH="$SCRIPT_DIR/frontend/build/macos/Build/Products/Release/CC Insights.app"
+echo -e "\n${YELLOW}Code signing the app...${NC}"
+codesign --deep --force --options runtime --sign "$CODESIGN_IDENTITY" "$APP_PATH"
+
+# Verify the signature
+echo -e "\n${YELLOW}Verifying code signature...${NC}"
+codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+# 7. Create zip for notarization
+echo -e "\n${YELLOW}Creating zip for notarization...${NC}"
 cd "$SCRIPT_DIR/frontend/build/macos/Build/Products/Release"
 ZIP_NAME="cc-insights-macos.zip"
 rm -f "$ZIP_NAME"
 zip -ry "$ZIP_NAME" "CC Insights.app"
 
-# 7. Calculate SHA256 checksum
+# 8. Submit for notarization and wait
+echo -e "\n${YELLOW}Submitting for notarization (this may take a few minutes)...${NC}"
+xcrun notarytool submit "$ZIP_NAME" --keychain-profile "$NOTARIZE_KEYCHAIN_PROFILE" --wait
+
+# 9. Staple the notarization ticket
+echo -e "\n${YELLOW}Stapling notarization ticket...${NC}"
+xcrun stapler staple "$APP_PATH"
+
+# 10. Recreate the zip with the stapled app
+echo -e "\n${YELLOW}Creating final zip with stapled app...${NC}"
+rm -f "$ZIP_NAME"
+zip -ry "$ZIP_NAME" "CC Insights.app"
+
+# 11. Calculate SHA256 checksum
 echo -e "\n${YELLOW}Calculating SHA256 checksum...${NC}"
 SHA256=$(shasum -a 256 "$ZIP_NAME" | awk '{print $1}')
 
-# 8. Create GitHub release and upload
+# 12. Create GitHub release and upload
 echo -e "\n${YELLOW}Creating GitHub release v${NEW_VERSION}...${NC}"
 TAG="v${NEW_VERSION}"
 gh release create "$TAG" \
@@ -77,7 +122,7 @@ gh release create "$TAG" \
     --generate-notes \
     "$ZIP_NAME"
 
-# 9. Output results
+# 13. Output results
 echo -e "\n${GREEN}=== Release Complete ===${NC}"
 echo -e "Version: ${NEW_VERSION}"
 echo -e "Tag: ${TAG}"
