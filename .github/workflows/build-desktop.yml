@@ -53,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cc-insights-windows-installer
-          path: frontend/build/**/*.msix
+          path: frontend/build/windows/x64/runner/Release/CC-Insights-Setup.msix
           retention-days: 90
 
   build-linux:
