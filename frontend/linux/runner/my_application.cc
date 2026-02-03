@@ -19,6 +19,21 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// Handles method calls on the window management channel.
+static void window_channel_method_call_handler(FlMethodChannel* channel,
+                                               FlMethodCall* method_call,
+                                               gpointer user_data) {
+  const gchar* method = fl_method_call_get_name(method_call);
+  if (g_strcmp0(method, "bringToFront") == 0) {
+    GtkWindow* window = GTK_WINDOW(user_data);
+    gtk_window_present(window);
+    g_autoptr(FlValue) result = fl_value_new_null();
+    fl_method_call_respond_success(method_call, result, nullptr);
+  } else {
+    fl_method_call_respond_not_implemented(method_call, nullptr);
+  }
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -74,6 +89,15 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  // Register method channel for window management (bring to front).
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  FlMethodChannel* window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "com.nickclifford.ccinsights/window",
+      FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      window_channel, window_channel_method_call_handler, window, nullptr);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

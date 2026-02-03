@@ -10,4 +10,22 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
   }
+
+  override func applicationDidFinishLaunching(_ notification: Notification) {
+    let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
+    let channel = FlutterMethodChannel(
+      name: "com.nickclifford.ccinsights/window",
+      binaryMessenger: controller.engine.binaryMessenger
+    )
+
+    channel.setMethodCallHandler { (call, result) in
+      if call.method == "bringToFront" {
+        NSApp.activate(ignoringOtherApps: true)
+        self.mainFlutterWindow?.makeKeyAndOrderFront(nil)
+        result(nil)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
 }

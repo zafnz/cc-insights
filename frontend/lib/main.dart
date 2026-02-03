@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:claude_sdk/claude_sdk.dart' show SdkLogger;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -560,15 +562,17 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Dialog observer for keyboard focus management
         Provider<DialogObserver>.value(value: _dialogObserver),
       ],
-      child: MaterialApp(
-        title: 'CC Insights',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: ThemeMode.system,
-        navigatorObservers: [_dialogObserver],
-        home: const MainScreen(),
-        routes: {'/replay': (context) => const ReplayDemoScreen()},
+      child: _NotificationNavigationListener(
+        child: MaterialApp(
+          title: 'CC Insights',
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          themeMode: ThemeMode.system,
+          navigatorObservers: [_dialogObserver],
+          home: const MainScreen(),
+          routes: {'/replay': (context) => const ReplayDemoScreen()},
+        ),
       ),
     );
   }
@@ -611,4 +615,78 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       ),
     );
   }
+}
+
+/// Listens for notification click events and navigates to the relevant
+/// worktree and chat.
+///
+/// Must be placed inside the [MultiProvider] so it can access
+/// [ProjectState] and [SelectionState] via [Provider].
+class _NotificationNavigationListener extends StatefulWidget {
+  final Widget child;
+
+  const _NotificationNavigationListener({required this.child});
+
+  @override
+  State<_NotificationNavigationListener> createState() =>
+      _NotificationNavigationListenerState();
+}
+
+class _NotificationNavigationListenerState
+    extends State<_NotificationNavigationListener> {
+  StreamSubscription<NotificationNavigationEvent>? _subscription;
+
+  static const _windowChannel =
+      MethodChannel('com.nickclifford.ccinsights/window');
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = NotificationService.instance.navigationEvents.listen(
+      _handleNavigationEvent,
+    );
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleNavigationEvent(NotificationNavigationEvent event) {
+    if (!mounted) return;
+
+    final project = context.read<ProjectState>();
+    final selection = context.read<SelectionState>();
+
+    // Find the worktree matching the event's worktreeRoot
+    final worktree = project.allWorktrees.where(
+      (w) => w.data.worktreeRoot == event.worktreeRoot,
+    ).firstOrNull;
+    if (worktree == null) return;
+
+    // Find the chat matching the event's chatId
+    final chat = worktree.chats.where(
+      (c) => c.data.id == event.chatId,
+    ).firstOrNull;
+    if (chat == null) return;
+
+    // Navigate to the worktree and chat
+    selection.selectWorktree(worktree);
+    selection.selectChat(chat);
+
+    // Bring the app window to front
+    _bringWindowToFront();
+  }
+
+  Future<void> _bringWindowToFront() async {
+    try {
+      await _windowChannel.invokeMethod('bringToFront');
+    } catch (_) {
+      // Platform channel not available - ignore
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

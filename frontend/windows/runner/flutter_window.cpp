@@ -2,6 +2,9 @@
 
 #include <optional>
 
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
+
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -25,6 +28,26 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  // Register method channel for window management (bring to front).
+  auto channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(),
+      "com.nickclifford.ccinsights/window",
+      &flutter::StandardMethodCodec::GetInstance());
+
+  HWND window_handle = GetHandle();
+  channel->SetMethodCallHandler(
+      [window_handle](const flutter::MethodCall<flutter::EncodableValue>& call,
+                      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() == "bringToFront") {
+          ShowWindow(window_handle, SW_RESTORE);
+          SetForegroundWindow(window_handle);
+          result->Success();
+        } else {
+          result->NotImplemented();
+        }
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

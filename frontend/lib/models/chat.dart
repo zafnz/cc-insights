@@ -938,11 +938,16 @@ class ChatState extends ChangeNotifier {
     _pendingPermissions.add(request);
     notifyListeners();
 
-    // Send desktop notification
-    NotificationService.instance.notifyPermissionRequest(
-      toolName: request.toolName,
-      chatName: _data.name,
-    );
+    // Send desktop notification with navigation context
+    final worktreeRoot = _data.worktreeRoot;
+    if (worktreeRoot != null) {
+      NotificationService.instance.notifyPermissionRequest(
+        toolName: request.toolName,
+        chatName: _data.name,
+        worktreeRoot: worktreeRoot,
+        chatId: _data.id,
+      );
+    }
   }
 
   /// @deprecated Use [addPendingPermission] instead.
