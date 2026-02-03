@@ -11,9 +11,12 @@ This tool:
 Usage:
     python anonymize_uuids.py input.jsonl [output.jsonl]
     python anonymize_uuids.py --in-place input.jsonl
+    cat input.jsonl | python anonymize_uuids.py > output.jsonl
+    python anonymize_uuids.py - < input.jsonl > output.jsonl
 
 If output is not specified, writes to input.anonymized.jsonl
 Use --in-place to overwrite the original file
+Use - or no arguments to read from stdin and write to stdout
 """
 
 import json
@@ -91,13 +94,13 @@ def anonymize_value(value: Any, mapping: Dict[str, str], prefix: str, counter: D
         return value
 
 
-def anonymize_jsonl_file(input_path: Path, output_path: Path) -> Dict[str, str]:
+def anonymize_jsonl_stream(infile, outfile) -> Dict[str, str]:
     """
-    Anonymize UUIDs in a JSONL file.
+    Anonymize UUIDs in a JSONL stream.
 
     Args:
-        input_path: Path to input JSONL file
-        output_path: Path to output JSONL file
+        infile: Input file-like object
+        outfile: Output file-like object
 
     Returns:
         Dictionary mapping original UUIDs to anonymized ones
@@ -109,34 +112,46 @@ def anonymize_jsonl_file(input_path: Path, output_path: Path) -> Dict[str, str]:
     mapping: Dict[str, str] = {}
     counter = {'count': 0}
 
-    # Process file line by line
-    with open(input_path, 'r', encoding='utf-8') as infile, \
-         open(output_path, 'w', encoding='utf-8') as outfile:
+    for line_num, line in enumerate(infile, 1):
+        line = line.strip()
+        if not line:
+            # Preserve empty lines
+            outfile.write('\n')
+            continue
 
-        for line_num, line in enumerate(infile, 1):
-            line = line.strip()
-            if not line:
-                # Preserve empty lines
-                outfile.write('\n')
-                continue
+        try:
+            # Parse JSON
+            data = json.loads(line)
 
-            try:
-                # Parse JSON
-                data = json.loads(line)
+            # Anonymize all UUIDs in the data
+            anonymized_data = anonymize_value(data, mapping, prefix, counter)
 
-                # Anonymize all UUIDs in the data
-                anonymized_data = anonymize_value(data, mapping, prefix, counter)
+            # Write back as JSON
+            outfile.write(json.dumps(anonymized_data, separators=(',', ':')) + '\n')
 
-                # Write back as JSON
-                outfile.write(json.dumps(anonymized_data, separators=(',', ':')) + '\n')
-
-            except json.JSONDecodeError as e:
-                print(f"Warning: Line {line_num} is not valid JSON: {e}", file=sys.stderr)
-                print(f"  Skipping line: {line[:100]}...", file=sys.stderr)
-                # Write original line
-                outfile.write(line + '\n')
+        except json.JSONDecodeError as e:
+            print(f"Warning: Line {line_num} is not valid JSON: {e}", file=sys.stderr)
+            print(f"  Skipping line: {line[:100]}...", file=sys.stderr)
+            # Write original line
+            outfile.write(line + '\n')
 
     return mapping
+
+
+def anonymize_jsonl_file(input_path: Path, output_path: Path) -> Dict[str, str]:
+    """
+    Anonymize UUIDs in a JSONL file.
+
+    Args:
+        input_path: Path to input JSONL file
+        output_path: Path to output JSONL file
+
+    Returns:
+        Dictionary mapping original UUIDs to anonymized ones
+    """
+    with open(input_path, 'r', encoding='utf-8') as infile, \
+         open(output_path, 'w', encoding='utf-8') as outfile:
+        return anonymize_jsonl_stream(infile, outfile)
 
 
 def print_mapping(mapping: Dict[str, str]) -> None:
@@ -149,20 +164,21 @@ def print_mapping(mapping: Dict[str, str]) -> None:
 
 def main():
     """Main entry point."""
-    if len(sys.argv) < 2:
-        print("Usage: python anonymize_uuids.py input.jsonl [output.jsonl]", file=sys.stderr)
-        print("       python anonymize_uuids.py --in-place input.jsonl", file=sys.stderr)
-        print("\nIf output is not specified, writes to input.anonymized.jsonl", file=sys.stderr)
-        print("Use --in-place to overwrite the original file", file=sys.stderr)
-        sys.exit(1)
-
-    # Check for --in-place flag
+    # Check for --in-place and --show-mapping flags
     in_place = '--in-place' in sys.argv
+    show_mapping = '--show-mapping' in sys.argv
     args = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
 
-    if len(args) < 1:
-        print("Error: No input file specified", file=sys.stderr)
-        sys.exit(1)
+    # Determine if we're in pipe mode (stdin/stdout)
+    use_stdin = len(args) == 0 or (len(args) >= 1 and args[0] == '-')
+
+    if use_stdin:
+        # Pipe mode: read from stdin, write to stdout
+        mapping = anonymize_jsonl_stream(sys.stdin, sys.stdout)
+        print(f"Anonymized {len(mapping)} unique UUIDs", file=sys.stderr)
+        if show_mapping:
+            print_mapping(mapping)
+        return
 
     input_path = Path(args[0])
 
@@ -200,7 +216,7 @@ def main():
         print(f"✓ Output written to: {output_path}")
 
     # Optionally print mapping (comment out if not needed)
-    if '--show-mapping' in sys.argv:
+    if show_mapping:
         print_mapping(mapping)
     else:
         print("\nUse --show-mapping flag to see the full UUID mapping")
