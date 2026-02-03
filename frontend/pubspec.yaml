@@ -1,7 +1,7 @@
 name: cc_insights_v2
 description: "GUI control plane for coordinating Claude agents across git worktrees"
 publish_to: 'none'
-version: 0.0.9
+version: 0.0.10
 
 environment:
   sdk: ^3.10.4
