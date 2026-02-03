@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:local_notifier/local_notifier.dart';
 
 /// Service for sending desktop notifications.
@@ -30,9 +29,8 @@ class NotificationService {
         shortcutPolicy: ShortcutPolicy.requireCreate,
       );
       _isInitialized = true;
-      debugPrint('NotificationService: initialized');
-    } catch (e) {
-      debugPrint('NotificationService: failed to initialize: $e');
+    } catch (_) {
+      // Initialization failed - notifications will be disabled
     }
   }
 
@@ -55,27 +53,9 @@ class NotificationService {
         body: '$chatName: $toolName is waiting for approval',
       );
 
-      // Add debug callbacks
-      notification.onShow = () {
-        debugPrint('NotificationService: notification shown');
-      };
-      notification.onClose = (reason) {
-        debugPrint('NotificationService: notification closed: $reason');
-      };
-      notification.onClick = () {
-        debugPrint('NotificationService: notification clicked');
-      };
-
-      debugPrint(
-        'NotificationService: showing notification for $toolName in $chatName',
-      );
       await notification.show();
-      debugPrint(
-        'NotificationService: notification.show() completed',
-      );
-    } catch (e, stack) {
-      debugPrint('NotificationService: failed to send notification: $e');
-      debugPrint('NotificationService: stack trace: $stack');
+    } catch (_) {
+      // Notification failed - ignore
     }
   }
 
@@ -85,9 +65,7 @@ class NotificationService {
   Future<void> notifyUserQuestion({
     required String chatName,
   }) async {
-    if (!_isInitialized) {
-      return;
-    }
+    if (!_isInitialized) return;
 
     try {
       final notification = LocalNotification(
@@ -96,9 +74,8 @@ class NotificationService {
       );
 
       await notification.show();
-      debugPrint('NotificationService: sent question notification for $chatName');
-    } catch (e) {
-      debugPrint('NotificationService: failed to send notification: $e');
+    } catch (_) {
+      // Notification failed - ignore
     }
   }
 }

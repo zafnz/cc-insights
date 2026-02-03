@@ -344,7 +344,7 @@ class _ToolCardState extends State<ToolCard> {
 
     // Special rendering for Read tool with image content
     if (entry.toolName == 'Read' && _isImageResult(entry.result)) {
-      return _ImageResultWidget(content: entry.result as List<dynamic>);
+      return _ImageResultWidget(content: entry.result);
     }
 
     // Special rendering for Bash results (black box with grey text)
@@ -1182,34 +1182,44 @@ class _TodoWriteResultWidget extends StatelessWidget {
 
 /// Renders an image result from the Read tool.
 ///
-/// The Read tool returns image content as a list with a single image block:
-/// ```json
-/// [{"type": "image", "source": {"type": "base64", "data": "...", "media_type": "image/png"}}]
-/// ```
+/// Supports two formats:
+/// 1. Map format: `{type: image, file: {base64: "..."}}` (from CC-Insights SDK)
+/// 2. List format: `[{type: image, source: {type: base64, data: "..."}}]` (Anthropic API)
 class _ImageResultWidget extends StatelessWidget {
-  final List<dynamic> content;
+  final dynamic content;
 
   const _ImageResultWidget({required this.content});
 
   @override
   Widget build(BuildContext context) {
-    // Extract the image block from the content list
-    final imageBlock = content.firstWhere(
-      (block) => block is Map && block['type'] == 'image',
-      orElse: () => null,
-    );
+    String? base64Data;
+    String mediaType = 'image/png';
+    int? originalSize;
 
-    if (imageBlock == null) {
-      return const SizedBox.shrink();
+    // Format 1: Map with {type: image, file: {base64: "..."}}
+    if (content is Map) {
+      final file = content['file'] as Map<String, dynamic>?;
+      if (file != null) {
+        base64Data = file['base64'] as String?;
+        mediaType = content['type'] as String? ?? 'image/png';
+        originalSize = content['originalSize'] as int?;
+      }
     }
-
-    final source = imageBlock['source'] as Map<String, dynamic>?;
-    if (source == null) {
-      return const SizedBox.shrink();
+    // Format 2: List with [{type: image, source: {type: base64, data: "..."}}]
+    else if (content is List) {
+      final imageBlock = (content as List).firstWhere(
+        (block) => block is Map && block['type'] == 'image',
+        orElse: () => null,
+      );
+      if (imageBlock != null) {
+        final source = imageBlock['source'] as Map<String, dynamic>?;
+        if (source != null) {
+          base64Data = source['data'] as String?;
+          mediaType = source['media_type'] as String? ?? 'image/png';
+          originalSize = imageBlock['originalSize'] as int?;
+        }
+      }
     }
-
-    final base64Data = source['data'] as String?;
-    final mediaType = source['media_type'] as String? ?? 'image/png';
 
     if (base64Data == null || base64Data.isEmpty) {
       return const SizedBox.shrink();
@@ -1218,8 +1228,6 @@ class _ImageResultWidget extends StatelessWidget {
     // Decode the base64 image data
     final imageBytes = base64Decode(base64Data);
 
-    // Get original size if available
-    final originalSize = imageBlock['originalSize'] as int?;
     final sizeInfo = originalSize != null ? _formatFileSize(originalSize) : null;
 
     return Column(
@@ -1320,17 +1328,32 @@ class _ImageResultWidget extends StatelessWidget {
 
 /// Checks if a tool result contains image content.
 ///
-/// Returns true if the result is a List containing an image block with
-/// base64 source data.
+/// Supports two formats:
+/// 1. Map format: `{type: image, file: {base64: "..."}}` (from CC-Insights SDK)
+/// 2. List format: `[{type: image, source: {type: base64, data: "..."}}]` (Anthropic API)
 bool _isImageResult(dynamic result) {
-  if (result is! List) return false;
-  return result.any((block) {
-    if (block is! Map) return false;
-    if (block['type'] != 'image') return false;
-    final source = block['source'];
-    if (source is! Map) return false;
-    return source['type'] == 'base64' && source['data'] != null;
-  });
+  // Format 1: Map with type: image and file.base64
+  if (result is Map) {
+    if (result['type'] == 'image') {
+      final file = result['file'];
+      if (file is Map && file['base64'] != null) {
+        return true;
+      }
+    }
+  }
+
+  // Format 2: List containing an image block
+  if (result is List) {
+    return result.any((block) {
+      if (block is! Map) return false;
+      if (block['type'] != 'image') return false;
+      final source = block['source'];
+      if (source is! Map) return false;
+      return source['type'] == 'base64' && source['data'] != null;
+    });
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
