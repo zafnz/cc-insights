@@ -194,7 +194,8 @@ void main() {
       expect(find.textContaining('2 commits ahead'), findsOneWidget);
     });
 
-    testWidgets('shows unmerged commits warning', (tester) async {
+    testWidgets('shows unmerged commits error and requires force delete',
+        (tester) async {
       // Set up: clean worktree with commits that aren't on main
       gitService.statuses[testWorktreePath] = const GitStatus();
       gitService.commitsAhead['$testWorktreePath:main'] = [
@@ -209,14 +210,18 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for delete button
+      // Wait for force delete button (unmerged commits requires force)
       await pumpUntilFound(
         tester,
-        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
       );
 
-      // Should show warning about unmerged commits
+      // Should show error about unmerged commits
       expect(find.textContaining('not yet on main'), findsOneWidget);
+
+      // Should show Abort button instead of Cancel
+      expect(find.text('Abort'), findsOneWidget);
+      expect(find.byKey(DeleteWorktreeDialogKeys.cancelButton), findsNothing);
     });
 
     testWidgets('prompts for force delete on git error', (tester) async {

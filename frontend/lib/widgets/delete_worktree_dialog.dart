@@ -115,6 +115,9 @@ enum _ActionState {
   /// Ready to delete worktree.
   readyToDelete,
 
+  /// Branch has unmerged commits - user must confirm force delete.
+  hasUnmergedCommits,
+
   /// Deleting worktree.
   deleting,
 
@@ -159,6 +162,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
   _ActionState _actionState = _ActionState.checking;
   String? _mainBranch;
   int _uncommittedCount = 0;
+  int _unmergedCommitsCount = 0;
   String? _forceDeleteError;
 
   @override
@@ -313,11 +317,18 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
 
     if (!mounted) return;
 
-    // Ready to delete
-    _addLog('Ready to remove worktree', LogEntryStatus.success);
-    setState(() {
-      _actionState = _ActionState.readyToDelete;
-    });
+    // Check if there are unmerged commits - if so, require force delete
+    if (_unmergedCommitsCount > 0) {
+      setState(() {
+        _actionState = _ActionState.hasUnmergedCommits;
+      });
+    } else {
+      // Ready to delete
+      _addLog('Ready to remove worktree', LogEntryStatus.success);
+      setState(() {
+        _actionState = _ActionState.readyToDelete;
+      });
+    }
   }
 
   Future<void> _fetchOrigin() async {
@@ -424,16 +435,21 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           LogEntryStatus.success,
           message: 'All commits appear to be on $_mainBranch',
         );
-      } else if (unmerged.length < totalCommits) {
-        _updateLastLog(
-          LogEntryStatus.warning,
-          message: '${unmerged.length} of $totalCommits commits not yet on $_mainBranch',
-        );
+        _unmergedCommitsCount = 0;
       } else {
-        _updateLastLog(
-          LogEntryStatus.warning,
-          message: '${unmerged.length} commits not yet on $_mainBranch',
-        );
+        // Any unmerged commits is an error - requires force delete
+        _unmergedCommitsCount = unmerged.length;
+        if (unmerged.length < totalCommits) {
+          _updateLastLog(
+            LogEntryStatus.error,
+            message: '${unmerged.length} of $totalCommits commits not yet on $_mainBranch',
+          );
+        } else {
+          _updateLastLog(
+            LogEntryStatus.error,
+            message: '${unmerged.length} ${unmerged.length == 1 ? 'commit' : 'commits'} not yet on $_mainBranch',
+          );
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -442,6 +458,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         message: 'Could not verify commits on $_mainBranch',
         detail: e.toString(),
       );
+      _unmergedCommitsCount = 0; // Can't verify, allow normal delete
     }
   }
 
@@ -633,8 +650,8 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         );
         break;
 
-      case _ActionState.needsForce:
-        buttons.add(
+      case _ActionState.hasUnmergedCommits:
+        buttons.addAll([
           _ActionButton(
             key: DeleteWorktreeDialogKeys.forceDeleteButton,
             label: 'Force Delete',
@@ -643,7 +660,38 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
             colorScheme: colorScheme,
             isPrimary: true,
           ),
-        );
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(DeleteWorktreeResult.cancelled),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.onErrorContainer,
+              side: BorderSide(color: colorScheme.onErrorContainer.withValues(alpha: 0.5)),
+            ),
+            child: const Text('Abort'),
+          ),
+        ]);
+        break;
+
+      case _ActionState.needsForce:
+        buttons.addAll([
+          _ActionButton(
+            key: DeleteWorktreeDialogKeys.forceDeleteButton,
+            label: 'Force Delete',
+            icon: Icons.warning,
+            onPressed: () => _handleDelete(force: true),
+            colorScheme: colorScheme,
+            isPrimary: true,
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(DeleteWorktreeResult.cancelled),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.onErrorContainer,
+              side: BorderSide(color: colorScheme.onErrorContainer.withValues(alpha: 0.5)),
+            ),
+            child: const Text('Abort'),
+          ),
+        ]);
         break;
 
       case _ActionState.checking:
@@ -683,8 +731,10 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         break;
     }
 
-    // Always add cancel button (except when complete)
-    if (_actionState != _ActionState.complete) {
+    // Always add cancel button (except when complete or when Abort is shown)
+    if (_actionState != _ActionState.complete &&
+        _actionState != _ActionState.hasUnmergedCommits &&
+        _actionState != _ActionState.needsForce) {
       buttons.addAll([
         const Spacer(),
         TextButton(
