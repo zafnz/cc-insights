@@ -120,6 +120,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The AskAI service for one-shot AI queries.
   AskAiService? _askAiService;
 
+  /// The persistence service for storing project/chat data.
+  PersistenceService? _persistenceService;
+
   /// Dialog observer for tracking open dialogs.
   /// Used to suspend keyboard interception while dialogs are open.
   final DialogObserver _dialogObserver = DialogObserver();
@@ -184,6 +187,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create the project restore service for persistence operations
     _restoreService = ProjectRestoreService();
 
+    // Create the persistence service for storing project/chat data
+    _persistenceService = PersistenceService();
+
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();
 
@@ -226,7 +232,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Collect all quit marker writes
     final writes = <Future<void>>[];
-    final persistence = PersistenceService();
+    final persistence = _persistenceService ?? PersistenceService();
 
     // Iterate through all worktrees and their chats
     for (final worktree in _project!.allWorktrees) {
@@ -401,6 +407,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         Provider<FileSystemService>.value(value: const RealFileSystemService()),
         // AskAI service for one-shot AI queries
         Provider<AskAiService>.value(value: _askAiService!),
+        // Persistence service for storing project/chat data
+        Provider<PersistenceService>.value(value: _persistenceService!),
         // Project state
         ChangeNotifierProvider<ProjectState>.value(value: project),
         // Selection state depends on project

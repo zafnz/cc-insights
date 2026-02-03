@@ -6,7 +6,11 @@ import 'package:provider/provider.dart';
 import '../models/chat.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
+import '../services/ask_ai_service.dart';
+import '../services/git_service.dart';
+import '../services/persistence_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/delete_worktree_dialog.dart';
 import 'panel_wrapper.dart';
 
 /// Worktree panel - shows the list of worktrees.
@@ -498,6 +502,67 @@ class _WorktreeListItem extends StatelessWidget {
     return parts.isEmpty ? '.' : parts.join('/');
   }
 
+  void _showContextMenu(BuildContext context, Offset position) async {
+    final data = worktree.data;
+
+    // Only show context menu for linked worktrees (not primary)
+    if (data.isPrimary) {
+      return;
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
+              const SizedBox(width: 8),
+              Text('Delete Worktree', style: TextStyle(color: colorScheme.error)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (result == 'delete' && context.mounted) {
+      await _handleDelete(context);
+    }
+  }
+
+  Future<void> _handleDelete(BuildContext context) async {
+    final project = context.read<ProjectState>();
+    final gitService = context.read<GitService>();
+    final persistenceService = context.read<PersistenceService>();
+    final askAiService = context.read<AskAiService>();
+
+    final result = await showDeleteWorktreeDialog(
+      context: context,
+      worktreePath: worktree.data.worktreeRoot,
+      repoRoot: repoRoot,
+      branch: worktree.data.branch,
+      projectId: PersistenceService.generateProjectId(repoRoot),
+      gitService: gitService,
+      persistenceService: persistenceService,
+      askAiService: askAiService,
+    );
+
+    if (result == DeleteWorktreeResult.deleted && context.mounted) {
+      // Remove the worktree from the project state
+      // Note: The filesystem watcher should also detect this, but we do it
+      // explicitly to ensure immediate UI update
+      project.removeLinkedWorktree(worktree);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -515,59 +580,64 @@ class _WorktreeListItem extends StatelessWidget {
         final hasAnyPermissionPending =
             worktree.chats.any((chat) => chat.isWaitingForPermission);
 
-        return Material(
-          color: isSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-              : Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top row: Branch name + permission indicator
-                  Row(
-                    children: [
-                      // Branch name (normal weight, ~13px)
-                      Expanded(
-                        child: Text(
-                          data.branch,
-                          style: textTheme.bodyMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Permission indicator (orange bell)
-                      if (hasAnyPermissionPending)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4),
-                          child: Icon(
-                            Icons.notifications_active,
-                            size: 14,
-                            color: Colors.orange,
+        return GestureDetector(
+          onSecondaryTapUp: (details) {
+            _showContextMenu(context, details.globalPosition);
+          },
+          child: Material(
+            color: isSelected
+                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                : Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top row: Branch name + permission indicator
+                    Row(
+                      children: [
+                        // Branch name (normal weight, ~13px)
+                        Expanded(
+                          child: Text(
+                            data.branch,
+                            style: textTheme.bodyMedium,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  // Path + status on same line (muted, monospace, ~11px)
-                  Row(
-                    children: [
-                      // Path (full for primary, relative for linked)
-                      Expanded(
-                        child: Text(
-                          displayPath,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                        // Permission indicator (orange bell)
+                        if (hasAnyPermissionPending)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.notifications_active,
+                              size: 14,
+                              color: Colors.orange,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    // Path + status on same line (muted, monospace, ~11px)
+                    Row(
+                      children: [
+                        // Path (full for primary, relative for linked)
+                        Expanded(
+                          child: Text(
+                            displayPath,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      // Inline status indicators
-                      InlineStatusIndicators(data: data),
-                    ],
-                  ),
-                ],
+                        // Inline status indicators
+                        InlineStatusIndicators(data: data),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
