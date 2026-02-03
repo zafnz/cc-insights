@@ -30,13 +30,17 @@ jobs:
         working-directory: frontend
         run: flutter build windows --release
 
+      - name: Create ZIP archive (portable)
+        run: |
+          Compress-Archive -Path frontend/build/windows/x64/runner/Release/* -DestinationPath cc-insights-windows-portable.zip
+
       - name: Create MSIX installer
         working-directory: frontend
         run: dart run msix:create --build-windows false
 
-      - name: Create ZIP archive (portable)
+      - name: Find MSIX output
         run: |
-          Compress-Archive -Path frontend/build/windows/x64/runner/Release/* -DestinationPath cc-insights-windows-portable.zip
+          Get-ChildItem -Path frontend/build -Recurse -Filter *.msix | ForEach-Object { Write-Output $_.FullName }
 
       - name: Upload portable ZIP
         uses: actions/upload-artifact@v4
@@ -49,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cc-insights-windows-installer
-          path: frontend/build/windows/x64/installer/*.msix
+          path: frontend/build/**/*.msix
           retention-days: 90
 
   build-linux:
