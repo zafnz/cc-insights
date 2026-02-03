@@ -223,6 +223,7 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                   controller: _branchController,
                   availableBranches: _availableBranches,
                   existingWorktreeBranches: _existingWorktreeBranches,
+                  onCreateRequested: _handleCreate,
                 ),
                 const SizedBox(height: 24),
                 // Action buttons
@@ -411,11 +412,13 @@ class _BranchNameField extends StatelessWidget {
     required this.controller,
     required this.availableBranches,
     required this.existingWorktreeBranches,
+    required this.onCreateRequested,
   });
 
   final TextEditingController controller;
   final List<String> availableBranches;
   final List<String> existingWorktreeBranches;
+  final VoidCallback onCreateRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -458,8 +461,10 @@ class _BranchNameField extends StatelessWidget {
             });
 
             return TextField(
+              key: CreateWorktreePanelKeys.branchField,
               controller: textEditingController,
               focusNode: focusNode,
+              autofocus: true,
               style: textTheme.bodyMedium,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
@@ -471,7 +476,7 @@ class _BranchNameField extends StatelessWidget {
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
-              onSubmitted: (_) => onFieldSubmitted(),
+              onSubmitted: (_) => onCreateRequested(),
             );
           },
           optionsViewBuilder: (context, onSelected, options) {
