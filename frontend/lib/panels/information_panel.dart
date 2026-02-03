@@ -208,6 +208,64 @@ class _WorktreeInfo extends StatelessWidget {
     onStatusChanged();
   }
 
+  Future<void> _handleMergeIntoMain(BuildContext context) async {
+    final gitService = context.read<GitService>();
+    final project = context.read<ProjectState>();
+
+    // Detect main branch
+    String? mainBranch;
+    try {
+      mainBranch =
+          await gitService.getMainBranch(project.data.repoRoot);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to detect main branch: $e')),
+      );
+      return;
+    }
+
+    if (mainBranch == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not detect main branch')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    // Merge the current branch into main, running in the primary
+    // worktree directory (since we can't checkout main in a worktree
+    // where another branch is checked out).
+    final primaryWorktreePath =
+        project.primaryWorktree.data.worktreeRoot;
+
+    final result = await showConflictResolutionDialog(
+      context: context,
+      worktreePath: primaryWorktreePath,
+      branch: mainBranch,
+      mainBranch: data.branch,
+      operation: MergeOperationType.merge,
+      gitService: gitService,
+    );
+
+    if (!context.mounted) return;
+
+    if (result == ConflictResolutionResult.resolveWithClaude) {
+      await _openConflictManagerChat(
+        context,
+        branch: mainBranch,
+        mainBranch: data.branch,
+        worktreePath: primaryWorktreePath,
+        mainWorktreePath: primaryWorktreePath,
+        operation: MergeOperationType.merge,
+      );
+    }
+
+    onStatusChanged();
+  }
+
   Future<void> _openConflictManagerChat(
     BuildContext context, {
     required String branch,
@@ -293,6 +351,24 @@ class _WorktreeInfo extends StatelessWidget {
   bool get _canUpdateFromMain =>
       data.commitsBehindMain > 0 && !data.isPrimary;
 
+  /// Whether the merge-into-main button should be enabled.
+  /// Enabled when ahead of main and not behind (safe fast-forward merge).
+  bool get _canMergeIntoMain =>
+      data.commitsAheadOfMain > 0 &&
+      data.commitsBehindMain == 0 &&
+      !data.isPrimary;
+
+  /// Tooltip for the merge-into-main button when disabled.
+  String? get _mergeIntoMainTooltip {
+    if (data.isPrimary) return 'Cannot merge primary worktree';
+    if (data.commitsAheadOfMain == 0) return 'No commits to merge';
+    if (data.commitsBehindMain > 0) {
+      return 'Update this branch with the latest from main '
+          'before merging it back in';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -365,9 +441,12 @@ class _WorktreeInfo extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           _CompactButton(
-            onPressed: null,
+            onPressed: _canMergeIntoMain
+                ? () => _handleMergeIntoMain(context)
+                : null,
             label: 'Merge',
             icon: Icons.merge,
+            tooltip: _canMergeIntoMain ? null : _mergeIntoMainTooltip,
           ),
         ],
       ),
@@ -501,11 +580,13 @@ class _CompactButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.icon,
+    this.tooltip,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -520,7 +601,7 @@ class _CompactButton extends StatelessWidget {
         ? colorScheme.outline
         : colorScheme.outlineVariant.withValues(alpha: 0.3);
 
-    return Opacity(
+    Widget button = Opacity(
       opacity: isEnabled ? 1.0 : 0.6,
       child: Material(
         color: Colors.transparent,
@@ -555,5 +636,11 @@ class _CompactButton extends StatelessWidget {
         ),
       ),
     );
+
+    if (tooltip != null) {
+      button = Tooltip(message: tooltip!, child: button);
+    }
+
+    return button;
   }
 }
