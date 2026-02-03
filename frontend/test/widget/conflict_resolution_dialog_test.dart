@@ -233,6 +233,7 @@ void main() {
       // Set up dirty working tree
       gitService.statuses[testWorktreePath] = const GitStatus(
         unstaged: 3,
+        changedEntries: 3,
       );
 
       await tester.pumpWidget(createTestWidget());

@@ -537,19 +537,16 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           update: (context, project, fileService, selectionState, previous) =>
               previous ?? FileManagerState(project, fileService, selectionState),
         ),
-        // Worktree watcher service for monitoring git status changes
-        ChangeNotifierProxyProvider2<
-          GitService,
-          ProjectState,
-          WorktreeWatcherService
-        >(
+        // Worktree watcher service for monitoring git status changes.
+        // Self-contained: listens to ProjectState and watches all
+        // worktrees automatically. Eager (lazy: false) so it starts
+        // polling immediately, not when first read by a widget.
+        ChangeNotifierProvider<WorktreeWatcherService>(
+          lazy: false,
           create: (context) => WorktreeWatcherService(
             gitService: context.read<GitService>(),
             project: context.read<ProjectState>(),
           ),
-          update: (context, gitService, project, previous) =>
-              previous ??
-              WorktreeWatcherService(gitService: gitService, project: project),
         ),
         // Project config service for reading/writing .ccinsights/config.json
         Provider<ProjectConfigService>(

@@ -112,6 +112,7 @@ void main() {
       // Set up: worktree with uncommitted changes
       gitService.statuses[testWorktreePath] = const GitStatus(
         unstaged: 3,
+        changedEntries: 3,
         untracked: 2,
       );
 
@@ -133,7 +134,7 @@ void main() {
 
     testWidgets('stashes changes when Discard is selected', (tester) async {
       // Set up: worktree with uncommitted changes
-      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1);
+      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1, changedEntries: 1);
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -307,7 +308,7 @@ void main() {
     testWidgets('cancels when Cancel is clicked on uncommitted prompt',
         (tester) async {
       // Set up: worktree with uncommitted changes
-      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1);
+      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1, changedEntries: 1);
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -360,7 +361,7 @@ void main() {
 
     testWidgets('shows stash recovery note after stashing', (tester) async {
       // Set up: worktree with uncommitted changes
-      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1);
+      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1, changedEntries: 1);
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -7,178 +8,217 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import 'git_service.dart';
 
-/// Service that watches a worktree's filesystem for changes and polls git
-/// status at a throttled interval.
+/// Per-worktree watcher state.
 ///
-/// Uses Dart's built-in [Directory.watch] to monitor the worktree directory
-/// for file changes. When changes are detected, the service waits for the
-/// throttle interval before polling git status, ensuring we don't poll more
-/// than once every [pollInterval].
+/// Holds the filesystem subscription, throttle timer, periodic timer,
+/// and last-poll timestamp for a single worktree.
+class _WorktreeWatcher {
+  final WorktreeState worktree;
+
+  StreamSubscription<FileSystemEvent>? watcherSubscription;
+  Timer? pollTimer;
+  Timer? periodicTimer;
+  DateTime? lastPollTime;
+  bool pollPending = false;
+
+  _WorktreeWatcher(this.worktree);
+
+  /// Cancels all timers and subscriptions for this watcher.
+  void cancel() {
+    watcherSubscription?.cancel();
+    watcherSubscription = null;
+    pollTimer?.cancel();
+    pollTimer = null;
+    periodicTimer?.cancel();
+    periodicTimer = null;
+    pollPending = false;
+  }
+}
+
+/// Service that watches all project worktrees for filesystem changes
+/// and polls git status at a throttled interval.
+///
+/// Listens to [ProjectState] and automatically starts/stops watchers
+/// as worktrees are added or removed. Each worktree gets its own
+/// filesystem watcher and periodic polling timer.
 class WorktreeWatcherService extends ChangeNotifier {
-  /// Minimum interval between git status polls triggered by filesystem events.
+  /// Minimum interval between git status polls triggered by
+  /// filesystem events.
   static const pollInterval = Duration(seconds: 10);
 
-  /// Interval for periodic background polling (catches changes not visible
-  /// to the filesystem watcher, e.g. `git fetch`).
+  /// Interval for periodic background polling (catches changes not
+  /// visible to the filesystem watcher, e.g. `git fetch`).
   static const periodicInterval = Duration(seconds: 30);
 
   final GitService _gitService;
   final ProjectState _project;
   final bool _enablePeriodicPolling;
-
-  WorktreeState? _currentWorktree;
-  StreamSubscription<FileSystemEvent>? _watcherSubscription;
-  Timer? _pollTimer;
-  Timer? _periodicTimer;
-  DateTime? _lastPollTime;
-  bool _pollPending = false;
   bool _disposed = false;
 
-  /// Creates a [WorktreeWatcherService] with the given dependencies.
+  /// Active watchers keyed by worktree root path.
+  final Map<String, _WorktreeWatcher> _watchers = {};
+
+  /// Creates a [WorktreeWatcherService] that automatically watches
+  /// all worktrees in [project].
   ///
-  /// Set [enablePeriodicPolling] to false to disable the background timer
-  /// (useful in tests to avoid interfering with pumpAndSettle).
+  /// Set [enablePeriodicPolling] to false to disable background
+  /// timers (useful in tests to avoid interfering with
+  /// pumpAndSettle).
   WorktreeWatcherService({
     required GitService gitService,
     required ProjectState project,
     bool enablePeriodicPolling = true,
   })  : _gitService = gitService,
         _project = project,
-        _enablePeriodicPolling = enablePeriodicPolling;
+        _enablePeriodicPolling = enablePeriodicPolling {
+    _project.addListener(_syncWatchers);
+    _syncWatchers();
+  }
 
-  /// The worktree currently being watched.
-  WorktreeState? get currentWorktree => _currentWorktree;
-
-  /// Starts watching the given worktree for filesystem changes.
+  /// Reconciles active watchers with the project's worktree list.
   ///
-  /// Stops any existing watcher before starting a new one. Also triggers
-  /// an immediate git status poll.
-  void watchWorktree(WorktreeState worktree) {
+  /// Adds watchers for new worktrees and removes watchers for
+  /// worktrees that no longer exist in the project.
+  void _syncWatchers() {
     if (_disposed) return;
 
-    // Don't restart if already watching this worktree
-    if (_currentWorktree == worktree) return;
+    final allWt = _project.allWorktrees;
+    developer.log(
+      '_syncWatchers: ${allWt.length} worktrees in project, '
+      '${_watchers.length} active watchers',
+      name: 'WorktreeWatcher',
+    );
+    // Also print so it shows in the terminal.
+    // ignore: avoid_print
+    print('[WorktreeWatcher] _syncWatchers: '
+        '${allWt.length} worktrees, '
+        '${_watchers.length} watchers');
 
-    stopWatching();
-    _currentWorktree = worktree;
-
-    // Start filesystem watcher
-    _startWatcher(worktree.data.worktreeRoot);
-
-    // Start periodic background polling
-    if (_enablePeriodicPolling) {
-      _startPeriodicPolling();
+    final desiredPaths = <String>{};
+    for (final wt in allWt) {
+      desiredPaths.add(wt.data.worktreeRoot);
     }
 
-    // Trigger immediate poll
-    _pollGitStatus();
-  }
-
-  /// Stops watching the current worktree.
-  void stopWatching() {
-    _watcherSubscription?.cancel();
-    _watcherSubscription = null;
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    _periodicTimer?.cancel();
-    _periodicTimer = null;
-    _currentWorktree = null;
-    _pollPending = false;
-  }
-
-  /// Starts a repeating timer that polls git status every [periodicInterval].
-  ///
-  /// This catches changes that don't trigger filesystem events, such as
-  /// `git fetch` updating remote tracking refs inside `.git/`.
-  void _startPeriodicPolling() {
-    _periodicTimer?.cancel();
-    _periodicTimer = Timer.periodic(periodicInterval, (_) {
-      _pollGitStatus();
-    });
-  }
-
-  /// Starts the filesystem watcher for the given path.
-  void _startWatcher(String path) {
-    try {
-      final dir = Directory(path);
-      if (!dir.existsSync()) {
-        // Directory doesn't exist (e.g., in tests) - silently skip
-        return;
-      }
-
-      // Watch recursively for all file changes
-      _watcherSubscription = dir.watch(recursive: true).listen(
-        _handleFileSystemEvent,
-        onError: (_) {
-          // Watcher errors are expected in tests - silently ignore
-        },
+    // Remove watchers for worktrees no longer in the project.
+    final currentPaths = _watchers.keys.toSet();
+    final toRemove = currentPaths.difference(desiredPaths);
+    for (final path in toRemove) {
+      developer.log(
+        'Removing watcher for $path',
+        name: 'WorktreeWatcher',
       );
+      _watchers[path]?.cancel();
+      _watchers.remove(path);
+    }
+
+    // Add watchers for new worktrees.
+    for (final wt in _project.allWorktrees) {
+      final path = wt.data.worktreeRoot;
+      if (!_watchers.containsKey(path)) {
+        _startWatching(wt);
+      }
+    }
+  }
+
+  /// Starts watching a single worktree.
+  void _startWatching(WorktreeState worktree) {
+    if (_disposed) return;
+
+    final path = worktree.data.worktreeRoot;
+    final watcher = _WorktreeWatcher(worktree);
+    _watchers[path] = watcher;
+
+    developer.log(
+      'Starting watcher: ${worktree.data.branch} @ $path '
+      '(periodic=$_enablePeriodicPolling)',
+      name: 'WorktreeWatcher',
+    );
+
+    // Start filesystem watcher.
+    _startFsWatcher(watcher);
+
+    // Start periodic background polling.
+    if (_enablePeriodicPolling) {
+      watcher.periodicTimer = Timer.periodic(
+        periodicInterval,
+        (_) => _pollGitStatus(watcher),
+      );
+    }
+
+    // Immediate initial poll.
+    _pollGitStatus(watcher);
+  }
+
+  /// Starts a filesystem watcher for the given [watcher]'s path.
+  void _startFsWatcher(_WorktreeWatcher watcher) {
+    try {
+      final dir = Directory(watcher.worktree.data.worktreeRoot);
+      if (!dir.existsSync()) return;
+
+      watcher.watcherSubscription = dir
+          .watch(recursive: true)
+          .listen(
+            (event) => _handleFileSystemEvent(watcher, event),
+            onError: (_) {},
+          );
     } catch (_) {
-      // Failed to start watcher (e.g., in tests) - silently ignore
+      // Failed to start watcher (e.g., in tests).
     }
   }
 
   /// Handles a filesystem event by scheduling a throttled poll.
-  void _handleFileSystemEvent(FileSystemEvent event) {
-    // Ignore .git directory internal changes (too noisy)
+  void _handleFileSystemEvent(
+    _WorktreeWatcher watcher,
+    FileSystemEvent event,
+  ) {
     if (event.path.contains('/.git/')) return;
-
-    _schedulePoll();
+    _schedulePoll(watcher);
   }
 
   /// Schedules a git status poll, respecting the throttle interval.
-  void _schedulePoll() {
-    if (_disposed || _currentWorktree == null) return;
-
-    // If a poll is already pending, don't schedule another
-    if (_pollPending) return;
+  void _schedulePoll(_WorktreeWatcher watcher) {
+    if (_disposed) return;
+    if (watcher.pollPending) return;
 
     final now = DateTime.now();
-    final lastPoll = _lastPollTime;
+    final lastPoll = watcher.lastPollTime;
 
     if (lastPoll == null) {
-      // First poll - execute immediately
-      _pollGitStatus();
+      _pollGitStatus(watcher);
     } else {
       final elapsed = now.difference(lastPoll);
       if (elapsed >= pollInterval) {
-        // Enough time has passed - poll immediately
-        _pollGitStatus();
+        _pollGitStatus(watcher);
       } else {
-        // Schedule a poll after the remaining interval
         final remaining = pollInterval - elapsed;
-        _pollPending = true;
-        _pollTimer?.cancel();
-        _pollTimer = Timer(remaining, () {
-          _pollPending = false;
-          _pollGitStatus();
+        watcher.pollPending = true;
+        watcher.pollTimer?.cancel();
+        watcher.pollTimer = Timer(remaining, () {
+          watcher.pollPending = false;
+          _pollGitStatus(watcher);
         });
       }
     }
   }
 
   /// Polls git status and updates the worktree state.
-  Future<void> _pollGitStatus() async {
+  Future<void> _pollGitStatus(_WorktreeWatcher watcher) async {
     if (_disposed) return;
 
-    final worktree = _currentWorktree;
-    if (worktree == null) return;
-
-    _lastPollTime = DateTime.now();
+    final worktree = watcher.worktree;
+    watcher.lastPollTime = DateTime.now();
 
     try {
       final path = worktree.data.worktreeRoot;
 
-      // Fetch basic git status
       final status = await _gitService.getStatus(path);
-
-      // Fetch upstream branch
       final upstream = await _gitService.getUpstream(path);
 
-      // Fetch comparison to main branch
-      final mainBranch = await _gitService.getMainBranch(_project.data.repoRoot);
+      final mainBranch =
+          await _gitService.getMainBranch(_project.data.repoRoot);
       ({int ahead, int behind})? mainComparison;
-      if (mainBranch != null && worktree.data.branch != mainBranch) {
+      if (mainBranch != null &&
+          worktree.data.branch != mainBranch) {
         mainComparison = await _gitService.getBranchComparison(
           path,
           worktree.data.branch,
@@ -186,41 +226,78 @@ class WorktreeWatcherService extends ChangeNotifier {
         );
       }
 
-      // Update worktree data if still watching the same worktree
-      if (!_disposed && _currentWorktree == worktree) {
-        worktree.updateData(worktree.data.copyWith(
-          uncommittedFiles: status.uncommittedFiles,
-          stagedFiles: status.staged,
-          commitsAhead: status.ahead,
-          commitsBehind: status.behind,
-          hasMergeConflict: status.hasConflicts,
-          upstreamBranch: upstream,
-          clearUpstreamBranch: upstream == null,
-          commitsAheadOfMain: mainComparison?.ahead ?? 0,
-          commitsBehindMain: mainComparison?.behind ?? 0,
-        ));
+      if (_disposed) return;
 
-        // Notify listeners that status has been updated
-        notifyListeners();
-      }
-    } catch (_) {
-      // Git status poll failed (e.g., in tests) - silently ignore
+      // Only update if still watching this worktree.
+      if (!_watchers.containsKey(path)) return;
+
+      developer.log(
+        'Git poll [${worktree.data.branch}]: '
+        '$status | '
+        'uncommittedFiles=${status.uncommittedFiles} | '
+        'upstream=$upstream | '
+        'mainComparison=$mainComparison',
+        name: 'WorktreeWatcher',
+      );
+      // ignore: avoid_print
+      print('[WorktreeWatcher] Git poll '
+          '[${worktree.data.branch}]: '
+          'uncommitted=${status.uncommittedFiles} '
+          'staged=${status.staged} '
+          'ahead=${status.ahead} '
+          'behind=${status.behind}');
+
+      worktree.updateData(worktree.data.copyWith(
+        uncommittedFiles: status.uncommittedFiles,
+        stagedFiles: status.staged,
+        commitsAhead: status.ahead,
+        commitsBehind: status.behind,
+        hasMergeConflict: status.hasConflicts,
+        upstreamBranch: upstream,
+        clearUpstreamBranch: upstream == null,
+        commitsAheadOfMain: mainComparison?.ahead ?? 0,
+        commitsBehindMain: mainComparison?.behind ?? 0,
+      ));
+    } catch (e) {
+      developer.log(
+        'Git poll failed [${worktree.data.branch}]: $e',
+        name: 'WorktreeWatcher',
+        level: 900,
+      );
+      // ignore: avoid_print
+      print('[WorktreeWatcher] Git poll FAILED '
+          '[${worktree.data.branch}]: $e');
     }
   }
 
-  /// Forces an immediate git status poll, ignoring the throttle interval.
-  ///
-  /// Useful for when the user explicitly requests a refresh.
-  Future<void> forceRefresh() async {
-    _pollTimer?.cancel();
-    _pollPending = false;
-    await _pollGitStatus();
+  /// Forces an immediate git status poll for [worktree].
+  Future<void> forceRefresh(WorktreeState worktree) async {
+    final watcher = _watchers[worktree.data.worktreeRoot];
+    if (watcher == null) return;
+    watcher.pollTimer?.cancel();
+    watcher.pollPending = false;
+    await _pollGitStatus(watcher);
+  }
+
+  /// Forces an immediate git status poll for all watched worktrees.
+  Future<void> forceRefreshAll() async {
+    await Future.wait(
+      _watchers.values.map((w) {
+        w.pollTimer?.cancel();
+        w.pollPending = false;
+        return _pollGitStatus(w);
+      }),
+    );
   }
 
   @override
   void dispose() {
     _disposed = true;
-    stopWatching();
+    _project.removeListener(_syncWatchers);
+    for (final w in _watchers.values) {
+      w.cancel();
+    }
+    _watchers.clear();
     super.dispose();
   }
 }

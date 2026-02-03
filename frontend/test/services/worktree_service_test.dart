@@ -568,6 +568,7 @@ void main() {
         gitService.statuses['$worktreeRoot/cci/feature'] = const GitStatus(
           staged: 1,
           unstaged: 2,
+          changedEntries: 3,
           ahead: 3,
           behind: 4,
           hasConflicts: true,
@@ -586,7 +587,7 @@ void main() {
         check(result.data.branch).equals('feature');
         check(result.data.isPrimary).isFalse();
         check(result.data.stagedFiles).equals(1);
-        check(result.data.uncommittedFiles).equals(2); // unstaged + untracked
+        check(result.data.uncommittedFiles).equals(3); // changedEntries + untracked
         check(result.data.commitsAhead).equals(3);
         check(result.data.commitsBehind).equals(4);
         check(result.data.hasMergeConflict).isTrue();

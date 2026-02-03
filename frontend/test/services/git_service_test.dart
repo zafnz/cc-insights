@@ -149,7 +149,7 @@ u UU N... 100644 100644 100644 100644 abc123 def456 ghi789 lib/conflicted.dart
       expect(status.staged, 2); // M. and A.
       expect(status.unstaged, 1); // .M
       expect(status.untracked, 2); // two ? entries
-      expect(status.uncommittedFiles, 3); // unstaged + untracked
+      expect(status.uncommittedFiles, 5); // 3 changed + 2 untracked
       expect(status.ahead, 3);
       expect(status.behind, 1);
       expect(status.hasConflicts, false);
@@ -297,6 +297,7 @@ branch refs/heads/main''';
         staged: 2,
         unstaged: 3,
         untracked: 1,
+        changedEntries: 4,
         ahead: 5,
         behind: 2,
         hasConflicts: true,
@@ -307,7 +308,7 @@ branch refs/heads/main''';
       expect(status.staged, 2);
       expect(status.unstaged, 3);
       expect(status.untracked, 1);
-      expect(status.uncommittedFiles, 4); // 3 + 1
+      expect(status.uncommittedFiles, 5); // 4 changed + 1 untracked
       expect(status.ahead, 5);
       expect(status.behind, 2);
       expect(status.hasConflicts, true);

@@ -10,41 +10,122 @@ import '../fakes/fake_git_service.dart';
 void main() {
   late FakeGitService gitService;
   late ProjectState project;
-  late WorktreeState worktree;
+  late WorktreeState primaryWorktree;
 
-  const worktreePath = '/fake/repo';
   const repoRoot = '/fake/repo';
 
   setUp(() {
     gitService = FakeGitService();
-    gitService.statuses[worktreePath] = const GitStatus();
+    gitService.statuses[repoRoot] = const GitStatus();
     gitService.mainBranches[repoRoot] = 'main';
+
+    primaryWorktree = WorktreeState(
+      const WorktreeData(
+        worktreeRoot: repoRoot,
+        isPrimary: true,
+        branch: 'main',
+      ),
+    );
 
     project = ProjectState(
       const ProjectData(name: 'test', repoRoot: repoRoot),
-      WorktreeState(
-        const WorktreeData(
-          worktreeRoot: repoRoot,
-          isPrimary: true,
-          branch: 'main',
-        ),
-      ),
+      primaryWorktree,
       autoValidate: false,
       watchFilesystem: false,
-    );
-
-    worktree = WorktreeState(
-      const WorktreeData(
-        worktreeRoot: worktreePath,
-        isPrimary: false,
-        branch: 'feature',
-      ),
     );
   });
 
   tearDown(() {
     project.dispose();
-    worktree.dispose();
+  });
+
+  group('automatic syncing', () {
+    test('polls all worktrees on construction', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+
+        // Flush the initial poll for the primary worktree.
+        async.flushMicrotasks();
+        expect(gitService.getStatusCalls, greaterThan(0));
+
+        service.dispose();
+      });
+    });
+
+    test('starts polling when worktree added to project', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+        async.flushMicrotasks();
+        final initialCalls = gitService.getStatusCalls;
+
+        // Add a linked worktree.
+        const linkedPath = '/fake/linked';
+        gitService.statuses[linkedPath] = const GitStatus();
+        final linked = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+          ),
+        );
+        project.addWorktree(linked);
+
+        // The sync triggers an immediate poll for the new wt.
+        async.flushMicrotasks();
+        expect(
+          gitService.getStatusCalls,
+          greaterThan(initialCalls),
+        );
+
+        service.dispose();
+      });
+    });
+
+    test('stops polling when worktree removed from project', () {
+      fakeAsync((async) {
+        // Start with a linked worktree.
+        const linkedPath = '/fake/linked';
+        gitService.statuses[linkedPath] = const GitStatus();
+        final linked = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+          ),
+        );
+        project.addWorktree(linked);
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+        async.flushMicrotasks();
+
+        // Remove the linked worktree.
+        project.removeLinkedWorktree(linked);
+        async.flushMicrotasks();
+        final callsAfterRemove = gitService.getStatusCalls;
+
+        // Advance 30s — only primary should poll, not linked.
+        async.elapse(const Duration(seconds: 30));
+        async.flushMicrotasks();
+
+        // The linked worktree's timer should be cancelled.
+        // We should see exactly one poll (primary), not two.
+        final pollsSinceRemove =
+            gitService.getStatusCalls - callsAfterRemove;
+        // Primary polls once at 30s.
+        expect(pollsSinceRemove, 1);
+
+        service.dispose();
+      });
+    });
   });
 
   group('periodic polling', () {
@@ -55,14 +136,9 @@ void main() {
           project: project,
         );
 
-        service.watchWorktree(worktree);
-
-        // The initial poll from watchWorktree
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
-        expect(initialCalls, greaterThan(0));
 
-        // Advance 30 seconds - should trigger periodic poll
         async.elapse(const Duration(seconds: 30));
         async.flushMicrotasks();
         expect(
@@ -70,7 +146,6 @@ void main() {
           greaterThan(initialCalls),
         );
 
-        // Advance another 30 seconds - should trigger again
         final afterFirst = gitService.getStatusCalls;
         async.elapse(const Duration(seconds: 30));
         async.flushMicrotasks();
@@ -90,34 +165,10 @@ void main() {
           project: project,
         );
 
-        service.watchWorktree(worktree);
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
 
-        // Advance 29 seconds - should NOT trigger periodic poll
         async.elapse(const Duration(seconds: 29));
-        async.flushMicrotasks();
-        expect(gitService.getStatusCalls, equals(initialCalls));
-
-        service.dispose();
-      });
-    });
-
-    test('stops periodic polling when stopWatching is called', () {
-      fakeAsync((async) {
-        final service = WorktreeWatcherService(
-          gitService: gitService,
-          project: project,
-        );
-
-        service.watchWorktree(worktree);
-        async.flushMicrotasks();
-        final initialCalls = gitService.getStatusCalls;
-
-        service.stopWatching();
-
-        // Advance 30 seconds - should NOT poll
-        async.elapse(const Duration(seconds: 30));
         async.flushMicrotasks();
         expect(gitService.getStatusCalls, equals(initialCalls));
 
@@ -132,59 +183,48 @@ void main() {
           project: project,
         );
 
-        service.watchWorktree(worktree);
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
 
         service.dispose();
 
-        // Advance 30 seconds - should NOT poll
         async.elapse(const Duration(seconds: 30));
         async.flushMicrotasks();
         expect(gitService.getStatusCalls, equals(initialCalls));
       });
     });
 
-    test('restarts periodic polling when switching worktrees', () {
+    test('polls multiple worktrees independently', () {
       fakeAsync((async) {
+        const linkedPath = '/fake/linked';
+        gitService.statuses[linkedPath] = const GitStatus();
+        final linked = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+          ),
+        );
+        project.addWorktree(linked);
+
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
         );
 
-        final worktree2 = WorktreeState(
-          const WorktreeData(
-            worktreeRoot: '/fake/repo2',
-            isPrimary: false,
-            branch: 'other',
-          ),
-        );
-        gitService.statuses['/fake/repo2'] = const GitStatus();
-
-        service.watchWorktree(worktree);
         async.flushMicrotasks();
+        final initialCalls = gitService.getStatusCalls;
+        // Should have polled both worktrees.
+        expect(initialCalls, greaterThanOrEqualTo(2));
 
-        // Switch to different worktree at 15s mark
-        async.elapse(const Duration(seconds: 15));
-        service.watchWorktree(worktree2);
-        async.flushMicrotasks();
-        final callsAfterSwitch = gitService.getStatusCalls;
-
-        // At 30s from start (15s after switch) - should NOT have fired
-        // the old 30s timer
-        async.elapse(const Duration(seconds: 15));
-        async.flushMicrotasks();
-        expect(gitService.getStatusCalls, equals(callsAfterSwitch));
-
-        // At 45s from start (30s after switch) - should fire new timer
-        async.elapse(const Duration(seconds: 15));
+        // After 30s, both should poll again.
+        async.elapse(const Duration(seconds: 30));
         async.flushMicrotasks();
         expect(
           gitService.getStatusCalls,
-          greaterThan(callsAfterSwitch),
+          greaterThanOrEqualTo(initialCalls + 2),
         );
 
-        worktree2.dispose();
         service.dispose();
       });
     });

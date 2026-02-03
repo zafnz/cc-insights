@@ -38,38 +38,8 @@ class InformationPanel extends StatelessWidget {
   }
 }
 
-class _InformationContent extends StatefulWidget {
+class _InformationContent extends StatelessWidget {
   const _InformationContent();
-
-  @override
-  State<_InformationContent> createState() => _InformationContentState();
-}
-
-class _InformationContentState extends State<_InformationContent> {
-  WorktreeState? _lastWorktree;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final selection = context.read<SelectionState>();
-    final worktree = selection.selectedWorktree;
-
-    // Start watching worktree when it changes
-    if (worktree != null && worktree != _lastWorktree) {
-      _lastWorktree = worktree;
-      _startWatching(worktree);
-    }
-  }
-
-  void _startWatching(WorktreeState worktree) {
-    // Try to get WorktreeWatcherService - may not be available in tests
-    try {
-      final watcherService = context.read<WorktreeWatcherService>();
-      watcherService.watchWorktree(worktree);
-    } catch (_) {
-      // Provider not available (e.g., in tests) - silently ignore
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,10 +58,11 @@ class _InformationContentState extends State<_InformationContent> {
         onStatusChanged: () {
           // Force an immediate refresh of the git status
           try {
-            final watcherService = context.read<WorktreeWatcherService>();
-            watcherService.forceRefresh();
+            final watcher =
+                context.read<WorktreeWatcherService>();
+            watcher.forceRefresh(worktree);
           } catch (_) {
-            // Provider not available (e.g., in tests) - silently ignore
+            // Provider not available (e.g., in tests)
           }
         },
       ),
@@ -423,6 +394,15 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
             prefix: 'Update from ',
             value: _updateSource,
             options: const ['main', 'origin/main'],
+            tooltips: const {
+              'main': 'Use changes from the local main branch.\n'
+                  'Use this when working locally and not\n'
+                  'in a GitHub Pull Request setup.',
+              'origin/main':
+                  'Use changes from the remote (origin)\n'
+                      'main branch. Use this when using\n'
+                      'GitHub to manage your merges.',
+            },
             onChanged: (v) => setState(() => _updateSource = v),
             colorScheme: colorScheme,
           ),
@@ -495,11 +475,11 @@ class _StatusCounts extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Tooltip(
-      message: 'Unstaged: ${data.uncommittedFiles} files\n'
+      message: 'Uncommitted: ${data.uncommittedFiles} files\n'
           'Staged: ${data.stagedFiles} files\n'
           'Commits ahead of upstream: ${data.commitsAhead}',
       child: Text(
-        'Unstaged/Staged/Commits: '
+        'Uncommitted/Staged/Commits: '
         '${data.uncommittedFiles}/${data.stagedFiles}/${data.commitsAhead}',
         style: textTheme.bodySmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
@@ -612,6 +592,7 @@ class _SectionDividerWithDropdown extends StatelessWidget {
     required this.options,
     required this.onChanged,
     required this.colorScheme,
+    this.tooltips,
   });
 
   final String prefix;
@@ -619,6 +600,7 @@ class _SectionDividerWithDropdown extends StatelessWidget {
   final List<String> options;
   final ValueChanged<String> onChanged;
   final ColorScheme colorScheme;
+  final Map<String, String>? tooltips;
 
   @override
   Widget build(BuildContext context) {
@@ -627,7 +609,9 @@ class _SectionDividerWithDropdown extends StatelessWidget {
       color: colorScheme.onSurfaceVariant,
     );
 
-    return GestureDetector(
+    final tooltip = tooltips?[value];
+
+    Widget child = GestureDetector(
       onTap: () {
         final renderBox =
             context.findRenderObject() as RenderBox;
@@ -675,6 +659,12 @@ class _SectionDividerWithDropdown extends StatelessWidget {
         ],
       ),
     );
+
+    if (tooltip != null) {
+      child = Tooltip(message: tooltip, child: child);
+    }
+
+    return child;
   }
 }
 

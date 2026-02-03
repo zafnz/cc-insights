@@ -221,7 +221,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
 
       if (!mounted) return;
 
-      _uncommittedCount = status.uncommittedFiles + status.staged;
+      _uncommittedCount = status.uncommittedFiles;
 
       if (_uncommittedCount > 0) {
         _updateLastLog(

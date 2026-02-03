@@ -183,7 +183,7 @@ class _ConflictResolutionDialogState
 
       if (!mounted) return;
 
-      final uncommitted = status.uncommittedFiles + status.staged;
+      final uncommitted = status.uncommittedFiles;
       if (uncommitted > 0) {
         _updateLastLog(
           LogEntryStatus.error,

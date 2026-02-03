@@ -12,6 +12,11 @@ class GitStatus {
   /// Number of untracked files.
   final int untracked;
 
+  /// Number of distinct tracked files with any change (staged and/or
+  /// unstaged). Each file is counted once even if it has both staged
+  /// and unstaged modifications.
+  final int changedEntries;
+
   /// Number of commits ahead of upstream.
   final int ahead;
 
@@ -25,18 +30,20 @@ class GitStatus {
     this.unstaged = 0,
     this.staged = 0,
     this.untracked = 0,
+    this.changedEntries = 0,
     this.ahead = 0,
     this.behind = 0,
     this.hasConflicts = false,
   });
 
-  /// Total uncommitted files (unstaged + untracked).
-  int get uncommittedFiles => unstaged + untracked;
+  /// Total uncommitted files (changed tracked entries + untracked).
+  int get uncommittedFiles => changedEntries + untracked;
 
   @override
   String toString() =>
       'GitStatus(unstaged: $unstaged, staged: $staged, untracked: $untracked, '
-      'ahead: $ahead, behind: $behind, hasConflicts: $hasConflicts)';
+      'changedEntries: $changedEntries, ahead: $ahead, behind: $behind, '
+      'hasConflicts: $hasConflicts)';
 }
 
 /// Information about a discovered worktree.
@@ -943,6 +950,7 @@ class GitStatusParser {
     int staged = 0;
     int unstaged = 0;
     int untracked = 0;
+    int changedEntries = 0;
     int ahead = 0;
     int behind = 0;
     bool hasConflicts = false;
@@ -974,6 +982,7 @@ class GitStatusParser {
 
       // Changed entries: 1 XY ... or 2 XY ... (renames)
       if (line.startsWith('1 ') || line.startsWith('2 ')) {
+        changedEntries++;
         final xy = line.substring(2, 4);
         final x = xy[0]; // staged status
         final y = xy[1]; // unstaged status
@@ -994,6 +1003,7 @@ class GitStatusParser {
       staged: staged,
       unstaged: unstaged,
       untracked: untracked,
+      changedEntries: changedEntries,
       ahead: ahead,
       behind: behind,
       hasConflicts: hasConflicts,
