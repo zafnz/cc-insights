@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
+import '../../services/runtime_config.dart';
 
 /// Displays a system notification entry.
 ///
 /// Shows feedback from the SDK that doesn't come through normal assistant
-/// messages, such as "Unknown skill: clear" for unrecognized slash commands.
+/// messages, such as "Unknown skill: clear" for unrecognized slash commands
+/// or local command output like /cost and /context.
+///
+/// Content is rendered as Markdown using GptMarkdown.
 class SystemNotificationEntryWidget extends StatelessWidget {
   /// Creates a system notification entry widget.
   const SystemNotificationEntryWidget({super.key, required this.entry});
@@ -28,6 +35,7 @@ class SystemNotificationEntryWidget extends StatelessWidget {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             Icons.info_outline,
@@ -36,11 +44,36 @@ class SystemNotificationEntryWidget extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              entry.message,
-              style: TextStyle(
-                fontSize: 13,
-                color: colorScheme.onSurface,
+            child: SelectionArea(
+              child: GptMarkdown(
+                entry.message,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.onSurface,
+                ),
+                onLinkTap: (url, title) {
+                  launchUrl(Uri.parse(url));
+                },
+                highlightBuilder: (context, text, style) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      text,
+                      style: GoogleFonts.getFont(
+                        RuntimeConfig.instance.monoFontFamily,
+                        fontSize: (style.fontSize ?? 13) - 1,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

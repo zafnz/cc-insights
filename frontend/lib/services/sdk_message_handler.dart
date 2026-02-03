@@ -36,19 +36,20 @@ class SdkMessageHandler {
   /// update the correct agent.
   final Map<String, String> _toolUseIdToAgentId = {};
 
-  /// Tracks whether assistant output was added during the current turn.
+  /// Tracks whether assistant output was added during the current turn,
+  /// per chat.
   ///
   /// Used to determine whether to display result messages - if no assistant
   /// output was added (e.g., for an unrecognized slash command), the result
   /// message should be shown to the user.
-  bool _hasAssistantOutputThisTurn = false;
+  final Map<String, bool> _hasAssistantOutputThisTurn = {};
 
-  /// Tracks whether we're expecting a context summary message.
+  /// Tracks whether we're expecting a context summary message, per chat.
   ///
   /// Set to true after receiving a compact_boundary message. The next user
   /// message will be treated as the context summary and displayed as a
   /// [ContextSummaryEntry].
-  bool _expectingContextSummary = false;
+  final Map<String, bool> _expectingContextSummary = {};
 
   /// AskAiService for generating chat titles.
   final AskAiService? _askAiService;
@@ -149,7 +150,7 @@ class SdkMessageHandler {
         ));
 
         // The next user message will contain the context summary
-        _expectingContextSummary = true;
+        _expectingContextSummary[chat.data.id] = true;
 
       case 'context_cleared':
         // Context was cleared (e.g., /clear command)
@@ -212,7 +213,7 @@ class SdkMessageHandler {
           chat.addOutputEntry(conversationId, textEntry);
           // Mark that we have assistant output for this turn (main agent only)
           if (parentToolUseId == null) {
-            _hasAssistantOutputThisTurn = true;
+            _hasAssistantOutputThisTurn[chat.data.id] = true;
           }
 
         case 'thinking':
@@ -225,7 +226,7 @@ class SdkMessageHandler {
           chat.addOutputEntry(conversationId, thinkingEntry);
           // Mark that we have assistant output for this turn (main agent only)
           if (parentToolUseId == null) {
-            _hasAssistantOutputThisTurn = true;
+            _hasAssistantOutputThisTurn[chat.data.id] = true;
           }
 
         case 'tool_use':
@@ -290,9 +291,11 @@ class SdkMessageHandler {
     // _expectingContextSummary flag after receiving compact_boundary
     final isSynthetic = msg['isSynthetic'] as bool? ?? false;
     final isReplay = msg['isReplay'] as bool? ?? false;
-    if (isSynthetic || (_expectingContextSummary && !isReplay)) {
+    final chatId = chat.data.id;
+    if (isSynthetic ||
+        ((_expectingContextSummary[chatId] ?? false) && !isReplay)) {
       // Reset the flag
-      _expectingContextSummary = false;
+      _expectingContextSummary[chatId] = false;
 
       // Extract the text content and display as a context summary entry
       for (final block in content) {
@@ -305,6 +308,35 @@ class SdkMessageHandler {
               timestamp: DateTime.now(),
               summary: text,
             ));
+          }
+        }
+      }
+      return;
+    }
+
+    // Handle local command output (e.g., /cost, /compact).
+    // These arrive as user messages with isReplay: true and text content
+    // wrapped in <local-command-stdout> tags.
+    // Skip replay messages that follow a compact_boundary — the
+    // AutoCompactionEntry already shows the compaction notification.
+    if (isReplay) {
+      if (!(_expectingContextSummary[chatId] ?? false)) {
+        final localCmdRegex = RegExp(
+          r'<local-command-stdout>([\s\S]*?)</local-command-stdout>',
+        );
+        for (final block in content) {
+          if (block is! Map<String, dynamic>) continue;
+          if (block['type'] != 'text') continue;
+          final text = block['text'] as String? ?? '';
+          final match = localCmdRegex.firstMatch(text);
+          if (match != null) {
+            final output = match.group(1)?.trim() ?? '';
+            if (output.isNotEmpty) {
+              chat.addEntry(SystemNotificationEntry(
+                timestamp: DateTime.now(),
+                message: output,
+              ));
+            }
           }
         }
       }
@@ -590,8 +622,9 @@ class SdkMessageHandler {
 
       // If no assistant output was added during this turn and there's a result
       // message, display it as a system notification (e.g., "Unknown skill: clear")
+      final chatId = chat.data.id;
       final result = msg['result'] as String?;
-      if (!_hasAssistantOutputThisTurn &&
+      if (!(_hasAssistantOutputThisTurn[chatId] ?? false) &&
           result != null &&
           result.isNotEmpty) {
         chat.addEntry(SystemNotificationEntry(
@@ -601,7 +634,7 @@ class SdkMessageHandler {
       }
 
       // Reset the flag for the next turn
-      _hasAssistantOutputThisTurn = false;
+      _hasAssistantOutputThisTurn[chatId] = false;
     }
   }
 
@@ -729,8 +762,8 @@ $userMessage''';
     _toolUseIdToEntry.clear();
     _agentIdToConversationId.clear();
     _toolUseIdToAgentId.clear();
-    _hasAssistantOutputThisTurn = false;
-    _expectingContextSummary = false;
+    _hasAssistantOutputThisTurn.clear();
+    _expectingContextSummary.clear();
     _pendingTitleGenerations.clear();
     _titlesGenerated.clear();
   }
