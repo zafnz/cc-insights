@@ -195,6 +195,18 @@ class TestGitService implements GitService {
     return [];
   }
 
+  @override
+  Future<DirectoryGitInfo> analyzeDirectory(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    // Default: not a git repo
+    return DirectoryGitInfo(
+      analyzedPath: path,
+      isInGitRepo: false,
+      isLinkedWorktree: false,
+      isAtWorktreeRoot: false,
+    );
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;

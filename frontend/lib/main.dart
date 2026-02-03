@@ -11,6 +11,7 @@ import 'models/worktree.dart';
 import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
 import 'screens/welcome_screen.dart';
+import 'widgets/directory_validation_dialog.dart';
 import 'services/ask_ai_service.dart';
 import 'services/backend_service.dart';
 import 'services/file_system_service.dart';
@@ -139,6 +140,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Whether a project has been selected (either from CLI or welcome screen).
   bool _projectSelected = false;
 
+  /// Whether we need to validate the directory before loading.
+  /// Set to true when launched from CLI with a potentially problematic directory.
+  bool _needsValidation = false;
+
+  /// The git info for the directory being validated.
+  DirectoryGitInfo? _pendingValidationInfo;
+
   @override
   void initState() {
     super.initState();
@@ -204,11 +212,34 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       _mockProject = _createMockProject();
       _projectSelected = true;
     } else if (RuntimeConfig.instance.launchedFromCli) {
-      // Launched from CLI - restore project for the working directory
-      _projectFuture = _restoreProject();
-      _projectSelected = true;
+      // Launched from CLI - need to validate the directory first
+      _needsValidation = true;
+      _validateDirectory(RuntimeConfig.instance.workingDirectory);
     }
     // Otherwise, show welcome screen and wait for user to select a project
+  }
+
+  /// Validates the directory and determines if we need to show a prompt.
+  Future<void> _validateDirectory(String path) async {
+    final gitService = const RealGitService();
+    final gitInfo = await gitService.analyzeDirectory(path);
+
+    if (!mounted) return;
+
+    // Check if the directory is ideal (primary worktree at root)
+    if (gitInfo.isPrimaryWorktreeRoot) {
+      // Ideal case - proceed directly
+      setState(() {
+        _needsValidation = false;
+        _projectSelected = true;
+        _projectFuture = _restoreProject();
+      });
+    } else {
+      // Need to show validation dialog
+      setState(() {
+        _pendingValidationInfo = gitInfo;
+      });
+    }
   }
 
   /// Initialize SDK debug logging to write all messages to a file.
@@ -300,6 +331,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       return _buildApp(_project!);
     }
 
+    // Show validation dialog if we have pending validation
+    if (_needsValidation && _pendingValidationInfo != null) {
+      return _buildValidationScreen();
+    }
+
     // Show welcome screen if not launched from CLI and no project selected
     if (!_projectSelected) {
       return _buildWelcomeApp();
@@ -366,6 +402,71 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         onProjectSelected: _onProjectSelected,
       ),
     );
+  }
+
+  /// Builds the validation screen that shows the directory validation message.
+  Widget _buildValidationScreen() {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      home: DirectoryValidationScreen(
+        gitInfo: _pendingValidationInfo!,
+        onResult: _handleValidationResult,
+      ),
+    );
+  }
+
+  /// Handles the result of the directory validation dialog.
+  void _handleValidationResult(DirectoryValidationResult result) {
+    switch (result) {
+      case DirectoryValidationResult.openPrimary:
+        // User chose to open the primary/repo root
+        final targetPath = _pendingValidationInfo!.isLinkedWorktree
+            ? _pendingValidationInfo!.repoRoot
+            : _pendingValidationInfo!.worktreeRoot;
+
+        if (targetPath != null) {
+          RuntimeConfig.instance.setWorkingDirectory(targetPath);
+          setState(() {
+            _needsValidation = false;
+            _pendingValidationInfo = null;
+            _projectSelected = true;
+            _projectFuture = _restoreProject();
+          });
+        }
+        break;
+
+      case DirectoryValidationResult.chooseDifferent:
+        // User wants to choose a different folder - show welcome screen
+        setState(() {
+          _needsValidation = false;
+          _pendingValidationInfo = null;
+          _projectSelected = false;
+        });
+        break;
+
+      case DirectoryValidationResult.openAnyway:
+        // User chose to proceed with the current directory
+        setState(() {
+          _needsValidation = false;
+          _pendingValidationInfo = null;
+          _projectSelected = true;
+          _projectFuture = _restoreProject();
+        });
+        break;
+
+      case DirectoryValidationResult.cancelled:
+        // User cancelled - show welcome screen
+        setState(() {
+          _needsValidation = false;
+          _pendingValidationInfo = null;
+          _projectSelected = false;
+        });
+        break;
+    }
   }
 
   /// Builds the loading screen shown while restoring project.

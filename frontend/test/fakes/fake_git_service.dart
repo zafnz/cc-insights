@@ -392,4 +392,25 @@ class FakeGitService implements GitService {
       statuses[wt.path] = const GitStatus();
     }
   }
+
+  /// Map of path -> directory git info for [analyzeDirectory].
+  final Map<String, DirectoryGitInfo> directoryInfos = {};
+
+  @override
+  Future<DirectoryGitInfo> analyzeDirectory(String path) async {
+    await _maybeDelay();
+    _maybeThrow();
+
+    if (directoryInfos.containsKey(path)) {
+      return directoryInfos[path]!;
+    }
+
+    // Default: not a git repo
+    return DirectoryGitInfo(
+      analyzedPath: path,
+      isInGitRepo: false,
+      isLinkedWorktree: false,
+      isAtWorktreeRoot: false,
+    );
+  }
 }
