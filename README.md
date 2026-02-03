@@ -11,6 +11,8 @@ Yet another Claude Code coordinater desktop GUI application.
 - Works with your **existing Claude subscription**, uses authorised SDK so won't be blocked by Anthropic.
 - This program does not require subscription or an account beyond what Claude requires. 
 
+<img style="float: right;" width="600" height="498" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
+
 ## More features
 
 - **Multi-agent visualization** - See main agents and subagents in a tree structure
