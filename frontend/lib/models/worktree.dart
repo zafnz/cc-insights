@@ -156,6 +156,18 @@ class WorktreeState extends ChangeNotifier {
   final List<ChatState> _chats;
   ChatState? _selectedChat;
 
+  /// Draft text typed in the welcome screen before any chat is created.
+  ///
+  /// Preserved when switching between worktrees so users don't lose their
+  /// in-progress messages on worktrees that don't have a chat yet.
+  String _welcomeDraftText = '';
+
+  /// Model selected in the welcome screen before any chat is created.
+  ClaudeModel _welcomeModel = ClaudeModel.opus;
+
+  /// Permission mode selected in the welcome screen before chat creation.
+  PermissionMode _welcomePermissionMode = PermissionMode.defaultMode;
+
   /// Creates a [WorktreeState] with the given initial data.
   ///
   /// [chats] defaults to an empty list if not provided.
@@ -176,6 +188,19 @@ class WorktreeState extends ChangeNotifier {
   /// When switching worktrees, the selection is preserved so users can
   /// return to their previous context.
   ChatState? get selectedChat => _selectedChat;
+
+  /// Draft text for the welcome screen (before any chat is created).
+  String get welcomeDraftText => _welcomeDraftText;
+  set welcomeDraftText(String value) => _welcomeDraftText = value;
+
+  /// Model selection for the welcome screen.
+  ClaudeModel get welcomeModel => _welcomeModel;
+  set welcomeModel(ClaudeModel value) => _welcomeModel = value;
+
+  /// Permission mode selection for the welcome screen.
+  PermissionMode get welcomePermissionMode => _welcomePermissionMode;
+  set welcomePermissionMode(PermissionMode value) =>
+      _welcomePermissionMode = value;
 
   /// Replaces the entire [WorktreeData] with a new instance.
   ///
