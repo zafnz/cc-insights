@@ -197,6 +197,7 @@ class WorktreeState extends ChangeNotifier {
   /// Tag names assigned to this worktree.
   List<String> _tags;
 
+
   /// Draft text typed in the welcome screen before any chat is created.
   ///
   /// Preserved when switching between worktrees so users don't lose their
@@ -271,6 +272,7 @@ class WorktreeState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
 
   /// Replaces the entire [WorktreeData] with a new instance.
   ///
