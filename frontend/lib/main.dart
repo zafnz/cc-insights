@@ -408,7 +408,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // AskAI service for one-shot AI queries
         Provider<AskAiService>.value(value: _askAiService!),
         // Persistence service for storing project/chat data
-        Provider<PersistenceService>.value(value: _persistenceService!),
+        Provider<PersistenceService>.value(
+            value: _persistenceService ?? PersistenceService()),
         // Project state
         ChangeNotifierProvider<ProjectState>.value(value: project),
         // Selection state depends on project
