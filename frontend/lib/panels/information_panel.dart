@@ -394,6 +394,10 @@ class _WorktreeInfo extends StatelessWidget {
                 : null,
             label: 'Stage and commit all',
             icon: Icons.check_circle_outline,
+            tooltip: data.uncommittedFiles == 0 &&
+                    data.stagedFiles == 0
+                ? 'No uncommitted files'
+                : null,
           ),
           const SizedBox(height: 12),
 
@@ -415,6 +419,9 @@ class _WorktreeInfo extends StatelessWidget {
                       : null,
                   label: 'Rebase',
                   icon: Icons.low_priority,
+                  tooltip: _canUpdateFromMain
+                      ? null
+                      : 'Already up-to-date with main',
                 ),
               ),
               const SizedBox(width: 6),
@@ -428,6 +435,9 @@ class _WorktreeInfo extends StatelessWidget {
                       : null,
                   label: 'Merge',
                   icon: Icons.merge,
+                  tooltip: _canUpdateFromMain
+                      ? null
+                      : 'Already up-to-date with main',
                 ),
               ),
             ],
