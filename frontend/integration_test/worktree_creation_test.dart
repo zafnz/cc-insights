@@ -415,8 +415,18 @@ void main() {
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Existing worktrees should still be listed
-      await _scrollWorktreePanelTo(tester, find.text('main'), delta: -200);
-      expect(find.text('main'), findsWidgets);
+      // Use a scoped finder to avoid matching 'main' in multiple places.
+      // scrollUntilVisible requires a single-element target, so use .first.
+      final mainInWorktreePanel = find.descendant(
+        of: find.byType(WorktreePanel),
+        matching: find.text('main'),
+      );
+      await _scrollWorktreePanelTo(
+        tester,
+        mainInWorktreePanel.first,
+        delta: -200,
+      );
+      expect(mainInWorktreePanel, findsWidgets);
       expect(find.text('feat-dark-mode'), findsOneWidget);
     });
   });
