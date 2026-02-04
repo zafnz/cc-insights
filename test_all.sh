@@ -30,7 +30,7 @@ for test_file in "$REPO_ROOT/frontend/integration_test"/*_test.dart; do
   name="$(basename "$test_file")"
   echo -e "${BOLD}Running integration test: ${name}${RESET}"
   cd "$REPO_ROOT/frontend"
-  flutter test "$test_file" || fail "Integration test: $name" -d macos
+  flutter test "$test_file" -d macos || fail "Integration test: $name"
   pass "Integration test: $name"
 done
 
