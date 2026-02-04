@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -83,16 +82,6 @@ class WorktreeWatcherService extends ChangeNotifier {
     if (_disposed) return;
 
     final allWt = _project.allWorktrees;
-    developer.log(
-      '_syncWatchers: ${allWt.length} worktrees in project, '
-      '${_watchers.length} active watchers',
-      name: 'WorktreeWatcher',
-    );
-    // Also print so it shows in the terminal.
-    // ignore: avoid_print
-    print('[WorktreeWatcher] _syncWatchers: '
-        '${allWt.length} worktrees, '
-        '${_watchers.length} watchers');
 
     final desiredPaths = <String>{};
     for (final wt in allWt) {
@@ -103,10 +92,6 @@ class WorktreeWatcherService extends ChangeNotifier {
     final currentPaths = _watchers.keys.toSet();
     final toRemove = currentPaths.difference(desiredPaths);
     for (final path in toRemove) {
-      developer.log(
-        'Removing watcher for $path',
-        name: 'WorktreeWatcher',
-      );
       _watchers[path]?.cancel();
       _watchers.remove(path);
     }
@@ -127,12 +112,6 @@ class WorktreeWatcherService extends ChangeNotifier {
     final path = worktree.data.worktreeRoot;
     final watcher = _WorktreeWatcher(worktree);
     _watchers[path] = watcher;
-
-    developer.log(
-      'Starting watcher: ${worktree.data.branch} @ $path '
-      '(periodic=$_enablePeriodicPolling)',
-      name: 'WorktreeWatcher',
-    );
 
     // Start filesystem watcher.
     _startFsWatcher(watcher);
@@ -231,22 +210,6 @@ class WorktreeWatcherService extends ChangeNotifier {
       // Only update if still watching this worktree.
       if (!_watchers.containsKey(path)) return;
 
-      developer.log(
-        'Git poll [${worktree.data.branch}]: '
-        '$status | '
-        'uncommittedFiles=${status.uncommittedFiles} | '
-        'upstream=$upstream | '
-        'mainComparison=$mainComparison',
-        name: 'WorktreeWatcher',
-      );
-      // ignore: avoid_print
-      print('[WorktreeWatcher] Git poll '
-          '[${worktree.data.branch}]: '
-          'uncommitted=${status.uncommittedFiles} '
-          'staged=${status.staged} '
-          'ahead=${status.ahead} '
-          'behind=${status.behind}');
-
       worktree.updateData(worktree.data.copyWith(
         uncommittedFiles: status.uncommittedFiles,
         stagedFiles: status.staged,
@@ -258,15 +221,8 @@ class WorktreeWatcherService extends ChangeNotifier {
         commitsAheadOfMain: mainComparison?.ahead ?? 0,
         commitsBehindMain: mainComparison?.behind ?? 0,
       ));
-    } catch (e) {
-      developer.log(
-        'Git poll failed [${worktree.data.branch}]: $e',
-        name: 'WorktreeWatcher',
-        level: 900,
-      );
-      // ignore: avoid_print
-      print('[WorktreeWatcher] Git poll FAILED '
-          '[${worktree.data.branch}]: $e');
+    } catch (_) {
+      // Git poll failed — will retry on next interval.
     }
   }
 

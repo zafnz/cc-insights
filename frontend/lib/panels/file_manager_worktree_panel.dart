@@ -124,7 +124,10 @@ class _WorktreeListItem extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 6,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -148,8 +151,15 @@ class _WorktreeListItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Inline status indicators
-                  _InlineStatusIndicators(data: data),
+                  // Status indicators rebuild when worktree
+                  // data changes (e.g. git status poll).
+                  ListenableBuilder(
+                    listenable: worktree,
+                    builder: (context, _) =>
+                        _InlineStatusIndicators(
+                      data: worktree.data,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -174,25 +184,29 @@ class _InlineStatusIndicators extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final parts = <TextSpan>[];
 
-    // Commits ahead (green arrow up)
-    if (data.commitsAhead > 0) {
+    // Commits ahead of main (green arrow up)
+    if (data.commitsAheadOfMain > 0) {
       parts.add(
         TextSpan(
-          text: '↑${data.commitsAhead}',
-          style: textTheme.labelSmall?.copyWith(color: Colors.green),
+          text: '↑${data.commitsAheadOfMain}',
+          style: textTheme.labelSmall?.copyWith(
+            color: Colors.green,
+          ),
         ),
       );
     }
 
-    // Commits behind (orange arrow down)
-    if (data.commitsBehind > 0) {
+    // Commits behind main (orange arrow down)
+    if (data.commitsBehindMain > 0) {
       if (parts.isNotEmpty) {
         parts.add(const TextSpan(text: ' '));
       }
       parts.add(
         TextSpan(
-          text: '↓${data.commitsBehind}',
-          style: textTheme.labelSmall?.copyWith(color: Colors.orange),
+          text: '↓${data.commitsBehindMain}',
+          style: textTheme.labelSmall?.copyWith(
+            color: Colors.orange,
+          ),
         ),
       );
     }

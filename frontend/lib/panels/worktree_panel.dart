@@ -567,15 +567,14 @@ class _WorktreeListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final data = worktree.data;
-    // Show relative path for linked worktrees, full path for primary
-    final displayPath =
-        _getRelativePath(data.worktreeRoot) ?? data.worktreeRoot;
-
-    // Listen to all chats in this worktree to detect permission changes
+    // Listen to worktree (git status) and all chats (permissions).
     return ListenableBuilder(
-      listenable: Listenable.merge(worktree.chats),
+      listenable: Listenable.merge([worktree, ...worktree.chats]),
       builder: (context, _) {
+        final data = worktree.data;
+        final displayPath =
+            _getRelativePath(data.worktreeRoot) ??
+            data.worktreeRoot;
         // Check if any chat in this worktree has a pending permission
         final hasAnyPermissionPending =
             worktree.chats.any((chat) => chat.isWaitingForPermission);
@@ -658,25 +657,29 @@ class InlineStatusIndicators extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final parts = <TextSpan>[];
 
-    // Commits ahead (green arrow up)
-    if (data.commitsAhead > 0) {
+    // Commits ahead of main (green arrow up)
+    if (data.commitsAheadOfMain > 0) {
       parts.add(
         TextSpan(
-          text: '↑${data.commitsAhead}',
-          style: textTheme.labelSmall?.copyWith(color: Colors.green),
+          text: '↑${data.commitsAheadOfMain}',
+          style: textTheme.labelSmall?.copyWith(
+            color: Colors.green,
+          ),
         ),
       );
     }
 
-    // Commits behind (orange arrow down)
-    if (data.commitsBehind > 0) {
+    // Commits behind main (orange arrow down)
+    if (data.commitsBehindMain > 0) {
       if (parts.isNotEmpty) {
         parts.add(const TextSpan(text: ' '));
       }
       parts.add(
         TextSpan(
-          text: '↓${data.commitsBehind}',
-          style: textTheme.labelSmall?.copyWith(color: Colors.orange),
+          text: '↓${data.commitsBehindMain}',
+          style: textTheme.labelSmall?.copyWith(
+            color: Colors.orange,
+          ),
         ),
       );
     }
@@ -689,7 +692,9 @@ class InlineStatusIndicators extends StatelessWidget {
       parts.add(
         TextSpan(
           text: '~${data.uncommittedFiles}',
-          style: textTheme.labelSmall?.copyWith(color: Colors.blue),
+          style: textTheme.labelSmall?.copyWith(
+            color: Colors.blue,
+          ),
         ),
       );
     }
@@ -702,7 +707,9 @@ class InlineStatusIndicators extends StatelessWidget {
       parts.add(
         TextSpan(
           text: '!',
-          style: textTheme.labelSmall?.copyWith(color: Colors.red),
+          style: textTheme.labelSmall?.copyWith(
+            color: Colors.red,
+          ),
         ),
       );
     }
@@ -712,13 +719,17 @@ class InlineStatusIndicators extends StatelessWidget {
     }
 
     final tooltipLines = <String>[];
-    if (data.commitsAhead > 0) {
-      final s = data.commitsAhead == 1 ? '' : 's';
-      tooltipLines.add('↑ ${data.commitsAhead} commit$s ahead');
+    if (data.commitsAheadOfMain > 0) {
+      final s = data.commitsAheadOfMain == 1 ? '' : 's';
+      tooltipLines.add(
+        '↑ ${data.commitsAheadOfMain} commit$s ahead of main',
+      );
     }
-    if (data.commitsBehind > 0) {
-      final s = data.commitsBehind == 1 ? '' : 's';
-      tooltipLines.add('↓ ${data.commitsBehind} commit$s behind');
+    if (data.commitsBehindMain > 0) {
+      final s = data.commitsBehindMain == 1 ? '' : 's';
+      tooltipLines.add(
+        '↓ ${data.commitsBehindMain} commit$s behind main',
+      );
     }
     if (data.uncommittedFiles > 0) {
       final s = data.uncommittedFiles == 1 ? '' : 's';
