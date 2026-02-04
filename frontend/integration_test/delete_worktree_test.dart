@@ -555,6 +555,8 @@ void main() {
         find.text('Delete Worktree'),
         timeout: const Duration(seconds: 10),
       );
+      // Let the popup menu animation complete before tapping
+      await safePumpAndSettle(tester);
       await tester.tap(find.text('Delete Worktree'));
       await safePumpAndSettle(tester);
 
@@ -601,6 +603,8 @@ void main() {
         find.text('Delete Worktree'),
         timeout: const Duration(seconds: 10),
       );
+      // Let the popup menu animation complete before tapping
+      await safePumpAndSettle(tester);
       await tester.tap(find.text('Delete Worktree'));
       await safePumpAndSettle(tester);
 

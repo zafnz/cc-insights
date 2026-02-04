@@ -440,8 +440,11 @@ void main() {
       // Capture screenshot after sending user message
       await _takeScreenshot(tester, '14_message_sent');
 
-      // Step 6: Wait for the mock reply
-      await tester.pump(const Duration(milliseconds: 200));
+      // Step 6: Wait for the mock reply (uses real async Future.delayed)
+      await tester.runAsync(() async {
+        await Future.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pump();
       await safePumpAndSettle(tester);
 
       // Step 7: Verify the mock reply appears
