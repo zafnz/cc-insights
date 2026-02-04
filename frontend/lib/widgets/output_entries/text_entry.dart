@@ -69,6 +69,7 @@ class TextEntryWidget extends StatelessWidget {
         child: MarkdownBody(
           data: displayText,
           styleSheet: buildMarkdownStyleSheet(context, fontSize: 13),
+          builders: buildMarkdownBuilders(projectDir: projectDir),
           onTapLink: (text, href, title) {
             if (href != null) launchUrl(Uri.parse(href));
           },

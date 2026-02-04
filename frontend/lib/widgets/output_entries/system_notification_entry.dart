@@ -58,6 +58,10 @@ class SystemNotificationEntryWidget extends StatelessWidget {
                   fontSize: 13,
                   codeColor: colorScheme.primary,
                 ),
+                builders: buildMarkdownBuilders(
+                  projectDir: projectDir,
+                  codeColor: colorScheme.primary,
+                ),
                 onTapLink: (text, href, title) {
                   if (href != null) launchUrl(Uri.parse(href));
                 },

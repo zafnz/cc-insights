@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/runtime_config.dart';
@@ -200,28 +202,46 @@ class _ClickableCodeSpanState extends State<ClickableCodeSpan> {
   }
 }
 
-/// Creates a `highlightBuilder` callback for [GptMarkdown] that supports
-/// clickable file paths in backtick spans.
-///
-/// [projectDir] is used to resolve relative file paths.
-/// [defaultColor] overrides the default text color (falls back to
-/// `colorScheme.secondary`).
-Widget Function(BuildContext, String, TextStyle) makeHighlightBuilder({
-  required String? projectDir,
-  Color? defaultColor,
-}) {
-  return (BuildContext context, String text, TextStyle style) {
-    final colorScheme = Theme.of(context).colorScheme;
+/// A [MarkdownElementBuilder] for inline `code` elements that renders
+/// each code span as a [ClickableCodeSpan], enabling click-to-open for
+/// file paths.
+class ClickableCodeBuilder extends MarkdownElementBuilder {
+  ClickableCodeBuilder({
+    required this.projectDir,
+    this.defaultColor,
+  });
 
-    return ClickableCodeSpan(
-      text: text,
-      baseStyle: GoogleFonts.getFont(
-        RuntimeConfig.instance.monoFontFamily,
-        fontSize: (style.fontSize ?? 13) - 1,
-        color: defaultColor ?? colorScheme.secondary,
+  /// The worktree root for resolving relative file paths.
+  final String? projectDir;
+
+  /// Optional override for the default code text color.
+  final Color? defaultColor;
+
+  @override
+  Widget visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final text = element.textContent;
+    final fontSize = preferredStyle?.fontSize ?? 12;
+
+    return Text.rich(
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: ClickableCodeSpan(
+          text: text,
+          baseStyle: GoogleFonts.getFont(
+            RuntimeConfig.instance.monoFontFamily,
+            fontSize: fontSize,
+            color: defaultColor ?? colorScheme.secondary,
+          ),
+          backgroundColor: colorScheme.surfaceContainerHighest,
+          projectDir: projectDir,
+        ),
       ),
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      projectDir: projectDir,
     );
-  };
+  }
 }

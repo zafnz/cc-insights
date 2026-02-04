@@ -337,6 +337,9 @@ class _PermissionDialogState extends State<PermissionDialog> {
                       context,
                       fontSize: 13,
                     ),
+                    builders: buildMarkdownBuilders(
+                      projectDir: widget.projectDir,
+                    ),
                     onTapLink: (text, href, title) {
                       if (href != null) launchUrl(Uri.parse(href));
                     },

@@ -101,6 +101,9 @@ class _ContextSummaryEntryWidgetState extends State<ContextSummaryEntryWidget> {
                         context,
                         fontSize: 12,
                       ),
+                      builders: buildMarkdownBuilders(
+                        projectDir: widget.projectDir,
+                      ),
                       onTapLink: (text, href, title) {
                         if (href != null) launchUrl(Uri.parse(href));
                       },

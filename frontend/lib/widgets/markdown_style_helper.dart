@@ -3,6 +3,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/runtime_config.dart';
+import 'clickable_code_span.dart';
 
 /// Builds a [MarkdownStyleSheet] matching the app's theme conventions.
 ///
@@ -30,4 +31,20 @@ MarkdownStyleSheet buildMarkdownStyleSheet(
       borderRadius: BorderRadius.circular(4),
     ),
   );
+}
+
+/// Returns a builders map with a [ClickableCodeBuilder] for inline code.
+///
+/// When [projectDir] is non-null, inline code spans will detect file paths
+/// and become clickable to open them.
+Map<String, MarkdownElementBuilder> buildMarkdownBuilders({
+  String? projectDir,
+  Color? codeColor,
+}) {
+  return {
+    'code': ClickableCodeBuilder(
+      projectDir: projectDir,
+      defaultColor: codeColor,
+    ),
+  };
 }
