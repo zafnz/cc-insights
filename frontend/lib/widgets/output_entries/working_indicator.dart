@@ -25,10 +25,14 @@ class WorkingIndicatorKeys {
 /// elapsed time counter that ticks every second.
 /// When [isCompacting] is true, shows "Compacting context..." instead of
 /// the default "Claude is working..." message.
+///
+/// If [startTime] is provided, the elapsed time is calculated from that time.
+/// Otherwise, a new timer starts when the widget is created.
 class WorkingIndicator extends StatefulWidget {
   const WorkingIndicator({
     super.key,
     this.isCompacting = false,
+    this.startTime,
   });
 
   /// Whether context compaction is in progress.
@@ -36,18 +40,23 @@ class WorkingIndicator extends StatefulWidget {
   /// When true, shows "Compacting context..." instead of "Claude is working..."
   final bool isCompacting;
 
+  /// The time when Claude started working.
+  ///
+  /// If provided, elapsed time is calculated from this time.
+  /// Otherwise, the timer starts when this widget is created.
+  final DateTime? startTime;
+
   @override
   State<WorkingIndicator> createState() => _WorkingIndicatorState();
 }
 
 class _WorkingIndicatorState extends State<WorkingIndicator> {
-  late final Stopwatch _stopwatch;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _stopwatch = Stopwatch()..start();
+    // Update every second to show elapsed time
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() {});
     });
@@ -56,8 +65,18 @@ class _WorkingIndicatorState extends State<WorkingIndicator> {
   @override
   void dispose() {
     _timer?.cancel();
-    _stopwatch.stop();
     super.dispose();
+  }
+
+  /// Calculates the elapsed duration since work started.
+  ///
+  /// If [widget.startTime] is provided, calculates from that time.
+  /// Otherwise, returns zero duration (timer just started).
+  Duration get _elapsed {
+    if (widget.startTime != null) {
+      return DateTime.now().difference(widget.startTime!);
+    }
+    return Duration.zero;
   }
 
   /// Formats elapsed duration as "Xs", "Xm", "XmYs".
@@ -79,7 +98,7 @@ class _WorkingIndicatorState extends State<WorkingIndicator> {
     final colorScheme = Theme.of(context).colorScheme;
     final statusText =
         widget.isCompacting ? 'Compacting context...' : 'Claude is working...';
-    final elapsed = _formatElapsed(_stopwatch.elapsed);
+    final elapsed = _formatElapsed(_elapsed);
 
     return Padding(
       key: WorkingIndicatorKeys.container,

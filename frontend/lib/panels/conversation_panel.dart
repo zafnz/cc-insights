@@ -453,6 +453,7 @@ class _ConversationPanelState extends State<ConversationPanel>
                 )
               : _buildEntryList(
                   conversation,
+                  chat: chat,
                   showWorkingIndicator: isPrimary && isWorking,
                   isCompacting: isCompacting,
                 ),
@@ -523,6 +524,7 @@ class _ConversationPanelState extends State<ConversationPanel>
 
   Widget _buildEntryList(
     ConversationData conversation, {
+    required ChatState? chat,
     bool showWorkingIndicator = false,
     bool isCompacting = false,
   }) {
@@ -542,7 +544,10 @@ class _ConversationPanelState extends State<ConversationPanel>
       itemBuilder: (context, index) {
         // Working indicator is at the end (bottom visually)
         if (showWorkingIndicator && index == entries.length) {
-          return WorkingIndicator(isCompacting: isCompacting);
+          return WorkingIndicator(
+            isCompacting: isCompacting,
+            startTime: chat?.workingStartTime,
+          );
         }
 
         // Normal chronological order: index 0 = oldest, index n-1 = newest

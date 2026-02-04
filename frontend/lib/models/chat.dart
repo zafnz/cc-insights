@@ -254,6 +254,12 @@ class ChatState extends ChangeNotifier {
   /// error is received.
   bool _isWorking = false;
 
+  /// The time when Claude started working.
+  ///
+  /// Set when [_isWorking] becomes true, cleared when it becomes false.
+  /// Used by the UI to show elapsed time in the working indicator.
+  DateTime? _workingStartTime;
+
   /// Whether the context is currently being compacted.
   ///
   /// True when compaction has started (status: "compacting" received),
@@ -432,6 +438,11 @@ class ChatState extends ChangeNotifier {
   ///
   /// True when a session is active and Claude is generating a response.
   bool get isWorking => _isWorking;
+
+  /// The time when Claude started working, or null if not working.
+  ///
+  /// Used by the UI to calculate and display elapsed time in the working indicator.
+  DateTime? get workingStartTime => _workingStartTime;
 
   /// Whether the context is currently being compacted.
   ///
@@ -941,6 +952,7 @@ class ChatState extends ChangeNotifier {
     // Clear the working/compacting state - Claude will stop generating
     _isWorking = false;
     _isCompacting = false;
+    _workingStartTime = null;
 
     // Update all active agents to error state since they were interrupted
     for (final sdkAgentId in _activeAgents.keys.toList()) {
@@ -991,9 +1003,12 @@ class ChatState extends ChangeNotifier {
   /// Sets the working state.
   ///
   /// Called by [SdkMessageHandler] when starting/stopping work.
+  /// When [working] is true, records the current time as [_workingStartTime].
+  /// When [working] is false, clears [_workingStartTime].
   void setWorking(bool working) {
     if (_isWorking != working) {
       _isWorking = working;
+      _workingStartTime = working ? DateTime.now() : null;
       notifyListeners();
     }
   }
@@ -1091,6 +1106,7 @@ class ChatState extends ChangeNotifier {
     _session = null;
     _isWorking = false;
     _isCompacting = false;
+    _workingStartTime = null;
     _messageSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1157,6 +1173,7 @@ class ChatState extends ChangeNotifier {
     _testHasActiveSession = false;
     _isWorking = false;
     _isCompacting = false;
+    _workingStartTime = null;
     _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
     _messageSubscription = null;
@@ -1178,6 +1195,7 @@ class ChatState extends ChangeNotifier {
     _testHasActiveSession = false;
     _isWorking = false;
     _isCompacting = false;
+    _workingStartTime = null;
     resetContext();
     addEntry(ContextClearedEntry(timestamp: DateTime.now()));
     notifyListeners();
