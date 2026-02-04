@@ -864,6 +864,7 @@ class ChatState extends ChangeNotifier {
 
     // Mark as working since we're starting with a prompt
     _isWorking = true;
+    _workingStartTime = DateTime.now();
 
     notifyListeners();
   }
