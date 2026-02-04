@@ -631,13 +631,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       brightness: brightness,
     );
 
-    // Blend the main scaffold background heavily toward
-    // pure white/black so it's almost neutral.
+    // Blend the main scaffold background toward
+    // pure white/black so it stays fairly neutral.
     final neutral = brightness == Brightness.light
         ? Colors.white
         : Colors.black;
     final colorScheme = base.copyWith(
-      surface: Color.lerp(base.surface, neutral, 0.85),
+      surface: Color.lerp(base.surface, neutral, 0.50),
     );
 
     return ThemeData(
