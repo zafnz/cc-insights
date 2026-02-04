@@ -7,6 +7,7 @@ import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
 import '../services/file_type_detector.dart';
 import '../services/git_service.dart';
+import '../services/runtime_config.dart';
 import 'code_line_view.dart';
 import 'file_viewers/binary_file_message.dart';
 import 'file_viewers/image_viewer.dart';
@@ -147,8 +148,10 @@ class _CommitDialogState extends State<CommitDialog>
         _files = files;
         _isLoadingFiles = false;
       });
-      // Start AI generation after files are loaded
-      _generateAiMessage();
+      // Start AI generation after files are loaded (if enabled)
+      if (RuntimeConfig.instance.aiAssistanceEnabled) {
+        _generateAiMessage();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -189,7 +192,7 @@ $fileList''';
       final result = await widget.askAiService.ask(
         prompt: prompt,
         workingDirectory: widget.worktreePath,
-        model: 'haiku',
+        model: RuntimeConfig.instance.aiAssistanceModel,
         allowedTools: ['Bash(git:*)', 'Read'],
         maxTurns: 5,
         timeoutSeconds: 120,
@@ -496,21 +499,22 @@ $fileList''';
             ),
           ),
           const Spacer(),
-          // AI regenerate button
-          Tooltip(
-            message: 'Generate commit message with AI',
-            child: IconButton(
-              key: CommitDialogKeys.aiButton,
-              icon: Icon(
-                Icons.auto_awesome,
-                color: colorScheme.onPrimaryContainer,
-                size: 20,
+          // AI regenerate button (hidden when AI assistance is disabled)
+          if (RuntimeConfig.instance.aiAssistanceEnabled)
+            Tooltip(
+              message: 'Generate commit message with AI',
+              child: IconButton(
+                key: CommitDialogKeys.aiButton,
+                icon: Icon(
+                  Icons.auto_awesome,
+                  color: colorScheme.onPrimaryContainer,
+                  size: 20,
+                ),
+                onPressed: _isGeneratingMessage || _isCommitting
+                    ? null
+                    : _triggerAiRegenerate,
               ),
-              onPressed: _isGeneratingMessage || _isCommitting
-                  ? null
-                  : _triggerAiRegenerate,
             ),
-          ),
         ],
       ),
     );

@@ -103,13 +103,37 @@ class SettingsService extends ChangeNotifier {
     icon: Icons.tune_outlined,
     settings: [
       SettingDefinition(
-        key: 'behavior.autoGenerateTitles',
-        title: 'Auto-generate Chat Titles',
+        key: 'behavior.aiAssistanceModel',
+        title: 'AI Assistance Model',
         description:
-            'Automatically generate descriptive titles for new '
-            'chats using AI after the first message exchange.',
-        type: SettingType.toggle,
-        defaultValue: true,
+            'Which model to use for automated tasks such as '
+            'commit message generation and merge conflict '
+            'resolution. Set to `Disabled` to turn off AI '
+            'assistance entirely.',
+        type: SettingType.dropdown,
+        defaultValue: 'haiku',
+        options: [
+          SettingOption(value: 'haiku', label: 'Haiku'),
+          SettingOption(value: 'sonnet', label: 'Sonnet'),
+          SettingOption(value: 'opus', label: 'Opus'),
+          SettingOption(value: 'disabled', label: 'Disabled'),
+        ],
+      ),
+      SettingDefinition(
+        key: 'behavior.aiChatLabelModel',
+        title: 'AI Chat Labels',
+        description:
+            'Which model to use when auto-generating chat '
+            'labels from the first message. Set to `Disabled` '
+            'to use sequential names like `Chat #1` instead.',
+        type: SettingType.dropdown,
+        defaultValue: 'haiku',
+        options: [
+          SettingOption(value: 'haiku', label: 'Haiku'),
+          SettingOption(value: 'sonnet', label: 'Sonnet'),
+          SettingOption(value: 'opus', label: 'Opus'),
+          SettingOption(value: 'disabled', label: 'Disabled'),
+        ],
       ),
       SettingDefinition(
         key: 'behavior.desktopNotifications',
@@ -290,8 +314,10 @@ class SettingsService extends ChangeNotifier {
         config.showTimestamps = value as bool;
       case 'appearance.timestampIdleThreshold':
         config.timestampIdleThreshold = (value as num).toInt();
-      case 'behavior.autoGenerateTitles':
-        config.autoGenerateTitles = value as bool;
+      case 'behavior.aiAssistanceModel':
+        config.aiAssistanceModel = value as String;
+      case 'behavior.aiChatLabelModel':
+        config.aiChatLabelModel = value as String;
       case 'behavior.desktopNotifications':
         config.desktopNotifications = value as bool;
       case 'session.defaultModel':

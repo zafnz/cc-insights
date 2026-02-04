@@ -6,6 +6,7 @@ import '../models/agent.dart';
 import '../models/chat.dart';
 import '../models/output_entry.dart';
 import 'ask_ai_service.dart';
+import 'runtime_config.dart';
 
 /// Handles SDK messages and routes them to the correct conversation.
 ///
@@ -682,6 +683,10 @@ class SdkMessageHandler {
     // Skip if no AskAiService available
     if (_askAiService == null) return;
 
+    // Skip if AI chat labels are disabled
+    final config = RuntimeConfig.instance;
+    if (!config.aiChatLabelsEnabled) return;
+
     // Skip if we've already generated (or attempted to generate) a title for this chat
     if (_titlesGenerated.contains(chat.data.id)) return;
 
@@ -713,7 +718,7 @@ $userMessage''';
       final result = await _askAiService!.ask(
         prompt: prompt,
         workingDirectory: workingDirectory,
-        model: 'haiku',
+        model: config.aiChatLabelModel,
         allowedTools: [], // No tools needed for title generation
         maxTurns: 1, // Single turn only - no tool use
         timeoutSeconds: 30,

@@ -67,8 +67,13 @@ class RuntimeConfig extends ChangeNotifier {
   /// Set to 0 to show on every message.
   int _timestampIdleThreshold = 5;
 
-  /// Whether to auto-generate chat titles via AI.
-  bool _autoGenerateTitles = true;
+  /// Model for AI assistance tasks (commit messages, conflict resolution).
+  /// Values: 'haiku', 'sonnet', 'opus', 'disabled'.
+  String _aiAssistanceModel = 'haiku';
+
+  /// Model for AI chat label generation.
+  /// Values: 'haiku', 'sonnet', 'opus', 'disabled'.
+  String _aiChatLabelModel = 'haiku';
 
   /// Whether desktop notifications are enabled.
   bool _desktopNotifications = true;
@@ -233,15 +238,31 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
-  /// Whether to auto-generate chat titles via AI.
-  bool get autoGenerateTitles => _autoGenerateTitles;
+  /// Model for AI assistance tasks (commit messages, conflict resolution).
+  String get aiAssistanceModel => _aiAssistanceModel;
 
-  set autoGenerateTitles(bool value) {
-    if (_autoGenerateTitles != value) {
-      _autoGenerateTitles = value;
+  set aiAssistanceModel(String value) {
+    if (_aiAssistanceModel != value) {
+      _aiAssistanceModel = value;
       notifyListeners();
     }
   }
+
+  /// Whether AI assistance is enabled.
+  bool get aiAssistanceEnabled => _aiAssistanceModel != 'disabled';
+
+  /// Model for AI chat label generation.
+  String get aiChatLabelModel => _aiChatLabelModel;
+
+  set aiChatLabelModel(String value) {
+    if (_aiChatLabelModel != value) {
+      _aiChatLabelModel = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether AI chat labels are enabled.
+  bool get aiChatLabelsEnabled => _aiChatLabelModel != 'disabled';
 
   /// Whether desktop notifications are enabled.
   bool get desktopNotifications => _desktopNotifications;
@@ -313,7 +334,8 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._showRawMessages = true;
     _instance._showTimestamps = false;
     _instance._timestampIdleThreshold = 5;
-    _instance._autoGenerateTitles = true;
+    _instance._aiAssistanceModel = 'haiku';
+    _instance._aiChatLabelModel = 'haiku';
     _instance._desktopNotifications = true;
     _instance._defaultModel = 'sonnet';
     _instance._defaultPermissionMode = 'default';

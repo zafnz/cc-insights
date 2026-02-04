@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/git_service.dart';
+import '../services/runtime_config.dart';
 import 'delete_worktree_dialog.dart' show LogEntry, LogEntryStatus;
 
 /// Keys for testing ConflictResolutionDialog widgets.
@@ -493,16 +494,24 @@ class _ConflictResolutionDialogState
 
     switch (_actionState) {
       case _ActionState.hasConflicts:
+        final aiEnabled = RuntimeConfig.instance.aiAssistanceEnabled;
         buttons.addAll([
           Flexible(
-            child: _ActionButton(
-              key: ConflictResolutionDialogKeys
-                  .resolveWithClaudeButton,
-              label: 'Claude',
-              icon: Icons.auto_fix_high,
-              onPressed: _handleResolveWithClaude,
-              colorScheme: colorScheme,
-              isPrimary: true,
+            child: Tooltip(
+              message: aiEnabled
+                  ? 'Resolve conflicts with Claude'
+                  : 'AI assistance is disabled in settings',
+              child: _ActionButton(
+                key: ConflictResolutionDialogKeys
+                    .resolveWithClaudeButton,
+                label: 'Claude',
+                icon: Icons.auto_fix_high,
+                onPressed: aiEnabled
+                    ? _handleResolveWithClaude
+                    : null,
+                colorScheme: colorScheme,
+                isPrimary: true,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -741,7 +750,7 @@ class _ActionButton extends StatelessWidget {
 
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final ColorScheme colorScheme;
   final bool isPrimary;
 

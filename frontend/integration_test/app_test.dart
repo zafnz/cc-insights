@@ -707,30 +707,14 @@ void main() {
       await tester.tap(find.text('Log Replay'));
       await safePumpAndSettle(tester);
 
-      // Wait for content to load
+      // Wait for content to load - conversation auto-scrolls to bottom
+      // so the Bash tool (last entry) should already be visible
       await pumpUntilFound(tester, find.textContaining('pubspec.yaml'));
 
-      // Find the scrollable INSIDE the ConversationPanel
-      final allConversationScrollables = find.descendant(
-        of: find.byType(ConversationPanel),
-        matching: find.byWidgetPredicate((widget) {
-          if (widget is Scrollable) {
-            return widget.axisDirection == AxisDirection.down;
-          }
-          return false;
-        }),
-      );
-      expect(allConversationScrollables, findsWidgets);
-      final conversationScrollable = allConversationScrollables.first;
-
-      // Scroll to find the Bash tool (it's near the end of the log)
+      // The Bash tool is near the end of the log. Since the conversation
+      // auto-scrolls to bottom, wait for it to appear.
       final bashToolFinder = find.text('Bash');
-      await tester.scrollUntilVisible(
-        bashToolFinder,
-        200, // Scroll down to find it (it's near the end)
-        scrollable: conversationScrollable,
-      );
-      await safePumpAndSettle(tester);
+      await pumpUntilFound(tester, bashToolFinder);
 
       // Tap to expand the Bash tool card
       await tester.tap(bashToolFinder.first);
