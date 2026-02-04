@@ -885,8 +885,27 @@ class _BaseBadge extends StatelessWidget {
       ));
     }
 
+    final tooltipLines = <String>['Base: $refName'];
+    if (ahead > 0) {
+      tooltipLines.add(
+        '${data.branch} has $ahead commit${ahead == 1 ? '' : 's'}'
+        ' not on $refName',
+      );
+    }
+    if (behind > 0) {
+      tooltipLines.add(
+        '$refName has $behind commit${behind == 1 ? '' : 's'}'
+        ' not on ${data.branch}',
+      );
+    }
+    if (ahead > 0 && behind > 0) {
+      tooltipLines.add('Branches have diverged');
+    } else if (ahead == 0 && behind == 0) {
+      tooltipLines.add('Up to date');
+    }
+
     return Tooltip(
-      message: '$icon base: $refName',
+      message: tooltipLines.join('\n'),
       child: _BadgeContainer(
         child: RichText(text: TextSpan(children: parts)),
       ),
@@ -907,13 +926,11 @@ class _SyncBadge extends StatelessWidget {
     final style = textTheme.labelSmall;
     final hasUpstream = data.upstreamBranch != null;
 
-    final tooltip = hasUpstream
-        ? '\u{2601} sync: ${data.upstreamBranch}'
-        : '\u{2601} sync: \u{2014} (no upstream)';
-
     final parts = <TextSpan>[
       TextSpan(text: '\u{2601} ', style: style),
     ];
+
+    final tooltipLines = <String>[];
 
     if (!hasUpstream) {
       parts.add(TextSpan(
@@ -924,7 +941,12 @@ class _SyncBadge extends StatelessWidget {
               .onSurfaceVariant,
         ),
       ));
+      tooltipLines.add('Sync: no upstream');
+      tooltipLines.add(
+        '${data.branch} is not tracking a remote branch',
+      );
     } else {
+      final upstream = data.upstreamBranch!;
       final ahead = data.commitsAhead;
       final behind = data.commitsBehind;
       if (ahead > 0) {
@@ -952,10 +974,29 @@ class _SyncBadge extends StatelessWidget {
           ),
         ));
       }
+
+      tooltipLines.add('Sync: $upstream');
+      if (ahead > 0) {
+        tooltipLines.add(
+          '${data.branch} has $ahead commit${ahead == 1 ? '' : 's'}'
+          ' not on $upstream',
+        );
+      }
+      if (behind > 0) {
+        tooltipLines.add(
+          '$upstream has $behind commit${behind == 1 ? '' : 's'}'
+          ' not on ${data.branch}',
+        );
+      }
+      if (ahead > 0 && behind > 0) {
+        tooltipLines.add('Branches have diverged');
+      } else if (ahead == 0 && behind == 0) {
+        tooltipLines.add('Up to date');
+      }
     }
 
     return Tooltip(
-      message: tooltip,
+      message: tooltipLines.join('\n'),
       child: _BadgeContainer(
         child: RichText(text: TextSpan(children: parts)),
       ),
