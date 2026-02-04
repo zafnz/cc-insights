@@ -16,7 +16,7 @@ import 'package:code_highlight_view/code_highlight_view.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../test_helpers.dart';
@@ -333,7 +333,7 @@ void main() {
 
         // Should show MarkdownViewer
         expect(find.byType(MarkdownViewer), findsOneWidget);
-        expect(find.byType(GptMarkdown), findsOneWidget);
+        expect(find.byType(MarkdownBody), findsOneWidget);
       });
 
       testWidgets('renders ImageViewer for image', (tester) async {
@@ -540,16 +540,16 @@ void main() {
         );
         await tester.pump();
 
-        // Initially in preview mode (GptMarkdown widget present)
-        expect(find.byType(GptMarkdown), findsOneWidget);
+        // Initially in preview mode (MarkdownBody widget present)
+        expect(find.byType(MarkdownBody), findsOneWidget);
 
         // Tap the toggle button
         await tester.tap(find.byIcon(Icons.preview));
         await tester.pump();
 
         // Now in raw mode - should show Text widget with raw content
-        // GptMarkdown should be gone
-        expect(find.byType(GptMarkdown), findsNothing);
+        // MarkdownBody should be gone
+        expect(find.byType(MarkdownBody), findsNothing);
         expect(find.text('# My Title'), findsOneWidget);
 
         // Tap again to go back to preview
@@ -557,7 +557,7 @@ void main() {
         await tester.pump();
 
         // Back to preview mode
-        expect(find.byType(GptMarkdown), findsOneWidget);
+        expect(find.byType(MarkdownBody), findsOneWidget);
       });
     });
 

@@ -1,12 +1,12 @@
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/fonts.dart';
 import '../services/runtime_config.dart';
-import 'clickable_code_span.dart';
+import 'markdown_style_helper.dart';
 
 // =============================================================================
 // Test Keys for PermissionDialog
@@ -331,18 +331,15 @@ class _PermissionDialogState extends State<PermissionDialog> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: SelectionArea(
-                  child: GptMarkdown(
-                    plan,
-                    style: TextStyle(
+                  child: MarkdownBody(
+                    data: plan,
+                    styleSheet: buildMarkdownStyleSheet(
+                      context,
                       fontSize: 13,
-                      color: colorScheme.onSurface,
                     ),
-                    onLinkTap: (url, title) {
-                      launchUrl(Uri.parse(url));
+                    onTapLink: (text, href, title) {
+                      if (href != null) launchUrl(Uri.parse(href));
                     },
-                    highlightBuilder: makeHighlightBuilder(
-                      projectDir: widget.projectDir,
-                    ),
                   ),
                 ),
               ),

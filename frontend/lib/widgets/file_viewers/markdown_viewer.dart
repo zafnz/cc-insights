@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/runtime_config.dart';
+import '../markdown_style_helper.dart';
 
 /// Displays markdown files with preview/raw toggle.
 ///
@@ -49,14 +50,11 @@ class MarkdownViewerState extends State<MarkdownViewer> {
         padding: const EdgeInsets.all(16),
         child: SelectionArea(
           child: _isPreviewMode
-              ? GptMarkdown(
-                  widget.content,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurface,
-                  ),
-                  onLinkTap: (url, title) {
-                    launchUrl(Uri.parse(url));
+              ? MarkdownBody(
+                  data: widget.content,
+                  styleSheet: buildMarkdownStyleSheet(context, fontSize: 13),
+                  onTapLink: (text, href, title) {
+                    if (href != null) launchUrl(Uri.parse(href));
                   },
                 )
               : Text(

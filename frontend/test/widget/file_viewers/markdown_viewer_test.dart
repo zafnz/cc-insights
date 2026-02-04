@@ -1,7 +1,7 @@
 import 'package:cc_insights_v2/widgets/file_viewers/markdown_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../test_helpers.dart';
 
@@ -21,8 +21,8 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      // GptMarkdown should be present in preview mode
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      // MarkdownBody should be present in preview mode
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('renders markdown content', (tester) async {
@@ -31,10 +31,10 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
 
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
+      final markdown = tester.widget<MarkdownBody>(
+        find.byType(MarkdownBody),
       );
       expect(markdown.data, equals(testContent));
     });
@@ -46,7 +46,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Initially in preview mode
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
 
       // Get the state and toggle
       final state = tester.state<MarkdownViewerState>(
@@ -57,7 +57,7 @@ void main() {
       await tester.pump();
 
       // Now should be in raw mode (plain Text widget)
-      expect(find.byType(GptMarkdown), findsNothing);
+      expect(find.byType(MarkdownBody), findsNothing);
       expect(find.text(testContent), findsOneWidget);
     });
 
@@ -74,12 +74,12 @@ void main() {
       // Toggle to raw
       state.toggleMode();
       await tester.pump();
-      expect(find.byType(GptMarkdown), findsNothing);
+      expect(find.byType(MarkdownBody), findsNothing);
 
       // Toggle back to preview
       state.toggleMode();
       await tester.pump();
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('preview mode shows rendered markdown', (tester) async {
@@ -88,8 +88,8 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      // GptMarkdown renders the content
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      // MarkdownBody renders the content
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('raw mode shows plain text', (tester) async {
@@ -221,7 +221,7 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('handles markdown with lists', (tester) async {
@@ -236,7 +236,7 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('handles markdown with links', (tester) async {
@@ -245,7 +245,7 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('handles markdown with images', (tester) async {
@@ -254,7 +254,7 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('handles complex markdown', (tester) async {
@@ -288,7 +288,7 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      expect(find.byType(GptMarkdown), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
     testWidgets('preserves content when toggling', (tester) async {
@@ -308,8 +308,8 @@ void main() {
       await tester.pump();
 
       // Content should still be there
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
+      final markdown = tester.widget<MarkdownBody>(
+        find.byType(MarkdownBody),
       );
       expect(markdown.data, equals(testContent));
     });
@@ -332,11 +332,11 @@ void main() {
       await tester.pumpWidget(testApp);
       await safePumpAndSettle(tester);
 
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
+      final markdown = tester.widget<MarkdownBody>(
+        find.byType(MarkdownBody),
       );
 
-      expect(markdown.style?.color, isNotNull);
+      expect(markdown.styleSheet?.p?.color, isNotNull);
     });
 
     testWidgets('respects theme colors in raw mode', (tester) async {
@@ -407,11 +407,11 @@ void main() {
       await tester.pumpWidget(createTestApp(testContent));
       await safePumpAndSettle(tester);
 
-      final markdown = tester.widget<GptMarkdown>(
-        find.byType(GptMarkdown),
+      final markdown = tester.widget<MarkdownBody>(
+        find.byType(MarkdownBody),
       );
 
-      expect(markdown.style?.fontSize, equals(13.0));
+      expect(markdown.styleSheet?.p?.fontSize, equals(13.0));
     });
   });
 }

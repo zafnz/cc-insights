@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
-import '../clickable_code_span.dart';
+import '../../widgets/markdown_style_helper.dart';
 
 /// Displays a system notification entry.
 ///
@@ -51,19 +51,16 @@ class SystemNotificationEntryWidget extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: SelectionArea(
-              child: GptMarkdown(
-                entry.message,
-                style: TextStyle(
+              child: MarkdownBody(
+                data: entry.message,
+                styleSheet: buildMarkdownStyleSheet(
+                  context,
                   fontSize: 13,
-                  color: colorScheme.onSurface,
+                  codeColor: colorScheme.primary,
                 ),
-                onLinkTap: (url, title) {
-                  launchUrl(Uri.parse(url));
+                onTapLink: (text, href, title) {
+                  if (href != null) launchUrl(Uri.parse(href));
                 },
-                highlightBuilder: makeHighlightBuilder(
-                  projectDir: projectDir,
-                  defaultColor: colorScheme.primary,
-                ),
               ),
             ),
           ),

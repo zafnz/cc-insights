@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../config/fonts.dart';
 import '../services/ask_ai_service.dart';
 import '../services/git_service.dart';
+import '../widgets/markdown_style_helper.dart';
 
 /// Keys for testing CreatePrDialog widgets.
 class CreatePrDialogKeys {
@@ -598,12 +600,12 @@ $commitList''';
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: SelectionArea(
-              child: GptMarkdown(
-                _cachedDescription!,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurface,
-                ),
+              child: MarkdownBody(
+                data: _cachedDescription!,
+                styleSheet: buildMarkdownStyleSheet(context, fontSize: 13),
+                onTapLink: (text, href, title) {
+                  if (href != null) launchUrl(Uri.parse(href));
+                },
               ),
             ),
           )

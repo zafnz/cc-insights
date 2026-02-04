@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../config/fonts.dart';
+import 'markdown_style_helper.dart';
 import '../models/file_content.dart';
 import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
@@ -1065,11 +1066,11 @@ $fileList''';
                       fontStyle: FontStyle.italic,
                     ),
                   )
-                : GptMarkdown(
-                    message,
-                    style: TextStyle(
+                : MarkdownBody(
+                    data: message,
+                    styleSheet: buildMarkdownStyleSheet(
+                      context,
                       fontSize: 13,
-                      color: colorScheme.onSurface,
                     ),
                   ),
           ),

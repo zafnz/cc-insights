@@ -5,13 +5,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/output_entry.dart';
 import '../services/runtime_config.dart';
 import 'click_to_scroll_container.dart';
 import 'diff_view.dart';
+import 'markdown_style_helper.dart';
 
 /// Expandable card showing tool execution details.
 ///
@@ -938,14 +939,14 @@ class _TaskResultWidget extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(8),
               child: SelectionArea(
-                child: GptMarkdown(
-                  resultText,
-                  style: TextStyle(
+                child: MarkdownBody(
+                  data: resultText,
+                  styleSheet: buildMarkdownStyleSheet(
+                    context,
                     fontSize: 12,
-                    color: colorScheme.onSurface,
                   ),
-                  onLinkTap: (url, title) {
-                    launchUrl(Uri.parse(url));
+                  onTapLink: (text, href, title) {
+                    if (href != null) launchUrl(Uri.parse(href));
                   },
                 ),
               ),

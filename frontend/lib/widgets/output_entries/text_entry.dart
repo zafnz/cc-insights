@@ -2,12 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
 import '../../services/runtime_config.dart';
-import '../clickable_code_span.dart';
+import '../../widgets/markdown_style_helper.dart';
 
 /// Displays a text output entry from the assistant.
 ///
@@ -66,15 +66,12 @@ class TextEntryWidget extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: SelectionArea(
-        child: GptMarkdown(
-          displayText,
-          style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
-          onLinkTap: (url, title) {
-            launchUrl(Uri.parse(url));
+        child: MarkdownBody(
+          data: displayText,
+          styleSheet: buildMarkdownStyleSheet(context, fontSize: 13),
+          onTapLink: (text, href, title) {
+            if (href != null) launchUrl(Uri.parse(href));
           },
-          highlightBuilder: makeHighlightBuilder(
-            projectDir: projectDir,
-          ),
         ),
       ),
     );

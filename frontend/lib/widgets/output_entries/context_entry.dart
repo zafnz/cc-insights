@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
-import '../clickable_code_span.dart';
+import '../../widgets/markdown_style_helper.dart';
 
 /// Displays a context summary entry (collapsible).
 class ContextSummaryEntryWidget extends StatefulWidget {
@@ -95,18 +95,15 @@ class _ContextSummaryEntryWidgetState extends State<ContextSummaryEntryWidget> {
                 constraints: const BoxConstraints(maxHeight: 400),
                 child: SingleChildScrollView(
                   child: SelectionArea(
-                    child: GptMarkdown(
-                      widget.entry.summary,
-                      style: TextStyle(
+                    child: MarkdownBody(
+                      data: widget.entry.summary,
+                      styleSheet: buildMarkdownStyleSheet(
+                        context,
                         fontSize: 12,
-                        color: colorScheme.onSurface,
                       ),
-                      onLinkTap: (url, title) {
-                        launchUrl(Uri.parse(url));
+                      onTapLink: (text, href, title) {
+                        if (href != null) launchUrl(Uri.parse(href));
                       },
-                      highlightBuilder: makeHighlightBuilder(
-                        projectDir: widget.projectDir,
-                      ),
                     ),
                   ),
                 ),
