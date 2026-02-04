@@ -47,7 +47,7 @@ class WorktreeWatcherService extends ChangeNotifier {
 
   /// Interval for periodic background polling (catches changes not
   /// visible to the filesystem watcher, e.g. `git fetch`).
-  static const periodicInterval = Duration(seconds: 30);
+  static const periodicInterval = Duration(minutes: 2);
 
   final GitService _gitService;
   final ProjectState _project;
@@ -150,7 +150,6 @@ class WorktreeWatcherService extends ChangeNotifier {
     _WorktreeWatcher watcher,
     FileSystemEvent event,
   ) {
-    if (event.path.contains('/.git/')) return;
     _schedulePoll(watcher);
   }
 
