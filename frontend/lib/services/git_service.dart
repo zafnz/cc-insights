@@ -333,6 +333,14 @@ abstract class GitService {
   /// Returns true if the dry-run detected conflicts.
   Future<bool> wouldMergeConflict(String path, String targetBranch);
 
+  /// Checks if rebasing onto [targetBranch] would produce conflicts,
+  /// without actually performing the rebase.
+  ///
+  /// Attempts `git rebase targetBranch` then immediately aborts via
+  /// `git rebase --abort` to restore the original state.
+  /// Returns true if the dry-run detected conflicts.
+  Future<bool> wouldRebaseConflict(String path, String targetBranch);
+
   /// Merges [targetBranch] into the current branch.
   ///
   /// Returns a [MergeResult] indicating success or conflicts.
@@ -899,6 +907,65 @@ class RealGitService implements GitService {
           (e.stderr?.contains('Automatic merge failed') ?? false)) {
         return true;
       }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> wouldRebaseConflict(
+    String path,
+    String targetBranch,
+  ) async {
+    try {
+      final result = await Process.run(
+        'git',
+        ['rebase', targetBranch],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+
+      // Rebase succeeded - abort to restore original state
+      try {
+        await _runGit(['rebase', '--abort'], workingDirectory: path);
+      } catch (_) {
+        // If abort fails, the rebase completed cleanly so we need to
+        // undo it. Use reflog to find the pre-rebase HEAD.
+        await _runGit(
+          ['reset', '--hard', 'ORIG_HEAD'],
+          workingDirectory: path,
+        );
+      }
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('could not apply')) {
+          // Abort the paused rebase
+          try {
+            await _runGit(
+              ['rebase', '--abort'],
+              workingDirectory: path,
+            );
+          } catch (_) {}
+          return true;
+        }
+        // Some other error
+        throw GitException(
+          stderr.isNotEmpty ? stderr : 'Rebase failed',
+          command: 'rebase',
+          exitCode: result.exitCode,
+        );
+      }
+      return false;
+    } on GitException {
+      // Ensure rebase is aborted
+      try {
+        await _runGit(['rebase', '--abort'], workingDirectory: path);
+      } catch (_) {}
+      rethrow;
+    } on TimeoutException {
+      try {
+        await _runGit(['rebase', '--abort'], workingDirectory: path);
+      } catch (_) {}
       rethrow;
     }
   }

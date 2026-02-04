@@ -227,8 +227,12 @@ class _ConflictResolutionDialogState
     );
 
     try {
-      final willConflict = await widget.gitService
-          .wouldMergeConflict(widget.worktreePath, widget.mainBranch);
+      final willConflict =
+          widget.operation == MergeOperationType.rebase
+              ? await widget.gitService.wouldRebaseConflict(
+                  widget.worktreePath, widget.mainBranch)
+              : await widget.gitService.wouldMergeConflict(
+                  widget.worktreePath, widget.mainBranch);
 
       if (!mounted) return;
 

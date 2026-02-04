@@ -427,6 +427,9 @@ class FakeGitService implements GitService {
   /// Result for [wouldMergeConflict]. Key is path.
   final Map<String, bool> wouldConflict = {};
 
+  /// Result for [wouldRebaseConflict]. Key is path.
+  final Map<String, bool> wouldRebaseConflicts = {};
+
   /// Result for [merge]. Key is path.
   final Map<String, MergeResult> mergeResults = {};
 
@@ -456,6 +459,16 @@ class FakeGitService implements GitService {
     await _maybeDelay();
     _maybeThrow();
     return wouldConflict[path] ?? false;
+  }
+
+  @override
+  Future<bool> wouldRebaseConflict(
+    String path,
+    String targetBranch,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return wouldRebaseConflicts[path] ?? false;
   }
 
   @override
