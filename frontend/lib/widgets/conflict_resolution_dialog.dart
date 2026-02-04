@@ -259,6 +259,9 @@ class _ConflictResolutionDialogState
         message: 'Failed to check for conflicts',
         detail: e.toString(),
       );
+      setState(() {
+        _actionState = _ActionState.failed;
+      });
     }
   }
 
@@ -287,6 +290,9 @@ class _ConflictResolutionDialogState
           message: '$_operationLabel failed',
           detail: result.error,
         );
+        setState(() {
+          _actionState = _ActionState.failed;
+        });
         return;
       }
 
@@ -324,6 +330,9 @@ class _ConflictResolutionDialogState
         message: '$_operationLabel failed',
         detail: e.toString(),
       );
+      setState(() {
+        _actionState = _ActionState.failed;
+      });
     }
   }
 
@@ -353,6 +362,9 @@ class _ConflictResolutionDialogState
           message: '$_operationLabel failed',
           detail: result.error,
         );
+        setState(() {
+          _actionState = _ActionState.failed;
+        });
         return;
       }
 
@@ -374,6 +386,9 @@ class _ConflictResolutionDialogState
         message: '$_operationLabel failed',
         detail: e.toString(),
       );
+      setState(() {
+        _actionState = _ActionState.failed;
+      });
     }
   }
 
@@ -403,6 +418,9 @@ class _ConflictResolutionDialogState
           message: '$_operationLabel failed',
           detail: result.error,
         );
+        setState(() {
+          _actionState = _ActionState.failed;
+        });
         return;
       }
 
@@ -424,6 +442,9 @@ class _ConflictResolutionDialogState
         message: '$_operationLabel failed',
         detail: e.toString(),
       );
+      setState(() {
+        _actionState = _ActionState.failed;
+      });
     }
   }
 
@@ -597,12 +618,17 @@ class _ConflictResolutionDialogState
           key: ConflictResolutionDialogKeys.cancelButton,
           onPressed: _actionState == _ActionState.performing
               ? null
-              : () => Navigator.of(context)
-                  .pop(ConflictResolutionResult.aborted),
+              : () => Navigator.of(context).pop(
+                    _actionState == _ActionState.failed
+                        ? ConflictResolutionResult.failed
+                        : ConflictResolutionResult.aborted,
+                  ),
           style: TextButton.styleFrom(
             foregroundColor: colorScheme.onPrimaryContainer,
           ),
-          child: const Text('Cancel'),
+          child: Text(
+            _actionState == _ActionState.failed ? 'Close' : 'Cancel',
+          ),
         ),
       ]);
     }
