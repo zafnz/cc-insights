@@ -128,6 +128,115 @@ void main() {
     });
   });
 
+  group('common git directory watcher', () {
+    test('git dir change triggers refresh of all worktrees', () {
+      fakeAsync((async) {
+        const linkedPath = '/fake/linked';
+        gitService.statuses[linkedPath] = const GitStatus();
+        final linked = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+          ),
+        );
+        project.addWorktree(linked);
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+        async.flushMicrotasks();
+        final initialCalls = gitService.getStatusCalls;
+
+        // Simulate a git dir change.
+        service.onGitDirChanged();
+        async.flushMicrotasks();
+
+        // Should poll both worktrees (primary + linked).
+        expect(gitService.getStatusCalls, initialCalls + 2);
+
+        service.dispose();
+      });
+    });
+
+    test('git dir changes are throttled at 5-second interval', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+        async.flushMicrotasks();
+        final initialCalls = gitService.getStatusCalls;
+
+        // First change triggers immediately.
+        service.onGitDirChanged();
+        async.flushMicrotasks();
+        final afterFirst = gitService.getStatusCalls;
+        expect(afterFirst, greaterThan(initialCalls));
+
+        // Second change within 5s is throttled.
+        service.onGitDirChanged();
+        async.flushMicrotasks();
+        expect(gitService.getStatusCalls, afterFirst);
+
+        // After 5 seconds, the pending poll fires.
+        async.elapse(const Duration(seconds: 5));
+        async.flushMicrotasks();
+        expect(gitService.getStatusCalls, greaterThan(afterFirst));
+
+        service.dispose();
+      });
+    });
+
+    test('git dir change after dispose is ignored', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+        async.flushMicrotasks();
+        final callsBeforeDispose = gitService.getStatusCalls;
+
+        service.dispose();
+
+        // Should not throw or trigger any polls.
+        service.onGitDirChanged();
+        async.flushMicrotasks();
+        expect(gitService.getStatusCalls, callsBeforeDispose);
+      });
+    });
+
+    test('forceRefreshAll polls all worktrees', () {
+      fakeAsync((async) {
+        const linkedPath = '/fake/linked';
+        gitService.statuses[linkedPath] = const GitStatus();
+        final linked = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+          ),
+        );
+        project.addWorktree(linked);
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+        );
+        async.flushMicrotasks();
+        final initialCalls = gitService.getStatusCalls;
+
+        service.forceRefreshAll();
+        async.flushMicrotasks();
+
+        expect(gitService.getStatusCalls, initialCalls + 2);
+
+        service.dispose();
+      });
+    });
+  });
+
   group('periodic polling', () {
     test('polls git status every 2 minutes', () {
       fakeAsync((async) {

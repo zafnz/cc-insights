@@ -49,6 +49,12 @@ class WorktreeWatcherService extends ChangeNotifier {
   /// visible to the filesystem watcher, e.g. `git fetch`).
   static const periodicInterval = Duration(minutes: 2);
 
+  /// Throttle interval for the common .git directory watcher.
+  ///
+  /// Shorter than per-worktree polling because git dir changes
+  /// are higher signal (commit, push, fetch).
+  static const gitDirPollInterval = Duration(seconds: 5);
+
   final GitService _gitService;
   final ProjectState _project;
   final bool _enablePeriodicPolling;
@@ -56,6 +62,14 @@ class WorktreeWatcherService extends ChangeNotifier {
 
   /// Active watchers keyed by worktree root path.
   final Map<String, _WorktreeWatcher> _watchers = {};
+
+  /// Watcher for the common .git directory.
+  StreamSubscription<FileSystemEvent>? _gitDirWatcherSubscription;
+
+  /// Throttle state for the common git dir watcher.
+  Timer? _gitDirPollTimer;
+  DateTime? _gitDirLastPollTime;
+  bool _gitDirPollPending = false;
 
   /// Creates a [WorktreeWatcherService] that automatically watches
   /// all worktrees in [project].
@@ -72,6 +86,7 @@ class WorktreeWatcherService extends ChangeNotifier {
         _enablePeriodicPolling = enablePeriodicPolling {
     _project.addListener(_syncWatchers);
     _syncWatchers();
+    _startGitDirWatcher();
   }
 
   /// Reconciles active watchers with the project's worktree list.
@@ -146,10 +161,15 @@ class WorktreeWatcherService extends ChangeNotifier {
   }
 
   /// Handles a filesystem event by scheduling a throttled poll.
+  ///
+  /// Events from the `.git` directory are skipped here — they are
+  /// handled by the dedicated common git dir watcher instead.
   void _handleFileSystemEvent(
     _WorktreeWatcher watcher,
     FileSystemEvent event,
   ) {
+    final path = event.path;
+    if (path.contains('/.git/') || path.endsWith('/.git')) return;
     _schedulePoll(watcher);
   }
 
@@ -270,6 +290,79 @@ class WorktreeWatcherService extends ChangeNotifier {
     }
   }
 
+  // -----------------------------------------------------------------
+  // Common .git directory watcher
+  // -----------------------------------------------------------------
+
+  /// Starts watching the common .git directory for changes.
+  ///
+  /// The common .git directory is shared between all worktrees.
+  /// Changes here (commits, pushes, fetches, branch operations)
+  /// affect all worktrees. When a change is detected, all
+  /// worktrees are refreshed via [forceRefreshAll].
+  void _startGitDirWatcher() {
+    if (_disposed) return;
+
+    final gitDirPath = '${_project.data.repoRoot}/.git';
+    try {
+      final dir = Directory(gitDirPath);
+      if (!dir.existsSync()) return;
+
+      _gitDirWatcherSubscription = dir
+          .watch(recursive: true)
+          .listen(
+            (_) => _onGitDirChanged(),
+            onError: (_) {},
+          );
+    } catch (_) {
+      // Failed to start watcher (e.g., in tests or bare repos).
+    }
+  }
+
+  /// Called when a change is detected in the common .git directory.
+  ///
+  /// Schedules a throttled refresh of all worktrees.
+  void _onGitDirChanged() {
+    if (_disposed) return;
+    if (_gitDirPollPending) return;
+
+    final now = DateTime.now();
+    final lastPoll = _gitDirLastPollTime;
+
+    if (lastPoll == null) {
+      _refreshAllFromGitDir();
+    } else {
+      final elapsed = now.difference(lastPoll);
+      if (elapsed >= gitDirPollInterval) {
+        _refreshAllFromGitDir();
+      } else {
+        final remaining = gitDirPollInterval - elapsed;
+        _gitDirPollPending = true;
+        _gitDirPollTimer?.cancel();
+        _gitDirPollTimer = Timer(remaining, () {
+          _gitDirPollPending = false;
+          _refreshAllFromGitDir();
+        });
+      }
+    }
+  }
+
+  /// Refreshes all worktrees in response to a common git dir change.
+  void _refreshAllFromGitDir() {
+    if (_disposed) return;
+    _gitDirLastPollTime = DateTime.now();
+    forceRefreshAll();
+  }
+
+  /// Simulates a git directory change for testing.
+  ///
+  /// Triggers the same throttled refresh-all logic that a real
+  /// filesystem event in the .git directory would trigger.
+  @visibleForTesting
+  void onGitDirChanged() => _onGitDirChanged();
+
+  // -----------------------------------------------------------------
+
   /// Forces an immediate git status poll for [worktree].
   Future<void> forceRefresh(WorktreeState worktree) async {
     final watcher = _watchers[worktree.data.worktreeRoot];
@@ -294,6 +387,13 @@ class WorktreeWatcherService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _project.removeListener(_syncWatchers);
+
+    // Cancel common git dir watcher.
+    _gitDirWatcherSubscription?.cancel();
+    _gitDirWatcherSubscription = null;
+    _gitDirPollTimer?.cancel();
+    _gitDirPollTimer = null;
+
     for (final w in _watchers.values) {
       w.cancel();
     }
