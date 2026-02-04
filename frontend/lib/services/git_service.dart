@@ -945,9 +945,8 @@ class RealGitService implements GitService {
 
   @override
   Future<void> mergeContinue(String path) async {
-    // git merge --continue is equivalent to git commit
     await _runGit(
-      ['commit', '--no-edit'],
+      ['-c', 'core.editor=true', 'merge', '--continue'],
       workingDirectory: path,
     );
   }
@@ -955,7 +954,7 @@ class RealGitService implements GitService {
   @override
   Future<void> rebaseContinue(String path) async {
     await _runGit(
-      ['rebase', '--continue'],
+      ['-c', 'core.editor=true', 'rebase', '--continue'],
       workingDirectory: path,
     );
   }

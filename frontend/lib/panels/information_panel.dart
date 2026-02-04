@@ -544,28 +544,13 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
           // Workflow mode toggle (only for non-primary worktrees)
           if (!data.isPrimary) ...[
             const SizedBox(height: 12),
-            SegmentedButton<WorkflowMode>(
-              segments: const [
-                ButtonSegment(
-                  value: WorkflowMode.local,
-                  label: Text('Work locally'),
-                  icon: Icon(Icons.computer, size: 14),
-                ),
-                ButtonSegment(
-                  value: WorkflowMode.pr,
-                  label: Text('Work via PRs'),
-                  icon: Icon(Icons.cloud_upload, size: 14),
-                ),
+            _CompactToggle<WorkflowMode>(
+              value: _workflowMode,
+              options: const [
+                (WorkflowMode.local, 'Local', Icons.computer),
+                (WorkflowMode.pr, 'PRs', Icons.cloud_upload),
               ],
-              selected: {_workflowMode},
-              onSelectionChanged: (selected) {
-                setState(
-                  () => _workflowMode = selected.first,
-                );
-              },
-              style: SegmentedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
+              onChanged: (v) => setState(() => _workflowMode = v),
             ),
           ],
           const SizedBox(height: 12),
@@ -997,6 +982,102 @@ class _SectionDividerWithDropdown extends StatelessWidget {
     }
 
     return child;
+  }
+}
+
+/// Compact segmented toggle matching [_CompactButton] sizing.
+class _CompactToggle<T> extends StatelessWidget {
+  const _CompactToggle({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final T value;
+  final List<(T, String, IconData)> options;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        for (var i = 0; i < options.length; i++)
+          Expanded(
+            child: _buildSegment(
+              context,
+              option: options[i],
+              isSelected: options[i].$1 == value,
+              isFirst: i == 0,
+              isLast: i == options.length - 1,
+              colorScheme: colorScheme,
+              textTheme: textTheme,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSegment(
+    BuildContext context, {
+    required (T, String, IconData) option,
+    required bool isSelected,
+    required bool isFirst,
+    required bool isLast,
+    required ColorScheme colorScheme,
+    required TextTheme textTheme,
+  }) {
+    final (val, label, icon) = option;
+    final contentColor = isSelected
+        ? colorScheme.onSurface
+        : colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+    final bgColor = isSelected
+        ? colorScheme.surfaceContainerHighest
+        : Colors.transparent;
+    final borderColor = colorScheme.outlineVariant;
+
+    final radius = BorderRadius.horizontal(
+      left: isFirst ? const Radius.circular(4) : Radius.zero,
+      right: isLast ? const Radius.circular(4) : Radius.zero,
+    );
+
+    return Material(
+      color: bgColor,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: () => onChanged(val),
+        borderRadius: radius,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 4,
+          ),
+          decoration: BoxDecoration(
+            border: Border.all(color: borderColor),
+            borderRadius: radius,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: contentColor),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: textTheme.labelSmall
+                      ?.copyWith(color: contentColor),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
