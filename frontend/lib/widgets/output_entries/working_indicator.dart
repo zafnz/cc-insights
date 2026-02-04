@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 /// Test keys for the working indicator.
@@ -12,14 +14,18 @@ class WorkingIndicatorKeys {
 
   /// The text label.
   static const label = Key('working_indicator_label');
+
+  /// The elapsed time label.
+  static const elapsed = Key('working_indicator_elapsed');
 }
 
 /// Indicator shown when Claude is working (thinking/processing).
 ///
-/// Displays a circular progress indicator with status text.
+/// Displays a circular progress indicator with status text and an
+/// elapsed time counter that ticks every second.
 /// When [isCompacting] is true, shows "Compacting context..." instead of
 /// the default "Claude is working..." message.
-class WorkingIndicator extends StatelessWidget {
+class WorkingIndicator extends StatefulWidget {
   const WorkingIndicator({
     super.key,
     this.isCompacting = false,
@@ -31,9 +37,49 @@ class WorkingIndicator extends StatelessWidget {
   final bool isCompacting;
 
   @override
+  State<WorkingIndicator> createState() => _WorkingIndicatorState();
+}
+
+class _WorkingIndicatorState extends State<WorkingIndicator> {
+  late final Stopwatch _stopwatch;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _stopwatch = Stopwatch()..start();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _stopwatch.stop();
+    super.dispose();
+  }
+
+  /// Formats elapsed duration as "Xs", "Xm", "XmYs".
+  String _formatElapsed(Duration d) {
+    final totalSeconds = d.inSeconds;
+    if (totalSeconds < 60) {
+      return '${totalSeconds}s';
+    }
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (seconds == 0) {
+      return '${minutes}m';
+    }
+    return '${minutes}m${seconds}s';
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final statusText = isCompacting ? 'Compacting context...' : 'Claude is working...';
+    final statusText =
+        widget.isCompacting ? 'Compacting context...' : 'Claude is working...';
+    final elapsed = _formatElapsed(_stopwatch.elapsed);
 
     return Padding(
       key: WorkingIndicatorKeys.container,
@@ -58,6 +104,16 @@ class WorkingIndicator extends StatelessWidget {
               fontSize: 13,
               color: Colors.grey[600],
               fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            elapsed,
+            key: WorkingIndicatorKeys.elapsed,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[500],
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],

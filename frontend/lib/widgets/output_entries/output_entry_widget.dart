@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../models/output_entry.dart';
 import '../../screens/raw_json_viewer.dart';
@@ -46,10 +47,14 @@ class OutputEntryWidget extends StatelessWidget {
   /// subagent output from primary conversation output.
   final bool isSubagent;
 
+  /// Formatter for [HH:MM] timestamps shown beside entries.
+  static final _timeFormat = DateFormat('HH:mm');
+
   @override
   Widget build(BuildContext context) {
     Widget child;
     List<Map<String, dynamic>>? rawMessages;
+    bool showTimestamp = true;
 
     switch (entry) {
       case final TextOutputEntry e:
@@ -67,10 +72,13 @@ class OutputEntryWidget extends StatelessWidget {
         );
       case ContextClearedEntry():
         child = const ContextClearedEntryWidget();
+        showTimestamp = false;
       case final SessionMarkerEntry e:
         child = SessionMarkerEntryWidget(entry: e);
+        showTimestamp = false;
       case final AutoCompactionEntry e:
         child = AutoCompactionEntryWidget(entry: e);
+        showTimestamp = false;
       case final UnknownMessageEntry e:
         child = UnknownMessageEntryWidget(entry: e);
       case final SystemNotificationEntry e:
@@ -89,6 +97,14 @@ class OutputEntryWidget extends StatelessWidget {
         rawMessages.isNotEmpty) {
       child = _EntryWithDebugIcon(
         rawMessages: rawMessages,
+        child: child,
+      );
+    }
+
+    // Add timestamp on the left for message-type entries
+    if (showTimestamp && config.showTimestamps) {
+      child = _TimestampedEntry(
+        timestamp: entry.timestamp,
         child: child,
       );
     }
@@ -149,6 +165,44 @@ class _EntryWithDebugIcon extends StatelessWidget {
             },
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Wrapper that adds a [HH:MM] timestamp to the left of an entry.
+class _TimestampedEntry extends StatelessWidget {
+  final DateTime timestamp;
+  final Widget child;
+
+  const _TimestampedEntry({
+    required this.timestamp,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final timeText = OutputEntryWidget._timeFormat.format(timestamp);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 40,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              timeText,
+              style: TextStyle(
+                fontSize: 10,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: colorScheme.onSurface.withValues(alpha: 0.35),
+              ),
+            ),
+          ),
+        ),
+        Expanded(child: child),
       ],
     );
   }
