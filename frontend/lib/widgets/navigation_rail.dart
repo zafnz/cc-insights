@@ -110,11 +110,10 @@ class AppNavigationRail extends StatelessWidget {
           const SizedBox(height: 4),
           _NavRailButton(
             icon: Icons.settings_outlined,
+            selectedIcon: Icons.settings,
             tooltip: 'Settings',
-            isSelected: false,
-            onTap: () {
-              // TODO: Navigate to settings screen
-            },
+            isSelected: selectedIndex == 2,
+            onTap: () => onDestinationSelected(2),
           ),
           const SizedBox(height: 8),
         ],

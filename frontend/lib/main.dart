@@ -23,6 +23,7 @@ import 'services/persistence_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
 import 'services/project_config_service.dart';
+import 'services/settings_service.dart';
 import 'services/script_execution_service.dart';
 import 'services/sdk_message_handler.dart';
 import 'services/worktree_watcher_service.dart';
@@ -123,6 +124,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The AskAI service for one-shot AI queries.
   AskAiService? _askAiService;
 
+  /// The settings service for application preferences.
+  SettingsService? _settingsService;
+
   /// The persistence service for storing project/chat data.
   PersistenceService? _persistenceService;
 
@@ -199,6 +203,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Create the persistence service for storing project/chat data
     _persistenceService = PersistenceService();
+
+    // Create and load the settings service (fire-and-forget load)
+    _settingsService = SettingsService();
+    _settingsService!.load();
 
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();
@@ -513,6 +521,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Persistence service for storing project/chat data
         Provider<PersistenceService>.value(
             value: _persistenceService ?? PersistenceService()),
+        // Settings service for application preferences
+        ChangeNotifierProvider<SettingsService>.value(
+          value: _settingsService!,
+        ),
         // Project state
         ChangeNotifierProvider<ProjectState>.value(value: project),
         // Selection state depends on project

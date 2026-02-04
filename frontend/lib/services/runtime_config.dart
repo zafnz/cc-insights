@@ -60,6 +60,28 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to show raw JSON debug icons on messages.
   bool _showRawMessages = true;
 
+  /// Whether to show timestamps on messages.
+  bool _showTimestamps = false;
+
+  /// Minutes of inactivity before showing a timestamp.
+  /// Set to 0 to show on every message.
+  int _timestampIdleThreshold = 5;
+
+  /// Whether to auto-generate chat titles via AI.
+  bool _autoGenerateTitles = true;
+
+  /// Whether desktop notifications are enabled.
+  bool _desktopNotifications = true;
+
+  /// Default Claude model for new chats.
+  String _defaultModel = 'sonnet';
+
+  /// Default permission mode for new chats.
+  String _defaultPermissionMode = 'default';
+
+  /// Whether to enable debug SDK logging.
+  bool _debugSdkLogging = false;
+
   /// The working directory for this session.
   String get workingDirectory => _workingDirectory;
 
@@ -191,6 +213,76 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether to show timestamps on messages.
+  bool get showTimestamps => _showTimestamps;
+
+  set showTimestamps(bool value) {
+    if (_showTimestamps != value) {
+      _showTimestamps = value;
+      notifyListeners();
+    }
+  }
+
+  /// Minutes of inactivity before showing a timestamp.
+  int get timestampIdleThreshold => _timestampIdleThreshold;
+
+  set timestampIdleThreshold(int value) {
+    if (_timestampIdleThreshold != value) {
+      _timestampIdleThreshold = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether to auto-generate chat titles via AI.
+  bool get autoGenerateTitles => _autoGenerateTitles;
+
+  set autoGenerateTitles(bool value) {
+    if (_autoGenerateTitles != value) {
+      _autoGenerateTitles = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether desktop notifications are enabled.
+  bool get desktopNotifications => _desktopNotifications;
+
+  set desktopNotifications(bool value) {
+    if (_desktopNotifications != value) {
+      _desktopNotifications = value;
+      notifyListeners();
+    }
+  }
+
+  /// Default Claude model for new chats.
+  String get defaultModel => _defaultModel;
+
+  set defaultModel(String value) {
+    if (_defaultModel != value) {
+      _defaultModel = value;
+      notifyListeners();
+    }
+  }
+
+  /// Default permission mode for new chats.
+  String get defaultPermissionMode => _defaultPermissionMode;
+
+  set defaultPermissionMode(String value) {
+    if (_defaultPermissionMode != value) {
+      _defaultPermissionMode = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether to enable debug SDK logging.
+  bool get debugSdkLogging => _debugSdkLogging;
+
+  set debugSdkLogging(bool value) {
+    if (_debugSdkLogging != value) {
+      _debugSdkLogging = value;
+      notifyListeners();
+    }
+  }
+
   /// Updates the working directory.
   ///
   /// This is called when the user selects a project from the welcome screen.
@@ -219,5 +311,12 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._toolSummaryRelativeFilePaths = true;
     _instance._monoFontFamily = 'JetBrains Mono';
     _instance._showRawMessages = true;
+    _instance._showTimestamps = false;
+    _instance._timestampIdleThreshold = 5;
+    _instance._autoGenerateTitles = true;
+    _instance._desktopNotifications = true;
+    _instance._defaultModel = 'sonnet';
+    _instance._defaultPermissionMode = 'default';
+    _instance._debugSdkLogging = false;
   }
 }

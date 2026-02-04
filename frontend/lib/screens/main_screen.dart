@@ -11,6 +11,7 @@ import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
 import 'file_manager_screen.dart';
+import 'settings_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
 class MainScreen extends StatefulWidget {
@@ -504,6 +505,8 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         // Index 1: File Manager screen
                         const FileManagerScreen(),
+                        // Index 2: Settings screen
+                        const SettingsScreen(),
                       ],
                     ),
                   ),

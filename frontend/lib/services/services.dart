@@ -13,3 +13,4 @@ export 'persistence_service.dart';
 export 'project_restore_service.dart';
 export 'runtime_config.dart';
 export 'sdk_message_handler.dart';
+export 'settings_service.dart';
