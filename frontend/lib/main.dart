@@ -227,6 +227,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _themeState!.addListener(_onThemeChanged);
     _settingsService!.addListener(_syncThemeFromSettings);
 
+    // Listen for changes to debug SDK logging setting
+    RuntimeConfig.instance.addListener(_onRuntimeConfigChanged);
+
     // Create or use injected SdkMessageHandler
     // Pass askAiService for auto-generating chat titles
     _handler =
@@ -268,6 +271,20 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     );
   }
 
+  /// Handles changes to RuntimeConfig (like debug SDK logging).
+  void _onRuntimeConfigChanged() {
+    final shouldLog = RuntimeConfig.instance.debugSdkLogging;
+    final home = Platform.environment['HOME'] ?? '/tmp';
+    final logPath = '$home/ccinsights.debug.jsonl';
+
+    SdkLogger.instance.debugEnabled = shouldLog;
+    if (shouldLog) {
+      SdkLogger.instance.enableFileLogging(logPath);
+    } else {
+      SdkLogger.instance.disableFileLogging();
+    }
+  }
+
   /// Validates the directory and determines if we need to show a prompt.
   Future<void> _validateDirectory(String path) async {
     final gitService = const RealGitService();
@@ -297,11 +314,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     final home = Platform.environment['HOME'] ?? '/tmp';
     final logPath = '$home/ccinsights.debug.jsonl';
 
-    // Enable debug mode and file logging
-    SdkLogger.instance.debugEnabled = true;
-    SdkLogger.instance.enableFileLogging(logPath);
-
-
+    // Enable debug mode and file logging based on RuntimeConfig
+    final shouldLog = RuntimeConfig.instance.debugSdkLogging;
+    SdkLogger.instance.debugEnabled = shouldLog;
+    if (shouldLog) {
+      SdkLogger.instance.enableFileLogging(logPath);
+    }
   }
 
   /// Handles app termination by writing session quit markers.
@@ -361,6 +379,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     WidgetsBinding.instance.removeObserver(this);
     _themeState?.removeListener(_onThemeChanged);
     _settingsService?.removeListener(_syncThemeFromSettings);
+    RuntimeConfig.instance.removeListener(_onRuntimeConfigChanged);
     // Only dispose services we created, not injected ones
     if (widget.backendService == null) {
       _backend?.dispose();
