@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../config/fonts.dart';
 import '../services/runtime_config.dart';
+import 'clickable_code_span.dart';
 
 // =============================================================================
 // Test Keys for PermissionDialog
@@ -124,6 +125,7 @@ class PermissionDialog extends StatefulWidget {
     required this.request,
     required this.onAllow,
     required this.onDeny,
+    this.projectDir,
   });
 
   /// The permission request from the SDK.
@@ -139,6 +141,9 @@ class PermissionDialog extends StatefulWidget {
   /// Called when the user denies the permission.
   /// The callback receives a denial message explaining why.
   final void Function(String message) onDeny;
+
+  /// The project directory for resolving relative file paths.
+  final String? projectDir;
 
   @override
   State<PermissionDialog> createState() => _PermissionDialogState();
@@ -335,26 +340,9 @@ class _PermissionDialogState extends State<PermissionDialog> {
                     onLinkTap: (url, title) {
                       launchUrl(Uri.parse(url));
                     },
-                    highlightBuilder: (context, text, style) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Text(
-                          text,
-                          style: GoogleFonts.getFont(
-                            RuntimeConfig.instance.monoFontFamily,
-                            fontSize: (style.fontSize ?? 13) - 1,
-                            color: colorScheme.secondary,
-                          ),
-                        ),
-                      );
-                    },
+                    highlightBuilder: makeHighlightBuilder(
+                      projectDir: widget.projectDir,
+                    ),
                   ),
                 ),
               ),

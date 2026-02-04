@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
-import '../../services/runtime_config.dart';
+import '../clickable_code_span.dart';
 
 /// Displays a system notification entry.
 ///
@@ -15,10 +14,17 @@ import '../../services/runtime_config.dart';
 /// Content is rendered as Markdown using GptMarkdown.
 class SystemNotificationEntryWidget extends StatelessWidget {
   /// Creates a system notification entry widget.
-  const SystemNotificationEntryWidget({super.key, required this.entry});
+  const SystemNotificationEntryWidget({
+    super.key,
+    required this.entry,
+    this.projectDir,
+  });
 
   /// The entry data to display.
   final SystemNotificationEntry entry;
+
+  /// The project directory for resolving relative file paths.
+  final String? projectDir;
 
   @override
   Widget build(BuildContext context) {
@@ -54,26 +60,10 @@ class SystemNotificationEntryWidget extends StatelessWidget {
                 onLinkTap: (url, title) {
                   launchUrl(Uri.parse(url));
                 },
-                highlightBuilder: (context, text, style) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      text,
-                      style: GoogleFonts.getFont(
-                        RuntimeConfig.instance.monoFontFamily,
-                        fontSize: (style.fontSize ?? 13) - 1,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  );
-                },
+                highlightBuilder: makeHighlightBuilder(
+                  projectDir: projectDir,
+                  defaultColor: colorScheme.primary,
+                ),
               ),
             ),
           ),

@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
-import '../../services/runtime_config.dart';
+import '../clickable_code_span.dart';
 
 /// Displays a context summary entry (collapsible).
 class ContextSummaryEntryWidget extends StatefulWidget {
-  const ContextSummaryEntryWidget({super.key, required this.entry});
+  const ContextSummaryEntryWidget({
+    super.key,
+    required this.entry,
+    this.projectDir,
+  });
 
   final ContextSummaryEntry entry;
+
+  /// The project directory for resolving relative file paths.
+  final String? projectDir;
 
   @override
   State<ContextSummaryEntryWidget> createState() =>
@@ -98,26 +104,9 @@ class _ContextSummaryEntryWidgetState extends State<ContextSummaryEntryWidget> {
                       onLinkTap: (url, title) {
                         launchUrl(Uri.parse(url));
                       },
-                      highlightBuilder: (context, text, style) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: Text(
-                            text,
-                            style: GoogleFonts.getFont(
-                              RuntimeConfig.instance.monoFontFamily,
-                              fontSize: (style.fontSize ?? 12) - 1,
-                              color: colorScheme.secondary,
-                            ),
-                          ),
-                        );
-                      },
+                      highlightBuilder: makeHighlightBuilder(
+                        projectDir: widget.projectDir,
+                      ),
                     ),
                   ),
                 ),

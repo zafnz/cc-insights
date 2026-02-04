@@ -53,7 +53,7 @@ class OutputEntryWidget extends StatelessWidget {
 
     switch (entry) {
       case final TextOutputEntry e:
-        child = TextEntryWidget(entry: e);
+        child = TextEntryWidget(entry: e, projectDir: projectDir);
         rawMessages = e.rawMessages;
       case final ToolUseOutputEntry e:
         child = ToolCard(entry: e, projectDir: projectDir);
@@ -61,7 +61,10 @@ class OutputEntryWidget extends StatelessWidget {
       case final UserInputEntry e:
         child = UserInputEntryWidget(entry: e);
       case final ContextSummaryEntry e:
-        child = ContextSummaryEntryWidget(entry: e);
+        child = ContextSummaryEntryWidget(
+          entry: e,
+          projectDir: projectDir,
+        );
       case ContextClearedEntry():
         child = const ContextClearedEntryWidget();
       case final SessionMarkerEntry e:
@@ -71,7 +74,10 @@ class OutputEntryWidget extends StatelessWidget {
       case final UnknownMessageEntry e:
         child = UnknownMessageEntryWidget(entry: e);
       case final SystemNotificationEntry e:
-        child = SystemNotificationEntryWidget(entry: e);
+        child = SystemNotificationEntryWidget(
+          entry: e,
+          projectDir: projectDir,
+        );
       default:
         return const SizedBox.shrink();
     }

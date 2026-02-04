@@ -497,8 +497,10 @@ class _ConversationPanelState extends State<ConversationPanel>
         },
       );
     } else {
+      final selection = context.read<SelectionState>();
       dialogWidget = PermissionDialog(
         request: permission,
+        projectDir: selection.selectedChat?.data.worktreeRoot,
         onAllow: ({
           Map<String, dynamic>? updatedInput,
           List<dynamic>? updatedPermissions,

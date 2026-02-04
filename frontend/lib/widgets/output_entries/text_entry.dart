@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/output_entry.dart';
 import '../../services/runtime_config.dart';
+import '../clickable_code_span.dart';
 
 /// Displays a text output entry from the assistant.
 ///
@@ -14,9 +15,16 @@ import '../../services/runtime_config.dart';
 /// Regular content is rendered as Markdown using GptMarkdown.
 /// Error content is displayed with error styling.
 class TextEntryWidget extends StatelessWidget {
-  const TextEntryWidget({super.key, required this.entry});
+  const TextEntryWidget({
+    super.key,
+    required this.entry,
+    this.projectDir,
+  });
 
   final TextOutputEntry entry;
+
+  /// The project directory for resolving relative file paths.
+  final String? projectDir;
 
   @override
   Widget build(BuildContext context) {
@@ -55,23 +63,9 @@ class TextEntryWidget extends StatelessWidget {
           onLinkTap: (url, title) {
             launchUrl(Uri.parse(url));
           },
-          highlightBuilder: (context, text, style) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text(
-                text,
-                style: GoogleFonts.getFont(
-                  RuntimeConfig.instance.monoFontFamily,
-                  fontSize: (style.fontSize ?? 13) - 1,
-                  color: colorScheme.secondary,
-                ),
-              ),
-            );
-          },
+          highlightBuilder: makeHighlightBuilder(
+            projectDir: projectDir,
+          ),
         ),
       ),
     );
