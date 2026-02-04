@@ -6,7 +6,8 @@
       "mcp__flutter-test__get_test_result",
       "Bash(flutter pub:*)",
       "Bash(npm run bundle:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(./init.sh)"
     ]
   }
 }
