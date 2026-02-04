@@ -8,11 +8,10 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as path;
 
 import 'package:cc_insights_v2/main.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/directory_validation_dialog.dart';
-
-import 'test_setup.dart';
 
 /// Integration test for directory validation when launching the app.
 ///
@@ -68,11 +67,15 @@ Future<void> _takeScreenshot(WidgetTester tester, String name) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  setupIntegrationTestIsolation();
 
   late Directory tempDir;
+  late Directory persistenceTempDir;
 
   setUpAll(() async {
+    // Create temp directory for persistence isolation
+    persistenceTempDir = await Directory.systemTemp.createTemp('integration_test_');
+    PersistenceService.setBaseDir('${persistenceTempDir.path}/.ccinsights');
+
     // Ensure screenshots directory exists
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
@@ -87,6 +90,15 @@ void main() {
   });
 
   tearDownAll(() async {
+    // Clean up persistence temp directory
+    if (await persistenceTempDir.exists()) {
+      await persistenceTempDir.delete(recursive: true);
+    }
+    // Reset to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
+
     // Clean up temp directory
     debugPrint('Cleaning up temp directory: ${tempDir.path}');
     try {

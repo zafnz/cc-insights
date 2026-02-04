@@ -6,11 +6,10 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:cc_insights_v2/main.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
-
-import 'test_setup.dart';
 
 /// Integration test for file tree expand performance.
 ///
@@ -21,12 +20,18 @@ import 'test_setup.dart';
 ///   flutter test integration_test/file_tree_expand_performance_test.dart -d macos
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  setupIntegrationTestIsolation();
 
   late String mockPath;
   late Directory tempDir;
+  late Directory persistenceTempDir;
 
-  setUpAll(() async {
+  setUpAll() async {
+    // Create temp directory for persistence isolation
+    persistenceTempDir = await Directory.systemTemp.createTemp('integration_test_');
+    PersistenceService.setBaseDir('${persistenceTempDir.path}/.ccinsights');
+
+    // Enable mock data
+    useMockData = true;
 
     // Create a unique temp directory for this test run
     tempDir = Directory.systemTemp.createTempSync('cc-insights-perf-test-');
@@ -54,12 +59,21 @@ void main() {
     debugPrint('Test repo has ${files.length} top-level items');
   });
 
-  tearDownAll(() {
+  tearDownAll(() async {
     // Clean up the cloned repo and temp directory
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
       debugPrint('Cleaned up temp directory: ${tempDir.path}');
     }
+
+    // Clean up persistence temp directory
+    if (await persistenceTempDir.exists()) {
+      await persistenceTempDir.delete(recursive: true);
+    }
+    // Reset to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
   });
 
   group('File tree expand performance', () {

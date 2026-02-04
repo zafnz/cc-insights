@@ -11,11 +11,10 @@ import 'package:path/path.dart' as path;
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/delete_worktree_dialog.dart';
-
-import 'test_setup.dart';
 
 /// Integration test for the delete worktree workflow.
 ///
@@ -73,13 +72,17 @@ Future<void> _takeScreenshot(WidgetTester tester, String name) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  setupIntegrationTestIsolation();
 
   late Directory tempDir;
+  late Directory persistenceTempDir;
   late String repoPath;
   const testRepoUrl = 'https://github.com/zafnz/cc-insights-test-repo.git';
 
   setUpAll(() async {
+    // Create temp directory for persistence isolation
+    persistenceTempDir = await Directory.systemTemp.createTemp('integration_test_');
+    PersistenceService.setBaseDir('${persistenceTempDir.path}/.ccinsights');
+
     // Ensure screenshots directory exists
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
@@ -109,13 +112,22 @@ void main() {
   });
 
   tearDownAll(() async {
-    // Clean up temp directory
+    // Clean up temp directories
     debugPrint('Cleaning up temp directory: ${tempDir.path}');
     try {
       await tempDir.delete(recursive: true);
     } catch (e) {
       debugPrint('Warning: Failed to delete temp directory: $e');
     }
+
+    // Clean up persistence temp directory
+    if (await persistenceTempDir.exists()) {
+      await persistenceTempDir.delete(recursive: true);
+    }
+    // Reset to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
   });
 
   group('Delete Worktree Integration Tests', () {

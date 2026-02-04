@@ -8,9 +8,8 @@ import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/panels/content_panel.dart';
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
-
-import 'test_setup.dart';
 
 Finder _findWorktreeScrollable() {
   return find.descendant(
@@ -61,14 +60,33 @@ Future<void> _scrollWorktreePanelTo(
 ///   flutter test integration_test/worktree_creation_test.dart -d macos
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  setupIntegrationTestIsolation();
 
-  // Ensure screenshots directory exists
-  setUpAll(() {
+  late Directory tempDir;
+
+  setUpAll(() async {
+    // Enable mock data
+    useMockData = true;
+
+    // Create temp directory for test isolation
+    tempDir = await Directory.systemTemp.createTemp('integration_test_');
+    PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
+
+    // Ensure screenshots directory exists
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
     }
+  });
+
+  tearDownAll(() async {
+    // Clean up temp directory
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    // Reset to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
   });
 
 

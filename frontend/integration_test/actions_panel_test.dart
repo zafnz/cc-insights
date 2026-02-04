@@ -7,11 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:cc_insights_v2/main.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/services/script_execution_service.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:provider/provider.dart';
-
-import 'test_setup.dart';
 
 /// Integration tests for the ActionsPanel feature.
 ///
@@ -21,14 +20,33 @@ import 'test_setup.dart';
 /// Screenshots are saved to the `screenshots/` directory.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  setupIntegrationTestIsolation();
 
-  // Ensure screenshots directory exists
-  setUpAll(() {
+  late Directory tempDir;
+
+  setUpAll(() async {
+    // Enable mock data
+    useMockData = true;
+
+    // Create temp directory for test isolation
+    tempDir = await Directory.systemTemp.createTemp('integration_test_');
+    PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
+
+    // Ensure screenshots directory exists
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
     }
+  });
+
+  tearDownAll(() async {
+    // Clean up temp directory
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    // Reset to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
   });
 
   group('ActionsPanel Integration Tests', () {
