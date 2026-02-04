@@ -1,0 +1,86 @@
+name: Run Tests
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  sdk-tests:
+    name: SDK Unit Tests
+    runs-on: macos-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.release.draft == true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        working-directory: claude_dart_sdk
+        run: flutter pub get
+
+      - name: Run SDK tests
+        working-directory: claude_dart_sdk
+        run: flutter test
+
+  frontend-unit-tests:
+    name: Frontend Unit/Widget Tests
+    runs-on: macos-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.release.draft == true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Run frontend unit/widget tests
+        working-directory: frontend
+        run: flutter test
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: macos-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.release.draft == true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Run integration tests
+        working-directory: frontend
+        run: |
+          for test_file in integration_test/*_test.dart; do
+            echo "=== Running: $test_file ==="
+            flutter test "$test_file" -d macos
+          done
