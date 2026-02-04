@@ -134,6 +134,7 @@ class _ClickToScrollContainerState extends State<ClickToScrollContainer> {
                 return false;
               },
               child: Container(
+                width: double.infinity,
                 constraints: BoxConstraints(maxHeight: widget.maxHeight),
                 decoration: BoxDecoration(
                   color: widget.backgroundColor,
