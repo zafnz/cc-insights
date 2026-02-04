@@ -185,24 +185,21 @@ class _TimestampedEntry extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final timeText = OutputEntryWidget._timeFormat.format(timestamp);
 
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 40,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              timeText,
-              style: TextStyle(
-                fontSize: 10,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                color: colorScheme.onSurface.withValues(alpha: 0.35),
-              ),
+        child,
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 4),
+          child: Text(
+            timeText,
+            style: TextStyle(
+              fontSize: 10,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: colorScheme.onSurface.withValues(alpha: 0.35),
             ),
           ),
         ),
-        Expanded(child: child),
       ],
     );
   }
