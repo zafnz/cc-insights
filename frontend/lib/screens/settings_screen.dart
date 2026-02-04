@@ -604,113 +604,120 @@ class _TagsSettingsContentState extends State<_TagsSettingsContent> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       children: [
-        Text(
-          'Tags',
-          style: textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Manage worktree tags and their colors',
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 24),
-        // Existing tags
-        for (final tag in tags) ...[
-          _TagRow(
-            tag: tag,
-            onColorChanged: (color) {
-              widget.settings.updateTag(
-                tag.name,
-                tag.copyWith(colorValue: color),
-              );
-            },
-            onDelete: () => widget.settings.removeTag(tag.name),
-          ),
-          const SizedBox(height: 8),
-        ],
-        if (tags.isNotEmpty)
-          Divider(
-            height: 32,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-          ),
-        // Add new tag row
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 500),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ColorDot(
-                colorValue: _newTagColor,
-                size: 24,
-                onTap: () async {
-                  final picked = await _showColorPicker(
-                    context,
-                    _newTagColor,
-                  );
-                  if (picked != null) {
-                    setState(() => _newTagColor = picked);
-                  }
-                },
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 36,
-                  child: TextField(
-                    controller: _newTagController,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colorScheme.onSurface,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'New tag name...',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
-                          color: colorScheme.outlineVariant
-                              .withValues(alpha: 0.3),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
-                          color: colorScheme.outlineVariant
-                              .withValues(alpha: 0.3),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    onSubmitted: (_) => _addTag(),
-                  ),
+              Text(
+                'Tags',
+                style: textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 36,
-                child: FilledButton.tonalIcon(
-                  onPressed: _addTag,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add'),
-                  style: FilledButton.styleFrom(
-                    textStyle: const TextStyle(fontSize: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                'Manage worktree tags and their colors',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
+              ),
+              const SizedBox(height: 24),
+              // Existing tags
+              for (final tag in tags) ...[
+                _TagRow(
+                  tag: tag,
+                  onColorChanged: (color) {
+                    widget.settings.updateTag(
+                      tag.name,
+                      tag.copyWith(colorValue: color),
+                    );
+                  },
+                  onDelete: () => widget.settings.removeTag(tag.name),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (tags.isNotEmpty)
+                Divider(
+                  height: 32,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              // Add new tag row
+              Row(
+                children: [
+                  _ColorDot(
+                    colorValue: _newTagColor,
+                    size: 24,
+                    onTap: () async {
+                      final picked = await _showColorPicker(
+                        context,
+                        _newTagColor,
+                      );
+                      if (picked != null) {
+                        setState(() => _newTagColor = picked);
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: TextField(
+                        controller: _newTagController,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'New tag name...',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          filled: true,
+                          fillColor: colorScheme.surfaceContainerHighest,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(
+                              color: colorScheme.outlineVariant
+                                  .withValues(alpha: 0.3),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(
+                              color: colorScheme.outlineVariant
+                                  .withValues(alpha: 0.3),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            borderSide: BorderSide(
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        onSubmitted: (_) => _addTag(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 36,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _addTag,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add'),
+                      style: FilledButton.styleFrom(
+                        textStyle: const TextStyle(fontSize: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -735,60 +742,57 @@ class _TagRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 500),
-      child: Row(
-        children: [
-          _ColorDot(
-            colorValue: tag.colorValue,
-            size: 24,
-            onTap: () async {
-              final picked = await _showColorPicker(
-                context,
-                tag.colorValue,
-              );
-              if (picked != null) {
-                onColorChanged(picked);
-              }
-            },
-          ),
-          const SizedBox(width: 12),
-          // Tag pill preview
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: tag.color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: tag.color.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Text(
-              tag.name,
-              style: TextStyle(
-                fontSize: 12,
-                color: tag.color,
-                fontWeight: FontWeight.w500,
-              ),
+    return Row(
+      children: [
+        _ColorDot(
+          colorValue: tag.colorValue,
+          size: 24,
+          onTap: () async {
+            final picked = await _showColorPicker(
+              context,
+              tag.colorValue,
+            );
+            if (picked != null) {
+              onColorChanged(picked);
+            }
+          },
+        ),
+        const SizedBox(width: 12),
+        // Tag pill preview
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: tag.color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: tag.color.withValues(alpha: 0.4),
             ),
           ),
-          const Spacer(),
-          IconButton(
-            onPressed: onDelete,
-            icon: Icon(
-              Icons.close,
-              size: 16,
-              color: colorScheme.onSurfaceVariant,
+          child: Text(
+            tag.name,
+            style: TextStyle(
+              fontSize: 12,
+              color: tag.color,
+              fontWeight: FontWeight.w500,
             ),
-            constraints: const BoxConstraints(
-              minWidth: 28,
-              minHeight: 28,
-            ),
-            padding: EdgeInsets.zero,
-            tooltip: 'Remove tag',
           ),
-        ],
-      ),
+        ),
+        const Spacer(),
+        IconButton(
+          onPressed: onDelete,
+          icon: Icon(
+            Icons.close,
+            size: 16,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          constraints: const BoxConstraints(
+            minWidth: 28,
+            minHeight: 28,
+          ),
+          padding: EdgeInsets.zero,
+          tooltip: 'Remove tag',
+        ),
+      ],
     );
   }
 }

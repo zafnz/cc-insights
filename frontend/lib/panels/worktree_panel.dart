@@ -515,15 +515,32 @@ class _WorktreeListItem extends StatelessWidget {
   void _showContextMenu(BuildContext context, Offset position) async {
     final data = worktree.data;
     final colorScheme = Theme.of(context).colorScheme;
+    final settings = context.read<SettingsService>();
+    final availableTags = settings.availableTags;
 
     final items = <PopupMenuEntry<String>>[
+      // Tags submenu header with arrow indicator
       styledMenuItem(
         value: 'tags',
         child: Row(
           children: [
-            Icon(Icons.label_outlined, size: 16, color: colorScheme.onSurface),
+            Icon(
+              Icons.label_outlined,
+              size: 16,
+              color: colorScheme.onSurface,
+            ),
             const SizedBox(width: 8),
-            Text('Tags...', style: TextStyle(color: colorScheme.onSurface)),
+            Expanded(
+              child: Text(
+                'Tags',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 16,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -555,7 +572,8 @@ class _WorktreeListItem extends StatelessWidget {
 
     switch (result) {
       case 'tags':
-        _showTagsDialog(context);
+        // Open the tags submenu to the right of the click position.
+        _showTagsSubmenu(context, position, availableTags);
       case 'delete':
         await _handleDelete(context);
       default:
@@ -563,20 +581,82 @@ class _WorktreeListItem extends StatelessWidget {
     }
   }
 
-  void _showTagsDialog(BuildContext context) {
+  void _showTagsSubmenu(
+    BuildContext context,
+    Offset position,
+    List<WorktreeTag> availableTags,
+  ) async {
     final project = context.read<ProjectState>();
     final persistence = context.read<PersistenceService>();
-    final settings = context.read<SettingsService>();
+    final colorScheme = Theme.of(context).colorScheme;
+    final currentTags = List.of(worktree.tags);
 
-    showDialog<void>(
+    if (availableTags.isEmpty) return;
+
+    final items = availableTags.map((tag) {
+      final isChecked = currentTags.contains(tag.name);
+      return styledMenuItem<String>(
+        value: tag.name,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              child: isChecked
+                  ? Icon(
+                      Icons.check,
+                      size: 14,
+                      color: colorScheme.primary,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: tag.color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              tag.name,
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList();
+
+    // Position submenu slightly to the right of the original position.
+    final submenuPosition = Offset(position.dx + 120, position.dy);
+    final result = await showStyledMenu<String>(
       context: context,
-      builder: (ctx) => _TagSelectionDialog(
-        worktree: worktree,
-        repoRoot: project.data.repoRoot,
-        persistenceService: persistence,
-        settingsService: settings,
-      ),
+      position: menuPositionFromOffset(submenuPosition),
+      items: items,
     );
+
+    if (result == null || !context.mounted) return;
+
+    // Toggle the selected tag
+    worktree.toggleTag(result);
+
+    // Persist
+    persistence.updateWorktreeTags(
+      projectRoot: project.data.repoRoot,
+      worktreePath: worktree.data.worktreeRoot,
+      tags: List.of(worktree.tags),
+    );
+
+    // Re-open the submenu so the user can toggle more tags.
+    if (context.mounted) {
+      final updatedTags =
+          context.read<SettingsService>().availableTags;
+      _showTagsSubmenu(context, position, updatedTags);
+    }
   }
 
   Future<void> _handleDelete(BuildContext context) async {
@@ -913,121 +993,3 @@ class _TagChip extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Tag selection dialog
-// -----------------------------------------------------------------------------
-
-class _TagSelectionDialog extends StatefulWidget {
-  const _TagSelectionDialog({
-    required this.worktree,
-    required this.repoRoot,
-    required this.persistenceService,
-    required this.settingsService,
-  });
-
-  final WorktreeState worktree;
-  final String repoRoot;
-  final PersistenceService persistenceService;
-  final SettingsService settingsService;
-
-  @override
-  State<_TagSelectionDialog> createState() => _TagSelectionDialogState();
-}
-
-class _TagSelectionDialogState extends State<_TagSelectionDialog> {
-  late List<String> _selectedTags;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedTags = List.of(widget.worktree.tags);
-  }
-
-  void _toggle(String tagName) {
-    setState(() {
-      if (_selectedTags.contains(tagName)) {
-        _selectedTags.remove(tagName);
-      } else {
-        _selectedTags.add(tagName);
-      }
-    });
-
-    // Update runtime state
-    widget.worktree.setTags(List.of(_selectedTags));
-
-    // Persist
-    widget.persistenceService.updateWorktreeTags(
-      projectRoot: widget.repoRoot,
-      worktreePath: widget.worktree.data.worktreeRoot,
-      tags: List.of(_selectedTags),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final availableTags = widget.settingsService.availableTags;
-
-    return AlertDialog(
-      title: Text(
-        'Tags for ${widget.worktree.data.branch}',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      ),
-      contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
-      content: SizedBox(
-        width: 280,
-        child: availableTags.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'No tags defined. Add tags in Settings.',
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
-                ),
-              )
-            : ListView.builder(
-                shrinkWrap: true,
-                itemCount: availableTags.length,
-                itemBuilder: (context, index) {
-                  final tag = availableTags[index];
-                  final isChecked = _selectedTags.contains(tag.name);
-                  return CheckboxListTile(
-                    value: isChecked,
-                    onChanged: (_) => _toggle(tag.name),
-                    dense: true,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                    ),
-                    title: Row(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: tag.color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          tag.name,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
-    );
-  }
-}
