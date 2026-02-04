@@ -7,12 +7,15 @@ import 'package:provider/provider.dart';
 import '../models/chat.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
+import '../models/worktree_tag.dart';
 import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
+import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/delete_worktree_dialog.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
 /// Worktree panel - shows the list of worktrees.
@@ -511,38 +514,69 @@ class _WorktreeListItem extends StatelessWidget {
 
   void _showContextMenu(BuildContext context, Offset position) async {
     final data = worktree.data;
-
-    // Only show context menu for linked worktrees (not primary)
-    if (data.isPrimary) {
-      return;
-    }
-
     final colorScheme = Theme.of(context).colorScheme;
-    final result = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
+
+    final items = <PopupMenuEntry<String>>[
+      styledMenuItem(
+        value: 'tags',
+        child: Row(
+          children: [
+            Icon(Icons.label_outlined, size: 16, color: colorScheme.onSurface),
+            const SizedBox(width: 8),
+            Text('Tags...', style: TextStyle(color: colorScheme.onSurface)),
+          ],
+        ),
       ),
-      items: [
-        PopupMenuItem(
+      if (!data.isPrimary) ...[
+        const PopupMenuDivider(height: 8),
+        styledMenuItem(
           value: 'delete',
           child: Row(
             children: [
-              Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
+              Icon(Icons.delete_outline, size: 16, color: colorScheme.error),
               const SizedBox(width: 8),
-              Text('Delete Worktree', style: TextStyle(color: colorScheme.error)),
+              Text(
+                'Delete Worktree',
+                style: TextStyle(color: colorScheme.error),
+              ),
             ],
           ),
         ),
       ],
+    ];
+
+    final result = await showStyledMenu<String>(
+      context: context,
+      position: menuPositionFromOffset(position),
+      items: items,
     );
 
-    if (result == 'delete' && context.mounted) {
-      await _handleDelete(context);
+    if (!context.mounted) return;
+
+    switch (result) {
+      case 'tags':
+        _showTagsDialog(context);
+      case 'delete':
+        await _handleDelete(context);
+      default:
+        break;
     }
+  }
+
+  void _showTagsDialog(BuildContext context) {
+    final project = context.read<ProjectState>();
+    final persistence = context.read<PersistenceService>();
+    final settings = context.read<SettingsService>();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _TagSelectionDialog(
+        worktree: worktree,
+        repoRoot: project.data.repoRoot,
+        persistenceService: persistence,
+        settingsService: settings,
+      ),
+    );
   }
 
   Future<void> _handleDelete(BuildContext context) async {
@@ -590,6 +624,9 @@ class _WorktreeListItem extends StatelessWidget {
         final hasAnyActiveChat =
             worktree.chats.any((chat) => chat.isWorking);
 
+        final availableTags =
+            context.read<SettingsService>().availableTags;
+
         return GestureDetector(
           onSecondaryTapUp: (details) {
             _showContextMenu(context, details.globalPosition);
@@ -636,6 +673,15 @@ class _WorktreeListItem extends StatelessWidget {
                           ),
                       ],
                     ),
+                    // Tag pills
+                    if (worktree.tags.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: _TagPills(
+                          tagNames: worktree.tags,
+                          availableTags: availableTags,
+                        ),
+                      ),
                     const SizedBox(height: 2),
                     // Path + status on same line (muted, monospace, ~11px)
                     Row(
@@ -803,6 +849,185 @@ class _WorktreeActivitySpinner extends StatelessWidget {
         strokeWidth: 2,
         color: color,
       ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Tag pills
+// -----------------------------------------------------------------------------
+
+/// Displays a row of small colored pill chips for each assigned tag.
+class _TagPills extends StatelessWidget {
+  const _TagPills({
+    required this.tagNames,
+    required this.availableTags,
+  });
+
+  final List<String> tagNames;
+  final List<WorktreeTag> availableTags;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 2,
+      children: tagNames.map((name) {
+        final tagDef = availableTags
+            .where((t) => t.name == name)
+            .firstOrNull;
+        final color = tagDef?.color ?? Colors.grey;
+        return _TagChip(name: name, color: color);
+      }).toList(),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.name, required this.color});
+
+  final String name;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withValues(alpha: 0.4),
+          width: 0.5,
+        ),
+      ),
+      child: Text(
+        name,
+        style: TextStyle(
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Tag selection dialog
+// -----------------------------------------------------------------------------
+
+class _TagSelectionDialog extends StatefulWidget {
+  const _TagSelectionDialog({
+    required this.worktree,
+    required this.repoRoot,
+    required this.persistenceService,
+    required this.settingsService,
+  });
+
+  final WorktreeState worktree;
+  final String repoRoot;
+  final PersistenceService persistenceService;
+  final SettingsService settingsService;
+
+  @override
+  State<_TagSelectionDialog> createState() => _TagSelectionDialogState();
+}
+
+class _TagSelectionDialogState extends State<_TagSelectionDialog> {
+  late List<String> _selectedTags;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTags = List.of(widget.worktree.tags);
+  }
+
+  void _toggle(String tagName) {
+    setState(() {
+      if (_selectedTags.contains(tagName)) {
+        _selectedTags.remove(tagName);
+      } else {
+        _selectedTags.add(tagName);
+      }
+    });
+
+    // Update runtime state
+    widget.worktree.setTags(List.of(_selectedTags));
+
+    // Persist
+    widget.persistenceService.updateWorktreeTags(
+      projectRoot: widget.repoRoot,
+      worktreePath: widget.worktree.data.worktreeRoot,
+      tags: List.of(_selectedTags),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final availableTags = widget.settingsService.availableTags;
+
+    return AlertDialog(
+      title: Text(
+        'Tags for ${widget.worktree.data.branch}',
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
+      content: SizedBox(
+        width: 280,
+        child: availableTags.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'No tags defined. Add tags in Settings.',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: availableTags.length,
+                itemBuilder: (context, index) {
+                  final tag = availableTags[index];
+                  final isChecked = _selectedTags.contains(tag.name);
+                  return CheckboxListTile(
+                    value: isChecked,
+                    onChanged: (_) => _toggle(tag.name),
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                    ),
+                    title: Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: tag.color,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          tag.name,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

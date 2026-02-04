@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../models/setting_definition.dart';
+import '../models/worktree_tag.dart';
 import 'persistence_service.dart';
 import 'runtime_config.dart';
 
@@ -34,13 +35,25 @@ class SettingsService extends ChangeNotifier {
   // Setting Categories
   // ---------------------------------------------------------------------------
 
+  /// Key for the available tags list in settings.
+  static const tagsKey = 'tags.available';
+
   /// All setting categories and their definitions.
   static const List<SettingCategory> categories = [
     _appearanceCategory,
     _behaviorCategory,
+    _tagsCategory,
     _sessionCategory,
     _developerCategory,
   ];
+
+  static const _tagsCategory = SettingCategory(
+    id: 'tags',
+    label: 'Tags',
+    description: 'Manage worktree tags and their colors',
+    icon: Icons.label_outlined,
+    settings: [],
+  );
 
   static const _appearanceCategory = SettingCategory(
     id: 'appearance',
@@ -245,6 +258,62 @@ class SettingsService extends ChangeNotifier {
     _syncAllToRuntimeConfig();
     notifyListeners();
     await _save();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tags
+  // ---------------------------------------------------------------------------
+
+  /// Returns the list of available worktree tags.
+  ///
+  /// Falls back to [WorktreeTag.defaults] if no tags are configured.
+  List<WorktreeTag> get availableTags {
+    final raw = _values[tagsKey];
+    if (raw is List) {
+      try {
+        return raw
+            .map(
+              (e) => WorktreeTag.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList();
+      } catch (_) {
+        return List.of(WorktreeTag.defaults);
+      }
+    }
+    return List.of(WorktreeTag.defaults);
+  }
+
+  /// Replaces the entire list of available tags.
+  Future<void> setAvailableTags(List<WorktreeTag> tags) async {
+    _values[tagsKey] = tags.map((t) => t.toJson()).toList();
+    notifyListeners();
+    await _save();
+  }
+
+  /// Adds a new tag to the available list.
+  Future<void> addTag(WorktreeTag tag) async {
+    final tags = availableTags;
+    tags.add(tag);
+    await setAvailableTags(tags);
+  }
+
+  /// Removes a tag by name from the available list.
+  Future<void> removeTag(String name) async {
+    final tags = availableTags;
+    tags.removeWhere((t) => t.name == name);
+    await setAvailableTags(tags);
+  }
+
+  /// Updates a tag identified by [oldName] with a new [tag].
+  Future<void> updateTag(String oldName, WorktreeTag tag) async {
+    final tags = availableTags;
+    final index = tags.indexWhere((t) => t.name == oldName);
+    if (index >= 0) {
+      tags[index] = tag;
+      await setAvailableTags(tags);
+    }
   }
 
   // ---------------------------------------------------------------------------

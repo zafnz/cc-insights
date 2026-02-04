@@ -170,6 +170,9 @@ class WorktreeState extends ChangeNotifier {
   final List<ChatState> _chats;
   ChatState? _selectedChat;
 
+  /// Tag names assigned to this worktree.
+  List<String> _tags;
+
   /// Draft text typed in the welcome screen before any chat is created.
   ///
   /// Preserved when switching between worktrees so users don't lose their
@@ -185,8 +188,10 @@ class WorktreeState extends ChangeNotifier {
   /// Creates a [WorktreeState] with the given initial data.
   ///
   /// [chats] defaults to an empty list if not provided.
-  WorktreeState(this._data, {List<ChatState>? chats})
+  /// [tags] defaults to an empty list if not provided.
+  WorktreeState(this._data, {List<ChatState>? chats, List<String>? tags})
     : _chats = chats ?? [],
+      _tags = tags ?? [],
       _selectedChat = null;
 
   /// The immutable data for this worktree.
@@ -215,6 +220,25 @@ class WorktreeState extends ChangeNotifier {
   PermissionMode get welcomePermissionMode => _welcomePermissionMode;
   set welcomePermissionMode(PermissionMode value) =>
       _welcomePermissionMode = value;
+
+  /// The tag names assigned to this worktree.
+  List<String> get tags => List.unmodifiable(_tags);
+
+  /// Replaces all assigned tags.
+  void setTags(List<String> tags) {
+    _tags = List.of(tags);
+    notifyListeners();
+  }
+
+  /// Toggles a tag: adds it if missing, removes it if present.
+  void toggleTag(String tagName) {
+    if (_tags.contains(tagName)) {
+      _tags.remove(tagName);
+    } else {
+      _tags.add(tagName);
+    }
+    notifyListeners();
+  }
 
   /// Replaces the entire [WorktreeData] with a new instance.
   ///

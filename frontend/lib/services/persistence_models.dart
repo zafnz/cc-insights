@@ -324,7 +324,7 @@ class ChatReference {
 
 /// Information about a worktree stored in `projects.json`.
 ///
-/// Contains the worktree type, name, and list of chats.
+/// Contains the worktree type, name, list of chats, and assigned tags.
 /// All fields are immutable.
 @immutable
 class WorktreeInfo {
@@ -337,23 +337,29 @@ class WorktreeInfo {
   /// List of chats in this worktree.
   final List<ChatReference> chats;
 
+  /// Tag names assigned to this worktree.
+  final List<String> tags;
+
   /// Creates a [WorktreeInfo] instance.
   const WorktreeInfo({
     required this.type,
     required this.name,
     this.chats = const [],
+    this.tags = const [],
   });
 
   /// Creates a primary worktree with the given name.
   const WorktreeInfo.primary({
     required this.name,
     this.chats = const [],
+    this.tags = const [],
   }) : type = 'primary';
 
   /// Creates a linked worktree with the given name.
   const WorktreeInfo.linked({
     required this.name,
     this.chats = const [],
+    this.tags = const [],
   }) : type = 'linked';
 
   /// Whether this is the primary worktree (repo root).
@@ -367,11 +373,13 @@ class WorktreeInfo {
     String? type,
     String? name,
     List<ChatReference>? chats,
+    List<String>? tags,
   }) {
     return WorktreeInfo(
       type: type ?? this.type,
       name: name ?? this.name,
       chats: chats ?? this.chats,
+      tags: tags ?? this.tags,
     );
   }
 
@@ -381,18 +389,21 @@ class WorktreeInfo {
       'type': type,
       'name': name,
       'chats': chats.map((c) => c.toJson()).toList(),
+      'tags': tags,
     };
   }
 
   /// Deserializes a [WorktreeInfo] from a JSON map.
   factory WorktreeInfo.fromJson(Map<String, dynamic> json) {
     final chatsList = json['chats'] as List<dynamic>? ?? [];
+    final tagsList = json['tags'] as List<dynamic>? ?? [];
     return WorktreeInfo(
       type: json['type'] as String? ?? 'primary',
       name: json['name'] as String? ?? 'main',
       chats: chatsList
           .map((c) => ChatReference.fromJson(c as Map<String, dynamic>))
           .toList(),
+      tags: tagsList.cast<String>(),
     );
   }
 
@@ -402,15 +413,22 @@ class WorktreeInfo {
     return other is WorktreeInfo &&
         other.type == type &&
         other.name == name &&
-        listEquals(other.chats, chats);
+        listEquals(other.chats, chats) &&
+        listEquals(other.tags, tags);
   }
 
   @override
-  int get hashCode => Object.hash(type, name, Object.hashAll(chats));
+  int get hashCode => Object.hash(
+        type,
+        name,
+        Object.hashAll(chats),
+        Object.hashAll(tags),
+      );
 
   @override
   String toString() {
-    return 'WorktreeInfo(type: $type, name: $name, chats: ${chats.length})';
+    return 'WorktreeInfo(type: $type, name: $name, '
+        'chats: ${chats.length}, tags: $tags)';
   }
 }
 

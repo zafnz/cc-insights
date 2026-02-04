@@ -172,6 +172,7 @@ class ProjectRestoreService {
         branch: worktreeInfo.name, // Use the stored name as the branch
       ),
       chats: chats,
+      tags: worktreeInfo.tags,
     );
   }
 

@@ -600,6 +600,67 @@ class PersistenceService {
     }
   }
 
+  /// Updates the tags assigned to a worktree in projects.json.
+  ///
+  /// This method is designed to be called fire-and-forget - errors are logged
+  /// but not thrown to avoid blocking UI operations.
+  Future<void> updateWorktreeTags({
+    required String projectRoot,
+    required String worktreePath,
+    required List<String> tags,
+  }) async {
+    try {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
+
+      if (project == null) {
+        developer.log(
+          'Project not found for tag update: $projectRoot',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for tag update: $worktreePath',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      final updatedWorktree = worktree.copyWith(tags: tags);
+      final updatedProject = project.copyWith(
+        worktrees: {
+          ...project.worktrees,
+          worktreePath: updatedWorktree,
+        },
+      );
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {
+          ...projectsIndex.projects,
+          projectRoot: updatedProject,
+        },
+      );
+
+      await saveProjectsIndex(updatedIndex);
+
+      developer.log(
+        'Updated tags for worktree $worktreePath: $tags',
+        name: 'PersistenceService',
+      );
+    } catch (e) {
+      developer.log(
+        'Failed to update tags for worktree $worktreePath: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+    }
+  }
+
   /// Removes a worktree from the projects.json index.
   ///
   /// This removes the worktree and all its associated chats from projects.json.
