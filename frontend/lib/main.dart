@@ -262,7 +262,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     SdkLogger.instance.debugEnabled = true;
     SdkLogger.instance.enableFileLogging(logPath);
 
-    debugPrint('SDK debug logging enabled: $logPath');
+
   }
 
   /// Handles app termination by writing session quit markers.
