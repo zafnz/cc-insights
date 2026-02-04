@@ -48,6 +48,12 @@ class RuntimeConfig extends ChangeNotifier {
   /// argument, or the current working directory if not provided.
   String _workingDirectory = Directory.current.path;
 
+  /// The config directory override (--config-dir flag).
+  ///
+  /// When set, overrides the default ~/.ccinsights directory for storing
+  /// application data. Used primarily for test isolation.
+  String? _configDir;
+
   /// How bash tool usage should be summarized in the UI.
   BashToolSummary _bashToolSummary = BashToolSummary.description;
 
@@ -90,6 +96,11 @@ class RuntimeConfig extends ChangeNotifier {
   /// The working directory for this session.
   String get workingDirectory => _workingDirectory;
 
+  /// The config directory override.
+  ///
+  /// Returns null if no override was specified via --config-dir.
+  String? get configDir => _configDir;
+
   /// Whether to use mock data (set via --mock flag).
   bool get useMockData => _useMockData;
 
@@ -111,6 +122,7 @@ class RuntimeConfig extends ChangeNotifier {
   ///
   /// Args format:
   /// - `--mock`: Use mock data instead of real backend
+  /// - `--config-dir <path>`: Override the default ~/.ccinsights directory
   /// - Positional arg 0: working directory (defaults to current directory)
   static void initialize(List<String> args) {
     if (_instance._initialized) {
@@ -127,9 +139,16 @@ class RuntimeConfig extends ChangeNotifier {
 
     // Parse flags and collect positional args
     final positionalArgs = <String>[];
-    for (final arg in args) {
+    for (var i = 0; i < args.length; i++) {
+      final arg = args[i];
       if (arg == '--mock') {
         _instance._useMockData = true;
+      } else if (arg == '--config-dir') {
+        // Next arg should be the config directory path
+        if (i + 1 < args.length) {
+          _instance._configDir = args[i + 1];
+          i++; // Skip the next arg since we consumed it
+        }
       } else if (!arg.startsWith('-')) {
         positionalArgs.add(arg);
       }
@@ -328,6 +347,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._useMockData = false;
     _instance._launchedFromCli = false;
     _instance._workingDirectory = Directory.current.path;
+    _instance._configDir = null;
     _instance._bashToolSummary = BashToolSummary.description;
     _instance._toolSummaryRelativeFilePaths = true;
     _instance._monoFontFamily = 'JetBrains Mono';

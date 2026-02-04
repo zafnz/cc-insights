@@ -51,6 +51,13 @@ void main(List<String> args) async {
     'RuntimeConfig.useMockData: ${RuntimeConfig.instance.useMockData}',
   );
 
+  // Set the config directory if specified via --config-dir
+  final configDir = RuntimeConfig.instance.configDir;
+  if (configDir != null) {
+    debugPrint('Using config directory: $configDir');
+    PersistenceService.setBaseDir(configDir);
+  }
+
   // Initialize the notification service for desktop notifications
   await NotificationService.instance.initialize();
 

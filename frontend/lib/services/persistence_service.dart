@@ -14,10 +14,24 @@ import 'persistence_models.dart';
 /// - `<chatId>.meta.json`: Chat metadata (model, permissions, usage)
 /// - `<chatId>.chat.jsonl`: Append-only conversation history
 ///
-/// All paths are relative to `~/.ccinsights/`.
+/// All paths are relative to `~/.ccinsights/` (or a custom directory if set).
 class PersistenceService {
   /// The base directory for all CC-Insights data.
-  static String get baseDir => '${Platform.environment['HOME']}/.ccinsights';
+  ///
+  /// Can be overridden via the --config-dir CLI flag for test isolation.
+  static String? _baseDirOverride;
+
+  /// Sets the base directory override.
+  ///
+  /// This should be called once during app initialization if a custom
+  /// config directory is specified via --config-dir.
+  static void setBaseDir(String baseDir) {
+    _baseDirOverride = baseDir;
+  }
+
+  /// The base directory for all CC-Insights data.
+  static String get baseDir =>
+      _baseDirOverride ?? '${Platform.environment['HOME']}/.ccinsights';
 
   /// Path to the master projects index file.
   static String get projectsJsonPath => '$baseDir/projects.json';

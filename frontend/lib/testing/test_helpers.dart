@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../services/persistence_service.dart';
+import '../services/runtime_config.dart';
 
 // =============================================================================
 // PUMP HELPERS - Avoid indefinite hangs
@@ -247,4 +251,53 @@ void expectFound(Finder finder, {String? reason}) {
 /// Asserts that a finder finds exactly N widgets.
 void expectN(Finder finder, int count, {String? reason}) {
   expect(finder, findsNWidgets(count), reason: reason);
+}
+
+// =============================================================================
+// TEST ISOLATION HELPERS - Prevent tests from affecting real data
+// =============================================================================
+
+/// Sets up a temporary config directory for test isolation.
+///
+/// Call this in `setUp()` to ensure tests don't write to ~/.ccinsights.
+/// Returns a cleanup function that should be called in `tearDown()`.
+///
+/// ```dart
+/// void main() {
+///   late Future<void> Function() cleanupConfig;
+///
+///   setUp(() async {
+///     cleanupConfig = await setupTestConfig();
+///   });
+///
+///   tearDown(() async {
+///     await cleanupConfig();
+///   });
+///
+///   test('my test', () {
+///     // Test code here - will use temp directory
+///   });
+/// }
+/// ```
+Future<Future<void> Function()> setupTestConfig() async {
+  // Create temp directory
+  final tempDir = await Directory.systemTemp.createTemp('cc_insights_test_');
+
+  // Set it as the config directory
+  PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
+
+  // Reset RuntimeConfig to ensure clean state
+  RuntimeConfig.resetForTesting();
+
+  // Return cleanup function
+  return () async {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    // Reset persistence service to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
+    RuntimeConfig.resetForTesting();
+  };
 }
