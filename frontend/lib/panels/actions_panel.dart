@@ -187,10 +187,18 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
       return const _NoWorktreePlaceholder();
     }
 
-    return _buildActionButtons(context, _config);
+    return _buildActionButtons(
+      context,
+      _config,
+      worktree.data.worktreeRoot,
+    );
   }
 
-  Widget _buildActionButtons(BuildContext context, ProjectConfig config) {
+  Widget _buildActionButtons(
+    BuildContext context,
+    ProjectConfig config,
+    String workingDirectory,
+  ) {
     final userActions = config.effectiveUserActions;
 
     if (userActions.isEmpty) {
@@ -205,7 +213,10 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
         spacing: 8,
         runSpacing: 8,
         children: userActions.entries.map((entry) {
-          final isRunning = scriptService.isActionRunning(entry.key);
+          final isRunning = scriptService.isActionRunning(
+            entry.key,
+            workingDirectory: workingDirectory,
+          );
           return _ActionButton(
             key: ActionsPanelKeys.actionButton(entry.key),
             name: entry.key,

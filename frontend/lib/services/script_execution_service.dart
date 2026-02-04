@@ -143,9 +143,16 @@ class ScriptExecutionService extends ChangeNotifier {
   /// Whether there is a focused script with output to show.
   bool get hasOutput => _focusedScriptId != null;
 
-  /// Check if a specific action is currently running.
-  bool isActionRunning(String actionName) =>
-      _scripts.values.any((s) => s.name == actionName && s.isRunning);
+  /// Check if a specific action is currently running in a given directory.
+  ///
+  /// If [workingDirectory] is provided, only matches scripts running in that
+  /// directory (used to scope action state per worktree).
+  bool isActionRunning(String actionName, {String? workingDirectory}) =>
+      _scripts.values.any((s) =>
+          s.name == actionName &&
+          s.isRunning &&
+          (workingDirectory == null ||
+              s.workingDirectory == workingDirectory));
 
   /// Run a script and track its execution.
   ///
