@@ -701,12 +701,15 @@ class _DivergenceInfo extends StatelessWidget {
 
     final ahead = data.commitsAheadOfMain;
     final behind = data.commitsBehindMain;
+    final baseIcon = data.isRemoteBase ? '\u{1F310}' : '\u{1F3E0}';
+    final baseName = data.baseRef ?? 'main';
 
     if (ahead == 0 && behind == 0) {
       return Tooltip(
-        message: 'Your branch is up to date with main',
+        message: '$baseIcon base: $baseName\n'
+            'Your branch is up to date',
         child: Text(
-          'Up to date with main',
+          '$baseIcon Up to date with $baseName',
           style: textTheme.bodySmall?.copyWith(
             color: Colors.green,
           ),
@@ -714,16 +717,17 @@ class _DivergenceInfo extends StatelessWidget {
       );
     }
 
-    final tooltipLines = <String>[];
+    final tooltipLines = <String>['$baseIcon base: $baseName'];
     if (ahead > 0) {
       tooltipLines.add(
         'Your ${data.branch} branch has $ahead '
-        '${ahead == 1 ? 'commit' : 'commits'} not present on main',
+        '${ahead == 1 ? 'commit' : 'commits'} not present on '
+        '$baseName',
       );
     }
     if (behind > 0) {
       tooltipLines.add(
-        'The main branch has $behind '
+        '$baseName has $behind '
         '${behind == 1 ? 'commit' : 'commits'} not present on '
         'your ${data.branch} branch',
       );
@@ -738,17 +742,18 @@ class _DivergenceInfo extends StatelessWidget {
         text: TextSpan(
           style: textTheme.bodySmall,
           children: [
+            TextSpan(text: '$baseIcon '),
             if (ahead > 0)
               TextSpan(
-                text: '${ahead > 0 ? "↑$ahead ahead" : ""}',
-                style: TextStyle(color: Colors.green),
+                text: '\u{2191}$ahead ahead',
+                style: const TextStyle(color: Colors.green),
               ),
             if (ahead > 0 && behind > 0)
               const TextSpan(text: '  '),
             if (behind > 0)
               TextSpan(
-                text: '↓$behind behind',
-                style: TextStyle(color: Colors.orange),
+                text: '\u{2193}$behind behind',
+                style: const TextStyle(color: Colors.orange),
               ),
           ],
         ),

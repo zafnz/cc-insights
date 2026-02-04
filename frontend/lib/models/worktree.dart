@@ -51,11 +51,21 @@ class WorktreeData {
   /// The upstream branch name (e.g., "origin/main"), or null if none.
   final String? upstreamBranch;
 
-  /// Number of commits this branch has that are not in the main branch.
+  /// Number of commits this branch has that are not in the base branch.
   final int commitsAheadOfMain;
 
-  /// Number of commits the main branch has that are not in this branch.
+  /// Number of commits the base branch has that are not in this branch.
   final int commitsBehindMain;
+
+  /// Whether the base comparison target is a remote ref (e.g. origin/main)
+  /// rather than a local ref (e.g. main).
+  ///
+  /// When true, the UI shows a globe icon; when false, a house icon.
+  final bool isRemoteBase;
+
+  /// The exact ref name used for the base comparison (e.g. "main" or
+  /// "origin/main"). Used in tooltips to show the comparison target.
+  final String? baseRef;
 
   /// Creates a new [WorktreeData] instance.
   const WorktreeData({
@@ -71,6 +81,8 @@ class WorktreeData {
     this.upstreamBranch,
     this.commitsAheadOfMain = 0,
     this.commitsBehindMain = 0,
+    this.isRemoteBase = false,
+    this.baseRef,
   });
 
   /// Creates a copy with the given mutable fields replaced.
@@ -89,6 +101,9 @@ class WorktreeData {
     bool clearUpstreamBranch = false,
     int? commitsAheadOfMain,
     int? commitsBehindMain,
+    bool? isRemoteBase,
+    String? baseRef,
+    bool clearBaseRef = false,
   }) {
     return WorktreeData(
       worktreeRoot: worktreeRoot,
@@ -106,6 +121,8 @@ class WorktreeData {
           clearUpstreamBranch ? null : (upstreamBranch ?? this.upstreamBranch),
       commitsAheadOfMain: commitsAheadOfMain ?? this.commitsAheadOfMain,
       commitsBehindMain: commitsBehindMain ?? this.commitsBehindMain,
+      isRemoteBase: isRemoteBase ?? this.isRemoteBase,
+      baseRef: clearBaseRef ? null : (baseRef ?? this.baseRef),
     );
   }
 
@@ -124,7 +141,9 @@ class WorktreeData {
         other.conflictOperation == conflictOperation &&
         other.upstreamBranch == upstreamBranch &&
         other.commitsAheadOfMain == commitsAheadOfMain &&
-        other.commitsBehindMain == commitsBehindMain;
+        other.commitsBehindMain == commitsBehindMain &&
+        other.isRemoteBase == isRemoteBase &&
+        other.baseRef == baseRef;
   }
 
   @override
@@ -142,6 +161,8 @@ class WorktreeData {
       upstreamBranch,
       commitsAheadOfMain,
       commitsBehindMain,
+      isRemoteBase,
+      baseRef,
     );
   }
 
@@ -154,7 +175,9 @@ class WorktreeData {
         'conflictOperation: $conflictOperation, '
         'upstreamBranch: $upstreamBranch, '
         'commitsAheadOfMain: $commitsAheadOfMain, '
-        'commitsBehindMain: $commitsBehindMain)';
+        'commitsBehindMain: $commitsBehindMain, '
+        'isRemoteBase: $isRemoteBase, '
+        'baseRef: $baseRef)';
   }
 }
 

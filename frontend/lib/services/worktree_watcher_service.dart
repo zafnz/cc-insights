@@ -192,15 +192,39 @@ class WorktreeWatcherService extends ChangeNotifier {
       final status = await _gitService.getStatus(path);
       final upstream = await _gitService.getUpstream(path);
 
-      final mainBranch =
-          await _gitService.getMainBranch(_project.data.repoRoot);
-      ({int ahead, int behind})? mainComparison;
-      if (mainBranch != null &&
-          worktree.data.branch != mainBranch) {
-        mainComparison = await _gitService.getBranchComparison(
+      // Determine base comparison target per branch:
+      // - If branch has upstream → use remote main (origin/main)
+      // - Otherwise → use local main
+      String? baseRef;
+      var isRemoteBase = false;
+
+      if (upstream != null) {
+        final remoteMain = await _gitService.getRemoteMainBranch(
+          _project.data.repoRoot,
+        );
+        if (remoteMain != null) {
+          baseRef = remoteMain;
+          isRemoteBase = true;
+        }
+      }
+
+      // Fallback to local main if no remote base was found
+      if (baseRef == null) {
+        final localMain = await _gitService.getMainBranch(
+          _project.data.repoRoot,
+        );
+        if (localMain != null) {
+          baseRef = localMain;
+        }
+      }
+
+      ({int ahead, int behind})? baseComparison;
+      if (baseRef != null &&
+          worktree.data.branch != baseRef) {
+        baseComparison = await _gitService.getBranchComparison(
           path,
           worktree.data.branch,
-          mainBranch,
+          baseRef,
         );
       }
 
@@ -233,8 +257,11 @@ class WorktreeWatcherService extends ChangeNotifier {
         clearConflictOperation: conflictOp == null,
         upstreamBranch: upstream,
         clearUpstreamBranch: upstream == null,
-        commitsAheadOfMain: mainComparison?.ahead ?? 0,
-        commitsBehindMain: mainComparison?.behind ?? 0,
+        commitsAheadOfMain: baseComparison?.ahead ?? 0,
+        commitsBehindMain: baseComparison?.behind ?? 0,
+        isRemoteBase: isRemoteBase,
+        baseRef: baseRef,
+        clearBaseRef: baseRef == null,
       ));
     } catch (_) {
       // Git poll failed — will retry on next interval.

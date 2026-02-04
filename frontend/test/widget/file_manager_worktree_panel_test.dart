@@ -383,7 +383,7 @@ void main() {
 
     // Note: Git status indicator tests are omitted because they require
     // complex setup and the rendering logic is straightforward. The
-    // _InlineStatusIndicators widget correctly renders status based on
+    // InlineStatusIndicators widget correctly renders status based on
     // WorktreeData fields, which is tested implicitly through the
     // integration tests and manual testing.
 

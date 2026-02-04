@@ -23,6 +23,8 @@ void main() {
         check(worktree.commitsAhead).equals(0);
         check(worktree.commitsBehind).equals(0);
         check(worktree.hasMergeConflict).isFalse();
+        check(worktree.isRemoteBase).isFalse();
+        check(worktree.baseRef).isNull();
       });
 
       test('creates linked worktree', () {
@@ -116,6 +118,50 @@ void main() {
         check(modified.uncommittedFiles).equals(3);
         check(modified.hasMergeConflict).isTrue();
       });
+
+      test('updates isRemoteBase and baseRef', () {
+        const original = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+        );
+
+        final modified = original.copyWith(
+          isRemoteBase: true,
+          baseRef: 'origin/main',
+        );
+
+        check(modified.isRemoteBase).isTrue();
+        check(modified.baseRef).equals('origin/main');
+      });
+
+      test('preserves isRemoteBase and baseRef when not specified', () {
+        const original = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'feature',
+          isRemoteBase: true,
+          baseRef: 'origin/main',
+        );
+
+        final modified = original.copyWith(branch: 'develop');
+
+        check(modified.isRemoteBase).isTrue();
+        check(modified.baseRef).equals('origin/main');
+      });
+
+      test('clears baseRef with clearBaseRef', () {
+        const original = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'feature',
+          baseRef: 'origin/main',
+        );
+
+        final modified = original.copyWith(clearBaseRef: true);
+
+        check(modified.baseRef).isNull();
+      });
     });
 
     group('equality', () {
@@ -151,6 +197,40 @@ void main() {
         );
 
         // Act & Assert
+        check(worktree1 == worktree2).isFalse();
+      });
+
+      test('equals returns false for different isRemoteBase', () {
+        const worktree1 = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+          isRemoteBase: false,
+        );
+        const worktree2 = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+          isRemoteBase: true,
+        );
+
+        check(worktree1 == worktree2).isFalse();
+      });
+
+      test('equals returns false for different baseRef', () {
+        const worktree1 = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+          baseRef: 'main',
+        );
+        const worktree2 = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+          baseRef: 'origin/main',
+        );
+
         check(worktree1 == worktree2).isFalse();
       });
     });

@@ -228,6 +228,14 @@ abstract class GitService {
   /// Returns null if no branches exist.
   Future<String?> getMainBranch(String repoRoot);
 
+  /// Gets the remote main branch tracking ref for the repository.
+  ///
+  /// Tries `refs/remotes/origin/HEAD` first, then falls back to checking
+  /// for `origin/main`, then `origin/master`.
+  /// Returns the remote tracking ref name (e.g. "origin/main") or null
+  /// if no remote main branch can be determined.
+  Future<String?> getRemoteMainBranch(String repoRoot);
+
   /// Gets a list of all changed files (staged, unstaged, untracked).
   ///
   /// Returns a list of [GitFileChange] with file paths and statuses.
@@ -663,6 +671,46 @@ class RealGitService implements GitService {
     if (branches.contains('main')) return 'main';
     if (branches.contains('master')) return 'master';
     return branches.isNotEmpty ? branches.first : null;
+  }
+
+  @override
+  Future<String?> getRemoteMainBranch(String repoRoot) async {
+    // Try symbolic-ref first (most reliable)
+    try {
+      final output = await _runGit(
+        ['symbolic-ref', 'refs/remotes/origin/HEAD'],
+        workingDirectory: repoRoot,
+      );
+      final ref = output.trim();
+      // Output: refs/remotes/origin/main → return "origin/main"
+      if (ref.startsWith('refs/remotes/')) {
+        return ref.substring('refs/remotes/'.length);
+      }
+    } on GitException {
+      // Fall through
+    }
+
+    // Try origin/main
+    try {
+      await _runGit(
+        ['rev-parse', '--verify', 'refs/remotes/origin/main'],
+        workingDirectory: repoRoot,
+      );
+      return 'origin/main';
+    } on GitException {
+      // Fall through
+    }
+
+    // Try origin/master
+    try {
+      await _runGit(
+        ['rev-parse', '--verify', 'refs/remotes/origin/master'],
+        workingDirectory: repoRoot,
+      );
+      return 'origin/master';
+    } on GitException {
+      return null;
+    }
   }
 
   @override

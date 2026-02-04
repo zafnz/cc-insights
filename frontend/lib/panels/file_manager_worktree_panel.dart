@@ -5,6 +5,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../state/file_manager_state.dart';
 import 'panel_wrapper.dart';
+import 'worktree_panel.dart';
 
 /// Simplified worktree panel for the File Manager screen.
 ///
@@ -156,7 +157,7 @@ class _WorktreeListItem extends StatelessWidget {
                   ListenableBuilder(
                     listenable: worktree,
                     builder: (context, _) =>
-                        _InlineStatusIndicators(
+                        InlineStatusIndicators(
                       data: worktree.data,
                     ),
                   ),
@@ -170,80 +171,3 @@ class _WorktreeListItem extends StatelessWidget {
   }
 }
 
-/// Compact inline status indicators using arrow format: "↑2 ↓1 ~3"
-///
-/// Displays commits ahead, commits behind, uncommitted files, and
-/// merge conflict indicators inline with appropriate colors.
-class _InlineStatusIndicators extends StatelessWidget {
-  const _InlineStatusIndicators({required this.data});
-
-  final WorktreeData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final parts = <TextSpan>[];
-
-    // Commits ahead of main (green arrow up)
-    if (data.commitsAheadOfMain > 0) {
-      parts.add(
-        TextSpan(
-          text: '↑${data.commitsAheadOfMain}',
-          style: textTheme.labelSmall?.copyWith(
-            color: Colors.green,
-          ),
-        ),
-      );
-    }
-
-    // Commits behind main (orange arrow down)
-    if (data.commitsBehindMain > 0) {
-      if (parts.isNotEmpty) {
-        parts.add(const TextSpan(text: ' '));
-      }
-      parts.add(
-        TextSpan(
-          text: '↓${data.commitsBehindMain}',
-          style: textTheme.labelSmall?.copyWith(
-            color: Colors.orange,
-          ),
-        ),
-      );
-    }
-
-    // Uncommitted changes (blue tilde)
-    if (data.uncommittedFiles > 0) {
-      if (parts.isNotEmpty) {
-        parts.add(const TextSpan(text: ' '));
-      }
-      parts.add(
-        TextSpan(
-          text: '~${data.uncommittedFiles}',
-          style: textTheme.labelSmall?.copyWith(color: Colors.blue),
-        ),
-      );
-    }
-
-    // Merge conflict (red exclamation)
-    if (data.hasMergeConflict) {
-      if (parts.isNotEmpty) {
-        parts.add(const TextSpan(text: ' '));
-      }
-      parts.add(
-        TextSpan(
-          text: '!',
-          style: textTheme.labelSmall?.copyWith(color: Colors.red),
-        ),
-      );
-    }
-
-    if (parts.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: RichText(text: TextSpan(children: parts)),
-    );
-  }
-}

@@ -58,6 +58,7 @@ class FakeGitService implements GitService {
     discoverWorktreesCalls = 0;
     findRepoRootCalls = 0;
     fileAtRefContents.clear();
+    remoteMainBranches.clear();
   }
 
   Future<void> _maybeDelay() async {
@@ -201,6 +202,16 @@ class FakeGitService implements GitService {
     await _maybeDelay();
     _maybeThrow();
     return mainBranches[repoRoot] ?? 'main';
+  }
+
+  /// Map of repo root -> remote main branch for [getRemoteMainBranch].
+  final Map<String, String?> remoteMainBranches = {};
+
+  @override
+  Future<String?> getRemoteMainBranch(String repoRoot) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return remoteMainBranches[repoRoot];
   }
 
   /// Map of path -> changed files for [getChangedFiles].

@@ -128,6 +128,12 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<String?> getRemoteMainBranch(String repoRoot) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return null;
+  }
+
+  @override
   Future<List<GitFileChange>> getChangedFiles(String path) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
     return [];
