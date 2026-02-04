@@ -15,9 +15,16 @@ void main() {
   setUp(() async {
     // Create a temporary directory for each test
     tempDir = await Directory.systemTemp.createTemp('project_restore_test_');
+    // Redirect PersistenceService to temp dir so ChatState.initPersistence
+    // doesn't create directories in ~/.ccinsights/projects/
+    PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
   });
 
   tearDown(() async {
+    // Reset persistence service to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
     // Clean up temporary directory
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);

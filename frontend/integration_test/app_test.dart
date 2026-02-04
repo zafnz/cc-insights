@@ -28,7 +28,7 @@ void main() {
   late Directory tempDir;
 
   // Ensure screenshots directory exists and enable mock data
-  setUpAll() async {
+  setUpAll(() async {
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
