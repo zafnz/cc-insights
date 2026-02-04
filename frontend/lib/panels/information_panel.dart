@@ -17,7 +17,11 @@ import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/commit_dialog.dart';
 import '../widgets/conflict_resolution_dialog.dart';
+import '../widgets/create_pr_dialog.dart';
 import 'panel_wrapper.dart';
+
+/// Workflow mode for how branches integrate with main.
+enum WorkflowMode { local, pr }
 
 /// Information panel - shows git branch/status info for the selected worktree.
 class InformationPanel extends StatelessWidget {
@@ -110,7 +114,7 @@ class _WorktreeInfo extends StatefulWidget {
 }
 
 class _WorktreeInfoState extends State<_WorktreeInfo> {
-  String _updateSource = 'main';
+  WorkflowMode _workflowMode = WorkflowMode.local;
 
   WorktreeData get data => widget.data;
   String get worktreeRoot => widget.worktreeRoot;
@@ -142,32 +146,46 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
-    // Use selected source or auto-detect main branch
-    String? mainBranch;
-    if (_updateSource == 'origin/main') {
-      mainBranch = 'origin/main';
-    } else {
+    // In PR mode, fetch from origin first
+    if (_workflowMode == WorkflowMode.pr) {
       try {
-        mainBranch =
-            await gitService.getMainBranch(project.data.repoRoot);
+        await gitService.fetch(worktreeRoot);
       } catch (e) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Failed to detect main branch: $e')),
-        );
-        return;
-      }
-
-      if (mainBranch == null) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Could not detect main branch')),
+          SnackBar(content: Text('Failed to fetch from origin: $e')),
         );
         return;
       }
     }
+
+    // Detect main branch
+    String? mainBranch;
+    try {
+      mainBranch =
+          await gitService.getMainBranch(project.data.repoRoot);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Failed to detect main branch: $e')),
+      );
+      return;
+    }
+
+    if (mainBranch == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Could not detect main branch')),
+      );
+      return;
+    }
+
+    // In PR mode, rebase/merge against origin/main
+    final targetBranch = _workflowMode == WorkflowMode.pr
+        ? 'origin/$mainBranch'
+        : mainBranch;
 
     if (!context.mounted) return;
 
@@ -175,7 +193,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       context: context,
       worktreePath: worktreeRoot,
       branch: data.branch,
-      mainBranch: mainBranch,
+      mainBranch: targetBranch,
       operation: operation,
       gitService: gitService,
     );
@@ -255,6 +273,64 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     }
 
     onStatusChanged();
+  }
+
+  Future<void> _handleCreatePr(BuildContext context) async {
+    final gitService = context.read<GitService>();
+    final askAiService = context.read<AskAiService>();
+    final project = context.read<ProjectState>();
+
+    // Check gh is installed
+    final ghInstalled = await gitService.isGhInstalled();
+    if (!ghInstalled) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'GitHub CLI (gh) is not installed. '
+            'Install it from https://cli.github.com',
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+
+    // Detect main branch
+    String? mainBranch;
+    try {
+      mainBranch =
+          await gitService.getMainBranch(project.data.repoRoot);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to detect main branch: $e')),
+      );
+      return;
+    }
+
+    if (mainBranch == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not detect main branch')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final created = await showCreatePrDialog(
+      context: context,
+      worktreePath: worktreeRoot,
+      branch: data.branch,
+      mainBranch: mainBranch,
+      gitService: gitService,
+      askAiService: askAiService,
+    );
+
+    if (created) {
+      onStatusChanged();
+    }
   }
 
   Future<void> _openConflictManagerChat(
@@ -360,6 +436,19 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     return null;
   }
 
+  /// Whether the create-PR button should be enabled.
+  bool get _canCreatePr =>
+      data.commitsAheadOfMain > 0 && !data.isPrimary;
+
+  /// Tooltip for the create-PR button when disabled.
+  String? get _createPrTooltip {
+    if (data.isPrimary) {
+      return 'Cannot create PR from primary worktree';
+    }
+    if (data.commitsAheadOfMain == 0) return 'No commits to push';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -390,23 +479,40 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                 ? 'No uncommitted files'
                 : null,
           ),
+          // Workflow mode toggle (only for non-primary worktrees)
+          if (!data.isPrimary) ...[
+            const SizedBox(height: 12),
+            SegmentedButton<WorkflowMode>(
+              segments: const [
+                ButtonSegment(
+                  value: WorkflowMode.local,
+                  label: Text('Work locally'),
+                  icon: Icon(Icons.computer, size: 14),
+                ),
+                ButtonSegment(
+                  value: WorkflowMode.pr,
+                  label: Text('Work via PRs'),
+                  icon: Icon(Icons.cloud_upload, size: 14),
+                ),
+              ],
+              selected: {_workflowMode},
+              onSelectionChanged: (selected) {
+                setState(
+                  () => _workflowMode = selected.first,
+                );
+              },
+              style: SegmentedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
 
           // Update from main section
-          _SectionDividerWithDropdown(
-            prefix: 'Update from ',
-            value: _updateSource,
-            options: const ['main', 'origin/main'],
-            tooltips: const {
-              'main': 'Use changes from the local main branch.\n'
-                  'Use this when working locally and not\n'
-                  'in a GitHub Pull Request setup.',
-              'origin/main':
-                  'Use changes from the remote (origin)\n'
-                      'main branch. Use this when using\n'
-                      'GitHub to manage your merges.',
-            },
-            onChanged: (v) => setState(() => _updateSource = v),
+          _SectionDivider(
+            label: _workflowMode == WorkflowMode.pr
+                ? 'Update from origin/main'
+                : 'Update from main',
             colorScheme: colorScheme,
           ),
           const SizedBox(height: 6),
@@ -447,20 +553,40 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
           ),
           const SizedBox(height: 12),
 
-          // Integrate into main section
-          _SectionDivider(
-            label: 'Integrate into main',
-            colorScheme: colorScheme,
-          ),
-          const SizedBox(height: 6),
-          _CompactButton(
-            onPressed: _canMergeIntoMain
-                ? () => _handleMergeIntoMain(context)
-                : null,
-            label: 'Merge',
-            icon: Icons.merge,
-            tooltip: _canMergeIntoMain ? null : _mergeIntoMainTooltip,
-          ),
+          // Integrate section - changes based on workflow mode
+          if (_workflowMode == WorkflowMode.local) ...[
+            _SectionDivider(
+              label: 'Integrate into main',
+              colorScheme: colorScheme,
+            ),
+            const SizedBox(height: 6),
+            _CompactButton(
+              onPressed: _canMergeIntoMain
+                  ? () => _handleMergeIntoMain(context)
+                  : null,
+              label: 'Merge',
+              icon: Icons.merge,
+              tooltip: _canMergeIntoMain
+                  ? null
+                  : _mergeIntoMainTooltip,
+            ),
+          ] else ...[
+            _SectionDivider(
+              label: 'Push to remote',
+              colorScheme: colorScheme,
+            ),
+            const SizedBox(height: 6),
+            _CompactButton(
+              onPressed: _canCreatePr
+                  ? () => _handleCreatePr(context)
+                  : null,
+              label: 'Create & Push PR',
+              icon: Icons.cloud_upload,
+              tooltip: _canCreatePr
+                  ? null
+                  : _createPrTooltip,
+            ),
+          ],
         ],
       ),
     );
@@ -584,90 +710,6 @@ class _SectionDivider extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-/// Section divider with an inline popup menu for selecting a value.
-class _SectionDividerWithDropdown extends StatelessWidget {
-  const _SectionDividerWithDropdown({
-    required this.prefix,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-    required this.colorScheme,
-    this.tooltips,
-  });
-
-  final String prefix;
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-  final ColorScheme colorScheme;
-  final Map<String, String>? tooltips;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final style = textTheme.labelSmall?.copyWith(
-      color: colorScheme.onSurfaceVariant,
-    );
-
-    final tooltip = tooltips?[value];
-
-    Widget child = GestureDetector(
-      onTap: () {
-        final renderBox =
-            context.findRenderObject() as RenderBox;
-        final offset = renderBox.localToGlobal(Offset.zero);
-        final size = renderBox.size;
-        showMenu<String>(
-          context: context,
-          position: RelativeRect.fromLTRB(
-            offset.dx + size.width / 2,
-            offset.dy + size.height,
-            offset.dx + size.width / 2,
-            offset.dy + size.height,
-          ),
-          items: options
-              .map(
-                (o) => PopupMenuItem<String>(
-                  height: 32,
-                  value: o,
-                  child: Text(o, style: textTheme.bodySmall),
-                ),
-              )
-              .toList(),
-        ).then((selected) {
-          if (selected != null) {
-            onChanged(selected);
-          }
-        });
-      },
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              '$prefix$value',
-              style: style,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Icon(
-            Icons.arrow_drop_down,
-            size: 14,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ],
-      ),
-    );
-
-    if (tooltip != null) {
-      child = Tooltip(message: tooltip, child: child);
-    }
-
-    return child;
   }
 }
 

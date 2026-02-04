@@ -507,4 +507,63 @@ class FakeGitService implements GitService {
       isAtWorktreeRoot: false,
     );
   }
+
+  // =========================================================================
+  // Push & Pull Request operations
+  // =========================================================================
+
+  /// Whether [isGhInstalled] returns true.
+  bool ghInstalled = true;
+
+  @override
+  Future<bool> isGhInstalled() async {
+    await _maybeDelay();
+    return ghInstalled;
+  }
+
+  /// Tracks calls to [push] with (path, setUpstream).
+  final List<({String path, bool setUpstream})> pushCalls = [];
+
+  /// If set, [push] will throw this exception.
+  GitException? pushError;
+
+  @override
+  Future<void> push(String path, {bool setUpstream = false}) async {
+    pushCalls.add((path: path, setUpstream: setUpstream));
+    await _maybeDelay();
+    _maybeThrow();
+    if (pushError != null) throw pushError!;
+  }
+
+  /// Tracks calls to [createPullRequest].
+  final List<({String path, String title, String body, bool draft})>
+      createPullRequestCalls = [];
+
+  /// The URL to return from [createPullRequest].
+  String createPullRequestResult =
+      'https://github.com/owner/repo/pull/1';
+
+  /// If set, [createPullRequest] will throw this exception.
+  GitException? createPullRequestError;
+
+  @override
+  Future<String> createPullRequest({
+    required String path,
+    required String title,
+    required String body,
+    bool draft = false,
+  }) async {
+    createPullRequestCalls.add((
+      path: path,
+      title: title,
+      body: body,
+      draft: draft,
+    ));
+    await _maybeDelay();
+    _maybeThrow();
+    if (createPullRequestError != null) {
+      throw createPullRequestError!;
+    }
+    return createPullRequestResult;
+  }
 }

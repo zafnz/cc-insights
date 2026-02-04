@@ -360,6 +360,35 @@ abstract class GitService {
   /// Uses `git rev-parse --git-dir --git-common-dir --show-toplevel --show-prefix`
   /// to determine the relationship between the directory and any git repo.
   Future<DirectoryGitInfo> analyzeDirectory(String path);
+
+  /// Checks if the GitHub CLI (`gh`) is installed and available.
+  ///
+  /// Returns true if `gh --version` runs successfully.
+  Future<bool> isGhInstalled();
+
+  /// Pushes the current branch to the remote.
+  ///
+  /// If [setUpstream] is true, uses `git push -u origin <branch>`.
+  /// Otherwise uses plain `git push`.
+  /// Throws [GitException] on failure.
+  Future<void> push(String path, {bool setUpstream = false});
+
+  /// Creates a pull request using the GitHub CLI (`gh`).
+  ///
+  /// Requires `gh` to be installed and authenticated.
+  /// [path] is the working directory.
+  /// [title] is the PR title.
+  /// [body] is the PR description/body.
+  /// If [draft] is true, creates a draft PR.
+  ///
+  /// Returns the URL of the created pull request.
+  /// Throws [GitException] if `gh` is not installed or the command fails.
+  Future<String> createPullRequest({
+    required String path,
+    required String title,
+    required String body,
+    bool draft = false,
+  });
 }
 
 /// Result of analyzing a directory's git repository status.
@@ -963,6 +992,104 @@ class RealGitService implements GitService {
         isInGitRepo: false,
         isLinkedWorktree: false,
         isAtWorktreeRoot: false,
+      );
+    }
+  }
+
+  /// Longer timeout for network operations (push, PR creation).
+  static const _networkTimeout = Duration(seconds: 30);
+
+  @override
+  Future<bool> isGhInstalled() async {
+    try {
+      final result = await Process.run('gh', ['--version'])
+          .timeout(const Duration(seconds: 5));
+      return result.exitCode == 0;
+    } on ProcessException {
+      return false;
+    } on TimeoutException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> push(String path, {bool setUpstream = false}) async {
+    final List<String> args;
+    if (setUpstream) {
+      final branch = await getCurrentBranch(path);
+      if (branch == null) {
+        throw const GitException('Cannot push: detached HEAD');
+      }
+      args = ['push', '-u', 'origin', branch];
+    } else {
+      args = ['push'];
+    }
+
+    final command = 'git ${args.join(' ')}';
+    try {
+      final result = await Process.run(
+        'git',
+        args,
+        workingDirectory: path,
+      ).timeout(_networkTimeout);
+
+      if (result.exitCode != 0) {
+        throw GitException(
+          'Push failed',
+          command: command,
+          exitCode: result.exitCode,
+          stderr: result.stderr as String,
+        );
+      }
+    } on TimeoutException {
+      throw GitException(
+        'Push timed out after $_networkTimeout',
+        command: command,
+      );
+    } on ProcessException catch (e) {
+      throw GitException(
+        'Failed to run git: ${e.message}',
+        command: command,
+      );
+    }
+  }
+
+  @override
+  Future<String> createPullRequest({
+    required String path,
+    required String title,
+    required String body,
+    bool draft = false,
+  }) async {
+    final args = ['pr', 'create', '--title', title, '--body', body];
+    if (draft) args.add('--draft');
+
+    try {
+      final result = await Process.run(
+        'gh',
+        args,
+        workingDirectory: path,
+      ).timeout(_networkTimeout);
+
+      if (result.exitCode != 0) {
+        throw GitException(
+          'Failed to create pull request',
+          command: 'gh ${args.join(' ')}',
+          exitCode: result.exitCode,
+          stderr: result.stderr as String,
+        );
+      }
+
+      return (result.stdout as String).trim();
+    } on TimeoutException {
+      throw const GitException(
+        'Pull request creation timed out',
+        command: 'gh pr create',
+      );
+    } on ProcessException catch (e) {
+      throw GitException(
+        'GitHub CLI (gh) is not available: ${e.message}',
+        command: 'gh pr create',
       );
     }
   }

@@ -254,6 +254,25 @@ class TestGitService implements GitService {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
   }
 
+  @override
+  Future<bool> isGhInstalled() async => true;
+
+  @override
+  Future<void> push(String path, {bool setUpstream = false}) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
+  Future<String> createPullRequest({
+    required String path,
+    required String title,
+    required String body,
+    bool draft = false,
+  }) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return 'https://github.com/owner/repo/pull/1';
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;
