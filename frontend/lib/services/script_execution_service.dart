@@ -27,6 +27,9 @@ class RunningScript {
   /// The exit code future from the PTY.
   final Future<int> _exitCodeFuture;
 
+  /// Completes with the exit code when the script finishes.
+  Future<int> get done => _exitCodeFuture;
+
   /// Stream controller for combined terminal output (raw bytes for xterm).
   final StreamController<Uint8List> _outputController =
       StreamController<Uint8List>.broadcast();

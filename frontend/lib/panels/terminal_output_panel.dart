@@ -437,8 +437,10 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
                   .key
               : '';
           final script = scriptId.isNotEmpty
-              ? scriptService.scripts.firstWhere((s) => s.id == scriptId,
-                  orElse: () => scriptService.scripts.first)
+              ? scriptService.scripts
+                  .cast<RunningScript?>()
+                  .firstWhere((s) => s!.id == scriptId,
+                      orElse: () => null)
               : null;
           final isRunning = script?.isRunning ?? false;
 
