@@ -4,6 +4,7 @@ import 'package:cc_insights_v2/panels/content_panel.dart';
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
+import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -827,10 +828,14 @@ void main() {
     late TestGitService testGitService;
     late ProjectState projectState;
     late SelectionState selectionState;
+    late SettingsService settingsService;
 
     setUp(() {
       testGitService = TestGitService();
       testGitService.setupSimpleRepo('/test/project', branch: 'main');
+      settingsService = SettingsService(
+        configPath: '/tmp/test_cwc_settings.json',
+      );
 
       final worktree = WorktreeState(
         const WorktreeData(
@@ -860,6 +865,7 @@ void main() {
     });
 
     tearDown(() async {
+      settingsService.dispose();
       await resources.disposeAll();
     });
 
@@ -869,6 +875,9 @@ void main() {
           Provider<GitService>.value(value: testGitService),
           ChangeNotifierProvider.value(value: projectState),
           ChangeNotifierProvider.value(value: selectionState),
+          ChangeNotifierProvider<SettingsService>.value(
+            value: settingsService,
+          ),
         ],
         child: const MaterialApp(
           home: Scaffold(

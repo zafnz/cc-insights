@@ -29,11 +29,14 @@ void main() {
     group('categories', () {
       test('has all expected categories', () {
         final ids = SettingsService.categories.map((c) => c.id).toList();
-        expect(ids, ['appearance', 'behavior', 'session', 'developer']);
+        expect(ids, ['appearance', 'behavior', 'tags', 'session', 'developer']);
       });
 
       test('each category has at least one setting', () {
-        for (final category in SettingsService.categories) {
+        // The 'tags' category uses a custom UI editor, not standard settings.
+        final standardCategories = SettingsService.categories
+            .where((c) => c.id != 'tags');
+        for (final category in standardCategories) {
           expect(
             category.settings.isNotEmpty,
             isTrue,

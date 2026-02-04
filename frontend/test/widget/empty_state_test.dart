@@ -4,6 +4,7 @@ import 'package:cc_insights_v2/panels/chats_panel.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/project_restore_service.dart';
+import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,7 @@ void main() {
   group('Empty State Tests', () {
     late ProjectState project;
     late SelectionState selection;
+    late SettingsService settingsService;
 
     /// Creates a project with just the primary worktree (no chats).
     ProjectState createEmptyProject() {
@@ -45,6 +47,9 @@ void main() {
           Provider<ProjectRestoreService>(
             create: (_) => ProjectRestoreService(),
           ),
+          ChangeNotifierProvider<SettingsService>.value(
+            value: settingsService,
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(body: child),
@@ -55,6 +60,11 @@ void main() {
     setUp(() {
       project = createEmptyProject();
       selection = SelectionState(project);
+      settingsService = SettingsService(configPath: '/tmp/test_settings.json');
+    });
+
+    tearDown(() {
+      settingsService.dispose();
     });
 
     // Note: Don't dispose - Provider handles disposal when widget is removed
