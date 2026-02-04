@@ -25,7 +25,7 @@ void main() {
   late Directory tempDir;
   late Directory persistenceTempDir;
 
-  setUpAll() async {
+  setUpAll(() async {
     // Create temp directory for persistence isolation
     persistenceTempDir = await Directory.systemTemp.createTemp('integration_test_');
     PersistenceService.setBaseDir('${persistenceTempDir.path}/.ccinsights');
