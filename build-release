@@ -54,7 +54,40 @@ fi
 
 echo -e "${GREEN}Working directory is clean.${NC}"
 
-# 2. Read current version from pubspec.yaml
+# 2. Check that we're on main branch and up-to-date with origin
+echo -e "\n${YELLOW}Checking branch status...${NC}"
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    echo -e "${RED}Error: Not on main branch (currently on ${CURRENT_BRANCH}).${NC}"
+    echo "Please checkout main before building a release."
+    exit 1
+fi
+
+echo -e "${YELLOW}Fetching latest from origin...${NC}"
+git fetch origin main
+
+LOCAL_HASH=$(git rev-parse HEAD)
+REMOTE_HASH=$(git rev-parse origin/main)
+
+if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+    # Check if local is behind, ahead, or diverged
+    MERGE_BASE=$(git merge-base HEAD origin/main)
+    if [ "$MERGE_BASE" = "$LOCAL_HASH" ]; then
+        echo -e "${RED}Error: Local branch is behind origin/main.${NC}"
+        echo "Please run 'git pull' to update before building a release."
+    elif [ "$MERGE_BASE" = "$REMOTE_HASH" ]; then
+        echo -e "${RED}Error: Local branch is ahead of origin/main.${NC}"
+        echo "Please push your changes or reset to origin/main before building a release."
+    else
+        echo -e "${RED}Error: Local branch has diverged from origin/main.${NC}"
+        echo "Please synchronize with origin/main before building a release."
+    fi
+    exit 1
+fi
+
+echo -e "${GREEN}Branch is up-to-date with origin/main.${NC}"
+
+# 3. Read current version from pubspec.yaml
 PUBSPEC="$SCRIPT_DIR/frontend/pubspec.yaml"
 CURRENT_VERSION=$(grep "^version:" "$PUBSPEC" | sed 's/version: //')
 echo -e "\n${YELLOW}Current version: ${CURRENT_VERSION}${NC}"
@@ -67,11 +100,11 @@ NEW_PATCH=$((PATCH + 1))
 NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
 echo -e "${GREEN}New version: ${NEW_VERSION}${NC}"
 
-# 3. Update version in pubspec.yaml
+# 4. Update version in pubspec.yaml
 echo -e "\n${YELLOW}Updating pubspec.yaml...${NC}"
 sed -i '' "s/^version: .*/version: ${NEW_VERSION}/" "$PUBSPEC"
 
-# 4. Commit the version bump and push (triggers Windows/Linux CI builds)
+# 5. Commit the version bump and push (triggers Windows/Linux CI builds)
 echo -e "\n${YELLOW}Committing version bump...${NC}"
 git add "$PUBSPEC"
 git commit -m "Bump version to ${NEW_VERSION}"
@@ -81,12 +114,12 @@ git tag "$TAG"
 echo -e "\n${YELLOW}Pushing commit and tag (triggers Windows/Linux CI builds)...${NC}"
 git push && git push origin "$TAG"
 
-# 5. Build the release
+# 6. Build the release
 echo -e "\n${YELLOW}Building macOS release...${NC}"
 cd "$SCRIPT_DIR/frontend"
 flutter build macos --release
 
-# 6. Code sign the app
+# 7. Code sign the app
 APP_PATH="$SCRIPT_DIR/frontend/build/macos/Build/Products/Release/CC Insights.app"
 echo -e "\n${YELLOW}Code signing the app...${NC}"
 codesign --deep --force --options runtime --sign "$CODESIGN_IDENTITY" "$APP_PATH"
@@ -95,27 +128,27 @@ codesign --deep --force --options runtime --sign "$CODESIGN_IDENTITY" "$APP_PATH
 echo -e "\n${YELLOW}Verifying code signature...${NC}"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
-# 7. Create zip for notarization
+# 8. Create zip for notarization
 echo -e "\n${YELLOW}Creating zip for notarization...${NC}"
 cd "$SCRIPT_DIR/frontend/build/macos/Build/Products/Release"
 ZIP_NAME="cc-insights-macos.zip"
 rm -f "$ZIP_NAME"
 zip -ry "$ZIP_NAME" "CC Insights.app"
 
-# 8. Submit for notarization and wait
+# 9. Submit for notarization and wait
 echo -e "\n${YELLOW}Submitting for notarization (this may take a few minutes)...${NC}"
 xcrun notarytool submit "$ZIP_NAME" --keychain-profile "$NOTARIZE_KEYCHAIN_PROFILE" --wait
 
-# 9. Staple the notarization ticket
+# 10. Staple the notarization ticket
 echo -e "\n${YELLOW}Stapling notarization ticket...${NC}"
 xcrun stapler staple "$APP_PATH"
 
-# 10. Recreate the zip with the stapled app
+# 11. Recreate the zip with the stapled app
 echo -e "\n${YELLOW}Creating final zip with stapled app...${NC}"
 rm -f "$ZIP_NAME"
 zip -ry "$ZIP_NAME" "CC Insights.app"
 
-# 11. Create DMG
+# 12. Create DMG
 echo -e "\n${YELLOW}Creating DMG installer...${NC}"
 DMG_NAME="cc-insights-macos.dmg"
 rm -f "$DMG_NAME"
@@ -136,17 +169,17 @@ if [ ! -f "$DMG_NAME" ]; then
     exit 1
 fi
 
-# 12. Notarize and staple the DMG
+# 13. Notarize and staple the DMG
 echo -e "\n${YELLOW}Notarizing DMG...${NC}"
 xcrun notarytool submit "$DMG_NAME" --keychain-profile "$NOTARIZE_KEYCHAIN_PROFILE" --wait
 xcrun stapler staple "$DMG_NAME"
 
-# 13. Calculate SHA256 checksums
+# 14. Calculate SHA256 checksums
 echo -e "\n${YELLOW}Calculating SHA256 checksums...${NC}"
 SHA256_ZIP=$(shasum -a 256 "$ZIP_NAME" | awk '{print $1}')
 SHA256_DMG=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')
 
-# 14. Create GitHub release and upload
+# 15. Create GitHub release and upload
 echo -e "\n${YELLOW}Creating GitHub release v${NEW_VERSION}...${NC}"
 gh release create "$TAG" \
     --title "CC Insights ${NEW_VERSION}" \
@@ -155,7 +188,7 @@ gh release create "$TAG" \
     "$ZIP_NAME" \
     "$DMG_NAME"
 
-# 15. Output results
+# 16. Output results
 echo -e "\n${GREEN}=== Release Complete ===${NC}"
 echo -e "Version: ${NEW_VERSION}"
 echo -e "Tag: ${TAG}"
