@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -15,14 +16,12 @@ import 'runtime_config.dart';
 /// - Tool use → tool result pairing via [_toolUseIdToEntry]
 /// - Conversation routing via parentToolUseId → [_agentIdToConversationId]
 /// - Agent lifecycle management (Task tool spawning)
+/// - Streaming: processing stream_event messages into live-updating entries
+///   with throttled UI notifications
 ///
 /// The handler is stateless with respect to [ChatState] - the chat is passed
 /// to [handleMessage] rather than stored. Internal tracking maps are keyed
 /// by toolUseId/agentId which are unique across sessions.
-///
-/// Future Phase 3 will add:
-/// - Streaming state tracking for real-time text updates
-/// - Throttled notifications for performance
 class SdkMessageHandler {
   /// Tool pairing: toolUseId → entry (for updating with result later).
   final Map<String, ToolUseOutputEntry> _toolUseIdToEntry = {};
@@ -66,9 +65,27 @@ class SdkMessageHandler {
   /// This persists for the lifetime of the SdkMessageHandler instance.
   final Set<String> _titlesGenerated = {};
 
-  // Phase 3: Streaming state (commented out for now)
-  // final Map<String, Map<int, OutputEntry>> _streamingEntries = {};
-  // Timer? _notifyTimer;
+  // Streaming state
+
+  /// Tracks streaming entries by (conversationId, contentBlockIndex).
+  /// Reset on each new message_start.
+  final Map<(String, int), OutputEntry> _streamingBlocks = {};
+
+  /// The conversation ID for the currently streaming message.
+  String? _streamingConversationId;
+
+  /// Chat reference for the current streaming session.
+  ChatState? _streamingChat;
+
+  /// Entries created during streaming for each conversation.
+  /// Used by [_handleAssistantMessage] to finalize instead of duplicate.
+  final Map<String, List<OutputEntry>> _activeStreamingEntries = {};
+
+  /// Throttle timer for batching UI updates during streaming.
+  Timer? _notifyTimer;
+
+  /// Whether any deltas arrived since the last timer tick.
+  bool _hasPendingNotify = false;
 
   /// Creates an [SdkMessageHandler].
   ///
@@ -94,7 +111,7 @@ class SdkMessageHandler {
       case 'result':
         _handleResultMessage(chat, rawMessage);
       case 'stream_event':
-        _handleStreamEvent(rawMessage);
+        _handleStreamEvent(chat, rawMessage);
       default:
         _handleUnknownMessage(chat, rawMessage, type ?? 'null');
     }
@@ -198,6 +215,19 @@ class SdkMessageHandler {
       chat.updateContextFromUsage(usage);
     }
 
+    // Check if we have streaming entries to finalize for this conversation.
+    // When streaming is active, entries are created during content_block_start
+    // events. The final assistant message should finalize those entries
+    // rather than creating duplicates.
+    final streamingEntries = _activeStreamingEntries.remove(conversationId);
+    if (streamingEntries != null && streamingEntries.isNotEmpty) {
+      _finalizeStreamingEntries(
+          chat, msg, streamingEntries, content, model, errorType,
+          parentToolUseId);
+      return;
+    }
+
+    // Non-streaming path: create entries as before
     for (final block in content) {
       final blockMap = block as Map<String, dynamic>;
       final blockType = blockMap['type'] as String?;
@@ -268,6 +298,112 @@ class SdkMessageHandler {
           }
       }
     }
+  }
+
+  /// Finalizes streaming entries with authoritative data from the
+  /// complete assistant message.
+  void _finalizeStreamingEntries(
+    ChatState chat,
+    Map<String, dynamic> msg,
+    List<OutputEntry> streamingEntries,
+    List<dynamic> content,
+    String? model,
+    String? errorType,
+    String? parentToolUseId,
+  ) {
+    int streamIdx = 0;
+
+    for (final block in content) {
+      final blockMap = block as Map<String, dynamic>;
+      final blockType = blockMap['type'] as String?;
+
+      switch (blockType) {
+        case 'text':
+          if (streamIdx < streamingEntries.length &&
+              streamingEntries[streamIdx] is TextOutputEntry) {
+            final entry = streamingEntries[streamIdx] as TextOutputEntry;
+            entry.text = blockMap['text'] as String? ?? '';
+            entry.isStreaming = false;
+            entry.addRawMessage(msg);
+            // Persist now that we have final content
+            chat.persistStreamingEntry(entry);
+            streamIdx++;
+          }
+          if (parentToolUseId == null) {
+            _hasAssistantOutputThisTurn[chat.data.id] = true;
+          }
+
+        case 'thinking':
+          if (streamIdx < streamingEntries.length &&
+              streamingEntries[streamIdx] is TextOutputEntry) {
+            final entry = streamingEntries[streamIdx] as TextOutputEntry;
+            entry.text = blockMap['thinking'] as String? ?? '';
+            entry.isStreaming = false;
+            entry.addRawMessage(msg);
+            chat.persistStreamingEntry(entry);
+            streamIdx++;
+          }
+          if (parentToolUseId == null) {
+            _hasAssistantOutputThisTurn[chat.data.id] = true;
+          }
+
+        case 'tool_use':
+          final toolUseId = blockMap['id'] as String? ?? '';
+          final toolName = blockMap['name'] as String? ?? '';
+          final inputRaw = blockMap['input'];
+          final toolInput = inputRaw is Map<String, dynamic>
+              ? inputRaw
+              : <String, dynamic>{};
+
+          if (streamIdx < streamingEntries.length &&
+              streamingEntries[streamIdx] is ToolUseOutputEntry) {
+            final entry =
+                streamingEntries[streamIdx] as ToolUseOutputEntry;
+            // Update with final parsed input
+            entry.toolInput
+              ..clear()
+              ..addAll(Map<String, dynamic>.from(toolInput));
+            entry.isStreaming = false;
+            entry.addRawMessage(msg);
+            chat.persistStreamingEntry(entry);
+
+            // Task tool detection now that full input is available
+            if (toolName == 'Task') {
+              developer.log(
+                'Task tool detected (finalized): '
+                'toolUseId: $toolUseId',
+                name: 'SdkMessageHandler',
+              );
+              _handleTaskToolSpawn(chat, toolUseId, entry);
+            }
+            streamIdx++;
+          } else {
+            // No matching streaming entry - create normally
+            developer.log(
+              'Tool use detected: $toolName (id: $toolUseId)',
+              name: 'SdkMessageHandler',
+            );
+            final entry = ToolUseOutputEntry(
+              timestamp: DateTime.now(),
+              toolName: toolName,
+              toolUseId: toolUseId,
+              toolInput: Map<String, dynamic>.from(toolInput),
+              model: model,
+            );
+            entry.addRawMessage(msg);
+            _toolUseIdToEntry[toolUseId] = entry;
+            final conversationId =
+                _resolveConversationId(chat, parentToolUseId);
+            chat.addOutputEntry(conversationId, entry);
+
+            if (toolName == 'Task') {
+              _handleTaskToolSpawn(chat, toolUseId, entry);
+            }
+          }
+      }
+    }
+
+    chat.notifyListeners();
   }
 
   void _handleUserMessage(ChatState chat, Map<String, dynamic> msg) {
@@ -639,10 +775,201 @@ class SdkMessageHandler {
     }
   }
 
-  void _handleStreamEvent(Map<String, dynamic> msg) {
-    // Phase 3: Streaming support
-    // For now, ignore stream events - we get complete messages anyway
-    // When streaming is enabled, this will create/update streaming entries
+  void _handleStreamEvent(ChatState chat, Map<String, dynamic> msg) {
+    final event = msg['event'] as Map<String, dynamic>? ?? {};
+    final eventType = event['type'] as String? ?? '';
+    final parentToolUseId = msg['parent_tool_use_id'] as String?;
+
+    switch (eventType) {
+      case 'message_start':
+        _onMessageStart(chat, parentToolUseId);
+
+      case 'content_block_start':
+        final index = event['index'] as int? ?? 0;
+        final contentBlock =
+            event['content_block'] as Map<String, dynamic>? ?? {};
+        _onContentBlockStart(chat, index, contentBlock);
+
+      case 'content_block_delta':
+        final index = event['index'] as int? ?? 0;
+        final delta = event['delta'] as Map<String, dynamic>? ?? {};
+        _onContentBlockDelta(chat, index, delta);
+
+      case 'content_block_stop':
+        final index = event['index'] as int? ?? 0;
+        _onContentBlockStop(index);
+
+      case 'message_delta':
+        // Contains stop_reason and usage - not needed for streaming UI
+        break;
+
+      case 'message_stop':
+        _onMessageStop(chat);
+
+      default:
+        break;
+    }
+  }
+
+  void _onMessageStart(ChatState chat, String? parentToolUseId) {
+    _streamingConversationId =
+        _resolveConversationId(chat, parentToolUseId);
+    _streamingChat = chat;
+    _streamingBlocks.clear();
+  }
+
+  void _onContentBlockStart(
+    ChatState chat,
+    int index,
+    Map<String, dynamic> contentBlock,
+  ) {
+    final convId = _streamingConversationId;
+    if (convId == null) return;
+
+    final blockType = contentBlock['type'] as String? ?? '';
+
+    OutputEntry? entry;
+    switch (blockType) {
+      case 'text':
+        entry = TextOutputEntry(
+          timestamp: DateTime.now(),
+          text: '',
+          contentType: 'text',
+          isStreaming: true,
+        );
+
+      case 'thinking':
+        entry = TextOutputEntry(
+          timestamp: DateTime.now(),
+          text: '',
+          contentType: 'thinking',
+          isStreaming: true,
+        );
+
+      case 'tool_use':
+        final toolUseId = contentBlock['id'] as String? ?? '';
+        final toolName = contentBlock['name'] as String? ?? '';
+        entry = ToolUseOutputEntry(
+          timestamp: DateTime.now(),
+          toolName: toolName,
+          toolUseId: toolUseId,
+          toolInput: <String, dynamic>{},
+          isStreaming: true,
+        );
+        // Register for tool result pairing
+        _toolUseIdToEntry[toolUseId] = entry as ToolUseOutputEntry;
+
+      default:
+        return;
+    }
+
+    _streamingBlocks[(convId, index)] = entry;
+    chat.addOutputEntry(convId, entry);
+    _activeStreamingEntries
+        .putIfAbsent(convId, () => [])
+        .add(entry);
+  }
+
+  void _onContentBlockDelta(
+    ChatState chat,
+    int index,
+    Map<String, dynamic> delta,
+  ) {
+    final convId = _streamingConversationId;
+    if (convId == null) return;
+
+    final entry = _streamingBlocks[(convId, index)];
+    if (entry == null) return;
+
+    final deltaType = delta['type'] as String? ?? '';
+    switch (deltaType) {
+      case 'text_delta':
+        if (entry is TextOutputEntry) {
+          entry.appendDelta(delta['text'] as String? ?? '');
+        }
+
+      case 'thinking_delta':
+        if (entry is TextOutputEntry) {
+          entry.appendDelta(delta['thinking'] as String? ?? '');
+        }
+
+      case 'input_json_delta':
+        if (entry is ToolUseOutputEntry) {
+          entry.appendInputDelta(
+              delta['partial_json'] as String? ?? '');
+        }
+
+      case 'signature_delta':
+        break;
+    }
+
+    _scheduleNotify();
+  }
+
+  void _onContentBlockStop(int index) {
+    final convId = _streamingConversationId;
+    if (convId == null) return;
+
+    final entry = _streamingBlocks[(convId, index)];
+    if (entry is TextOutputEntry) {
+      entry.isStreaming = false;
+    } else if (entry is ToolUseOutputEntry) {
+      entry.isStreaming = false;
+    }
+  }
+
+  void _onMessageStop(ChatState chat) {
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    if (_hasPendingNotify) {
+      _hasPendingNotify = false;
+      chat.notifyListeners();
+    }
+
+    _streamingBlocks.clear();
+    _streamingConversationId = null;
+    _streamingChat = null;
+  }
+
+  void _scheduleNotify() {
+    _hasPendingNotify = true;
+    _notifyTimer ??= Timer.periodic(
+      const Duration(milliseconds: 50),
+      (_) {
+        if (_hasPendingNotify && _streamingChat != null) {
+          _hasPendingNotify = false;
+          _streamingChat!.notifyListeners();
+        }
+      },
+    );
+  }
+
+  /// Clears in-flight streaming state.
+  ///
+  /// Marks any streaming entries as finalized and flushes pending
+  /// notifications. Call this when a session is interrupted.
+  void clearStreamingState() {
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    _hasPendingNotify = false;
+
+    // Finalize any in-flight streaming entries
+    for (final entry in _streamingBlocks.values) {
+      if (entry is TextOutputEntry) {
+        entry.isStreaming = false;
+      } else if (entry is ToolUseOutputEntry) {
+        entry.isStreaming = false;
+      }
+    }
+
+    if (_streamingChat != null) {
+      _streamingChat!.notifyListeners();
+    }
+
+    _streamingBlocks.clear();
+    _activeStreamingEntries.clear();
+    _streamingConversationId = null;
+    _streamingChat = null;
   }
 
   /// Handles unknown message types by displaying them for debugging.
@@ -771,11 +1098,17 @@ $userMessage''';
     _expectingContextSummary.clear();
     _pendingTitleGenerations.clear();
     _titlesGenerated.clear();
+    _streamingBlocks.clear();
+    _activeStreamingEntries.clear();
+    _streamingConversationId = null;
+    _streamingChat = null;
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    _hasPendingNotify = false;
   }
 
   /// Disposes of resources.
   void dispose() {
     clear();
-    // Phase 3: _notifyTimer?.cancel();
   }
 }

@@ -489,6 +489,15 @@ class ToolUseOutputEntry extends OutputEntry {
     List<Map<String, dynamic>>? rawMessages,
   }) : _rawMessages = rawMessages;
 
+  /// Accumulated partial JSON string for streaming tool input.
+  /// Only used during streaming; cleared when finalized.
+  String _partialInputJson = '';
+
+  /// Appends a partial JSON delta during streaming.
+  void appendInputDelta(String delta) {
+    _partialInputJson += delta;
+  }
+
   /// Updates the result when tool_result message arrives.
   void updateResult(dynamic newResult, bool error) {
     result = newResult;

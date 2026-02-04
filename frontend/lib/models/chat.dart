@@ -714,8 +714,14 @@ class ChatState extends ChangeNotifier {
           entries: [..._data.primaryConversation.entries, entry],
         ),
       );
-      // Persist entry to JSONL file (only for primary conversation)
-      _persistEntry(entry);
+      // Skip persistence for streaming entries - they are persisted
+      // when finalized by the assistant message handler.
+      final isStreaming =
+          (entry is TextOutputEntry && entry.isStreaming) ||
+              (entry is ToolUseOutputEntry && entry.isStreaming);
+      if (!isStreaming) {
+        _persistEntry(entry);
+      }
       // Track unread messages for assistant text output
       if (entry is TextOutputEntry && entry.contentType == 'text') {
         _incrementUnread();
@@ -803,6 +809,8 @@ class ChatState extends ChangeNotifier {
         settingSources: const ['user', 'project', 'local'],
         // Use Claude Code's system prompt (includes CLAUDE.md support)
         systemPrompt: const sdk.PresetSystemPrompt(),
+        // Enable streaming - receive partial messages as they're generated
+        includePartialMessages: true,
       ),
       content: content,
     );
@@ -1386,6 +1394,15 @@ class ChatState extends ChangeNotifier {
       // Log error but don't throw - persistence failures shouldn't break UI
       debugPrint('Failed to persist entry: $e');
     }
+  }
+
+  /// Persists a streaming entry that has been finalized.
+  ///
+  /// Called by [SdkMessageHandler] when the complete assistant message
+  /// arrives and finalizes a previously streaming entry. Only persists
+  /// entries belonging to the primary conversation.
+  void persistStreamingEntry(OutputEntry entry) {
+    _persistEntry(entry);
   }
 
   /// Persists a tool result to the chat's JSONL file.

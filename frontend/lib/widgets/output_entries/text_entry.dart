@@ -37,12 +37,18 @@ class TextEntryWidget extends StatelessWidget {
       return _buildErrorWidget(context, colorScheme);
     }
 
+    // Streaming cursor character appended while content is arriving
+    const streamingCursor = '\u258C';
+
     // For thinking content, use plain text (italic)
     if (isThinking) {
+      final displayText = entry.isStreaming
+          ? '${entry.text}$streamingCursor'
+          : entry.text;
       return Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: SelectableText(
-          entry.text,
+          displayText,
           style: GoogleFonts.getFont(
             RuntimeConfig.instance.monoFontFamily,
             fontSize: 13,
@@ -54,11 +60,14 @@ class TextEntryWidget extends StatelessWidget {
     }
 
     // For regular content, render as Markdown
+    final displayText = entry.isStreaming
+        ? '${entry.text}$streamingCursor'
+        : entry.text;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: SelectionArea(
         child: GptMarkdown(
-          entry.text,
+          displayText,
           style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
           onLinkTap: (url, title) {
             launchUrl(Uri.parse(url));

@@ -1129,15 +1129,330 @@ void main() {
     });
 
     group('stream_event handling', () {
-      test('ignores stream_event messages (Phase 3 placeholder)', () {
+      /// Sends a message_start stream event.
+      void sendMessageStart({String? parentToolUseId}) {
         handler.handleMessage(chat, {
           'type': 'stream_event',
-          'event_type': 'content_block_delta',
-          'delta': {'text': 'streaming text...'},
+          'parent_tool_use_id': parentToolUseId,
+          'event': {
+            'type': 'message_start',
+            'message': {'role': 'assistant'},
+          },
+        });
+      }
+
+      /// Sends a content_block_start stream event.
+      void sendContentBlockStart(
+        int index,
+        Map<String, dynamic> contentBlock,
+      ) {
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'event': {
+            'type': 'content_block_start',
+            'index': index,
+            'content_block': contentBlock,
+          },
+        });
+      }
+
+      /// Sends a content_block_delta stream event.
+      void sendContentBlockDelta(
+        int index,
+        Map<String, dynamic> delta,
+      ) {
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'event': {
+            'type': 'content_block_delta',
+            'index': index,
+            'delta': delta,
+          },
+        });
+      }
+
+      /// Sends a content_block_stop stream event.
+      void sendContentBlockStop(int index) {
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'event': {
+            'type': 'content_block_stop',
+            'index': index,
+          },
+        });
+      }
+
+      /// Sends a message_stop stream event.
+      void sendMessageStop() {
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'event': {'type': 'message_stop'},
+        });
+      }
+
+      test('content_block_start creates streaming TextOutputEntry', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('');
+        check(textEntry.isStreaming).isTrue();
+        check(textEntry.contentType).equals('text');
+      });
+
+      test('content_block_delta appends text via appendDelta', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': 'Hello'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': ', world'});
+
+        final entries = chat.data.primaryConversation.entries;
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Hello, world');
+      });
+
+      test('content_block_stop marks entry as not streaming', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': 'Done'});
+        sendContentBlockStop(0);
+
+        final textEntry =
+            chat.data.primaryConversation.entries.first as TextOutputEntry;
+        check(textEntry.isStreaming).isFalse();
+        check(textEntry.text).equals('Done');
+      });
+
+      test('assistant message finalizes streaming entry without duplication',
+          () {
+        // Stream a complete message
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': 'Streamed'});
+        sendContentBlockStop(0);
+        sendMessageStop();
+
+        // Now send the final assistant message
+        handler.handleMessage(chat, {
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'assistant',
+            'content': [
+              {'type': 'text', 'text': 'Streamed text final'},
+            ],
+          },
         });
 
-        // No entries created - streaming not yet implemented
-        check(chat.data.primaryConversation.entries).isEmpty();
+        // Should have exactly 1 entry (no duplicate)
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+
+        final textEntry = entries.first as TextOutputEntry;
+        // Text should be the authoritative final value
+        check(textEntry.text).equals('Streamed text final');
+        check(textEntry.isStreaming).isFalse();
+      });
+
+      test('thinking_delta creates thinking TextOutputEntry', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'thinking'});
+        sendContentBlockDelta(
+            0, {'type': 'thinking_delta', 'thinking': 'Hmm...'});
+        sendContentBlockDelta(
+            0, {'type': 'thinking_delta', 'thinking': ' let me think'});
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+
+        final thinkingEntry = entries.first as TextOutputEntry;
+        check(thinkingEntry.contentType).equals('thinking');
+        check(thinkingEntry.text).equals('Hmm... let me think');
+        check(thinkingEntry.isStreaming).isTrue();
+      });
+
+      test('tool_use content_block_start creates ToolUseOutputEntry', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {
+          'type': 'tool_use',
+          'id': 'tool_123',
+          'name': 'Read',
+        });
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<ToolUseOutputEntry>();
+
+        final toolEntry = entries.first as ToolUseOutputEntry;
+        check(toolEntry.toolName).equals('Read');
+        check(toolEntry.toolUseId).equals('tool_123');
+        check(toolEntry.isStreaming).isTrue();
+      });
+
+      test('input_json_delta accumulates on ToolUseOutputEntry', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {
+          'type': 'tool_use',
+          'id': 'tool_456',
+          'name': 'Bash',
+        });
+        sendContentBlockDelta(
+            0, {'type': 'input_json_delta', 'partial_json': '{"com'});
+        sendContentBlockDelta(
+            0, {'type': 'input_json_delta', 'partial_json': 'mand":'});
+        sendContentBlockStop(0);
+
+        final toolEntry =
+            chat.data.primaryConversation.entries.first as ToolUseOutputEntry;
+        check(toolEntry.isStreaming).isFalse();
+      });
+
+      test('multiple content blocks create separate entries', () {
+        sendMessageStart();
+        // Thinking block
+        sendContentBlockStart(0, {'type': 'thinking'});
+        sendContentBlockDelta(
+            0, {'type': 'thinking_delta', 'thinking': 'Thinking...'});
+        sendContentBlockStop(0);
+        // Text block
+        sendContentBlockStart(1, {'type': 'text'});
+        sendContentBlockDelta(1, {'type': 'text_delta', 'text': 'Answer'});
+        sendContentBlockStop(1);
+        sendMessageStop();
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(2);
+        check((entries[0] as TextOutputEntry).contentType).equals('thinking');
+        check((entries[0] as TextOutputEntry).text).equals('Thinking...');
+        check((entries[1] as TextOutputEntry).contentType).equals('text');
+        check((entries[1] as TextOutputEntry).text).equals('Answer');
+      });
+
+      test('message_stop clears streaming state', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': 'First'});
+        sendContentBlockStop(0);
+        sendMessageStop();
+
+        // Start a second message - should work independently
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': 'Second'});
+        sendContentBlockStop(0);
+        sendMessageStop();
+
+        // Both messages create entries, finalized by their assistant messages
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(2);
+      });
+
+      test('clearStreamingState finalizes in-flight entries', () {
+        sendMessageStart();
+        sendContentBlockStart(0, {'type': 'text'});
+        sendContentBlockDelta(0, {'type': 'text_delta', 'text': 'Partial'});
+
+        // Entry should still be streaming
+        var textEntry =
+            chat.data.primaryConversation.entries.first as TextOutputEntry;
+        check(textEntry.isStreaming).isTrue();
+
+        // Clear streaming state (simulates interrupt)
+        handler.clearStreamingState();
+
+        // Entry should now be finalized
+        textEntry =
+            chat.data.primaryConversation.entries.first as TextOutputEntry;
+        check(textEntry.isStreaming).isFalse();
+        check(textEntry.text).equals('Partial');
+      });
+
+      test('subagent stream events route to correct conversation', () {
+        // First create a subagent via non-streaming Task tool
+        handler.handleMessage(chat, {
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'assistant',
+            'content': [
+              {
+                'type': 'tool_use',
+                'id': 'task_001',
+                'name': 'Task',
+                'input': {
+                  'subagent_type': 'Explore',
+                  'description': 'Test agent',
+                  'prompt': 'Do something',
+                },
+              },
+            ],
+          },
+        });
+
+        // Now stream events for the subagent
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'parent_tool_use_id': 'task_001',
+          'event': {
+            'type': 'message_start',
+            'message': {'role': 'assistant'},
+          },
+        });
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'parent_tool_use_id': 'task_001',
+          'event': {
+            'type': 'content_block_start',
+            'index': 0,
+            'content_block': {'type': 'text'},
+          },
+        });
+        handler.handleMessage(chat, {
+          'type': 'stream_event',
+          'parent_tool_use_id': 'task_001',
+          'event': {
+            'type': 'content_block_delta',
+            'index': 0,
+            'delta': {'type': 'text_delta', 'text': 'Subagent reply'},
+          },
+        });
+
+        // Primary conversation should only have the Task tool entry
+        final primaryEntries = chat.data.primaryConversation.entries;
+        check(primaryEntries.length).equals(1);
+        check(primaryEntries.first).isA<ToolUseOutputEntry>();
+
+        // Subagent conversation should have the streaming text entry
+        final subConversations = chat.data.subagentConversations;
+        check(subConversations).isNotEmpty();
+        final subEntries = subConversations.values.first.entries;
+        check(subEntries.length).equals(1);
+        check(subEntries.first).isA<TextOutputEntry>();
+        check((subEntries.first as TextOutputEntry).text)
+            .equals('Subagent reply');
+      });
+
+      test('assistant message with no streaming entries creates normally', () {
+        // Send an assistant message without any preceding stream events
+        handler.handleMessage(chat, {
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'assistant',
+            'content': [
+              {'type': 'text', 'text': 'Direct response'},
+            ],
+          },
+        });
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check((entries.first as TextOutputEntry).text)
+            .equals('Direct response');
       });
     });
 

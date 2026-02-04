@@ -97,6 +97,8 @@ class ClaudeCliBackend implements AgentBackend {
                 maxTurns: options?.maxTurns,
                 maxBudgetUsd: options?.maxBudgetUsd,
                 resume: options?.resume,
+                includePartialMessages:
+                    options?.includePartialMessages ?? false,
               )
             : null,
       );

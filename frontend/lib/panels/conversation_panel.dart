@@ -344,6 +344,21 @@ class _ConversationPanelState extends State<ConversationPanel>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
       });
+    } else if (!newEntriesAdded && _scrollController.hasClients) {
+      // No new entries, but content may have changed (streaming deltas).
+      // If user is at bottom and any entry is streaming, keep scrolled down.
+      final hasStreamingEntry = conversation?.entries.any((e) =>
+              (e is TextOutputEntry && e.isStreaming) ||
+              (e is ToolUseOutputEntry && e.isStreaming)) ??
+          false;
+      if (hasStreamingEntry && _isAtBottom) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scrollController.hasClients) {
+            _scrollController
+                .jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        });
+      }
     }
 
     _lastEntryCount = currentCount;
@@ -533,8 +548,14 @@ class _ConversationPanelState extends State<ConversationPanel>
     final projectDir = selection.selectedChat?.data.worktreeRoot;
     final isSubagent = !conversation.isPrimary;
 
-    // Add 1 to item count for the working indicator when active
-    final itemCount = entries.length + (showWorkingIndicator ? 1 : 0);
+    // Hide the working indicator when the last entry is streaming text,
+    // since the streaming cursor already indicates Claude is working.
+    final lastEntry = entries.isNotEmpty ? entries.last : null;
+    final lastEntryIsStreaming =
+        lastEntry is TextOutputEntry && lastEntry.isStreaming;
+    final showIndicator = showWorkingIndicator && !lastEntryIsStreaming;
+
+    final itemCount = entries.length + (showIndicator ? 1 : 0);
 
     return SuperListView.builder(
       controller: _scrollController,
@@ -543,7 +564,7 @@ class _ConversationPanelState extends State<ConversationPanel>
       itemCount: itemCount,
       itemBuilder: (context, index) {
         // Working indicator is at the end (bottom visually)
-        if (showWorkingIndicator && index == entries.length) {
+        if (showIndicator && index == entries.length) {
           return WorkingIndicator(
             isCompacting: isCompacting,
             startTime: chat?.workingStartTime,

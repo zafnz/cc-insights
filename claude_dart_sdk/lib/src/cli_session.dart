@@ -173,6 +173,8 @@ class CliSession {
           maxTurns: options?.maxTurns,
           maxBudgetUsd: options?.maxBudgetUsd,
           resume: options?.resume,
+          includePartialMessages:
+              options?.includePartialMessages ?? false,
         );
 
     // Spawn the CLI process
@@ -195,6 +197,8 @@ class CliSession {
           'subtype': 'initialize',
           if (options?.systemPrompt != null)
             'system_prompt': options!.systemPrompt!.toJson(),
+          if (options?.includePartialMessages == true)
+            'include_partial_messages': true,
           'mcp_servers': options?.mcpServers ?? {},
           'agents': {},
           'hooks': {},

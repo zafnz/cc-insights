@@ -30,6 +30,7 @@ class CliProcessConfig {
     this.maxBudgetUsd,
     this.resume,
     this.verbose = false,
+    this.includePartialMessages = false,
   });
 
   /// Path to the claude executable.
@@ -59,6 +60,9 @@ class CliProcessConfig {
 
   /// Enable verbose output.
   final bool verbose;
+
+  /// Include partial message chunks as they arrive (streaming).
+  final bool includePartialMessages;
 
   /// Get the executable path, using environment variable or default.
   String get resolvedExecutablePath {
@@ -149,6 +153,10 @@ class CliProcess {
 
     if (config.verbose) {
       args.add('--verbose');
+    }
+
+    if (config.includePartialMessages) {
+      args.add('--include-partial-messages');
     }
 
     return args;
