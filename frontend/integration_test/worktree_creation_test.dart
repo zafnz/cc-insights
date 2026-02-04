@@ -10,6 +10,8 @@ import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 
+import 'test_setup.dart';
+
 Finder _findWorktreeScrollable() {
   return find.descendant(
     of: find.byType(WorktreePanel),
@@ -59,15 +61,14 @@ Future<void> _scrollWorktreePanelTo(
 ///   flutter test integration_test/worktree_creation_test.dart -d macos
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setupIntegrationTestIsolation();
 
-  // Ensure screenshots directory exists and enable mock data
+  // Ensure screenshots directory exists
   setUpAll(() {
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
     }
-    // Enable mock data for all integration tests
-    useMockData = true;
   });
 
 

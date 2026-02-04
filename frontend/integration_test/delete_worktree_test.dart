@@ -15,6 +15,8 @@ import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/delete_worktree_dialog.dart';
 
+import 'test_setup.dart';
+
 /// Integration test for the delete worktree workflow.
 ///
 /// This test:
@@ -71,6 +73,7 @@ Future<void> _takeScreenshot(WidgetTester tester, String name) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setupIntegrationTestIsolation();
 
   late Directory tempDir;
   late String repoPath;

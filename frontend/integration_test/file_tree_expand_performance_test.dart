@@ -10,6 +10,8 @@ import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 
+import 'test_setup.dart';
+
 /// Integration test for file tree expand performance.
 ///
 /// Clones cc-insights-test-repo (317 files, 177 directories) to a temp directory
@@ -19,12 +21,12 @@ import 'package:cc_insights_v2/testing/test_helpers.dart';
 ///   flutter test integration_test/file_tree_expand_performance_test.dart -d macos
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setupIntegrationTestIsolation();
 
   late String mockPath;
   late Directory tempDir;
 
   setUpAll(() async {
-    useMockData = true;
 
     // Create a unique temp directory for this test run
     tempDir = Directory.systemTemp.createTempSync('cc-insights-perf-test-');

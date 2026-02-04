@@ -12,19 +12,21 @@ import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/click_to_scroll_container.dart';
 import 'package:cc_insights_v2/widgets/tool_card.dart';
 
+import 'test_setup.dart';
+
 /// Integration tests for ClickToScrollContainer within the actual app.
 ///
 /// Run tests:
 ///   flutter test integration_test/click_to_scroll_test.dart -d macos
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setupIntegrationTestIsolation();
 
   setUpAll(() {
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
     }
-    useMockData = true;
   });
 
   group('ClickToScrollContainer in App', () {

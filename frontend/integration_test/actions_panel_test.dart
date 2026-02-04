@@ -11,6 +11,8 @@ import 'package:cc_insights_v2/services/script_execution_service.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:provider/provider.dart';
 
+import 'test_setup.dart';
+
 /// Integration tests for the ActionsPanel feature.
 ///
 /// Run tests:
@@ -19,15 +21,14 @@ import 'package:provider/provider.dart';
 /// Screenshots are saved to the `screenshots/` directory.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setupIntegrationTestIsolation();
 
-  // Ensure screenshots directory exists and enable mock data
+  // Ensure screenshots directory exists
   setUpAll(() {
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
     }
-    // Enable mock data for all integration tests
-    useMockData = true;
   });
 
   group('ActionsPanel Integration Tests', () {

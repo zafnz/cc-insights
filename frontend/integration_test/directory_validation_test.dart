@@ -12,6 +12,8 @@ import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/directory_validation_dialog.dart';
 
+import 'test_setup.dart';
+
 /// Integration test for directory validation when launching the app.
 ///
 /// This test validates the following scenarios:
@@ -66,6 +68,7 @@ Future<void> _takeScreenshot(WidgetTester tester, String name) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setupIntegrationTestIsolation();
 
   late Directory tempDir;
 
