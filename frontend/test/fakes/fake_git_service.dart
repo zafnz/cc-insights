@@ -487,6 +487,38 @@ class FakeGitService implements GitService {
     _maybeThrow();
   }
 
+  /// Calls to [mergeContinue].
+  final List<String> mergeContinueCalls = [];
+
+  /// Calls to [rebaseContinue].
+  final List<String> rebaseContinueCalls = [];
+
+  @override
+  Future<void> mergeContinue(String path) async {
+    mergeContinueCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+  }
+
+  @override
+  Future<void> rebaseContinue(String path) async {
+    rebaseContinueCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+  }
+
+  /// Map of path -> conflict operation type for [getConflictOperation].
+  final Map<String, MergeOperationType> conflictOperations = {};
+
+  @override
+  Future<MergeOperationType?> getConflictOperation(
+    String path,
+  ) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return conflictOperations[path];
+  }
+
   /// Map of path -> directory git info for [analyzeDirectory].
   final Map<String, DirectoryGitInfo> directoryInfos = {};
 

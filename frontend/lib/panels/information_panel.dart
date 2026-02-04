@@ -115,6 +115,7 @@ class _WorktreeInfo extends StatefulWidget {
 
 class _WorktreeInfoState extends State<_WorktreeInfo> {
   WorkflowMode _workflowMode = WorkflowMode.local;
+  String _updateSource = 'main';
 
   WorktreeData get data => widget.data;
   String get worktreeRoot => widget.worktreeRoot;
@@ -414,6 +415,67 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     }
   }
 
+  Future<void> _handleAbortConflict(BuildContext context) async {
+    final gitService = context.read<GitService>();
+    final operation = data.conflictOperation;
+    try {
+      if (operation == MergeOperationType.rebase) {
+        await gitService.rebaseAbort(worktreeRoot);
+      } else {
+        await gitService.mergeAbort(worktreeRoot);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to abort: $e')),
+      );
+    }
+    onStatusChanged();
+  }
+
+  Future<void> _handleContinueConflict(
+    BuildContext context,
+  ) async {
+    final gitService = context.read<GitService>();
+    final operation = data.conflictOperation;
+    try {
+      if (operation == MergeOperationType.rebase) {
+        await gitService.rebaseContinue(worktreeRoot);
+      } else {
+        await gitService.mergeContinue(worktreeRoot);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to continue: $e')),
+      );
+    }
+    onStatusChanged();
+  }
+
+  Future<void> _handleAskClaudeConflict(
+    BuildContext context,
+  ) async {
+    final project = context.read<ProjectState>();
+    final mainBranch = await context
+        .read<GitService>()
+        .getMainBranch(project.data.repoRoot);
+    if (!context.mounted) return;
+
+    final operation = data.conflictOperation ?? MergeOperationType.merge;
+    final mainWorktreePath =
+        project.primaryWorktree.data.worktreeRoot;
+
+    await _openConflictManagerChat(
+      context,
+      branch: data.branch,
+      mainBranch: mainBranch ?? 'main',
+      worktreePath: worktreeRoot,
+      mainWorktreePath: mainWorktreePath,
+      operation: operation,
+    );
+  }
+
   /// Whether the update-from-main buttons should be enabled.
   bool get _canUpdateFromMain =>
       data.commitsBehindMain > 0 && !data.isPrimary;
@@ -508,84 +570,109 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
           ],
           const SizedBox(height: 12),
 
-          // Update from main section
-          _SectionDivider(
-            label: _workflowMode == WorkflowMode.pr
-                ? 'Update from origin/main'
-                : 'Update from main',
-            colorScheme: colorScheme,
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: _CompactButton(
-                  onPressed: _canUpdateFromMain
-                      ? () => _handleUpdateFromMain(
-                            context,
-                            MergeOperationType.rebase,
-                          )
-                      : null,
-                  label: 'Rebase',
-                  icon: Icons.low_priority,
-                  tooltip: _canUpdateFromMain
-                      ? null
-                      : 'Already up-to-date with main',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _CompactButton(
-                  onPressed: _canUpdateFromMain
-                      ? () => _handleUpdateFromMain(
-                            context,
-                            MergeOperationType.merge,
-                          )
-                      : null,
-                  label: 'Merge',
-                  icon: Icons.merge,
-                  tooltip: _canUpdateFromMain
-                      ? null
-                      : 'Already up-to-date with main',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Integrate section - changes based on workflow mode
-          if (_workflowMode == WorkflowMode.local) ...[
-            _SectionDivider(
-              label: 'Integrate into main',
-              colorScheme: colorScheme,
-            ),
-            const SizedBox(height: 6),
-            _CompactButton(
-              onPressed: _canMergeIntoMain
-                  ? () => _handleMergeIntoMain(context)
-                  : null,
-              label: 'Merge',
-              icon: Icons.merge,
-              tooltip: _canMergeIntoMain
-                  ? null
-                  : _mergeIntoMainTooltip,
+          if (data.hasMergeConflict ||
+              data.conflictOperation != null) ...[
+            // Conflict/operation in progress section
+            _ConflictInProgress(
+              data: data,
+              onAbort: () => _handleAbortConflict(context),
+              onAskClaude: () =>
+                  _handleAskClaudeConflict(context),
+              onContinue: () =>
+                  _handleContinueConflict(context),
             ),
           ] else ...[
-            _SectionDivider(
-              label: 'Push to remote',
+            // Update from main section
+            _SectionDividerWithDropdown(
+              prefix: 'Update from ',
+              value: _updateSource,
+              options: const ['main', 'origin/main'],
+              tooltips: const {
+                'main':
+                    'Use changes from the local main branch.\n'
+                    'Use this when working locally and not\n'
+                    'in a GitHub Pull Request setup.',
+                'origin/main':
+                    'Use changes from the remote (origin)\n'
+                        'main branch. Use this when using\n'
+                        'GitHub to manage your merges.',
+              },
+              onChanged: (v) =>
+                  setState(() => _updateSource = v),
               colorScheme: colorScheme,
             ),
             const SizedBox(height: 6),
-            _CompactButton(
-              onPressed: _canCreatePr
-                  ? () => _handleCreatePr(context)
-                  : null,
-              label: 'Create & Push PR',
-              icon: Icons.cloud_upload,
-              tooltip: _canCreatePr
-                  ? null
-                  : _createPrTooltip,
+            Row(
+              children: [
+                Expanded(
+                  child: _CompactButton(
+                    onPressed: _canUpdateFromMain
+                        ? () => _handleUpdateFromMain(
+                              context,
+                              MergeOperationType.rebase,
+                            )
+                        : null,
+                    label: 'Rebase',
+                    icon: Icons.low_priority,
+                    tooltip: _canUpdateFromMain
+                        ? null
+                        : 'Already up-to-date with main',
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _CompactButton(
+                    onPressed: _canUpdateFromMain
+                        ? () => _handleUpdateFromMain(
+                              context,
+                              MergeOperationType.merge,
+                            )
+                        : null,
+                    label: 'Merge',
+                    icon: Icons.merge,
+                    tooltip: _canUpdateFromMain
+                        ? null
+                        : 'Already up-to-date with main',
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+
+            // Integrate section - changes based on workflow mode
+            if (_workflowMode == WorkflowMode.local) ...[
+              _SectionDivider(
+                label: 'Integrate into main',
+                colorScheme: colorScheme,
+              ),
+              const SizedBox(height: 6),
+              _CompactButton(
+                onPressed: _canMergeIntoMain
+                    ? () => _handleMergeIntoMain(context)
+                    : null,
+                label: 'Merge',
+                icon: Icons.merge,
+                tooltip: _canMergeIntoMain
+                    ? null
+                    : _mergeIntoMainTooltip,
+              ),
+            ] else ...[
+              _SectionDivider(
+                label: 'Push to remote',
+                colorScheme: colorScheme,
+              ),
+              const SizedBox(height: 6),
+              _CompactButton(
+                onPressed: _canCreatePr
+                    ? () => _handleCreatePr(context)
+                    : null,
+                label: 'Create & Push PR',
+                icon: Icons.cloud_upload,
+                tooltip: _canCreatePr
+                    ? null
+                    : _createPrTooltip,
+              ),
+            ],
           ],
         ],
       ),
@@ -685,6 +772,122 @@ class _DivergenceInfo extends StatelessWidget {
   }
 }
 
+class _ConflictInProgress extends StatelessWidget {
+  const _ConflictInProgress({
+    required this.data,
+    required this.onAbort,
+    required this.onAskClaude,
+    required this.onContinue,
+  });
+
+  final WorktreeData data;
+  final VoidCallback onAbort;
+  final VoidCallback onAskClaude;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    final operationLabel =
+        data.conflictOperation == MergeOperationType.rebase
+            ? 'Rebase'
+            : 'Merge';
+
+    // Conflicts resolved but operation still pending.
+    final resolved = !data.hasMergeConflict &&
+        data.conflictOperation != null;
+
+    final Color bannerColor;
+    final IconData bannerIcon;
+    final String bannerText;
+    if (resolved) {
+      bannerColor = Colors.green.shade700;
+      bannerIcon = Icons.check_circle_outline;
+      bannerText = 'Conflicts resolved — ready to continue';
+    } else {
+      bannerColor = Colors.orange.shade700;
+      bannerIcon = Icons.warning_amber;
+      bannerText = '$operationLabel conflict in progress';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: bannerColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: bannerColor.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(bannerIcon, size: 14, color: bannerColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  bannerText,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: bannerColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (resolved)
+          Row(
+            children: [
+              Expanded(
+                child: _CompactButton(
+                  onPressed: onContinue,
+                  label: 'Continue',
+                  icon: Icons.play_arrow,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _CompactButton(
+                  onPressed: onAbort,
+                  label: 'Abort',
+                  icon: Icons.cancel_outlined,
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: _CompactButton(
+                  onPressed: onAbort,
+                  label: 'Abort',
+                  icon: Icons.cancel_outlined,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _CompactButton(
+                  onPressed: onAskClaude,
+                  label: 'Ask Claude',
+                  icon: Icons.auto_fix_high,
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
 class _SectionDivider extends StatelessWidget {
   const _SectionDivider({
     required this.label,
@@ -710,6 +913,90 @@ class _SectionDivider extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Section divider with an inline popup menu for selecting a value.
+class _SectionDividerWithDropdown extends StatelessWidget {
+  const _SectionDividerWithDropdown({
+    required this.prefix,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    required this.colorScheme,
+    this.tooltips,
+  });
+
+  final String prefix;
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+  final ColorScheme colorScheme;
+  final Map<String, String>? tooltips;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final style = textTheme.labelSmall?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+    );
+
+    final tooltip = tooltips?[value];
+
+    Widget child = GestureDetector(
+      onTap: () {
+        final renderBox =
+            context.findRenderObject() as RenderBox;
+        final offset = renderBox.localToGlobal(Offset.zero);
+        final size = renderBox.size;
+        showMenu<String>(
+          context: context,
+          position: RelativeRect.fromLTRB(
+            offset.dx + size.width / 2,
+            offset.dy + size.height,
+            offset.dx + size.width / 2,
+            offset.dy + size.height,
+          ),
+          items: options
+              .map(
+                (o) => PopupMenuItem<String>(
+                  height: 32,
+                  value: o,
+                  child: Text(o, style: textTheme.bodySmall),
+                ),
+              )
+              .toList(),
+        ).then((selected) {
+          if (selected != null) {
+            onChanged(selected);
+          }
+        });
+      },
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              '$prefix$value',
+              style: style,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Icon(
+            Icons.arrow_drop_down,
+            size: 14,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+
+    if (tooltip != null) {
+      child = Tooltip(message: tooltip, child: child);
+    }
+
+    return child;
   }
 }
 

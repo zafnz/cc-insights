@@ -209,12 +209,28 @@ class WorktreeWatcherService extends ChangeNotifier {
       // Only update if still watching this worktree.
       if (!_watchers.containsKey(path)) return;
 
+      // Detect conflict operation type. Check whenever there are
+      // conflicts OR a previous operation was in progress, so we
+      // can detect the "resolved but not yet continued" state.
+      final hadOperation =
+          worktree.data.conflictOperation != null;
+      MergeOperationType? conflictOp;
+      if (status.hasConflicts || hadOperation) {
+        conflictOp =
+            await _gitService.getConflictOperation(path);
+      }
+
+      if (_disposed) return;
+      if (!_watchers.containsKey(path)) return;
+
       worktree.updateData(worktree.data.copyWith(
         uncommittedFiles: status.uncommittedFiles,
         stagedFiles: status.staged,
         commitsAhead: status.ahead,
         commitsBehind: status.behind,
         hasMergeConflict: status.hasConflicts,
+        conflictOperation: conflictOp,
+        clearConflictOperation: conflictOp == null,
         upstreamBranch: upstream,
         clearUpstreamBranch: upstream == null,
         commitsAheadOfMain: mainComparison?.ahead ?? 0,

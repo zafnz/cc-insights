@@ -273,6 +273,24 @@ class TestGitService implements GitService {
     return 'https://github.com/owner/repo/pull/1';
   }
 
+  @override
+  Future<MergeOperationType?> getConflictOperation(
+    String path,
+  ) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return null;
+  }
+
+  @override
+  Future<void> mergeContinue(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
+  Future<void> rebaseContinue(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;

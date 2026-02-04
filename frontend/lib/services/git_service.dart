@@ -349,6 +349,23 @@ abstract class GitService {
   /// Throws [GitException] on failure.
   Future<void> rebaseAbort(String path);
 
+  /// Continues a merge in progress (after conflicts have been resolved).
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> mergeContinue(String path);
+
+  /// Continues a rebase in progress (after conflicts have been resolved).
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> rebaseContinue(String path);
+
+  /// Detects which type of conflict operation is in progress.
+  ///
+  /// Returns [MergeOperationType.merge] if a merge is in progress,
+  /// [MergeOperationType.rebase] if a rebase is in progress, or null
+  /// if no operation is in progress.
+  Future<MergeOperationType?> getConflictOperation(String path);
+
   /// Analyzes a directory to determine its git repository status.
   ///
   /// Returns a [DirectoryGitInfo] containing:
@@ -924,6 +941,50 @@ class RealGitService implements GitService {
   @override
   Future<void> rebaseAbort(String path) async {
     await _runGit(['rebase', '--abort'], workingDirectory: path);
+  }
+
+  @override
+  Future<void> mergeContinue(String path) async {
+    // git merge --continue is equivalent to git commit
+    await _runGit(
+      ['commit', '--no-edit'],
+      workingDirectory: path,
+    );
+  }
+
+  @override
+  Future<void> rebaseContinue(String path) async {
+    await _runGit(
+      ['rebase', '--continue'],
+      workingDirectory: path,
+    );
+  }
+
+  @override
+  Future<MergeOperationType?> getConflictOperation(
+    String path,
+  ) async {
+    // Check for rebase first (more specific).
+    // git rebase uses .git/rebase-merge or .git/rebase-apply.
+    try {
+      final gitDir = await _runGit(
+        ['rev-parse', '--git-dir'],
+        workingDirectory: path,
+      );
+      final dir = gitDir.trim();
+      final rebaseMerge = Directory('$dir/rebase-merge');
+      final rebaseApply = Directory('$dir/rebase-apply');
+      if (rebaseMerge.existsSync() || rebaseApply.existsSync()) {
+        return MergeOperationType.rebase;
+      }
+      final mergeHead = File('$dir/MERGE_HEAD');
+      if (mergeHead.existsSync()) {
+        return MergeOperationType.merge;
+      }
+    } catch (_) {
+      // If we can't determine, return null.
+    }
+    return null;
   }
 
   @override

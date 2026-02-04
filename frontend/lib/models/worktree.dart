@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../services/git_service.dart';
 import 'chat.dart';
 
 /// Immutable data representing a git worktree.
@@ -42,6 +43,10 @@ class WorktreeData {
   /// Whether this worktree has unresolved merge conflicts.
   final bool hasMergeConflict;
 
+  /// The type of conflict operation in progress (merge or rebase), or null
+  /// if no conflict is in progress.
+  final MergeOperationType? conflictOperation;
+
   /// The upstream branch name (e.g., "origin/main"), or null if none.
   final String? upstreamBranch;
 
@@ -61,6 +66,7 @@ class WorktreeData {
     this.commitsAhead = 0,
     this.commitsBehind = 0,
     this.hasMergeConflict = false,
+    this.conflictOperation,
     this.upstreamBranch,
     this.commitsAheadOfMain = 0,
     this.commitsBehindMain = 0,
@@ -76,6 +82,8 @@ class WorktreeData {
     int? commitsAhead,
     int? commitsBehind,
     bool? hasMergeConflict,
+    MergeOperationType? conflictOperation,
+    bool clearConflictOperation = false,
     String? upstreamBranch,
     bool clearUpstreamBranch = false,
     int? commitsAheadOfMain,
@@ -90,6 +98,9 @@ class WorktreeData {
       commitsAhead: commitsAhead ?? this.commitsAhead,
       commitsBehind: commitsBehind ?? this.commitsBehind,
       hasMergeConflict: hasMergeConflict ?? this.hasMergeConflict,
+      conflictOperation: clearConflictOperation
+          ? null
+          : (conflictOperation ?? this.conflictOperation),
       upstreamBranch:
           clearUpstreamBranch ? null : (upstreamBranch ?? this.upstreamBranch),
       commitsAheadOfMain: commitsAheadOfMain ?? this.commitsAheadOfMain,
@@ -109,6 +120,7 @@ class WorktreeData {
         other.commitsAhead == commitsAhead &&
         other.commitsBehind == commitsBehind &&
         other.hasMergeConflict == hasMergeConflict &&
+        other.conflictOperation == conflictOperation &&
         other.upstreamBranch == upstreamBranch &&
         other.commitsAheadOfMain == commitsAheadOfMain &&
         other.commitsBehindMain == commitsBehindMain;
@@ -125,6 +137,7 @@ class WorktreeData {
       commitsAhead,
       commitsBehind,
       hasMergeConflict,
+      conflictOperation,
       upstreamBranch,
       commitsAheadOfMain,
       commitsBehindMain,
@@ -137,6 +150,7 @@ class WorktreeData {
         'branch: $branch, uncommittedFiles: $uncommittedFiles, '
         'stagedFiles: $stagedFiles, commitsAhead: $commitsAhead, '
         'commitsBehind: $commitsBehind, hasMergeConflict: $hasMergeConflict, '
+        'conflictOperation: $conflictOperation, '
         'upstreamBranch: $upstreamBranch, '
         'commitsAheadOfMain: $commitsAheadOfMain, '
         'commitsBehindMain: $commitsBehindMain)';
