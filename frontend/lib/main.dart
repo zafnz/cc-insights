@@ -29,6 +29,7 @@ import 'services/sdk_message_handler.dart';
 import 'services/worktree_watcher_service.dart';
 import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
+import 'state/theme_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
 import 'widgets/dialog_observer.dart';
@@ -134,6 +135,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Used to suspend keyboard interception while dialogs are open.
   final DialogObserver _dialogObserver = DialogObserver();
 
+  /// Theme state for dynamic theme switching.
+  ThemeState? _themeState;
+
   /// Future for project restoration.
   Future<ProjectState>? _projectFuture;
 
@@ -211,6 +215,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();
 
+    // Create theme state with defaults, then load persisted
+    _themeState = ThemeState();
+    _themeState!.addListener(_onThemeChanged);
+    _loadThemeSettings();
+
     // Create or use injected SdkMessageHandler
     // Pass askAiService for auto-generating chat titles
     _handler =
@@ -227,6 +236,21 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       _validateDirectory(RuntimeConfig.instance.workingDirectory);
     }
     // Otherwise, show welcome screen and wait for user to select a project
+  }
+
+  /// Rebuilds the widget tree when theme settings change.
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Loads persisted theme settings and applies them.
+  Future<void> _loadThemeSettings() async {
+    final loaded = await ThemeState.load();
+    if (!mounted) return;
+    _themeState!.applyLoaded(
+      loaded.seedColor,
+      loaded.themeMode,
+    );
   }
 
   /// Validates the directory and determines if we need to show a prompt.
@@ -320,6 +344,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _themeState?.removeListener(_onThemeChanged);
     // Only dispose services we created, not injected ones
     if (widget.backendService == null) {
       _backend?.dispose();
@@ -407,7 +432,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
       home: WelcomeScreen(
         onProjectSelected: _onProjectSelected,
       ),
@@ -421,7 +446,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
       home: DirectoryValidationScreen(
         gitInfo: _pendingValidationInfo!,
         onResult: _handleValidationResult,
@@ -486,7 +511,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
       home: const Scaffold(
         body: Center(
           child: Column(
@@ -568,6 +593,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<ScriptExecutionService>(
           create: (_) => ScriptExecutionService(),
         ),
+        // Theme state for dynamic theme switching
+        ChangeNotifierProvider<ThemeState>.value(
+          value: _themeState!,
+        ),
         // Dialog observer for keyboard focus management
         Provider<DialogObserver>.value(value: _dialogObserver),
       ],
@@ -577,7 +606,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(Brightness.light),
           darkTheme: _buildTheme(Brightness.dark),
-          themeMode: ThemeMode.system,
+          themeMode: _themeState?.themeMode ?? ThemeMode.system,
           navigatorObservers: [_dialogObserver],
           home: const MainScreen(),
           routes: {'/replay': (context) => const ReplayDemoScreen()},
@@ -589,7 +618,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Build a compact desktop-appropriate theme.
   ThemeData _buildTheme(Brightness brightness) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
+      seedColor: _themeState?.seedColor ?? Colors.deepPurple,
       brightness: brightness,
     );
 

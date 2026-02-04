@@ -6,3 +6,4 @@ library;
 
 export 'file_manager_state.dart';
 export 'selection_state.dart';
+export 'theme_state.dart';
