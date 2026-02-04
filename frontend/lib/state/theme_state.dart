@@ -25,14 +25,21 @@ class ThemeState extends ChangeNotifier {
   ThemeState({
     Color seedColor = const Color(0xFF673AB7), // deepPurple
     ThemeMode themeMode = ThemeMode.system,
+    Color? inputTextColor,
   })  : _seedColor = seedColor,
-        _themeMode = themeMode;
+        _themeMode = themeMode,
+        _inputTextColor = inputTextColor;
 
   Color _seedColor;
   ThemeMode _themeMode;
+  Color? _inputTextColor;
 
   Color get seedColor => _seedColor;
   ThemeMode get themeMode => _themeMode;
+
+  /// Custom color for user input message bubbles.
+  /// When null, falls back to [ColorScheme.primary].
+  Color? get inputTextColor => _inputTextColor;
 
   /// The preset matching the current seed color, or null if
   /// using a custom color.
@@ -46,6 +53,12 @@ class ThemeState extends ChangeNotifier {
   void setSeedColor(Color color) {
     if (_seedColor.value == color.value) return;
     _seedColor = color;
+    notifyListeners();
+  }
+
+  void setInputTextColor(Color? color) {
+    if (_inputTextColor?.value == color?.value) return;
+    _inputTextColor = color;
     notifyListeners();
   }
 

@@ -87,6 +87,16 @@ class SettingsService extends ChangeNotifier {
         defaultValue: 0xFF673AB7,
       ),
       SettingDefinition(
+        key: 'appearance.inputTextColor',
+        title: 'Input Text Color',
+        description:
+            'Custom color for your message bubbles. '
+            'Set to Default to use the accent color.',
+        type: SettingType.colorPicker,
+        // 0 means "use default" (accent/primary color)
+        defaultValue: 0,
+      ),
+      SettingDefinition(
         key: 'appearance.bashToolSummary',
         title: 'Bash Tool Summary',
         description:

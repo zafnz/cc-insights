@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:cc_insights_v2/models/output_entry.dart';
+import 'package:cc_insights_v2/state/theme_state.dart';
 import 'package:cc_insights_v2/widgets/output_entries/user_input_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 import '../test_helpers.dart';
 
@@ -22,10 +24,13 @@ void main() {
   ]);
 
   Widget createTestApp({required UserInputEntry entry}) {
-    return MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: UserInputEntryWidget(entry: entry),
+    return ChangeNotifierProvider(
+      create: (_) => ThemeState(),
+      child: MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: UserInputEntryWidget(entry: entry),
+          ),
         ),
       ),
     );

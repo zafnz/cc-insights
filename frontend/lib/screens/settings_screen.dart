@@ -435,6 +435,7 @@ class _SettingRow extends StatelessWidget {
       SettingType.colorPicker => _ColorPickerInput(
           value: (value as num).toInt(),
           onChanged: onChanged,
+          allowDefault: definition.defaultValue == 0,
         ),
     };
   }
@@ -669,10 +670,15 @@ class _ColorPickerInput extends StatefulWidget {
   const _ColorPickerInput({
     required this.value,
     required this.onChanged,
+    this.allowDefault = false,
   });
 
   final int value;
   final ValueChanged<dynamic> onChanged;
+
+  /// When true, shows a "Default" swatch that sets the value
+  /// to 0 (meaning "use the accent color").
+  final bool allowDefault;
 
   @override
   State<_ColorPickerInput> createState() =>
@@ -731,11 +737,20 @@ class _ColorPickerInputState extends State<_ColorPickerInput> {
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (widget.allowDefault)
+              _DefaultColorSwatch(
+                isSelected: widget.value == 0,
+                onTap: () {
+                  widget.onChanged(0);
+                  setState(() => _showHexInput = false);
+                },
+              ),
             for (final preset in ThemePresetColor.values)
               _ColorSwatch(
                 color: preset.color,
                 tooltip: preset.label,
                 isSelected:
+                    widget.value != 0 &&
                     preset.color.value == widget.value,
                 onTap: () {
                   widget.onChanged(preset.color.value);
@@ -850,6 +865,7 @@ class _ColorPickerInputState extends State<_ColorPickerInput> {
   }
 
   bool _isCustomColor(Color color) {
+    if (widget.value == 0) return false;
     return ThemePresetColor.values
         .every((p) => p.color.value != color.value);
   }
@@ -907,6 +923,61 @@ class _ColorSwatch extends StatelessWidget {
                       : Colors.white,
                 )
               : null,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// "Default" swatch (uses accent color)
+// ---------------------------------------------------------------------
+
+class _DefaultColorSwatch extends StatelessWidget {
+  const _DefaultColorSwatch({
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final borderColor = colorScheme.outline;
+
+    return Tooltip(
+      message: 'Default (accent color)',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: isSelected
+                ? Border.all(
+                    color: borderColor,
+                    width: 2.5,
+                  )
+                : Border.all(
+                    color: borderColor
+                        .withValues(alpha: 0.3),
+                  ),
+          ),
+          child: isSelected
+              ? Icon(
+                  Icons.check,
+                  size: 16,
+                  color: colorScheme.onSurface,
+                )
+              : Icon(
+                  Icons.auto_awesome,
+                  size: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
         ),
       ),
     );

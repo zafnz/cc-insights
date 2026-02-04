@@ -254,6 +254,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _themeState!.setThemeMode(
       ThemeState.parseThemeMode(modeStr),
     );
+    final inputColorValue = _settingsService!
+        .getValue<int>('appearance.inputTextColor');
+    _themeState!.setInputTextColor(
+      inputColorValue == 0 ? null : Color(inputColorValue),
+    );
   }
 
   /// Validates the directory and determines if we need to show a prompt.

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/output_entry.dart';
+import '../../state/theme_state.dart';
 
 /// Displays a user input entry.
 class UserInputEntryWidget extends StatelessWidget {
@@ -12,12 +14,16 @@ class UserInputEntryWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final themeState = context.watch<ThemeState>();
+    final bubbleColor =
+        themeState.inputTextColor ?? colorScheme.primary;
+    final onBubbleColor = _contrastColor(bubbleColor);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.primary,
+        color: bubbleColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -30,14 +36,14 @@ class UserInputEntryWidget extends StatelessWidget {
               Icon(
                 Icons.person_outline,
                 size: 16,
-                color: colorScheme.onPrimary,
+                color: onBubbleColor,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: SelectableText(
                   entry.text,
                   style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onPrimary,
+                    color: onBubbleColor,
                   ),
                 ),
               ),
@@ -58,6 +64,13 @@ class UserInputEntryWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Returns white or black depending on the luminance of [color].
+Color _contrastColor(Color color) {
+  return color.computeLuminance() > 0.5
+      ? Colors.black
+      : Colors.white;
 }
 
 /// Displays a thumbnail of an attached image.

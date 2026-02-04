@@ -50,10 +50,12 @@ void main() {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
+      // Two color pickers (Accent Color + Input Text Color)
+      // each show all presets.
       for (final preset in ThemePresetColor.values) {
         expect(
           find.byTooltip(preset.label),
-          findsOneWidget,
+          findsNWidgets(2),
         );
       }
     });
@@ -63,7 +65,9 @@ void main() {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      await tester.tap(find.byTooltip('Blue'));
+      // Two "Blue" swatches exist; the first belongs to
+      // the Accent Color picker.
+      await tester.tap(find.byTooltip('Blue').first);
       await tester.pump();
 
       final value =
@@ -78,9 +82,10 @@ void main() {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
+      // Two color pickers each have a custom color button.
       expect(
         find.byTooltip('Custom color'),
-        findsOneWidget,
+        findsNWidgets(2),
       );
     });
 
@@ -89,7 +94,7 @@ void main() {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      await tester.tap(find.byTooltip('Custom color'));
+      await tester.tap(find.byTooltip('Custom color').first);
       await tester.pump();
 
       // There may be other TextFields on the screen

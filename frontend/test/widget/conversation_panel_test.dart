@@ -8,6 +8,7 @@ import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
+import 'package:cc_insights_v2/state/theme_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
 import 'package:checks/checks.dart';
@@ -295,6 +296,7 @@ void main() {
             ChangeNotifierProvider.value(value: selectionState),
             ChangeNotifierProvider<BackendService>.value(value: fakeBackend),
             Provider<SdkMessageHandler>.value(value: fakeMessageHandler),
+            ChangeNotifierProvider(create: (_) => ThemeState()),
           ],
           child: const Scaffold(
             body: KeyboardFocusManager(
