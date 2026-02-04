@@ -229,6 +229,66 @@ class _SettingsContent extends StatelessWidget {
   final SettingCategory category;
   final SettingsService settings;
 
+  void _handleSettingChanged(
+    BuildContext context,
+    SettingsService settings,
+    SettingDefinition definition,
+    dynamic value,
+  ) {
+    if (definition.key == 'session.defaultPermissionMode' &&
+        value == 'bypassPermissions') {
+      _showBypassWarning(context, settings, definition.key);
+      return;
+    }
+    settings.setValue(definition.key, value);
+  }
+
+  static void _showBypassWarning(
+    BuildContext context,
+    SettingsService settings,
+    String key,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: Theme.of(ctx).colorScheme.error,
+          size: 48,
+        ),
+        title: const Text('Enable Bypass Mode?'),
+        content: const SizedBox(
+          width: 400,
+          child: Text(
+            'Bypass mode approves all tool operations without asking '
+            'for permission. This means Claude can read, write, and '
+            'delete files, execute arbitrary commands, and access '
+            'the network without any confirmation.\n\n'
+            'This is dangerous and should only be used in isolated '
+            'environments where you fully trust the operations '
+            'being performed.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              settings.setValue(key, 'bypassPermissions');
+            },
+            child: const Text('Enable Bypass'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -263,7 +323,12 @@ class _SettingsContent extends StatelessWidget {
             definition: category.settings[i],
             value: settings.getValue(category.settings[i].key),
             onChanged: (value) {
-              settings.setValue(category.settings[i].key, value);
+              _handleSettingChanged(
+                context,
+                settings,
+                category.settings[i],
+                value,
+              );
             },
           ),
           if (i < category.settings.length - 1)

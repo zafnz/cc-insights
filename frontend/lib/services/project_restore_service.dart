@@ -234,19 +234,8 @@ class ProjectRestoreService {
 
   /// Applies ChatMeta settings to a ChatState.
   void _applyMetaToChat(ChatState chat, ChatMeta meta) {
-    // Find the matching model enum
-    final model = ClaudeModel.values.firstWhere(
-      (m) => m.apiName == meta.model,
-      orElse: () => ClaudeModel.opus,
-    );
-    chat.setModel(model);
-
-    // Find the matching permission mode enum
-    final permissionMode = PermissionMode.values.firstWhere(
-      (p) => p.apiName == meta.permissionMode,
-      orElse: () => PermissionMode.defaultMode,
-    );
-    chat.setPermissionMode(permissionMode);
+    chat.setModel(ClaudeModel.fromApiName(meta.model));
+    chat.setPermissionMode(PermissionMode.fromApiName(meta.permissionMode));
   }
 
   /// Creates a new project and saves it to persistence.

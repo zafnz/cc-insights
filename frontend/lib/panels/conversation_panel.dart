@@ -1042,9 +1042,14 @@ class WelcomeCard extends StatelessWidget {
       children: [
         // Header with model/permission selectors
         _WelcomeHeader(
-          model: worktree?.welcomeModel ?? ClaudeModel.opus,
-          permissionMode:
-              worktree?.welcomePermissionMode ?? PermissionMode.defaultMode,
+          model: worktree?.welcomeModel ??
+              ClaudeModel.fromApiName(
+                RuntimeConfig.instance.defaultModel,
+              ),
+          permissionMode: worktree?.welcomePermissionMode ??
+              PermissionMode.fromApiName(
+                RuntimeConfig.instance.defaultPermissionMode,
+              ),
           onModelChanged: (model) => worktree?.welcomeModel = model,
           onPermissionChanged: (mode) =>
               worktree?.welcomePermissionMode = mode,

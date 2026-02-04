@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../services/git_service.dart';
+import '../services/runtime_config.dart';
 import 'chat.dart';
 
 /// Immutable data representing a git worktree.
@@ -180,10 +181,18 @@ class WorktreeState extends ChangeNotifier {
   String _welcomeDraftText = '';
 
   /// Model selected in the welcome screen before any chat is created.
-  ClaudeModel _welcomeModel = ClaudeModel.opus;
+  ///
+  /// Initialized from [RuntimeConfig.instance.defaultModel].
+  ClaudeModel _welcomeModel = ClaudeModel.fromApiName(
+    RuntimeConfig.instance.defaultModel,
+  );
 
   /// Permission mode selected in the welcome screen before chat creation.
-  PermissionMode _welcomePermissionMode = PermissionMode.defaultMode;
+  ///
+  /// Initialized from [RuntimeConfig.instance.defaultPermissionMode].
+  PermissionMode _welcomePermissionMode = PermissionMode.fromApiName(
+    RuntimeConfig.instance.defaultPermissionMode,
+  );
 
   /// Creates a [WorktreeState] with the given initial data.
   ///

@@ -8,6 +8,7 @@ import '../services/backend_service.dart';
 import '../services/notification_service.dart';
 import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
+import '../services/runtime_config.dart';
 import '../services/sdk_message_handler.dart';
 import 'agent.dart';
 import 'context_tracker.dart';
@@ -27,6 +28,16 @@ enum ClaudeModel {
 
   /// API name sent to the backend.
   final String apiName;
+
+  /// Finds a [ClaudeModel] by its API name string.
+  ///
+  /// Falls back to [opus] if no match is found.
+  static ClaudeModel fromApiName(String apiName) {
+    return ClaudeModel.values.firstWhere(
+      (m) => m.apiName == apiName,
+      orElse: () => ClaudeModel.opus,
+    );
+  }
 }
 
 /// Permission modes for tool execution.
@@ -50,6 +61,16 @@ enum PermissionMode {
 
   /// API name sent to the backend.
   final String apiName;
+
+  /// Finds a [PermissionMode] by its API name string.
+  ///
+  /// Falls back to [defaultMode] if no match is found.
+  static PermissionMode fromApiName(String apiName) {
+    return PermissionMode.values.firstWhere(
+      (p) => p.apiName == apiName,
+      orElse: () => PermissionMode.defaultMode,
+    );
+  }
 }
 
 /// Immutable data class representing a chat.
@@ -251,10 +272,18 @@ class ChatState extends ChangeNotifier {
   String? _selectedConversationId;
 
   /// The selected Claude model for this chat.
-  ClaudeModel _model = ClaudeModel.opus;
+  ///
+  /// Initialized from [RuntimeConfig.instance.defaultModel].
+  ClaudeModel _model = ClaudeModel.fromApiName(
+    RuntimeConfig.instance.defaultModel,
+  );
 
   /// The permission mode for this chat.
-  PermissionMode _permissionMode = PermissionMode.defaultMode;
+  ///
+  /// Initialized from [RuntimeConfig.instance.defaultPermissionMode].
+  PermissionMode _permissionMode = PermissionMode.fromApiName(
+    RuntimeConfig.instance.defaultPermissionMode,
+  );
 
   /// The last SDK session ID for this chat, used for session resume.
   ///

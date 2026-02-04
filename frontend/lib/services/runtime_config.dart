@@ -79,7 +79,7 @@ class RuntimeConfig extends ChangeNotifier {
   bool _desktopNotifications = true;
 
   /// Default Claude model for new chats.
-  String _defaultModel = 'sonnet';
+  String _defaultModel = 'opus';
 
   /// Default permission mode for new chats.
   String _defaultPermissionMode = 'default';
@@ -337,7 +337,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._aiAssistanceModel = 'haiku';
     _instance._aiChatLabelModel = 'haiku';
     _instance._desktopNotifications = true;
-    _instance._defaultModel = 'sonnet';
+    _instance._defaultModel = 'opus';
     _instance._defaultPermissionMode = 'default';
     _instance._debugSdkLogging = false;
   }

@@ -199,7 +199,7 @@ class SettingsService extends ChangeNotifier {
             '`Opus` is the most capable, `Sonnet` balances speed '
             'and capability, `Haiku` is the fastest.',
         type: SettingType.dropdown,
-        defaultValue: 'sonnet',
+        defaultValue: 'opus',
         options: [
           SettingOption(value: 'haiku', label: 'Haiku'),
           SettingOption(value: 'sonnet', label: 'Sonnet'),

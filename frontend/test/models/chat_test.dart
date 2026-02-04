@@ -5,11 +5,84 @@ import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/conversation.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
+import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('ClaudeModel.fromApiName', () {
+    test('resolves haiku', () {
+      check(ClaudeModel.fromApiName('haiku')).equals(ClaudeModel.haiku);
+    });
+
+    test('resolves sonnet', () {
+      check(ClaudeModel.fromApiName('sonnet')).equals(ClaudeModel.sonnet);
+    });
+
+    test('resolves opus', () {
+      check(ClaudeModel.fromApiName('opus')).equals(ClaudeModel.opus);
+    });
+
+    test('falls back to opus for unknown', () {
+      check(ClaudeModel.fromApiName('unknown')).equals(ClaudeModel.opus);
+    });
+  });
+
+  group('PermissionMode.fromApiName', () {
+    test('resolves default', () {
+      check(PermissionMode.fromApiName('default'))
+          .equals(PermissionMode.defaultMode);
+    });
+
+    test('resolves acceptEdits', () {
+      check(PermissionMode.fromApiName('acceptEdits'))
+          .equals(PermissionMode.acceptEdits);
+    });
+
+    test('resolves plan', () {
+      check(PermissionMode.fromApiName('plan'))
+          .equals(PermissionMode.plan);
+    });
+
+    test('resolves bypassPermissions', () {
+      check(PermissionMode.fromApiName('bypassPermissions'))
+          .equals(PermissionMode.bypass);
+    });
+
+    test('falls back to defaultMode for unknown', () {
+      check(PermissionMode.fromApiName('unknown'))
+          .equals(PermissionMode.defaultMode);
+    });
+  });
+
+  group('ChatState default model/permission from RuntimeConfig', () {
+    setUp(() {
+      RuntimeConfig.resetForTesting();
+      RuntimeConfig.initialize([]);
+    });
+
+    test('uses RuntimeConfig defaults', () {
+      // RuntimeConfig defaults: model='opus', permissionMode='default'
+      final chat = ChatState(
+        ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
+      );
+      check(chat.model).equals(ClaudeModel.opus);
+      check(chat.permissionMode).equals(PermissionMode.defaultMode);
+    });
+
+    test('picks up non-default RuntimeConfig values', () {
+      RuntimeConfig.instance.defaultModel = 'haiku';
+      RuntimeConfig.instance.defaultPermissionMode = 'acceptEdits';
+
+      final chat = ChatState(
+        ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
+      );
+      check(chat.model).equals(ClaudeModel.haiku);
+      check(chat.permissionMode).equals(PermissionMode.acceptEdits);
+    });
+  });
+
   group('ChatData', () {
     group('create() factory', () {
       test('generates unique ID based on timestamp', () {

@@ -310,5 +310,94 @@ void main() {
         expect(find.text('Command'), findsWidgets);
       });
     });
+
+    group('bypass permission warning', () {
+      testWidgets('shows warning dialog when selecting Bypass',
+          (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        // Navigate to Session category
+        await tester.tap(find.text('Session'));
+        await safePumpAndSettle(tester);
+
+        // Find the permission mode dropdown (second dropdown in Session)
+        final dropdowns = find.byType(DropdownButton<String>);
+        // There should be 2 dropdowns: Default Model and Permission Mode
+        expect(dropdowns, findsNWidgets(2));
+        await tester.tap(dropdowns.last);
+        await safePumpAndSettle(tester);
+
+        // Select Bypass
+        await tester.tap(find.text('Bypass').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Warning dialog should appear
+        expect(find.text('Enable Bypass Mode?'), findsOneWidget);
+        expect(
+          find.textContaining('approves all tool operations'),
+          findsOneWidget,
+        );
+        expect(find.text('Cancel'), findsOneWidget);
+        expect(find.text('Enable Bypass'), findsOneWidget);
+      });
+
+      testWidgets('cancel does not change value', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Session'));
+        await safePumpAndSettle(tester);
+
+        final dropdowns = find.byType(DropdownButton<String>);
+        await tester.tap(dropdowns.last);
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Bypass').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Cancel the dialog
+        await tester.tap(find.text('Cancel'));
+        await safePumpAndSettle(tester);
+
+        // Value should still be 'default'
+        expect(
+          settingsService.getValue<String>(
+            'session.defaultPermissionMode',
+          ),
+          'default',
+        );
+      });
+
+      testWidgets('confirm sets bypass value', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Session'));
+        await safePumpAndSettle(tester);
+
+        final dropdowns = find.byType(DropdownButton<String>);
+        await tester.tap(dropdowns.last);
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Bypass').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Confirm the dialog
+        await tester.tap(find.text('Enable Bypass'));
+        await safePumpAndSettle(tester);
+
+        // Value should now be 'bypassPermissions'
+        expect(
+          settingsService.getValue<String>(
+            'session.defaultPermissionMode',
+          ),
+          'bypassPermissions',
+        );
+      });
+    });
   });
 }
