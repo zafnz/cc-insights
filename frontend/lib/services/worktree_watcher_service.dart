@@ -248,6 +248,7 @@ class WorktreeWatcherService extends ChangeNotifier {
       if (!_watchers.containsKey(path)) return;
 
 
+
       worktree.updateData(worktree.data.copyWith(
         uncommittedFiles: status.uncommittedFiles,
         stagedFiles: status.staged,

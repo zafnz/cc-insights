@@ -308,6 +308,7 @@ class TestGitService implements GitService {
   }
 
 
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;
