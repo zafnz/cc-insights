@@ -1,4 +1,7 @@
 #!/bin/bash
 echo "initialising worktree..."
-# Don't need to do anything anymore. Yay.
+cd frontend
+echo "getting flutter packages..."
+flutter pub get
+cd ..
 echo "initialisation complete."
