@@ -10,6 +10,9 @@ enum SettingType {
 
   /// Numeric input field.
   number,
+
+  /// Color picker with presets and custom hex input.
+  colorPicker,
 }
 
 /// A single option in a dropdown setting.

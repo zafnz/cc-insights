@@ -55,18 +55,31 @@ void main() {
       check(count).equals(0);
     });
 
-    test('applyLoaded sets both values and notifies once',
-        () {
-      final state = ThemeState();
-      var count = 0;
-      state.addListener(() => count++);
+    group('parseThemeMode', () {
+      test('parses light', () {
+        check(ThemeState.parseThemeMode('light'))
+            .equals(ThemeMode.light);
+      });
 
-      state.applyLoaded(Colors.teal, ThemeMode.light);
+      test('parses dark', () {
+        check(ThemeState.parseThemeMode('dark'))
+            .equals(ThemeMode.dark);
+      });
 
-      check(state.seedColor.value)
-          .equals(Colors.teal.value);
-      check(state.themeMode).equals(ThemeMode.light);
-      check(count).equals(1);
+      test('parses system', () {
+        check(ThemeState.parseThemeMode('system'))
+            .equals(ThemeMode.system);
+      });
+
+      test('defaults to system for unknown', () {
+        check(ThemeState.parseThemeMode('unknown'))
+            .equals(ThemeMode.system);
+      });
+
+      test('defaults to system for null', () {
+        check(ThemeState.parseThemeMode(null))
+            .equals(ThemeMode.system);
+      });
     });
 
     group('activePreset', () {

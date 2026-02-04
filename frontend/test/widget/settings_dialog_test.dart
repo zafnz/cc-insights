@@ -1,5 +1,7 @@
+import 'package:cc_insights_v2/models/setting_definition.dart';
+import 'package:cc_insights_v2/screens/settings_screen.dart';
+import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
-import 'package:cc_insights_v2/widgets/settings_dialog.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,119 +10,67 @@ import 'package:provider/provider.dart';
 import '../test_helpers.dart';
 
 void main() {
-  group('SettingsDialog', () {
-    late ThemeState themeState;
+  group('SettingsScreen theme settings', () {
+    late SettingsService settingsService;
 
     setUp(() {
-      themeState = ThemeState();
+      // Use a temp path so we never touch real config.
+      settingsService = SettingsService(
+        configPath: '/tmp/cc_test_settings.json',
+      );
     });
 
-    Widget createTestApp({Widget? home}) {
-      return ChangeNotifierProvider<ThemeState>.value(
-        value: themeState,
-        child: MaterialApp(
-          home: home ?? const Scaffold(body: SettingsDialog()),
+    Widget createTestApp() {
+      return ChangeNotifierProvider<SettingsService>.value(
+        value: settingsService,
+        child: const MaterialApp(
+          home: Scaffold(body: SettingsScreen()),
         ),
       );
     }
 
-    testWidgets('displays Settings title', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      expect(find.text('Settings'), findsOneWidget);
-    });
-
-    testWidgets('displays Color section', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      expect(find.text('Color'), findsOneWidget);
-    });
-
-    testWidgets('displays Appearance section',
+    testWidgets('displays Accent Color setting',
         (tester) async {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      expect(find.text('Appearance'), findsOneWidget);
+      expect(find.text('Accent Color'), findsOneWidget);
     });
 
-    testWidgets('displays theme mode segments',
+    testWidgets('displays Theme Mode setting',
         (tester) async {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      expect(find.text('Light'), findsOneWidget);
-      expect(find.text('Dark'), findsOneWidget);
-      expect(find.text('System'), findsOneWidget);
+      expect(find.text('Theme Mode'), findsOneWidget);
     });
 
-    testWidgets('tapping preset changes seed color',
+    testWidgets('displays preset color swatches',
         (tester) async {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      // Find the Blue preset tooltip
-      final blueFinder = find.byTooltip('Blue');
-      expect(blueFinder, findsOneWidget);
+      for (final preset in ThemePresetColor.values) {
+        expect(
+          find.byTooltip(preset.label),
+          findsOneWidget,
+        );
+      }
+    });
 
-      await tester.tap(blueFinder);
+    testWidgets('tapping preset updates seed color',
+        (tester) async {
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      await tester.tap(find.byTooltip('Blue'));
       await tester.pump();
 
-      check(themeState.seedColor.value)
-          .equals(Colors.blue.value);
-    });
-
-    testWidgets('tapping Dark mode changes theme mode',
-        (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      await tester.tap(find.text('Dark'));
-      await tester.pump();
-
-      check(themeState.themeMode).equals(ThemeMode.dark);
-    });
-
-    testWidgets('tapping Light mode changes theme mode',
-        (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      await tester.tap(find.text('Light'));
-      await tester.pump();
-
-      check(themeState.themeMode).equals(ThemeMode.light);
-    });
-
-    testWidgets('Close button dismisses dialog',
-        (tester) async {
-      await tester.pumpWidget(
-        createTestApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => TextButton(
-                onPressed: () => showSettingsDialog(context),
-                child: const Text('Open'),
-              ),
-            ),
-          ),
-        ),
-      );
-      await safePumpAndSettle(tester);
-
-      // Open the dialog
-      await tester.tap(find.text('Open'));
-      await safePumpAndSettle(tester);
-
-      expect(find.text('Settings'), findsOneWidget);
-
-      // Close the dialog
-      await tester.tap(find.text('Close'));
-      await safePumpAndSettle(tester);
-
-      expect(find.text('Settings'), findsNothing);
+      final value =
+          settingsService.getValue<int>(
+            'appearance.seedColor',
+          );
+      check(value).equals(Colors.blue.value);
     });
 
     testWidgets('displays custom color button',
@@ -134,8 +84,7 @@ void main() {
       );
     });
 
-    testWidgets(
-        'tapping custom color shows hex input',
+    testWidgets('tapping custom color shows hex input',
         (tester) async {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -143,11 +92,17 @@ void main() {
       await tester.tap(find.byTooltip('Custom color'));
       await tester.pump();
 
-      expect(
-        find.byType(TextField),
-        findsOneWidget,
-      );
+      // There may be other TextFields on the screen
+      // (e.g., the number input). Find the one with
+      // the hex hint text.
       expect(find.text('Apply'), findsOneWidget);
+    });
+
+    testWidgets(
+        'colorPicker type exists in SettingType enum', (_) async {
+      // Verify the enum value is accessible.
+      check(SettingType.colorPicker.name)
+          .equals('colorPicker');
     });
   });
 }

@@ -13,14 +13,11 @@ class UserInputEntryWidget extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    // Brighter purple for user messages
-    const userMessagePurple = Color(0xFF3D2A54);
-
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: userMessagePurple,
+        color: colorScheme.primary,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -33,13 +30,15 @@ class UserInputEntryWidget extends StatelessWidget {
               Icon(
                 Icons.person_outline,
                 size: 16,
-                color: colorScheme.primary,
+                color: colorScheme.onPrimary,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: SelectableText(
                   entry.text,
-                  style: textTheme.bodyMedium,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onPrimary,
+                  ),
                 ),
               ),
             ],

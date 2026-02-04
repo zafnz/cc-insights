@@ -258,14 +258,16 @@ void main() {
         await tester.pumpWidget(createTestApp(entry: entry));
         await safePumpAndSettle(tester);
 
-        // Assert - find the container with the user message styling
+        // Assert - find the container with the themed primary color
+        final primaryColor = Theme.of(
+          tester.element(find.byType(UserInputEntryWidget)),
+        ).colorScheme.primary;
         final containers = tester
             .widgetList<Container>(find.byType(Container))
             .where((container) {
           final decoration = container.decoration;
           if (decoration is BoxDecoration) {
-            // Check for the user message purple color
-            return decoration.color == const Color(0xFF3D2A54);
+            return decoration.color == primaryColor;
           }
           return false;
         });

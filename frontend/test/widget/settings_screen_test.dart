@@ -123,14 +123,18 @@ void main() {
     group('toggle setting', () {
       testWidgets('renders switch widget', (tester) async {
         await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
 
         final switches = tester.widgetList<Switch>(find.byType(Switch));
         expect(switches.isNotEmpty, isTrue);
+
+        await tester.binding.setSurfaceSize(null);
       });
 
       testWidgets('toggling updates value', (tester) async {
         await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
 
         expect(
@@ -138,7 +142,15 @@ void main() {
           false,
         );
 
-        // Show Timestamps is the second toggle in Appearance
+        // Scroll down to Show Timestamps and tap its switch
+        await tester.scrollUntilVisible(
+          find.text('Show Timestamps'),
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
+        // Find the switch closest to Show Timestamps text.
+        // Relative File Paths is the first toggle, Show Timestamps is
+        // the second toggle in Appearance.
         final switches = find.byType(Switch);
         await tester.tap(switches.at(1));
         await safePumpAndSettle(tester);
@@ -147,6 +159,8 @@ void main() {
           settingsService.getValue<bool>('appearance.showTimestamps'),
           true,
         );
+
+        await tester.binding.setSurfaceSize(null);
       });
     });
 
@@ -162,10 +176,20 @@ void main() {
 
       testWidgets('changing dropdown updates value', (tester) async {
         await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
 
-        // Find and tap the dropdown button specifically
-        final dropdown = find.byType(DropdownButton<String>).first;
+        // Scroll to Bash Tool Summary dropdown (second dropdown
+        // after Theme Mode)
+        await tester.scrollUntilVisible(
+          find.text('Bash Tool Summary'),
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
+
+        // Find and tap the second dropdown (Bash Tool Summary;
+        // first is Theme Mode)
+        final dropdown = find.byType(DropdownButton<String>).at(1);
         await tester.tap(dropdown);
         await safePumpAndSettle(tester);
 
@@ -177,6 +201,8 @@ void main() {
           settingsService.getValue<String>('appearance.bashToolSummary'),
           'command',
         );
+
+        await tester.binding.setSurfaceSize(null);
       });
     });
 

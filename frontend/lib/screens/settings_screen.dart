@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
 import '../services/settings_service.dart';
+import '../state/theme_state.dart';
 
 /// Settings screen with sidebar navigation and generic setting renderers.
 class SettingsScreen extends StatefulWidget {
@@ -295,6 +296,31 @@ class _SettingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // Color picker uses a stacked layout (title + description
+    // above, picker below) because it needs more width.
+    if (definition.type == SettingType.colorPicker) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 700),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              definition.title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 6),
+            _DescriptionText(definition.description),
+            const SizedBox(height: 12),
+            _buildInput(context),
+          ],
+        ),
+      );
+    }
+
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 700),
       child: Row(
@@ -334,6 +360,10 @@ class _SettingRow extends StatelessWidget {
           value: (value as num).toInt(),
           min: definition.min ?? 0,
           max: definition.max ?? 999,
+          onChanged: onChanged,
+        ),
+      SettingType.colorPicker => _ColorPickerInput(
+          value: (value as num).toInt(),
           onChanged: onChanged,
         ),
     };
@@ -556,6 +586,258 @@ class _NumberInputState extends State<_NumberInput> {
         ),
         onSubmitted: _submit,
         onTapOutside: (_) => _submit(_controller.text),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// Color picker input
+// ---------------------------------------------------------------------
+
+class _ColorPickerInput extends StatefulWidget {
+  const _ColorPickerInput({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final int value;
+  final ValueChanged<dynamic> onChanged;
+
+  @override
+  State<_ColorPickerInput> createState() =>
+      _ColorPickerInputState();
+}
+
+class _ColorPickerInputState extends State<_ColorPickerInput> {
+  bool _showHexInput = false;
+  late TextEditingController _hexController;
+  Color? _previewColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _hexController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  void _onHexChanged(String value) {
+    final color = _parseHex(value);
+    setState(() => _previewColor = color);
+  }
+
+  void _applyHex() {
+    if (_previewColor != null) {
+      widget.onChanged(_previewColor!.value);
+      setState(() => _showHexInput = false);
+    }
+  }
+
+  static Color? _parseHex(String input) {
+    final hex = input.trim().replaceFirst('#', '');
+    if (hex.length == 6 &&
+        RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
+      return Color(int.parse('FF$hex', radix: 16));
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor =
+        Theme.of(context).colorScheme.outline;
+    final currentColor = Color(widget.value);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final preset in ThemePresetColor.values)
+              _ColorSwatch(
+                color: preset.color,
+                tooltip: preset.label,
+                isSelected:
+                    preset.color.value == widget.value,
+                onTap: () {
+                  widget.onChanged(preset.color.value);
+                  setState(() => _showHexInput = false);
+                },
+              ),
+            // Custom color button
+            Tooltip(
+              message: 'Custom color',
+              child: InkWell(
+                onTap: () => setState(
+                  () => _showHexInput = !_showHexInput,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const SweepGradient(
+                      colors: [
+                        Colors.red,
+                        Colors.orange,
+                        Colors.yellow,
+                        Colors.green,
+                        Colors.blue,
+                        Colors.purple,
+                        Colors.red,
+                      ],
+                    ),
+                    border: _isCustomColor(currentColor)
+                        ? Border.all(
+                            color: borderColor,
+                            width: 2.5,
+                          )
+                        : Border.all(
+                            color: borderColor
+                                .withValues(alpha: 0.3),
+                          ),
+                  ),
+                  child: _isCustomColor(currentColor)
+                      ? const Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_showHexInput) ...[
+          const SizedBox(height: 12),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_previewColor != null)
+                Container(
+                  width: 24,
+                  height: 24,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: _previewColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: borderColor
+                          .withValues(alpha: 0.3),
+                    ),
+                  ),
+                ),
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _hexController,
+                  decoration: const InputDecoration(
+                    hintText: '#FF5722',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(fontSize: 13),
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(7),
+                  ],
+                  onChanged: _onHexChanged,
+                  onSubmitted: (_) => _applyHex(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed:
+                    _previewColor != null
+                        ? _applyHex
+                        : null,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                  ),
+                  minimumSize: const Size(0, 36),
+                ),
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool _isCustomColor(Color color) {
+    return ThemePresetColor.values
+        .every((p) => p.color.value != color.value);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Color swatch circle
+// ---------------------------------------------------------------------
+
+class _ColorSwatch extends StatelessWidget {
+  const _ColorSwatch({
+    required this.color,
+    required this.tooltip,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final Color color;
+  final String tooltip;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor =
+        Theme.of(context).colorScheme.outline;
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: isSelected
+                ? Border.all(
+                    color: borderColor,
+                    width: 2.5,
+                  )
+                : Border.all(
+                    color: borderColor
+                        .withValues(alpha: 0.3),
+                  ),
+          ),
+          child: isSelected
+              ? Icon(
+                  Icons.check,
+                  size: 16,
+                  color: color.computeLuminance() > 0.5
+                      ? Colors.black
+                      : Colors.white,
+                )
+              : null,
+        ),
       ),
     );
   }

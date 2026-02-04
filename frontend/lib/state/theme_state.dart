@@ -1,7 +1,3 @@
-import 'dart:convert';
-import 'dart:developer' as developer;
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 /// Preset seed colors available in the theme selector.
@@ -20,11 +16,11 @@ enum ThemePresetColor {
   final Color color;
 }
 
-/// Manages the application's theme settings.
+/// Reactive holder for theme settings.
 ///
-/// Owns the seed color and theme mode, persists them to
-/// `~/.ccinsights/theme.json`, and notifies listeners on
-/// change.
+/// Values are managed by [SettingsService] and synced here
+/// so that [MaterialApp] can rebuild when the theme changes.
+/// This class does not persist anything itself.
 class ThemeState extends ChangeNotifier {
   ThemeState({
     Color seedColor = const Color(0xFF673AB7), // deepPurple
@@ -51,80 +47,16 @@ class ThemeState extends ChangeNotifier {
     if (_seedColor.value == color.value) return;
     _seedColor = color;
     notifyListeners();
-    _persist();
   }
 
   void setThemeMode(ThemeMode mode) {
     if (_themeMode == mode) return;
     _themeMode = mode;
     notifyListeners();
-    _persist();
   }
 
-  /// Apply loaded settings without re-persisting.
-  ///
-  /// Used during startup to apply values read from disk
-  /// without triggering a redundant write.
-  void applyLoaded(Color seedColor, ThemeMode themeMode) {
-    _seedColor = seedColor;
-    _themeMode = themeMode;
-    notifyListeners();
-  }
-
-  // -- Persistence --
-
-  static String get _settingsPath {
-    final home = Platform.environment['HOME'] ?? '';
-    return '$home/.ccinsights/theme.json';
-  }
-
-  /// Loads theme settings from disk. Returns a new
-  /// [ThemeState] with the persisted values, or defaults.
-  static Future<ThemeState> load() async {
-    final file = File(_settingsPath);
-    if (!await file.exists()) return ThemeState();
-    try {
-      final content = await file.readAsString();
-      final json = jsonDecode(content) as Map<String, dynamic>;
-      final colorValue = json['seedColor'] as int?;
-      final modeStr = json['themeMode'] as String?;
-      return ThemeState(
-        seedColor: colorValue != null
-            ? Color(colorValue)
-            : const Color(0xFF673AB7),
-        themeMode: _parseThemeMode(modeStr),
-      );
-    } catch (e) {
-      developer.log(
-        'Failed to load theme settings: $e',
-        name: 'ThemeState',
-      );
-      return ThemeState();
-    }
-  }
-
-  Future<void> _persist() async {
-    try {
-      final dir = Directory(
-        File(_settingsPath).parent.path,
-      );
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-      final json = jsonEncode({
-        'seedColor': _seedColor.value,
-        'themeMode': _themeMode.name,
-      });
-      await File(_settingsPath).writeAsString(json);
-    } catch (e) {
-      developer.log(
-        'Failed to persist theme settings: $e',
-        name: 'ThemeState',
-      );
-    }
-  }
-
-  static ThemeMode _parseThemeMode(String? s) {
+  /// Parses a theme mode string to [ThemeMode].
+  static ThemeMode parseThemeMode(String? s) {
     switch (s) {
       case 'light':
         return ThemeMode.light;

@@ -62,6 +62,31 @@ class SettingsService extends ChangeNotifier {
     icon: Icons.palette_outlined,
     settings: [
       SettingDefinition(
+        key: 'appearance.themeMode',
+        title: 'Theme Mode',
+        description:
+            'Choose between light, dark, or system-default '
+            'appearance.',
+        type: SettingType.dropdown,
+        defaultValue: 'system',
+        options: [
+          SettingOption(value: 'light', label: 'Light'),
+          SettingOption(value: 'dark', label: 'Dark'),
+          SettingOption(value: 'system', label: 'System'),
+        ],
+      ),
+      SettingDefinition(
+        key: 'appearance.seedColor',
+        title: 'Accent Color',
+        description:
+            'The seed color used to generate the application '
+            'color scheme. Choose a preset or enter a custom '
+            'hex value.',
+        type: SettingType.colorPicker,
+        // Colors.deepPurple.value
+        defaultValue: 0xFF673AB7,
+      ),
+      SettingDefinition(
         key: 'appearance.bashToolSummary',
         title: 'Bash Tool Summary',
         description:

@@ -215,10 +215,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();
 
-    // Create theme state with defaults, then load persisted
+    // Create theme state and sync from settings service
     _themeState = ThemeState();
     _themeState!.addListener(_onThemeChanged);
-    _loadThemeSettings();
+    _settingsService!.addListener(_syncThemeFromSettings);
 
     // Create or use injected SdkMessageHandler
     // Pass askAiService for auto-generating chat titles
@@ -243,13 +243,16 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     if (mounted) setState(() {});
   }
 
-  /// Loads persisted theme settings and applies them.
-  Future<void> _loadThemeSettings() async {
-    final loaded = await ThemeState.load();
-    if (!mounted) return;
-    _themeState!.applyLoaded(
-      loaded.seedColor,
-      loaded.themeMode,
+  /// Syncs theme values from [SettingsService] to [ThemeState].
+  void _syncThemeFromSettings() {
+    if (_settingsService == null || _themeState == null) return;
+    final colorValue = _settingsService!
+        .getValue<int>('appearance.seedColor');
+    _themeState!.setSeedColor(Color(colorValue));
+    final modeStr = _settingsService!
+        .getValue<String>('appearance.themeMode');
+    _themeState!.setThemeMode(
+      ThemeState.parseThemeMode(modeStr),
     );
   }
 
@@ -345,6 +348,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _themeState?.removeListener(_onThemeChanged);
+    _settingsService?.removeListener(_syncThemeFromSettings);
     // Only dispose services we created, not injected ones
     if (widget.backendService == null) {
       _backend?.dispose();
@@ -616,10 +620,24 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   }
 
   /// Build a compact desktop-appropriate theme.
+  ///
+  /// The primary background ([ColorScheme.surface]) is
+  /// desaturated to near-white/near-black so the app
+  /// feels neutral. Other surface variants keep their
+  /// normal Material 3 tonal relationships.
   ThemeData _buildTheme(Brightness brightness) {
-    final colorScheme = ColorScheme.fromSeed(
+    final base = ColorScheme.fromSeed(
       seedColor: _themeState?.seedColor ?? Colors.deepPurple,
       brightness: brightness,
+    );
+
+    // Blend the main scaffold background heavily toward
+    // pure white/black so it's almost neutral.
+    final neutral = brightness == Brightness.light
+        ? Colors.white
+        : Colors.black;
+    final colorScheme = base.copyWith(
+      surface: Color.lerp(base.surface, neutral, 0.85),
     );
 
     return ThemeData(
