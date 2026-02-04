@@ -917,21 +917,18 @@ void main() {
       // The structuredPatch contains:
       // -  # Markdown rendering (AI-optimized with LaTeX support)
       // +  # The markdown package
-      //
-      // NOTE: This test is expected to FAIL because the DiffView currently
-      // doesn't properly render the structuredPatch data from the result.
       expect(
         find.textContaining('# Markdown rendering'),
         findsWidgets,
         reason:
-            'Edit tool should show diff with old text from structuredPatch (EXPECTED TO FAIL)',
+            'Edit tool should show diff with old text from structuredPatch',
       );
 
       expect(
         find.textContaining('# The markdown package'),
         findsWidgets,
         reason:
-            'Edit tool should show diff with new text from structuredPatch (EXPECTED TO FAIL)',
+            'Edit tool should show diff with new text from structuredPatch',
       );
 
       await _takeScreenshot(tester, '27_edit_tool_expanded');
