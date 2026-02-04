@@ -152,6 +152,9 @@ void main() {
         // Relative File Paths is the first toggle, Show Timestamps is
         // the second toggle in Appearance.
         final switches = find.byType(Switch);
+        // Ensure the switch itself is visible after scrolling to the text
+        await tester.ensureVisible(switches.at(1));
+        await tester.pumpAndSettle();
         await tester.tap(switches.at(1));
         await safePumpAndSettle(tester);
 

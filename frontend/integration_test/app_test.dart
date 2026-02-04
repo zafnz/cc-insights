@@ -34,9 +34,18 @@ void main() {
     useMockData = true;
   });
 
+  // Set minimum window size for each test
+  // Ensures tests have enough space to render UI properly
+  setUp(() async {
+    // Note: This is a no-op setup that will be overridden by _ensureMinimumSize
+    // in each test. We keep it here for documentation purposes.
+  });
+
 
   group('App Launch Integration Tests', () {
     testWidgets('app launches and displays panel layout', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // Launch the app
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
@@ -68,6 +77,8 @@ void main() {
     });
 
     testWidgets('panels are present', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -85,6 +96,8 @@ void main() {
     });
 
     testWidgets('chat selection shows agents', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -114,6 +127,8 @@ void main() {
     });
 
     testWidgets('worktree selection updates chats panel', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -152,6 +167,8 @@ void main() {
     });
 
     testWidgets('panel divider can be dragged to resize', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -195,6 +212,8 @@ void main() {
     });
 
     testWidgets('panel can be dragged to rearrange layout', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -267,6 +286,8 @@ void main() {
 
   group('Panel Merge Integration Tests', () {
     testWidgets('navigation rail is visible and functional', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -283,6 +304,8 @@ void main() {
     });
 
     testWidgets('status bar shows connection status and stats', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -294,6 +317,8 @@ void main() {
     });
 
     testWidgets('agents panel shows Chat entry first', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -309,6 +334,8 @@ void main() {
     });
 
     testWidgets('replace action is intercepted', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -358,6 +385,8 @@ void main() {
 
   group('Message Input Integration Tests', () {
     testWidgets('can type message and receive mock reply', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // Create mock backend with auto-reply configured
       final mockBackend = MockBackendService();
       await mockBackend.start();
@@ -425,6 +454,8 @@ void main() {
     });
 
     testWidgets('message input clears after sending', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // Create mock backend (no auto-reply needed for this test)
       final mockBackend = MockBackendService();
       await mockBackend.start();
@@ -459,6 +490,8 @@ void main() {
     });
 
     testWidgets('Enter key submits message', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // Create mock backend (no auto-reply needed for this test)
       final mockBackend = MockBackendService();
       await mockBackend.start();
@@ -700,6 +733,8 @@ void main() {
 
   group('Tool Card Expansion Tests', () {
     testWidgets('Bash tool expands with command and result', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -738,6 +773,8 @@ void main() {
     });
 
     testWidgets('Write tool expands with content', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -786,6 +823,8 @@ void main() {
     });
 
     testWidgets('Read tool expands with file content', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -836,6 +875,8 @@ void main() {
     });
 
     testWidgets('Edit tool expands with structuredPatch diff', (tester) async {
+      await _ensureMinimumSize(tester);
+
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -1002,6 +1043,8 @@ void main() {
     });
 
     testWidgets('permission dialog can deny permission', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // Create mock backend with permission trigger configured
       final mockBackend = MockBackendService();
       await mockBackend.start();
@@ -1099,6 +1142,8 @@ void main() {
   // Documentation tests for scroll/expansion behavior (see widget tests for actual verification)
   group('Scroll and Expansion Documentation Tests', () {
     testWidgets('tool card expansion state documentation', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // This test documents that tool card expansion state is managed
       // via OutputEntry.isExpanded which persists across rebuilds.
       //
@@ -1107,6 +1152,8 @@ void main() {
     });
 
     testWidgets('scroll position stability documentation', (tester) async {
+      await _ensureMinimumSize(tester);
+
       // This test documents that scroll position is managed via
       // _savedScrollPositions in ConversationPanelState.
       //
@@ -1118,6 +1165,22 @@ void main() {
 
 // Relative path to screenshots directory (relative to frontend/)
 const _screenshotsDir = 'screenshots';
+
+/// Ensures the test window has a minimum size of 1000x800.
+/// If the current window is smaller, it will be resized.
+Future<void> _ensureMinimumSize(WidgetTester tester) async {
+  const minWidth = 1000.0;
+  const minHeight = 800.0;
+  final binding = tester.binding;
+  final view = binding.platformDispatcher.views.first;
+  final currentSize = view.physicalSize / view.devicePixelRatio;
+
+  if (currentSize.width < minWidth || currentSize.height < minHeight) {
+    final width = currentSize.width < minWidth ? minWidth : currentSize.width;
+    final height = currentSize.height < minHeight ? minHeight : currentSize.height;
+    await binding.setSurfaceSize(Size(width, height));
+  }
+}
 
 /// Takes a screenshot of the current widget tree and saves it to screenshots/.
 Future<void> _takeScreenshot(WidgetTester tester, String name) async {

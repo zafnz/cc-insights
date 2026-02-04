@@ -39,6 +39,9 @@ class _MainScreenState extends State<MainScreen> {
   // Track last error shown to avoid duplicate snackbars
   String? _lastShownError;
 
+  // Callback to resume keyboard interception when leaving settings
+  VoidCallback? _resumeKeyboardInterception;
+
   @override
   void initState() {
     super.initState();
@@ -129,8 +132,40 @@ class _MainScreenState extends State<MainScreen> {
     selection.showCreateWorktreePanel();
   }
 
+  /// Handles navigation destination changes (nav rail).
+  ///
+  /// Suspends keyboard interception when entering settings screen (index 2)
+  /// and resumes when leaving.
+  void _handleNavigationChange(int newIndex) {
+    final oldIndex = _selectedNavIndex;
+    final wasInSettings = oldIndex == 2;
+    final isEnteringSettings = newIndex == 2;
+
+    // Update the selected index first
+    setState(() => _selectedNavIndex = newIndex);
+
+    // Manage keyboard interception suspension after the next frame
+    // to ensure the widget tree has been updated
+    if (wasInSettings && !isEnteringSettings) {
+      // Resume keyboard interception when leaving settings
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _resumeKeyboardInterception?.call();
+        _resumeKeyboardInterception = null;
+      });
+    } else if (!wasInSettings && isEnteringSettings) {
+      // Suspend keyboard interception when entering settings
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final keyboardManager = KeyboardFocusManager.maybeOf(context);
+        _resumeKeyboardInterception = keyboardManager?.suspend();
+      });
+    }
+  }
+
   @override
   void dispose() {
+    // Resume keyboard interception if suspended
+    _resumeKeyboardInterception?.call();
     // Remove listener before dispose
     try {
       context.read<BackendService>().removeListener(_onBackendChanged);
@@ -456,7 +491,7 @@ class _MainScreenState extends State<MainScreen> {
                     isAgentsSeparate:
                         !_agentsMergedIntoChats && !_chatsMergedIntoWorktrees,
                     onDestinationSelected: (index) {
-                      setState(() => _selectedNavIndex = index);
+                      _handleNavigationChange(index);
                     },
                     onPanelToggle: _togglePanel,
                   ),
