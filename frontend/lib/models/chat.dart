@@ -809,8 +809,8 @@ class ChatState extends ChangeNotifier {
         settingSources: const ['user', 'project', 'local'],
         // Use Claude Code's system prompt (includes CLAUDE.md support)
         systemPrompt: const sdk.PresetSystemPrompt(),
-        // Enable streaming - receive partial messages as they're generated
-        includePartialMessages: true,
+        // Stream partial messages if the setting is enabled
+        includePartialMessages: RuntimeConfig.instance.streamOfThought,
       ),
       content: content,
     );

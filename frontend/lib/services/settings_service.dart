@@ -235,6 +235,16 @@ class SettingsService extends ChangeNotifier {
           SettingOption(value: 'bypassPermissions', label: 'Bypass'),
         ],
       ),
+      SettingDefinition(
+        key: 'session.streamOfThought',
+        title: 'Show Stream of Thought',
+        description:
+            'Show Claude\'s output as it is being generated, as '
+            'opposed to only outputting the complete message once '
+            'it\'s done. Applies to new chats only.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
     ],
   );
 
@@ -430,6 +440,8 @@ class SettingsService extends ChangeNotifier {
         config.defaultModel = value as String;
       case 'session.defaultPermissionMode':
         config.defaultPermissionMode = value as String;
+      case 'session.streamOfThought':
+        config.streamOfThought = value as bool;
       case 'developer.showRawMessages':
         config.showRawMessages = value as bool;
       case 'developer.debugSdkLogging':

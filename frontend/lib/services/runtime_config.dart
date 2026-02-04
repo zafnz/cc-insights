@@ -90,6 +90,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Default permission mode for new chats.
   String _defaultPermissionMode = 'default';
 
+  /// Whether to stream partial messages as they're generated.
+  bool _streamOfThought = true;
+
   /// Whether to enable debug SDK logging.
   bool _debugSdkLogging = false;
 
@@ -315,6 +318,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether to stream partial messages as they're generated.
+  bool get streamOfThought => _streamOfThought;
+
+  set streamOfThought(bool value) {
+    if (_streamOfThought != value) {
+      _streamOfThought = value;
+      notifyListeners();
+    }
+  }
+
   /// Whether to enable debug SDK logging.
   bool get debugSdkLogging => _debugSdkLogging;
 
@@ -361,6 +374,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._desktopNotifications = true;
     _instance._defaultModel = 'opus';
     _instance._defaultPermissionMode = 'default';
+    _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;
   }
 }
