@@ -294,6 +294,7 @@ class _SettingsContent extends StatelessWidget {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -303,6 +304,7 @@ class _SettingsContent extends StatelessWidget {
     if (category.id == 'tags') {
       return _TagsSettingsContent(settings: settings);
     }
+
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
@@ -390,6 +392,7 @@ class _SettingRow extends StatelessWidget {
         ),
       );
     }
+
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 700),

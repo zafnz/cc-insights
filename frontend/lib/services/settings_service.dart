@@ -38,6 +38,7 @@ class SettingsService extends ChangeNotifier {
   /// Key for the available tags list in settings.
   static const tagsKey = 'tags.available';
 
+
   /// All setting categories and their definitions.
   static const List<SettingCategory> categories = [
     _appearanceCategory,
@@ -54,6 +55,7 @@ class SettingsService extends ChangeNotifier {
     icon: Icons.label_outlined,
     settings: [],
   );
+
 
   static const _appearanceCategory = SettingCategory(
     id: 'appearance',

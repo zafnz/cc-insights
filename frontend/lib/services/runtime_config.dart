@@ -283,6 +283,7 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether AI chat labels are enabled.
   bool get aiChatLabelsEnabled => _aiChatLabelModel != 'disabled';
 
+
   /// Whether desktop notifications are enabled.
   bool get desktopNotifications => _desktopNotifications;
 
