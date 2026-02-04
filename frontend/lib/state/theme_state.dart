@@ -41,6 +41,7 @@ class ThemeState extends ChangeNotifier {
   /// When null, falls back to [ColorScheme.primary].
   Color? get inputTextColor => _inputTextColor;
 
+
   /// The preset matching the current seed color, or null if
   /// using a custom color.
   ThemePresetColor? get activePreset {

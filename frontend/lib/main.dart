@@ -285,6 +285,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     }
   }
 
+
   /// Validates the directory and determines if we need to show a prompt.
   Future<void> _validateDirectory(String path) async {
     final gitService = const RealGitService();
