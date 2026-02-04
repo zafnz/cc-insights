@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
@@ -24,14 +25,31 @@ import 'package:cc_insights_v2/widgets/tool_card.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  late Directory tempDir;
+
   // Ensure screenshots directory exists and enable mock data
-  setUpAll(() {
+  setUpAll() async {
     final screenshotsDir = Directory('screenshots');
     if (!screenshotsDir.existsSync()) {
       screenshotsDir.createSync(recursive: true);
     }
     // Enable mock data for all integration tests
     useMockData = true;
+
+    // Create temp directory for test isolation
+    tempDir = await Directory.systemTemp.createTemp('integration_test_');
+    PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
+  });
+
+  tearDownAll(() async {
+    // Clean up temp directory
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    // Reset to default
+    PersistenceService.setBaseDir(
+      '${Platform.environment['HOME']}/.ccinsights',
+    );
   });
 
   // Set minimum window size for each test

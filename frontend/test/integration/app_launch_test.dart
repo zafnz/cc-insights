@@ -1,12 +1,34 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cc_insights_v2/main.dart';
+import 'package:cc_insights_v2/services/persistence_service.dart';
 
 import '../test_helpers.dart';
 
 void main() {
   group('App Launch Tests', () {
+    late Directory tempDir;
+
+    setUpAll(() async {
+      // Create temp directory for test isolation
+      tempDir = await Directory.systemTemp.createTemp('app_launch_test_');
+      PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
+    });
+
+    tearDownAll(() async {
+      // Clean up temp directory
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+      // Reset to default
+      PersistenceService.setBaseDir(
+        '${Platform.environment['HOME']}/.ccinsights',
+      );
+    });
+
     setUp(() {
       // Use mock data to avoid async project loading and timeouts
       useMockData = true;
