@@ -112,15 +112,15 @@ void main() {
         async.flushMicrotasks();
         final callsAfterRemove = gitService.getStatusCalls;
 
-        // Advance 30s — only primary should poll, not linked.
-        async.elapse(const Duration(seconds: 30));
+        // Advance 2min — only primary should poll, not linked.
+        async.elapse(const Duration(minutes: 2));
         async.flushMicrotasks();
 
         // The linked worktree's timer should be cancelled.
         // We should see exactly one poll (primary), not two.
         final pollsSinceRemove =
             gitService.getStatusCalls - callsAfterRemove;
-        // Primary polls once at 30s.
+        // Primary polls once at 2min.
         expect(pollsSinceRemove, 1);
 
         service.dispose();
@@ -129,7 +129,7 @@ void main() {
   });
 
   group('periodic polling', () {
-    test('polls git status every 30 seconds', () {
+    test('polls git status every 2 minutes', () {
       fakeAsync((async) {
         final service = WorktreeWatcherService(
           gitService: gitService,
@@ -139,7 +139,7 @@ void main() {
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
 
-        async.elapse(const Duration(seconds: 30));
+        async.elapse(const Duration(minutes: 2));
         async.flushMicrotasks();
         expect(
           gitService.getStatusCalls,
@@ -147,7 +147,7 @@ void main() {
         );
 
         final afterFirst = gitService.getStatusCalls;
-        async.elapse(const Duration(seconds: 30));
+        async.elapse(const Duration(minutes: 2));
         async.flushMicrotasks();
         expect(
           gitService.getStatusCalls,
@@ -158,7 +158,7 @@ void main() {
       });
     });
 
-    test('does not poll before 30 seconds', () {
+    test('does not poll before 2 minutes', () {
       fakeAsync((async) {
         final service = WorktreeWatcherService(
           gitService: gitService,
@@ -168,7 +168,7 @@ void main() {
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
 
-        async.elapse(const Duration(seconds: 29));
+        async.elapse(const Duration(seconds: 119));
         async.flushMicrotasks();
         expect(gitService.getStatusCalls, equals(initialCalls));
 
@@ -188,7 +188,7 @@ void main() {
 
         service.dispose();
 
-        async.elapse(const Duration(seconds: 30));
+        async.elapse(const Duration(minutes: 2));
         async.flushMicrotasks();
         expect(gitService.getStatusCalls, equals(initialCalls));
       });
@@ -217,8 +217,8 @@ void main() {
         // Should have polled both worktrees.
         expect(initialCalls, greaterThanOrEqualTo(2));
 
-        // After 30s, both should poll again.
-        async.elapse(const Duration(seconds: 30));
+        // After 2min, both should poll again.
+        async.elapse(const Duration(minutes: 2));
         async.flushMicrotasks();
         expect(
           gitService.getStatusCalls,

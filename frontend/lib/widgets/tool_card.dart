@@ -507,13 +507,11 @@ class _BashInputWidget extends StatelessWidget {
           ),
           const SizedBox(height: 4),
         ],
-        Container(
-          width: double.infinity,
+        ClickToScrollContainer(
+          maxHeight: 200,
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.circular(4),
-          ),
+          backgroundColor: Colors.black87,
+          borderRadius: BorderRadius.circular(4),
           child: SelectableText(
             '\$ $command',
             style: GoogleFonts.getFont(
