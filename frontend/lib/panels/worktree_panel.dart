@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,6 +18,11 @@ import 'panel_wrapper.dart';
 /// Worktree panel - shows the list of worktrees.
 class WorktreePanel extends StatelessWidget {
   const WorktreePanel({super.key});
+
+  /// When true, animated indicators (spinners) are replaced with static
+  /// widgets so that [WidgetTester.pumpAndSettle] does not hang.
+  @visibleForTesting
+  static bool disableAnimations = false;
 
   @override
   Widget build(BuildContext context) {
@@ -581,6 +587,8 @@ class _WorktreeListItem extends StatelessWidget {
         // Check if any chat in this worktree has a pending permission
         final hasAnyPermissionPending =
             worktree.chats.any((chat) => chat.isWaitingForPermission);
+        final hasAnyActiveChat =
+            worktree.chats.any((chat) => chat.isWorking);
 
         return GestureDetector(
           onSecondaryTapUp: (details) {
@@ -597,9 +605,17 @@ class _WorktreeListItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top row: Branch name + permission indicator
+                    // Top row: spinner + branch name + permission indicator
                     Row(
                       children: [
+                        // Activity spinner
+                        if (hasAnyActiveChat)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: _WorktreeActivitySpinner(
+                              color: colorScheme.primary,
+                            ),
+                          ),
                         // Branch name (normal weight, ~13px)
                         Expanded(
                           child: Text(
@@ -749,6 +765,43 @@ class InlineStatusIndicators extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.only(left: 4),
         child: RichText(text: TextSpan(children: parts)),
+      ),
+    );
+  }
+}
+
+/// A small spinner shown to the left of the worktree branch name when any
+/// chat in the worktree is actively working.
+///
+/// When [WorktreePanel.disableAnimations] is true (e.g. in tests), renders
+/// a static circle icon instead of an animated [CircularProgressIndicator]
+/// so that [WidgetTester.pumpAndSettle] does not hang.
+class _WorktreeActivitySpinner extends StatelessWidget {
+  const _WorktreeActivitySpinner({required this.color});
+
+  final Color color;
+
+  static const double _size = 12.0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (WorktreePanel.disableAnimations) {
+      return SizedBox(
+        width: _size,
+        height: _size,
+        child: Icon(
+          Icons.circle,
+          size: _size,
+          color: color.withValues(alpha: 0.6),
+        ),
+      );
+    }
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        color: color,
       ),
     );
   }
