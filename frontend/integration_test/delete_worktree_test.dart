@@ -70,6 +70,23 @@ Future<void> _takeScreenshot(WidgetTester tester, String name) async {
   }
 }
 
+/// Taps a popup menu item by dispatching a pointer event at the coordinates
+/// of the text widget. We use [tapAt] instead of [tap] because Flutter's
+/// PopupMenuItem renders an InkWell/MouseRegion above the Text in the render
+/// tree, which intercepts the hit test. [tap] warns and the event may not
+/// reach the gesture detector reliably. [tapAt] bypasses widget-level hit
+/// test validation and dispatches directly through the gesture system.
+Future<void> _tapPopupMenuItem(
+  WidgetTester tester,
+  String text,
+) async {
+  final textFinder = find.text(text);
+  expect(textFinder, findsOneWidget,
+      reason: 'Popup menu item with text "$text" should exist');
+  final center = tester.getCenter(textFinder);
+  await tester.tapAt(center);
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -138,8 +155,13 @@ void main() {
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
-      // Verify the app launched with the worktree panel visible
-      expect(find.byType(WorktreePanel), findsOneWidget);
+      // Wait for the app to fully load and show the worktree panel
+      await pumpUntilFound(
+        tester,
+        find.byType(WorktreePanel),
+        timeout: const Duration(seconds: 15),
+        debugLabel: 'waiting for WorktreePanel to load',
+      );
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Verify the main branch is visible (test-repo has 'main' as default)
@@ -295,7 +317,7 @@ void main() {
       // Screenshot: Context menu open
       await _takeScreenshot(tester, 'delete_wt_03_context_menu');
 
-      await tester.tap(find.text('Delete Worktree'));
+      await _tapPopupMenuItem(tester, 'Delete Worktree');
       await safePumpAndSettle(tester);
 
       // ===== STEP 4: Handle the delete dialog workflow =====
@@ -572,7 +594,7 @@ void main() {
       );
       // Let the popup menu animation complete before tapping
       await safePumpAndSettle(tester);
-      await tester.tap(find.text('Delete Worktree'));
+      await _tapPopupMenuItem(tester, 'Delete Worktree');
       await safePumpAndSettle(tester);
 
       // Wait for Discard button (indicates uncommitted changes detected)
@@ -620,7 +642,7 @@ void main() {
       );
       // Let the popup menu animation complete before tapping
       await safePumpAndSettle(tester);
-      await tester.tap(find.text('Delete Worktree'));
+      await _tapPopupMenuItem(tester, 'Delete Worktree');
       await safePumpAndSettle(tester);
 
       // Wait for Discard button (indicates uncommitted changes detected)
