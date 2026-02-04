@@ -22,33 +22,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsService>();
 
-    return Row(
-      children: [
-        _SettingsSidebar(
-          categories: SettingsService.categories,
-          selectedCategoryId: _selectedCategoryId,
-          onCategorySelected: (id) {
-            setState(() => _selectedCategoryId = id);
-          },
-          onResetToDefaults: () => _confirmReset(context, settings),
-        ),
-        VerticalDivider(
-          width: 1,
-          thickness: 1,
-          color: Theme.of(context)
-              .colorScheme
-              .outlineVariant
-              .withValues(alpha: 0.3),
-        ),
-        Expanded(
-          child: _SettingsContent(
-            category: SettingsService.categories.firstWhere(
-              (c) => c.id == _selectedCategoryId,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Row(
+          children: [
+            _SettingsSidebar(
+              categories: SettingsService.categories,
+              selectedCategoryId: _selectedCategoryId,
+              onCategorySelected: (id) {
+                setState(() => _selectedCategoryId = id);
+              },
+              onResetToDefaults: () => _confirmReset(context, settings),
             ),
-            settings: settings,
-          ),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: Theme.of(context)
+                  .colorScheme
+                  .outlineVariant
+                  .withValues(alpha: 0.3),
+            ),
+            Expanded(
+              child: _SettingsContent(
+                category: SettingsService.categories.firstWhere(
+                  (c) => c.id == _selectedCategoryId,
+                ),
+                settings: settings,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
