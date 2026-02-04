@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/chat.dart';
 import '../models/conversation.dart';
+import '../models/cost_tracking.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import 'persistence_models.dart';
@@ -402,8 +403,9 @@ class ProjectRestoreService {
   ///
   /// This performs the following cleanup:
   /// 1. Stops any active SDK session
-  /// 2. Deletes the chat files from disk (.chat.jsonl and .meta.json)
-  /// 3. Removes the chat reference from projects.json
+  /// 2. Saves cost tracking to the project's tracking.jsonl file
+  /// 3. Deletes the chat files from disk (.chat.jsonl and .meta.json)
+  /// 4. Removes the chat reference from projects.json
   ///
   /// Note: The caller is responsible for removing the chat from the
   /// WorktreeState (which also calls chat.dispose()).
@@ -423,6 +425,11 @@ class ProjectRestoreService {
     // Stop active session if any
     await chat.stopSession();
 
+    // Save cost tracking before deleting the chat
+    if (projectId != null) {
+      await _saveCostTracking(projectId, worktreePath, chat);
+    }
+
     // Delete disk files (existing method)
     if (projectId != null) {
       await _persistence.deleteChat(projectId, chatId);
@@ -437,6 +444,68 @@ class ProjectRestoreService {
 
     developer.log(
       'Chat closed: ${chat.data.name}',
+      name: 'ProjectRestoreService',
+    );
+  }
+
+  /// Saves cost tracking for a chat before closure.
+  ///
+  /// Extracts the worktree name from the path and creates a cost tracking
+  /// entry with the chat's final usage totals.
+  Future<void> _saveCostTracking(
+    String projectId,
+    String worktreePath,
+    ChatState chat,
+  ) async {
+    try {
+      // Extract worktree name from path (last component)
+      final worktreeName = p.basename(worktreePath);
+
+      // Create cost tracking entry from chat's final state
+      final entry = CostTrackingEntry.fromChat(
+        worktreeName: worktreeName,
+        chatName: chat.data.name,
+        modelUsage: chat.modelUsage,
+      );
+
+      // Append to tracking.jsonl
+      await _persistence.appendCostTracking(projectId, entry);
+    } catch (e) {
+      developer.log(
+        'Failed to save cost tracking for chat ${chat.data.name}: $e',
+        name: 'ProjectRestoreService',
+        error: e,
+      );
+      // Don't rethrow - cost tracking failures shouldn't block chat closure
+    }
+  }
+
+  /// Saves cost tracking for all chats in a worktree.
+  ///
+  /// This should be called before deleting a worktree to preserve the cost
+  /// data for all chats. Each chat's cost totals are appended to the project's
+  /// tracking.jsonl file.
+  ///
+  /// The [worktreeState] should be the WorktreeState containing the chats.
+  /// The [projectId] identifies which project's tracking file to append to.
+  Future<void> saveWorktreeCostTracking(
+    String projectId,
+    WorktreeState worktreeState,
+  ) async {
+    final worktreePath = worktreeState.data.worktreeRoot;
+
+    developer.log(
+      'Saving cost tracking for ${worktreeState.chats.length} chats in worktree',
+      name: 'ProjectRestoreService',
+    );
+
+    // Save cost tracking for each chat
+    for (final chat in worktreeState.chats) {
+      await _saveCostTracking(projectId, worktreePath, chat);
+    }
+
+    developer.log(
+      'Cost tracking saved for all chats in worktree',
       name: 'ProjectRestoreService',
     );
   }

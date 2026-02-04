@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+import '../models/cost_tracking.dart';
 import '../models/output_entry.dart';
 import 'persistence_models.dart';
 
@@ -52,6 +53,10 @@ class PersistenceService {
   /// Path to a chat's metadata file.
   static String chatMetaPath(String projectId, String chatId) =>
       '${chatsDir(projectId)}/$chatId.meta.json';
+
+  /// Path to a project's cost tracking file (JSONL format).
+  static String costTrackingPath(String projectId) =>
+      '${projectDir(projectId)}/tracking.jsonl';
 
   /// Generates a stable project ID from the project root path.
   ///
@@ -785,6 +790,69 @@ class PersistenceService {
         error: e,
       );
       rethrow;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cost Tracking Methods
+  // ---------------------------------------------------------------------------
+
+  /// Appends a cost tracking entry to the project's tracking.jsonl file.
+  ///
+  /// This is called when a chat is closed or when a worktree is deleted.
+  /// The tracking file is append-only to avoid parsing overhead and support
+  /// concurrent writes from multiple worktrees.
+  ///
+  /// The file format is one JSON object per line (JSONL):
+  /// ```json
+  /// {"worktree":"main","chatName":"Fix bug","timestamp":"2024-01-15T10:30:00Z","modelUsage":[...]}
+  /// {"worktree":"feature-x","chatName":"Add feature","timestamp":"2024-01-15T11:45:00Z","modelUsage":[...]}
+  /// ```
+  ///
+  /// The [projectId] identifies which project's tracking file to append to.
+  /// The [entry] contains the chat's final cost totals.
+  ///
+  /// Does nothing if the entry has no model usage (no cost to track).
+  Future<void> appendCostTracking(
+    String projectId,
+    CostTrackingEntry entry,
+  ) async {
+    // Skip entries with no model usage
+    if (entry.modelUsage.isEmpty) {
+      developer.log(
+        'Skipping cost tracking for ${entry.chatName}: no model usage',
+        name: 'PersistenceService',
+      );
+      return;
+    }
+
+    try {
+      final trackingPath = costTrackingPath(projectId);
+      final file = File(trackingPath);
+
+      // Ensure parent directory exists
+      await file.parent.create(recursive: true);
+
+      // Append the entry as a single JSON line
+      final jsonLine = '${jsonEncode(entry.toJson())}\n';
+      await file.writeAsString(
+        jsonLine,
+        mode: FileMode.append,
+        flush: true, // Ensure write is flushed to disk
+      );
+
+      developer.log(
+        'Appended cost tracking for ${entry.chatName} in ${entry.worktree} '
+        '(total: \$${entry.totalCost.toStringAsFixed(4)})',
+        name: 'PersistenceService',
+      );
+    } catch (e) {
+      developer.log(
+        'Failed to append cost tracking: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+      // Don't rethrow - cost tracking failures shouldn't block chat closure
     }
   }
 }

@@ -12,6 +12,7 @@ import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
+import '../services/project_restore_service.dart';
 import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/delete_worktree_dialog.dart';
@@ -665,13 +666,18 @@ class _WorktreeListItem extends StatelessWidget {
     final persistenceService = context.read<PersistenceService>();
     final askAiService = context.read<AskAiService>();
     final fileSystemService = context.read<FileSystemService>();
+    final restoreService = context.read<ProjectRestoreService>();
+
+    // Save cost tracking for all chats in this worktree before deletion
+    final projectId = PersistenceService.generateProjectId(repoRoot);
+    await restoreService.saveWorktreeCostTracking(projectId, worktree);
 
     final result = await showDeleteWorktreeDialog(
       context: context,
       worktreePath: worktree.data.worktreeRoot,
       repoRoot: repoRoot,
       branch: worktree.data.branch,
-      projectId: PersistenceService.generateProjectId(repoRoot),
+      projectId: projectId,
       gitService: gitService,
       persistenceService: persistenceService,
       askAiService: askAiService,
