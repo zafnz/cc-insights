@@ -3,6 +3,8 @@ import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
+  private var channel: FlutterMethodChannel?
+
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
   }
@@ -13,12 +15,12 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
-    let channel = FlutterMethodChannel(
+    channel = FlutterMethodChannel(
       name: "com.nickclifford.ccinsights/window",
       binaryMessenger: controller.engine.binaryMessenger
     )
 
-    channel.setMethodCallHandler { (call, result) in
+    channel?.setMethodCallHandler { (call, result) in
       if call.method == "bringToFront" {
         NSApp.activate(ignoringOtherApps: true)
         self.mainFlutterWindow?.makeKeyAndOrderFront(nil)
@@ -27,5 +29,9 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  @IBAction func openSettings(_ sender: Any) {
+    channel?.invokeMethod("openSettings", arguments: nil)
   }
 }

@@ -1,5 +1,6 @@
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../panels/panels.dart';
@@ -42,6 +43,11 @@ class _MainScreenState extends State<MainScreen> {
   // Callback to resume keyboard interception when leaving settings
   VoidCallback? _resumeKeyboardInterception;
 
+  // Method channel for native menu actions
+  static const _windowChannel = MethodChannel(
+    'com.nickclifford.ccinsights/window',
+  );
+
   @override
   void initState() {
     super.initState();
@@ -52,10 +58,19 @@ class _MainScreenState extends State<MainScreen> {
     // Enable drag-and-drop (editMode is a setter, not constructor param)
     _controller.editMode = true;
 
+    // Listen for native menu actions
+    _windowChannel.setMethodCallHandler(_handleNativeMethodCall);
+
     // Listen for backend errors after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupBackendErrorListener();
     });
+  }
+
+  Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
+    if (call.method == 'openSettings') {
+      _handleNavigationChange(2);
+    }
   }
 
   void _setupBackendErrorListener() {
@@ -166,6 +181,8 @@ class _MainScreenState extends State<MainScreen> {
   void dispose() {
     // Resume keyboard interception if suspended
     _resumeKeyboardInterception?.call();
+    // Remove native menu handler
+    _windowChannel.setMethodCallHandler(null);
     // Remove listener before dispose
     try {
       context.read<BackendService>().removeListener(_onBackendChanged);
