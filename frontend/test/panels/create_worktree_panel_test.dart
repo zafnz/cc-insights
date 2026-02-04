@@ -307,6 +307,7 @@ class TestGitService implements GitService {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
   }
 
+
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
     repoRoots[path] = path;
