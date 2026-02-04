@@ -1094,6 +1094,7 @@ class _CompactToggle<T> extends StatelessWidget {
 }
 
 
+
 /// Compact button styled for desktop UI - smaller padding and text.
 class _CompactButton extends StatelessWidget {
   const _CompactButton({
