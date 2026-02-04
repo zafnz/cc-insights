@@ -75,7 +75,7 @@ class RuntimeConfig extends ChangeNotifier {
 
   /// Model for AI assistance tasks (commit messages, conflict resolution).
   /// Values: 'haiku', 'sonnet', 'opus', 'disabled'.
-  String _aiAssistanceModel = 'haiku';
+  String _aiAssistanceModel = 'opus';
 
   /// Model for AI chat label generation.
   /// Values: 'haiku', 'sonnet', 'opus', 'disabled'.
@@ -354,7 +354,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._showRawMessages = true;
     _instance._showTimestamps = false;
     _instance._timestampIdleThreshold = 5;
-    _instance._aiAssistanceModel = 'haiku';
+    _instance._aiAssistanceModel = 'opus';
     _instance._aiChatLabelModel = 'haiku';
     _instance._desktopNotifications = true;
     _instance._defaultModel = 'opus';
