@@ -1,0 +1,279 @@
+import 'package:flutter/material.dart';
+
+/// Keys for testing BaseSelectorDialog widgets.
+class BaseSelectorDialogKeys {
+  BaseSelectorDialogKeys._();
+
+  /// The dialog itself.
+  static const dialog = Key('base_selector_dialog');
+
+  /// Radio tile for "Use project default".
+  static const projectDefaultOption =
+      Key('base_selector_project_default_option');
+
+  /// Radio tile for "main".
+  static const mainOption = Key('base_selector_main_option');
+
+  /// Radio tile for "origin/main".
+  static const originMainOption = Key('base_selector_origin_main_option');
+
+  /// Radio tile for "Custom...".
+  static const customOption = Key('base_selector_custom_option');
+
+  /// Text field for custom ref input.
+  static const customField = Key('base_selector_custom_field');
+
+  /// The cancel button.
+  static const cancelButton = Key('base_selector_cancel');
+
+  /// The apply button.
+  static const applyButton = Key('base_selector_apply');
+}
+
+/// Shows a dialog to select a base ref override for a worktree.
+///
+/// [currentBaseOverride] is the current per-worktree override value,
+/// or null if the worktree uses the project default.
+///
+/// Returns the new base override value: a ref string like "main" or
+/// "origin/main", or null to clear the override (use project default).
+/// Returns the unchanged value if cancelled (callers should compare
+/// with the original to detect changes, or use the [onChanged] variant).
+Future<String?> showBaseSelectorDialog(
+  BuildContext context, {
+  String? currentBaseOverride,
+}) async {
+  final result = await showDialog<String?>(
+    context: context,
+    builder: (context) => BaseSelectorDialog(
+      currentBaseOverride: currentBaseOverride,
+    ),
+  );
+  if (result == _projectDefaultSentinel) return null;
+  return result;
+}
+
+/// The sentinel value used internally to distinguish "user chose project
+/// default (null)" from "user cancelled the dialog (also null)".
+///
+/// When the dialog returns this value, it means the user explicitly
+/// selected "Use project default". Callers using [showBaseSelectorDialog]
+/// receive null for this case; callers that want to distinguish
+/// cancellation should check the raw dialog result.
+const _projectDefaultSentinel = '__project_default__';
+
+/// Dialog for selecting a base ref override for a worktree.
+///
+/// Presents radio options for common base refs plus a custom text field.
+/// The dialog returns a ref string, [_projectDefaultSentinel] for
+/// "use project default", or null if cancelled.
+class BaseSelectorDialog extends StatefulWidget {
+  const BaseSelectorDialog({
+    super.key,
+    this.currentBaseOverride,
+  });
+
+  /// The current per-worktree base override, or null if using project default.
+  final String? currentBaseOverride;
+
+  @override
+  State<BaseSelectorDialog> createState() => _BaseSelectorDialogState();
+}
+
+/// The selection categories. "custom" means the user typed a freeform ref.
+enum _BaseOption { projectDefault, main, originMain, custom }
+
+class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
+  late _BaseOption _selected;
+  late final TextEditingController _customController;
+
+  @override
+  void initState() {
+    super.initState();
+    final current = widget.currentBaseOverride;
+    if (current == null) {
+      _selected = _BaseOption.projectDefault;
+      _customController = TextEditingController();
+    } else if (current == 'main') {
+      _selected = _BaseOption.main;
+      _customController = TextEditingController();
+    } else if (current == 'origin/main') {
+      _selected = _BaseOption.originMain;
+      _customController = TextEditingController();
+    } else {
+      _selected = _BaseOption.custom;
+      _customController = TextEditingController(text: current);
+    }
+  }
+
+  @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
+
+  /// Resolves the current selection to the value to return from the dialog.
+  String? _resolveValue() {
+    switch (_selected) {
+      case _BaseOption.projectDefault:
+        return null;
+      case _BaseOption.main:
+        return 'main';
+      case _BaseOption.originMain:
+        return 'origin/main';
+      case _BaseOption.custom:
+        final text = _customController.text.trim();
+        return text.isEmpty ? null : text;
+    }
+  }
+
+  bool get _canApply {
+    if (_selected == _BaseOption.custom) {
+      return _customController.text.trim().isNotEmpty;
+    }
+    return true;
+  }
+
+  void _handleApply() {
+    final value = _resolveValue();
+    // Use sentinel to distinguish "project default" from cancel.
+    Navigator.of(context).pop(value ?? _projectDefaultSentinel);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return AlertDialog(
+      key: BaseSelectorDialogKeys.dialog,
+      title: const Text('Change Base Ref'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select the branch used for merge and diff comparisons '
+              'in this worktree.',
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRadioTile(
+              key: BaseSelectorDialogKeys.projectDefaultOption,
+              title: 'Use project default',
+              subtitle: 'Inherits from project settings',
+              value: _BaseOption.projectDefault,
+            ),
+            _buildRadioTile(
+              key: BaseSelectorDialogKeys.mainOption,
+              title: 'main',
+              value: _BaseOption.main,
+              monospace: true,
+            ),
+            _buildRadioTile(
+              key: BaseSelectorDialogKeys.originMainOption,
+              title: 'origin/main',
+              value: _BaseOption.originMain,
+              monospace: true,
+            ),
+            _buildRadioTile(
+              key: BaseSelectorDialogKeys.customOption,
+              title: 'Custom...',
+              value: _BaseOption.custom,
+            ),
+            if (_selected == _BaseOption.custom) ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 40, top: 4),
+                child: TextField(
+                  key: BaseSelectorDialogKeys.customField,
+                  controller: _customController,
+                  autofocus: true,
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 13,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'e.g., develop, origin/develop',
+                    hintStyle: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.5,
+                      ),
+                      fontFamily: 'JetBrains Mono',
+                      fontSize: 13,
+                    ),
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    if (_canApply) _handleApply();
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: BaseSelectorDialogKeys.cancelButton,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: BaseSelectorDialogKeys.applyButton,
+          onPressed: _canApply ? _handleApply : null,
+          child: const Text('Apply'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRadioTile({
+    required Key key,
+    required String title,
+    required _BaseOption value,
+    String? subtitle,
+    bool monospace = false,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return RadioListTile<_BaseOption>(
+      key: key,
+      title: Text(
+        title,
+        style: monospace
+            ? textTheme.bodyMedium?.copyWith(
+                fontFamily: 'JetBrains Mono',
+                fontSize: 13,
+              )
+            : textTheme.bodyMedium,
+      ),
+      subtitle: subtitle != null
+          ? Text(
+              subtitle,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            )
+          : null,
+      value: value,
+      groupValue: _selected,
+      onChanged: (v) {
+        if (v != null) setState(() => _selected = v);
+      },
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
