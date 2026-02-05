@@ -368,6 +368,37 @@ class SettingsService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Panel layout persistence
+  // ---------------------------------------------------------------------------
+
+  /// Key for panel flex values stored in config.json.
+  static const _layoutFlexKey = 'layout.flexValues';
+
+  /// Returns the saved panel flex values, or null if not saved.
+  ///
+  /// The map keys are node IDs and values are flex ratios.
+  Map<String, double>? get savedLayoutFlex {
+    final raw = _values[_layoutFlexKey];
+    if (raw is Map) {
+      try {
+        return raw.map(
+          (key, value) =>
+              MapEntry(key.toString(), (value as num).toDouble()),
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// Saves panel flex values to config.json.
+  Future<void> saveLayoutFlex(Map<String, double> flexValues) async {
+    _values[_layoutFlexKey] = flexValues;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------------------
   // Value access
   // ---------------------------------------------------------------------------
 

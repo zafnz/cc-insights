@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
 import '../services/menu_action_service.dart';
+import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/keyboard_focus_manager.dart';
@@ -42,6 +45,9 @@ class _MainScreenState extends State<MainScreen> {
 
   // Callback to resume keyboard interception when leaving settings
   VoidCallback? _resumeKeyboardInterception;
+
+  // Debounce timer for saving panel layout after divider drag
+  Timer? _layoutSaveDebounce;
 
   // Method channel for native menu actions
   static const _windowChannel = MethodChannel(
@@ -262,6 +268,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    _layoutSaveDebounce?.cancel();
     // Resume keyboard interception if suspended
     _resumeKeyboardInterception?.call();
     // Remove native menu handler
@@ -275,6 +282,31 @@ class _MainScreenState extends State<MainScreen> {
     }
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Schedules a debounced save of the current panel layout flex values.
+  void _debounceSaveLayout() {
+    _layoutSaveDebounce?.cancel();
+    _layoutSaveDebounce = Timer(const Duration(seconds: 5), () {
+      _saveLayoutFlex();
+    });
+  }
+
+  /// Saves the current panel flex values immediately.
+  void _saveLayoutFlex() {
+    final settings = context.read<SettingsService>();
+    final flexMap = _extractFlexValues(_controller.rootNode);
+    settings.saveLayoutFlex(flexMap);
+  }
+
+  /// Recursively extracts node ID → flex value from the tree.
+  Map<String, double> _extractFlexValues(SplitNode node) {
+    final map = <String, double>{};
+    map[node.id] = node.flex;
+    for (final child in node.children) {
+      map.addAll(_extractFlexValues(child));
+    }
+    return map;
   }
 
   /// Handle replace interception - merge panels instead of replacing.
@@ -328,6 +360,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
+    _debounceSaveLayout();
   }
 
   /// Merge chats panel into worktrees panel.
@@ -373,6 +406,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
+    _debounceSaveLayout();
   }
 
   /// Separate agents back out from the chats panel.
@@ -411,6 +445,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+    _debounceSaveLayout();
   }
 
   /// Separate chats back out from the worktrees panel.
@@ -461,36 +496,51 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+    _debounceSaveLayout();
   }
 
   /// Build the initial panel layout tree.
+  ///
+  /// If saved flex values exist in settings, they are applied to
+  /// restore the previous panel proportions.
   SplitNode _buildInitialLayout() {
+    Map<String, double>? saved;
+    try {
+      saved = context.read<SettingsService>().savedLayoutFlex;
+    } catch (_) {
+      // Provider not available (e.g. in tests without SettingsService)
+    }
+
+    double flex(String id, double defaultFlex) =>
+        saved?[id] ?? defaultFlex;
+
     return SplitNode.branch(
       id: 'root',
       axis: SplitAxis.horizontal,
+      flex: flex('root', 1.0),
       children: [
         // Left sidebar: Worktrees + Information + Actions stacked
         SplitNode.branch(
           id: 'left_sidebar',
           axis: SplitAxis.vertical,
-          flex: 1.0,
+          flex: flex('left_sidebar', 1.0),
           children: [
             // Worktrees panel (top)
             SplitNode.leaf(
               id: 'worktrees',
-              flex: 1.0,
+              flex: flex('worktrees', 1.0),
               widgetBuilder: (context) => const WorktreePanel(),
             ),
             // Information panel
             SplitNode.leaf(
               id: 'information',
-              flex: 1.0,
+              flex: flex('information', 1.0),
               widgetBuilder: (context) => const InformationPanel(),
             ),
             // Actions panel (bottom)
             SplitNode.leaf(
               id: 'actions',
-              flex: 0.5,
+              flex: flex('actions', 0.5),
               widgetBuilder: (context) => const ActionsPanel(),
             ),
           ],
@@ -499,18 +549,18 @@ class _MainScreenState extends State<MainScreen> {
         SplitNode.branch(
           id: 'content_area',
           axis: SplitAxis.vertical,
-          flex: 3.0,
+          flex: flex('content_area', 3.0),
           children: [
             // Main content area
             SplitNode.leaf(
               id: 'content',
-              flex: 3.0,
+              flex: flex('content', 3.0),
               widgetBuilder: (context) => const ContentPanel(),
             ),
             // Terminal output panel (for script output)
             SplitNode.leaf(
               id: 'terminal',
-              flex: 1.0,
+              flex: flex('terminal', 1.0),
               widgetBuilder: (context) => const TerminalOutputPanel(),
             ),
           ],
@@ -519,18 +569,18 @@ class _MainScreenState extends State<MainScreen> {
         SplitNode.branch(
           id: 'right_sidebar',
           axis: SplitAxis.vertical,
-          flex: 1.0,
+          flex: flex('right_sidebar', 1.0),
           children: [
             // Chats panel (top)
             SplitNode.leaf(
               id: 'chats',
-              flex: 1.0,
+              flex: flex('chats', 1.0),
               widgetBuilder: (context) => const ChatsPanel(),
             ),
             // Agents panel (bottom)
             SplitNode.leaf(
               id: 'agents',
-              flex: 1.0,
+              flex: flex('agents', 1.0),
               widgetBuilder: (context) => const AgentsPanel(),
             ),
           ],
@@ -610,6 +660,7 @@ class _MainScreenState extends State<MainScreen> {
                         // Index 0: Main screen with panel layout
                         EditableMultiSplitView(
                           controller: _controller,
+                          onDividerDragEnd: _debounceSaveLayout,
                           config: EditableMultiSplitViewConfig(
                             dividerThickness: 1.0,
                             dividerHandleBuffer: 3.0,
