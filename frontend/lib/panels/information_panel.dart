@@ -576,9 +576,7 @@ class _WorktreeInfo extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // A. Working Tree section
-          _SectionLabel(label: 'Working tree'),
-          const SizedBox(height: 4),
+          // A. Working Tree section (status counts, no label)
           _StatusCounts(data: data),
           const SizedBox(height: 8),
           _CompactButton(
@@ -685,6 +683,53 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
+/// Section divider with centered text label and horizontal lines.
+class _SectionDivider extends StatelessWidget {
+  const _SectionDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final dividerColor = colorScheme.outlineVariant.withValues(alpha: 0.4);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // For very narrow panels, just show text centered
+        if (constraints.maxWidth < 150) {
+          return Center(
+            child: Text(
+              label,
+              style: textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: Divider(color: dividerColor)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                label,
+                style: textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: dividerColor)),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _StatusCounts extends StatelessWidget {
   const _StatusCounts({required this.data});
 
@@ -747,20 +792,12 @@ class _BaseSection extends StatelessWidget {
                     style: const TextStyle(fontSize: 14),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    isLocal ? 'local' : 'remote',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      baseRef,
+                      '${isLocal ? 'local' : 'remote'} $baseRef',
                       style: textTheme.bodySmall?.copyWith(
                         fontFamily: 'JetBrains Mono',
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -785,20 +822,12 @@ class _BaseSection extends StatelessWidget {
                       style: const TextStyle(fontSize: 14),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      isLocal ? 'local' : 'remote',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
                     Flexible(
                       child: Text(
-                        baseRef,
+                        '${isLocal ? 'local' : 'remote'} $baseRef',
                         style: textTheme.bodySmall?.copyWith(
                           fontFamily: 'JetBrains Mono',
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -983,11 +1012,30 @@ class _ActionsSection extends StatelessWidget {
   bool get _isLocalBase => !data.isRemoteBase;
   bool get _hasUpstream => data.upstreamBranch != null;
 
+  /// Returns the section labels based on the current mode.
+  /// Mode is determined by: Local (local base), Unpublished (remote base, no
+  /// upstream), or Published (remote base, has upstream).
+  (String topSection, String bottomSection) get _sectionLabels {
+    if (_isLocalBase) {
+      return ('Local actions', 'Integrate locally');
+    } else if (!_hasUpstream) {
+      return ('Remote-base actions', 'Publish');
+    } else {
+      return ('Remote-base actions', 'Sync');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final (topSection, bottomSection) = _sectionLabels;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Top section divider
+        _SectionDivider(label: topSection),
+        const SizedBox(height: 8),
+
         // Rebase onto base
         _CompactButton(
           key: InformationPanelKeys.rebaseOntoBaseButton,
@@ -1009,6 +1057,10 @@ class _ActionsSection extends StatelessWidget {
               ? null
               : 'Already up-to-date with $baseRef',
         ),
+
+        // Bottom section divider
+        const SizedBox(height: 12),
+        _SectionDivider(label: bottomSection),
         const SizedBox(height: 8),
 
         // State-specific actions
@@ -1028,11 +1080,15 @@ class _ActionsSection extends StatelessWidget {
             label: 'Push to origin/${data.branch}...',
             icon: Icons.cloud_upload,
           ),
+
+          // Pull Request section
+          const SizedBox(height: 12),
+          const _SectionDivider(label: 'Pull Request'),
           const SizedBox(height: 8),
           _CompactButton(
             key: InformationPanelKeys.createPrButton,
             onPressed: null,
-            label: 'Create PR',
+            label: 'Create PR (push required)',
             icon: Icons.open_in_new,
             tooltip: 'Push required before creating PR',
           ),
@@ -1065,6 +1121,10 @@ class _ActionsSection extends StatelessWidget {
               ),
             ],
           ),
+
+          // Pull Request section
+          const SizedBox(height: 12),
+          const _SectionDivider(label: 'Pull Request'),
           const SizedBox(height: 8),
           _CompactButton(
             key: InformationPanelKeys.createPrButton,

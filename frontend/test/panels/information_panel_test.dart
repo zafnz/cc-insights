@@ -161,12 +161,11 @@ void main() {
         find.byKey(InformationPanelKeys.baseSection).evaluate(),
       ).isNotEmpty();
 
-      // House emoji and "local" label for local base
+      // House emoji for local base
       check(find.text('🏠').evaluate()).isNotEmpty();
-      check(find.text('local').evaluate()).isNotEmpty();
 
-      // Base ref text
-      check(find.text('main').evaluate()).isNotEmpty();
+      // Combined "local main" text (now using same font)
+      check(find.text('local main').evaluate()).isNotEmpty();
 
       // Ahead/behind indicators (rendered via RichText)
       final richTexts = find.byType(RichText).evaluate();
@@ -191,10 +190,11 @@ void main() {
         ));
         await safePumpAndSettle(tester);
 
-        // Globe emoji and "remote" label for remote base
+        // Globe emoji for remote base
         check(find.text('🌐').evaluate()).isNotEmpty();
-        check(find.text('remote').evaluate()).isNotEmpty();
-        check(find.text('origin/main').evaluate()).isNotEmpty();
+
+        // Combined "remote origin/main" text (now using same font)
+        check(find.text('remote origin/main').evaluate()).isNotEmpty();
       },
     );
 
@@ -802,8 +802,8 @@ void main() {
         ));
         await safePumpAndSettle(tester);
 
-        // Working tree section visible
-        check(find.text('Working tree').evaluate()).isNotEmpty();
+        // Working tree section visible (status counts shown, no label)
+        check(find.textContaining('Uncommitted').evaluate()).isNotEmpty();
 
         // Base and upstream sections not visible
         check(
