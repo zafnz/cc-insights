@@ -1195,12 +1195,21 @@ $fileList''';
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Text(
-                          Platform.isMacOS ? '\u{2318}\u{21A9}' : 'Ctrl+\u{21A9}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              Platform.isMacOS ? '\u{2318}' : 'Ctrl+',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_return,
+                              size: 12,
+                            ),
+                          ],
                         ),
                       ),
                     ],
