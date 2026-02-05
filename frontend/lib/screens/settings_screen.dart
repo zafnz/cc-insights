@@ -440,6 +440,11 @@ class _SettingRow extends StatelessWidget {
           onChanged: onChanged,
           allowDefault: definition.defaultValue == 0,
         ),
+      SettingType.text => _TextInput(
+          value: value as String,
+          placeholder: definition.placeholder,
+          onChanged: onChanged,
+        ),
     };
   }
 
@@ -635,6 +640,104 @@ class _NumberInputState extends State<_NumberInput> {
         ),
         decoration: InputDecoration(
           isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
+          filled: true,
+          fillColor: colorScheme.surfaceContainerHighest,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: colorScheme.primary),
+          ),
+        ),
+        onSubmitted: _submit,
+        onTapOutside: (_) => _submit(_controller.text),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// Text input
+// ---------------------------------------------------------------------
+
+class _TextInput extends StatefulWidget {
+  const _TextInput({
+    required this.value,
+    this.placeholder,
+    required this.onChanged,
+  });
+
+  final String value;
+  final String? placeholder;
+  final ValueChanged<dynamic> onChanged;
+
+  @override
+  State<_TextInput> createState() => _TextInputState();
+}
+
+class _TextInputState extends State<_TextInput> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_TextInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value &&
+        _controller.text != widget.value) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit(String text) {
+    widget.onChanged(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 280,
+      child: TextField(
+        controller: _controller,
+        style: TextStyle(
+          fontSize: 13,
+          fontFamily: 'JetBrains Mono',
+          color: colorScheme.onSurface,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: widget.placeholder,
+          hintStyle: TextStyle(
+            fontSize: 13,
+            fontFamily: 'JetBrains Mono',
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 8,

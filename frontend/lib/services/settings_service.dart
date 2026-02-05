@@ -45,6 +45,7 @@ class SettingsService extends ChangeNotifier {
     _behaviorCategory,
     _tagsCategory,
     _sessionCategory,
+    _loggingCategory,
     _developerCategory,
   ];
 
@@ -248,6 +249,42 @@ class SettingsService extends ChangeNotifier {
     ],
   );
 
+  static const _loggingCategory = SettingCategory(
+    id: 'logging',
+    label: 'Logging',
+    description: 'Configure application logging and log file output',
+    icon: Icons.terminal_outlined,
+    settings: [
+      SettingDefinition(
+        key: 'logging.filePath',
+        title: 'Log File Path',
+        description:
+            'Path to write application logs. Leave empty to disable '
+            'file logging. Logs are written in JSONL format.',
+        type: SettingType.text,
+        defaultValue: '~/ccinsights.app.jsonl',
+        placeholder: '~/ccinsights.app.jsonl',
+      ),
+      SettingDefinition(
+        key: 'logging.minimumLevel',
+        title: 'Minimum Log Level',
+        description:
+            'Only log messages at or above this level will be written '
+            'to the log file. All messages are still visible in the '
+            'log viewer regardless of this setting.',
+        type: SettingType.dropdown,
+        defaultValue: 'debug',
+        options: [
+          SettingOption(value: 'debug', label: 'Debug'),
+          SettingOption(value: 'info', label: 'Info'),
+          SettingOption(value: 'notice', label: 'Notice'),
+          SettingOption(value: 'warn', label: 'Warn'),
+          SettingOption(value: 'error', label: 'Error'),
+        ],
+      ),
+    ],
+  );
+
   static const _developerCategory = SettingCategory(
     id: 'developer',
     label: 'Developer',
@@ -446,6 +483,10 @@ class SettingsService extends ChangeNotifier {
         config.showRawMessages = value as bool;
       case 'developer.debugSdkLogging':
         config.debugSdkLogging = value as bool;
+      case 'logging.filePath':
+        config.loggingFilePath = value as String;
+      case 'logging.minimumLevel':
+        config.loggingMinimumLevel = value as String;
     }
   }
 

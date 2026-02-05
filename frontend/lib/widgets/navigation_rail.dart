@@ -101,11 +101,10 @@ class AppNavigationRail extends StatelessWidget {
           const SizedBox(height: 8),
           _NavRailButton(
             icon: Icons.terminal_outlined,
+            selectedIcon: Icons.terminal,
             tooltip: 'Logs',
-            isSelected: false,
-            onTap: () {
-              // TODO: Navigate to logs screen
-            },
+            isSelected: selectedIndex == 3,
+            onTap: () => onDestinationSelected(3),
           ),
           const SizedBox(height: 4),
           _NavRailButton(

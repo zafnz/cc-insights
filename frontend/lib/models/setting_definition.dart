@@ -13,6 +13,9 @@ enum SettingType {
 
   /// Color picker with presets and custom hex input.
   colorPicker,
+
+  /// Text input field.
+  text,
 }
 
 /// A single option in a dropdown setting.
@@ -60,6 +63,9 @@ class SettingDefinition {
   /// For numbers: maximum allowed value.
   final int? max;
 
+  /// For text: placeholder text shown when empty.
+  final String? placeholder;
+
   const SettingDefinition({
     required this.key,
     required this.title,
@@ -69,6 +75,7 @@ class SettingDefinition {
     this.options,
     this.min,
     this.max,
+    this.placeholder,
   });
 }
 

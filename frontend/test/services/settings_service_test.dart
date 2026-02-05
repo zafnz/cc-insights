@@ -29,7 +29,7 @@ void main() {
     group('categories', () {
       test('has all expected categories', () {
         final ids = SettingsService.categories.map((c) => c.id).toList();
-        expect(ids, ['appearance', 'behavior', 'tags', 'session', 'developer']);
+        expect(ids, ['appearance', 'behavior', 'tags', 'session', 'logging', 'developer']);
       });
 
       test('each category has at least one setting', () {

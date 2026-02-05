@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:claude_sdk/claude_sdk.dart' show SdkLogger;
+import 'package:claude_sdk/claude_sdk.dart' as sdk;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,6 +16,7 @@ import 'screens/replay_demo_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'widgets/directory_validation_dialog.dart';
 import 'services/ask_ai_service.dart';
+import 'services/log_service.dart';
 import 'services/backend_service.dart';
 import 'services/file_system_service.dart';
 import 'services/git_service.dart';
@@ -39,9 +41,29 @@ import 'widgets/dialog_observer.dart';
 /// Set this to true before running integration tests that need mock data.
 bool useMockData = false;
 
+/// The original debugPrintSynchronously function, saved before we override it.
+final DebugPrintCallback _originalDebugPrint = debugPrintSynchronously;
+
+/// Custom debugPrint that logs to LogService while also printing to stdout.
+///
+/// This replaces Flutter's default debugPrint to capture debug output in the
+/// centralized logging system while preserving the standard console output.
+void _loggingDebugPrint(String? message, {int? wrapWidth}) {
+  // Always forward to stdout (original behavior)
+  _originalDebugPrint(message, wrapWidth: wrapWidth);
+
+  // Also log to LogService if message is not null/empty
+  if (message != null && message.isNotEmpty) {
+    LogService.instance.debug('Flutter', 'print', message);
+  }
+}
+
 void main(List<String> args) async {
   // Ensure Flutter bindings are initialized before any async work
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Override debugPrint to also log to LogService while preserving stdout output
+  debugPrint = _loggingDebugPrint;
 
   // Initialize runtime config from command line arguments.
   // First positional arg is the working directory.
@@ -164,6 +186,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The git info for the directory being validated.
   DirectoryGitInfo? _pendingValidationInfo;
 
+  /// Subscription to forward SdkLogger entries to LogService.
+  StreamSubscription<sdk.LogEntry>? _sdkLogSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -189,8 +214,14 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void _initializeServices() {
     final shouldUseMock = _shouldUseMockData();
 
+    // Initialize application logging
+    _initializeLogging();
+
     // Enable SDK debug logging to file
     _initializeSdkLogging();
+
+    // Forward SDK logs to the central LogService
+    _sdkLogSubscription = sdk.SdkLogger.instance.logs.listen(_forwardSdkLog);
 
     // Create or use injected BackendService
     if (widget.backendService != null) {
@@ -273,18 +304,123 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Handles changes to RuntimeConfig (like debug SDK logging).
   void _onRuntimeConfigChanged() {
+    // Handle SDK debug logging setting
     final shouldLog = RuntimeConfig.instance.debugSdkLogging;
     final home = Platform.environment['HOME'] ?? '/tmp';
     final logPath = '$home/ccinsights.debug.jsonl';
 
-    SdkLogger.instance.debugEnabled = shouldLog;
+    sdk.SdkLogger.instance.debugEnabled = shouldLog;
     if (shouldLog) {
-      SdkLogger.instance.enableFileLogging(logPath);
+      sdk.SdkLogger.instance.enableFileLogging(logPath);
     } else {
-      SdkLogger.instance.disableFileLogging();
+      sdk.SdkLogger.instance.disableFileLogging();
+    }
+
+    // Handle application logging settings
+    _updateLoggingConfig();
+  }
+
+  /// Updates LogService configuration from RuntimeConfig.
+  void _updateLoggingConfig() {
+    final config = RuntimeConfig.instance;
+    final logPath = _expandPath(config.loggingFilePath);
+
+    // Update minimum level
+    LogService.instance.minimumLevel = _parseLogLevel(config.loggingMinimumLevel);
+
+    // Update file logging
+    if (logPath.isEmpty) {
+      LogService.instance.disableFileLogging();
+    } else {
+      LogService.instance.enableFileLogging(logPath);
     }
   }
 
+  /// Parses a log level string to LogLevel enum.
+  LogLevel _parseLogLevel(String level) {
+    return switch (level) {
+      'debug' => LogLevel.debug,
+      'info' => LogLevel.info,
+      'notice' => LogLevel.notice,
+      'warn' => LogLevel.warn,
+      'error' => LogLevel.error,
+      _ => LogLevel.debug,
+    };
+  }
+
+  /// Expands ~ to home directory in a path.
+  String _expandPath(String path) {
+    if (path.isEmpty) return path;
+    if (path.startsWith('~/')) {
+      final home = Platform.environment['HOME'];
+      if (home != null) {
+        return home + path.substring(1);
+      }
+    } else if (path == '~') {
+      return Platform.environment['HOME'] ?? path;
+    }
+    return path;
+  }
+
+  /// Forwards an SDK log entry to the central LogService.
+  void _forwardSdkLog(sdk.LogEntry entry) {
+    // Map SDK log level to app log level
+    final level = switch (entry.level) {
+      sdk.LogLevel.debug => LogLevel.debug,
+      sdk.LogLevel.info => LogLevel.info,
+      sdk.LogLevel.warning => LogLevel.warn,
+      sdk.LogLevel.error => LogLevel.error,
+    };
+
+    // Determine the type based on direction
+    final type = switch (entry.direction) {
+      sdk.LogDirection.stdin => 'send',
+      sdk.LogDirection.stdout => 'recv',
+      sdk.LogDirection.stderr => 'stderr',
+      sdk.LogDirection.internal => 'internal',
+      null => 'message',
+    };
+
+    // Build the message payload
+    final message = <String, dynamic>{};
+    if (entry.data != null) {
+      message.addAll(entry.data!);
+    } else if (entry.text != null) {
+      message['text'] = entry.text;
+    } else {
+      message['text'] = entry.message;
+    }
+
+    // Add direction if present
+    if (entry.direction != null) {
+      message['direction'] = entry.direction!.name;
+    }
+
+    LogService.instance.log(
+      service: 'ClaudeSDK',
+      level: level,
+      type: type,
+      message: message,
+      // TODO: Add worktree when we can associate sessions with worktrees
+    );
+  }
+
+
+  /// Initialize application logging with settings from RuntimeConfig.
+  void _initializeLogging() {
+    final config = RuntimeConfig.instance;
+    final logPath = _expandPath(config.loggingFilePath);
+
+    // Set minimum level
+    LogService.instance.minimumLevel = _parseLogLevel(config.loggingMinimumLevel);
+
+    // Enable file logging if path is set
+    if (logPath.isNotEmpty) {
+      LogService.instance.enableFileLogging(logPath);
+    }
+
+    LogService.instance.info('App', 'startup', 'CC Insights starting up');
+  }
 
   /// Validates the directory and determines if we need to show a prompt.
   Future<void> _validateDirectory(String path) async {
@@ -317,9 +453,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Enable debug mode and file logging based on RuntimeConfig
     final shouldLog = RuntimeConfig.instance.debugSdkLogging;
-    SdkLogger.instance.debugEnabled = shouldLog;
+    sdk.SdkLogger.instance.debugEnabled = shouldLog;
     if (shouldLog) {
-      SdkLogger.instance.enableFileLogging(logPath);
+      sdk.SdkLogger.instance.enableFileLogging(logPath);
     }
   }
 
@@ -378,6 +514,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sdkLogSubscription?.cancel();
     _themeState?.removeListener(_onThemeChanged);
     _settingsService?.removeListener(_syncThemeFromSettings);
     RuntimeConfig.instance.removeListener(_onRuntimeConfigChanged);

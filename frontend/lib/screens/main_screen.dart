@@ -12,6 +12,7 @@ import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
 import 'file_manager_screen.dart';
+import 'log_viewer_screen.dart';
 import 'settings_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
@@ -147,28 +148,34 @@ class _MainScreenState extends State<MainScreen> {
     selection.showCreateWorktreePanel();
   }
 
+  /// Whether the given nav index needs keyboard interception suspended.
+  ///
+  /// Settings and Logs screens have text fields that need direct keyboard
+  /// input, so we suspend the global keyboard interception for them.
+  bool _needsKeyboardSuspension(int index) => index == 2 || index == 3;
+
   /// Handles navigation destination changes (nav rail).
   ///
-  /// Suspends keyboard interception when entering settings screen (index 2)
-  /// and resumes when leaving.
+  /// Suspends keyboard interception when entering screens with text input
+  /// (settings, logs) and resumes when leaving.
   void _handleNavigationChange(int newIndex) {
     final oldIndex = _selectedNavIndex;
-    final wasInSettings = oldIndex == 2;
-    final isEnteringSettings = newIndex == 2;
+    final wasSuspended = _needsKeyboardSuspension(oldIndex);
+    final needsSuspension = _needsKeyboardSuspension(newIndex);
 
     // Update the selected index first
     setState(() => _selectedNavIndex = newIndex);
 
     // Manage keyboard interception suspension after the next frame
     // to ensure the widget tree has been updated
-    if (wasInSettings && !isEnteringSettings) {
-      // Resume keyboard interception when leaving settings
+    if (wasSuspended && !needsSuspension) {
+      // Resume keyboard interception when leaving a suspended screen
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _resumeKeyboardInterception?.call();
         _resumeKeyboardInterception = null;
       });
-    } else if (!wasInSettings && isEnteringSettings) {
-      // Suspend keyboard interception when entering settings
+    } else if (!wasSuspended && needsSuspension) {
+      // Suspend keyboard interception when entering a screen with text input
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final keyboardManager = KeyboardFocusManager.maybeOf(context);
@@ -559,6 +566,8 @@ class _MainScreenState extends State<MainScreen> {
                         const FileManagerScreen(),
                         // Index 2: Settings screen
                         const SettingsScreen(),
+                        // Index 3: Log Viewer screen
+                        const LogViewerScreen(),
                       ],
                     ),
                   ),

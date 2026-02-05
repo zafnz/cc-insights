@@ -96,6 +96,12 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to enable debug SDK logging.
   bool _debugSdkLogging = false;
 
+  /// Path to the application log file.
+  String _loggingFilePath = '~/ccinsights.app.jsonl';
+
+  /// Minimum log level for file output.
+  String _loggingMinimumLevel = 'debug';
+
   /// The working directory for this session.
   String get workingDirectory => _workingDirectory;
 
@@ -338,6 +344,26 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Path to the application log file.
+  String get loggingFilePath => _loggingFilePath;
+
+  set loggingFilePath(String value) {
+    if (_loggingFilePath != value) {
+      _loggingFilePath = value;
+      notifyListeners();
+    }
+  }
+
+  /// Minimum log level for file output.
+  String get loggingMinimumLevel => _loggingMinimumLevel;
+
+  set loggingMinimumLevel(String value) {
+    if (_loggingMinimumLevel != value) {
+      _loggingMinimumLevel = value;
+      notifyListeners();
+    }
+  }
+
   /// Updates the working directory.
   ///
   /// This is called when the user selects a project from the welcome screen.
@@ -376,5 +402,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._defaultPermissionMode = 'default';
     _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;
+    _instance._loggingFilePath = '~/ccinsights.app.jsonl';
+    _instance._loggingMinimumLevel = 'debug';
   }
 }
