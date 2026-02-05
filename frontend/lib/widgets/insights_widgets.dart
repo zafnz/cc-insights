@@ -69,6 +69,9 @@ class InsightsTextField extends StatelessWidget {
     this.onSubmitted,
     this.onTapOutside,
     this.textAlign = TextAlign.start,
+    this.prefixIcon,
+    this.autofocus = false,
+    this.focusNode,
   });
 
   final TextEditingController? controller;
@@ -77,18 +80,23 @@ class InsightsTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final TapRegionCallback? onTapOutside;
   final TextAlign textAlign;
+  final Widget? prefixIcon;
+  final bool autofocus;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       textAlign: textAlign,
+      autofocus: autofocus,
+      focusNode: focusNode,
       style: insightsInputTextStyle(context, monospace: monospace),
       decoration: insightsInputDecoration(
         context,
         hintText: hintText,
         monospace: monospace,
-      ),
+      ).copyWith(prefixIcon: prefixIcon),
       onSubmitted: onSubmitted,
       onTapOutside: onTapOutside,
     );

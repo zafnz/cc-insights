@@ -163,7 +163,7 @@ void main() {
       await _takeScreenshot(tester, 'sanity_03_new_worktree_form');
 
       // Cancel back to conversation view
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.byKey(CreateWorktreePanelKeys.cancelButton));
       await safePumpAndSettle(tester);
       expect(find.byType(CreateWorktreePanel), findsNothing);
     });

@@ -7,6 +7,7 @@ import '../services/git_service.dart';
 import '../services/persistence_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/insights_widgets.dart';
 
 /// Keys for testing CreateWorktreePanel widgets.
 class CreateWorktreePanelKeys {
@@ -460,21 +461,15 @@ class _BranchNameField extends StatelessWidget {
               controller.text = textEditingController.text;
             });
 
-            return TextField(
+            return InsightsTextField(
               key: CreateWorktreePanelKeys.branchField,
               controller: textEditingController,
               focusNode: focusNode,
               autofocus: true,
-              style: textTheme.bodyMedium,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                prefixIcon: Icon(
-                  Icons.call_split,
-                  size: 20,
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              prefixIcon: Icon(
+                Icons.call_split,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
               ),
               onSubmitted: (_) => onCreateRequested(),
             );
@@ -544,18 +539,12 @@ class _WorktreeRootField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
+        InsightsTextField(
           controller: controller,
-          style: textTheme.bodyMedium,
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            prefixIcon: Icon(
-              Icons.folder_outlined,
-              size: 20,
-              color: colorScheme.onSurfaceVariant,
-            ),
+          prefixIcon: Icon(
+            Icons.folder_outlined,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -741,13 +730,13 @@ class _ActionBar extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        TextButton(
+        InsightsOutlinedButton(
           key: CreateWorktreePanelKeys.cancelButton,
           onPressed: isCreating ? null : onCancel,
           child: const Text('Cancel'),
         ),
         const SizedBox(width: 12),
-        FilledButton.icon(
+        InsightsFilledButton(
           key: CreateWorktreePanelKeys.createButton,
           onPressed: isCreating ? null : onCreate,
           icon: isCreating
@@ -760,7 +749,7 @@ class _ActionBar extends StatelessWidget {
                   ),
                 )
               : const Icon(Icons.add, size: 18),
-          label: Text(isCreating ? 'Creating...' : 'Create Worktree'),
+          child: Text(isCreating ? 'Creating...' : 'Create Worktree'),
         ),
       ],
     );
