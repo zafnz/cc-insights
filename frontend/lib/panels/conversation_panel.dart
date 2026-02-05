@@ -686,6 +686,7 @@ class _ConversationHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final backendService = context.watch<BackendService>();
 
     final isSubagent = !conversation.isPrimary;
 
@@ -740,9 +741,15 @@ class _ConversationHeader extends StatelessWidget {
                             (m) => m.id == chat.model.id,
                             orElse: () => chat.model,
                           );
+                          final isModelLoading =
+                              chat.model.backend == sdk.BackendType.codex &&
+                              backendService.isModelListLoadingFor(
+                                chat.model.backend,
+                              );
                           return _CompactDropdown(
                             value: selected.label,
                             items: models.map((m) => m.label).toList(),
+                            isLoading: isModelLoading,
                             onChanged: (value) {
                               final model = models.firstWhere(
                                 (m) => m.label == value,
@@ -1009,11 +1016,13 @@ class _CompactDropdown extends StatefulWidget {
     required this.value,
     required this.items,
     required this.onChanged,
+    this.isLoading = false,
   });
 
   final String value;
   final List<String> items;
   final ValueChanged<String> onChanged;
+  final bool isLoading;
 
   @override
   State<_CompactDropdown> createState() => _CompactDropdownState();
@@ -1079,6 +1088,19 @@ class _CompactDropdownState extends State<_CompactDropdown> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
+              if (widget.isLoading) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(
+                      colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 4),
               Icon(
                 Icons.arrow_drop_down,
@@ -1129,6 +1151,7 @@ class WelcomeCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final project = context.watch<ProjectState>();
     final selection = context.watch<SelectionState>();
+    final backendService = context.watch<BackendService>();
     final worktree = selection.selectedWorktree;
     final defaultModel = ChatModelCatalog.defaultForBackend(
       RuntimeConfig.instance.defaultBackend,
@@ -1139,9 +1162,14 @@ class WelcomeCard extends StatelessWidget {
     );
 
     Widget buildHeader() {
+      final model = worktree?.welcomeModel ?? defaultModel;
+      final isModelLoading =
+          model.backend == sdk.BackendType.codex &&
+          backendService.isModelListLoadingFor(model.backend);
       return _WelcomeHeader(
-        model: worktree?.welcomeModel ?? defaultModel,
+        model: model,
         permissionMode: worktree?.welcomePermissionMode ?? defaultPermissionMode,
+        isModelLoading: isModelLoading,
         onAgentChanged: (backendType) async {
           final backendService = context.read<BackendService>();
           await backendService.start(type: backendType);
@@ -1386,6 +1414,7 @@ class _WelcomeHeader extends StatelessWidget {
     required this.onModelChanged,
     required this.onPermissionChanged,
     required this.onAgentChanged,
+    required this.isModelLoading,
   });
 
   final ChatModel model;
@@ -1393,6 +1422,7 @@ class _WelcomeHeader extends StatelessWidget {
   final ValueChanged<ChatModel> onModelChanged;
   final ValueChanged<PermissionMode> onPermissionChanged;
   final ValueChanged<sdk.BackendType> onAgentChanged;
+  final bool isModelLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -1451,6 +1481,7 @@ class _WelcomeHeader extends StatelessWidget {
                       return _CompactDropdown(
                         value: selected.label,
                         items: models.map((m) => m.label).toList(),
+                        isLoading: isModelLoading,
                         onChanged: (value) {
                           final next = models.firstWhere(
                             (m) => m.label == value,

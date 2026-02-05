@@ -61,6 +61,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   bool isStartingFor(sdk.BackendType type) => false;
 
   @override
+  bool isModelListLoadingFor(sdk.BackendType type) => false;
+
+  @override
   String? errorFor(sdk.BackendType type) => null;
 
   @override

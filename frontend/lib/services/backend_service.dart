@@ -38,6 +38,7 @@ class BackendService extends ChangeNotifier {
   final Map<BackendType, StreamSubscription<LogEntry>> _logSubscriptions = {};
   final Map<BackendType, String?> _errors = {};
   final Set<BackendType> _starting = {};
+  final Set<BackendType> _modelListLoading = {};
 
   BackendType? _backendType;
 
@@ -73,6 +74,10 @@ class BackendService extends ChangeNotifier {
 
   /// Whether a specific backend is currently starting.
   bool isStartingFor(BackendType type) => _starting.contains(type);
+
+  /// Whether model list loading is in progress for a backend.
+  bool isModelListLoadingFor(BackendType type) =>
+      _modelListLoading.contains(type);
 
   /// Error message for a specific backend, if any.
   String? errorFor(BackendType type) => _errors[type];
@@ -189,6 +194,11 @@ class BackendService extends ChangeNotifier {
   ) async {
     if (backend is! ModelListingBackend) return;
 
+    final didStartLoading = _modelListLoading.add(type);
+    if (didStartLoading) {
+      notifyListeners();
+    }
+
     try {
       final modelBackend = backend as ModelListingBackend;
       final models = await modelBackend.listModels();
@@ -215,6 +225,7 @@ class BackendService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed to refresh model list: $e');
     } finally {
+      _modelListLoading.remove(type);
       notifyListeners();
     }
   }
