@@ -456,6 +456,108 @@ branch refs/heads/main''';
       );
     });
 
+    group('pull', () {
+      test('tracks calls', () async {
+        await gitService.pull('/my/repo');
+
+        expect(gitService.pullCalls, ['/my/repo']);
+      });
+
+      test('returns success by default', () async {
+        final result = await gitService.pull('/my/repo');
+
+        expect(result.hasConflicts, false);
+        expect(result.operation, MergeOperationType.merge);
+        expect(result.error, isNull);
+      });
+
+      test('returns configured conflict result', () async {
+        gitService.pullResults['/my/repo'] = const MergeResult(
+          hasConflicts: true,
+          operation: MergeOperationType.merge,
+        );
+
+        final result = await gitService.pull('/my/repo');
+
+        expect(result.hasConflicts, true);
+        expect(result.operation, MergeOperationType.merge);
+      });
+
+      test('throws configured error', () async {
+        gitService.pullError =
+            const GitException('Pull failed', exitCode: 1);
+
+        expect(
+          () => gitService.pull('/my/repo'),
+          throwsA(isA<GitException>()),
+        );
+      });
+
+      test('returns configured error result', () async {
+        gitService.pullResults['/my/repo'] = const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.merge,
+          error: 'No upstream configured',
+        );
+
+        final result = await gitService.pull('/my/repo');
+
+        expect(result.hasConflicts, false);
+        expect(result.error, 'No upstream configured');
+      });
+    });
+
+    group('pullRebase', () {
+      test('tracks calls', () async {
+        await gitService.pullRebase('/my/repo');
+
+        expect(gitService.pullRebaseCalls, ['/my/repo']);
+      });
+
+      test('returns success by default', () async {
+        final result = await gitService.pullRebase('/my/repo');
+
+        expect(result.hasConflicts, false);
+        expect(result.operation, MergeOperationType.rebase);
+        expect(result.error, isNull);
+      });
+
+      test('returns configured conflict result', () async {
+        gitService.pullRebaseResults['/my/repo'] = const MergeResult(
+          hasConflicts: true,
+          operation: MergeOperationType.rebase,
+        );
+
+        final result = await gitService.pullRebase('/my/repo');
+
+        expect(result.hasConflicts, true);
+        expect(result.operation, MergeOperationType.rebase);
+      });
+
+      test('throws configured error', () async {
+        gitService.pullRebaseError =
+            const GitException('Pull rebase failed', exitCode: 1);
+
+        expect(
+          () => gitService.pullRebase('/my/repo'),
+          throwsA(isA<GitException>()),
+        );
+      });
+
+      test('returns configured error result', () async {
+        gitService.pullRebaseResults['/my/repo'] = const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+          error: 'No upstream configured',
+        );
+
+        final result = await gitService.pullRebase('/my/repo');
+
+        expect(result.hasConflicts, false);
+        expect(result.error, 'No upstream configured');
+      });
+    });
+
     test('removeWorktree only throws on non-force when configured', () async {
       gitService.removeWorktreeError =
           const GitException('Contains modified files', exitCode: 1);

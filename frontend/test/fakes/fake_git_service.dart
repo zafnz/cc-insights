@@ -436,6 +436,50 @@ class FakeGitService implements GitService {
   /// Result for [rebase]. Key is path.
   final Map<String, MergeResult> rebaseResults = {};
 
+  /// Result for [pull]. Key is path.
+  final Map<String, MergeResult> pullResults = {};
+
+  /// Result for [pullRebase]. Key is path.
+  final Map<String, MergeResult> pullRebaseResults = {};
+
+  /// Tracks calls to [pull].
+  final List<String> pullCalls = [];
+
+  /// Tracks calls to [pullRebase].
+  final List<String> pullRebaseCalls = [];
+
+  /// If set, [pull] will throw this exception.
+  GitException? pullError;
+
+  /// If set, [pullRebase] will throw this exception.
+  GitException? pullRebaseError;
+
+  @override
+  Future<MergeResult> pull(String path) async {
+    pullCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+    if (pullError != null) throw pullError!;
+    return pullResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.merge,
+        );
+  }
+
+  @override
+  Future<MergeResult> pullRebase(String path) async {
+    pullRebaseCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+    if (pullRebaseError != null) throw pullRebaseError!;
+    return pullRebaseResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+        );
+  }
+
   /// Tracks calls to [mergeAbort].
   final List<String> mergeAbortCalls = [];
 

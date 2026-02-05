@@ -355,6 +355,20 @@ abstract class GitService {
   /// to resolve.
   Future<MergeResult> rebase(String path, String targetBranch);
 
+  /// Pulls from the remote (git pull).
+  ///
+  /// Returns a [MergeResult] with [MergeOperationType.merge] indicating
+  /// success or conflicts. If conflicts occur, the working tree is left
+  /// in a conflicted state for the user or Claude to resolve.
+  Future<MergeResult> pull(String path);
+
+  /// Pulls from the remote with rebase (git pull --rebase).
+  ///
+  /// Returns a [MergeResult] with [MergeOperationType.rebase] indicating
+  /// success or conflicts. If conflicts occur, the rebase is paused for
+  /// the user or Claude to resolve.
+  Future<MergeResult> pullRebase(String path);
+
   /// Aborts a merge in progress.
   ///
   /// Throws [GitException] on failure.
@@ -1038,6 +1052,84 @@ class RealGitService implements GitService {
         hasConflicts: false,
         operation: MergeOperationType.rebase,
         error: 'Rebase timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<MergeResult> pull(String path) async {
+    try {
+      await Process.run(
+        'git',
+        ['pull'],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+      // Check if there are conflicts by looking at status
+      final status = await getStatus(path);
+      if (status.hasConflicts) {
+        return const MergeResult(
+          hasConflicts: true,
+          operation: MergeOperationType.merge,
+        );
+      }
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+      );
+    } on TimeoutException {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+        error: 'Pull timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<MergeResult> pullRebase(String path) async {
+    try {
+      final result = await Process.run(
+        'git',
+        ['pull', '--rebase'],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('could not apply')) {
+          return const MergeResult(
+            hasConflicts: true,
+            operation: MergeOperationType.rebase,
+          );
+        }
+        return MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+          error: stderr.isNotEmpty ? stderr : 'Pull rebase failed',
+        );
+      }
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+      );
+    } on TimeoutException {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Pull rebase timed out after $_mergeTimeout',
       );
     } on ProcessException catch (e) {
       return MergeResult(
