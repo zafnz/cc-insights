@@ -31,13 +31,18 @@ class WorkingIndicatorKeys {
 class WorkingIndicator extends StatefulWidget {
   const WorkingIndicator({
     super.key,
+    this.agentName = 'Claude',
     this.isCompacting = false,
     this.startTime,
   });
 
+  /// The name of the agent (e.g. "Claude" or "Codex").
+  final String agentName;
+
   /// Whether context compaction is in progress.
   ///
-  /// When true, shows "Compacting context..." instead of "Claude is working..."
+  /// When true, shows "Compacting context..." instead of
+  /// "<Agent> is working..." message.
   final bool isCompacting;
 
   /// The time when Claude started working.
@@ -97,7 +102,9 @@ class _WorkingIndicatorState extends State<WorkingIndicator> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final statusText =
-        widget.isCompacting ? 'Compacting context...' : 'Claude is working...';
+        widget.isCompacting
+            ? 'Compacting context...'
+            : '${widget.agentName} is working...';
     final elapsed = _formatElapsed(_elapsed);
 
     return Padding(

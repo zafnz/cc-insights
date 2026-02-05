@@ -568,7 +568,12 @@ class _ConversationPanelState extends State<ConversationPanel>
       itemBuilder: (context, index) {
         // Working indicator is at the end (bottom visually)
         if (showIndicator && index == entries.length) {
+          final agentName =
+              chat?.model.backend == sdk.BackendType.codex
+                  ? 'Codex'
+                  : 'Claude';
           return WorkingIndicator(
+            agentName: agentName,
             isCompacting: isCompacting,
             startTime: chat?.workingStartTime,
           );

@@ -6,11 +6,11 @@ import '../test_helpers.dart';
 
 void main() {
   group('WorkingIndicator', () {
-    Widget buildTestWidget() {
+    Widget buildTestWidget({String agentName = 'Claude'}) {
       return MaterialApp(
         theme: ThemeData.dark(),
-        home: const Scaffold(
-          body: WorkingIndicator(),
+        home: Scaffold(
+          body: WorkingIndicator(agentName: agentName),
         ),
       );
     }
@@ -84,6 +84,14 @@ void main() {
 
       expect(find.text('Claude is working...'), findsOneWidget);
       expect(find.text('Compacting context...'), findsNothing);
+    });
+
+    testWidgets('shows "Codex is working..." when agentName is Codex',
+        (tester) async {
+      await tester.pumpWidget(buildTestWidget(agentName: 'Codex'));
+
+      expect(find.text('Codex is working...'), findsOneWidget);
+      expect(find.text('Claude is working...'), findsNothing);
     });
   });
 }
