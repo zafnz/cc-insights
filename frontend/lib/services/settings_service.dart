@@ -343,6 +343,31 @@ class SettingsService extends ChangeNotifier {
   );
 
   // ---------------------------------------------------------------------------
+  // Window persistence
+  // ---------------------------------------------------------------------------
+
+  /// Keys for window geometry stored in config.json.
+  static const _windowWidthKey = 'window.width';
+  static const _windowHeightKey = 'window.height';
+
+  /// Returns the saved window size, or null if not saved.
+  ({double width, double height})? get savedWindowSize {
+    final w = _values[_windowWidthKey];
+    final h = _values[_windowHeightKey];
+    if (w is num && h is num && w > 0 && h > 0) {
+      return (width: w.toDouble(), height: h.toDouble());
+    }
+    return null;
+  }
+
+  /// Saves the window dimensions to config.json.
+  Future<void> saveWindowSize(double width, double height) async {
+    _values[_windowWidthKey] = width;
+    _values[_windowHeightKey] = height;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------------------
   // Value access
   // ---------------------------------------------------------------------------
 

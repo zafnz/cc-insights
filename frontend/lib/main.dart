@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'models/output_entry.dart';
 import 'models/project.dart';
@@ -61,6 +62,9 @@ void _loggingDebugPrint(String? message, {int? wrapWidth}) {
 void main(List<String> args) async {
   // Ensure Flutter bindings are initialized before any async work
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize window_manager for cross-platform window control
+  await windowManager.ensureInitialized();
 
   // Override debugPrint to also log to LogService while preserving stdout output
   debugPrint = _loggingDebugPrint;
@@ -186,6 +190,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The git info for the directory being validated.
   DirectoryGitInfo? _pendingValidationInfo;
 
+  /// Debounce timer for saving window size after resize.
+  Timer? _windowSizeDebounce;
 
   @override
   void initState() {
@@ -202,6 +208,46 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       // Note: We cannot await in didChangeAppLifecycleState, but we fire
       // off the async operation. The OS should give us enough time to complete.
       _handleAppTermination();
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _debounceSaveWindowSize();
+  }
+
+  /// Restores the saved window size on startup via window_manager.
+  ///
+  /// Called after settings have been loaded.
+  Future<void> _restoreWindowSize() async {
+    final saved = _settingsService?.savedWindowSize;
+    if (saved == null) return;
+
+    try {
+      await windowManager.setSize(Size(saved.width, saved.height));
+    } catch (e) {
+      debugPrint('Failed to restore window size: $e');
+    }
+  }
+
+  /// Debounces window size saves - waits 5 seconds after the last resize.
+  void _debounceSaveWindowSize() {
+    _windowSizeDebounce?.cancel();
+    _windowSizeDebounce = Timer(const Duration(seconds: 5), () {
+      _saveCurrentWindowSize();
+    });
+  }
+
+  /// Reads the current window size and saves it to config.json.
+  Future<void> _saveCurrentWindowSize() async {
+    try {
+      final size = await windowManager.getSize();
+      if (size.width > 0 && size.height > 0) {
+        await _settingsService?.saveWindowSize(size.width, size.height);
+      }
+    } catch (e) {
+      debugPrint('Failed to save window size: $e');
     }
   }
 
@@ -248,6 +294,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       if (!shouldUseMock && widget.backendService == null) {
         _backend?.start(type: RuntimeConfig.instance.defaultBackend);
       }
+      _restoreWindowSize();
     });
 
     // Create the AskAI service for one-shot AI queries
@@ -469,6 +516,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   @override
   void dispose() {
+    _windowSizeDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _themeState?.removeListener(_onThemeChanged);
     _settingsService?.removeListener(_syncThemeFromSettings);

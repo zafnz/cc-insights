@@ -54,6 +54,9 @@ dependencies:
   # Image processing
   image: ^4.0.0
 
+  # Window management (cross-platform size/position persistence)
+  window_manager: ^0.5.0
+
   # Image paste and drag-drop support
   super_clipboard: ^0.8.0
   desktop_drop: ^0.4.0
