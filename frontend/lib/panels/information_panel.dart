@@ -607,7 +607,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                     label: 'Rebase',
                     icon: Icons.low_priority,
                     tooltip: _canUpdateFromMain
-                        ? null
+                        ? 'Replay your commits on top of main'
                         : 'Already up-to-date with main',
                   ),
                 ),
@@ -623,7 +623,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                     label: 'Merge',
                     icon: Icons.merge,
                     tooltip: _canUpdateFromMain
-                        ? null
+                        ? 'Create a merge commit from main'
                         : 'Already up-to-date with main',
                   ),
                 ),
