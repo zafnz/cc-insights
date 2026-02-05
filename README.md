@@ -97,6 +97,7 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 📦 Auto containerisation | ❌ | |
 | 🤖 Z.ai GLM subscription | ❌ | Coming soon |
 | 🧠 Codex backend | ❌ | Coming soon |
+| 🧠 Z.ai backend | ❌ | Coming soon |
 
 ## Proudly Self Hoisted
 
