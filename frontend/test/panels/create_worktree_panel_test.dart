@@ -1,6 +1,7 @@
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/content_panel.dart';
+// ignore: library_prefixes, implementation_imports
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
@@ -432,16 +433,14 @@ void main() {
       testWidgets('shows branch name input field', (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        expect(find.text('Branch Name'), findsOneWidget);
-        // Hint text has been removed per design requirements
+        expect(find.text('Branch/worktree name:'), findsOneWidget);
         expect(find.byType(TextField), findsWidgets);
       });
 
       testWidgets('shows worktree root directory field', (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        expect(find.text('Worktree Root Directory'), findsOneWidget);
-        // Hint text has been removed per design requirements
+        expect(find.text('Worktree base:'), findsOneWidget);
         expect(find.byType(TextField), findsWidgets);
       });
 
@@ -461,7 +460,7 @@ void main() {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         expect(find.text('Cancel'), findsOneWidget);
-        expect(find.text('Create Worktree'), findsOneWidget);
+        expect(find.text('Create'), findsOneWidget);
       });
 
       testWidgets('path preview widget exists in the panel', (tester) async {
@@ -525,14 +524,14 @@ void main() {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         // Tap Create button without entering branch name
-        await tester.tap(find.text('Create Worktree'));
+        await tester.tap(find.text('Create'));
         await tester.pump();
 
         // Should show error message about empty branch name
         expect(find.text('Please enter a branch name.'), findsOneWidget);
       });
 
-      testWidgets('Create button shows loading spinner when creating',
+      testWidgets('Create button shows loading state when creating',
           (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
@@ -547,15 +546,15 @@ void main() {
         await tester.pump();
 
         // Tap Create button to start creation (no delay, just check state)
-        await tester.tap(find.text('Create Worktree'));
+        await tester.tap(find.text('Create'));
         // Pump once to start the async operation
         await tester.pump();
 
         // The button should be disabled and show "Creating..." while waiting
         // Note: Without a delay, this happens very fast. We check for the
         // button showing the creating state.
-        final createButton = find.widgetWithText(FilledButton, 'Creating...');
-        // If the async operation completes too fast, we may not see the spinner
+        final createButton = find.text('Creating...');
+        // If the async operation completes too fast, we may not see the state
         // This is acceptable - the test validates the button state change
         if (createButton.evaluate().isNotEmpty) {
           expect(find.text('Creating...'), findsOneWidget);
@@ -577,7 +576,7 @@ void main() {
         await tester.pump();
 
         // Tap Create button and wait for validation
-        await tester.tap(find.text('Create Worktree'));
+        await tester.tap(find.text('Create'));
         await tester.runAsync(() async {
           await Future.delayed(const Duration(milliseconds: 100));
         });
@@ -604,7 +603,7 @@ void main() {
         await tester.pump();
 
         // Tap Create button and wait for validation
-        await tester.tap(find.text('Create Worktree'));
+        await tester.tap(find.text('Create'));
         await tester.runAsync(() async {
           await Future.delayed(const Duration(milliseconds: 100));
         });
@@ -618,43 +617,42 @@ void main() {
       });
     });
 
-    group('branch autocomplete', () {
-      testWidgets('shows available branches in dropdown', (tester) async {
+    group('branch from dropdown', () {
+      testWidgets('shows Branch from dropdown with default options',
+          (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        // Focus the branch field to trigger autocomplete
-        final branchField = find.byType(TextField).first;
-        await tester.tap(branchField);
-        await tester.pump();
+        // Should show the "Branch from" label
+        expect(find.text('Branch from'), findsOneWidget);
 
-        // The autocomplete widget should be present
-        expect(find.byType(Autocomplete<String>), findsOneWidget);
+        // Should have a DropdownButton
+        expect(find.byType(DropdownButton<BranchFromOption>), findsOneWidget);
       });
 
-      testWidgets('shows existing worktree branches as note', (tester) async {
-        // Add branches that are already worktrees
-        testGitService.worktrees['/test/project'] = [
-          const WorktreeInfo(
-            path: '/test/project',
-            isPrimary: true,
-            branch: 'main',
-          ),
-          const WorktreeInfo(
-            path: '/elsewhere/feature-x',
-            isPrimary: false,
-            branch: 'feature-x',
-          ),
+      testWidgets('can switch to other branch mode', (tester) async {
+        // Set up available branches
+        testGitService.branchLists['/test/project'] = [
+          'main',
+          'origin/main',
+          'feature-x',
+          'develop',
         ];
 
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        // Should show note about existing worktree branches
-        expect(
-          find.textContaining('Branches already in worktrees'),
-          findsOneWidget,
-        );
-        expect(find.textContaining('main'), findsWidgets);
-        expect(find.textContaining('feature-x'), findsOneWidget);
+        // Find and tap the dropdown
+        await tester.tap(find.byType(DropdownButton<BranchFromOption>));
+        await tester.pumpAndSettle();
+
+        // Select "other..."
+        await tester.tap(find.text('other...').last);
+        await tester.pumpAndSettle();
+
+        // Now should show the full branch dropdown label
+        expect(find.text('Branch from:'), findsOneWidget);
+
+        // Should have a string dropdown for selecting branches
+        expect(find.byType(DropdownButton<String>), findsOneWidget);
       });
     });
 
@@ -815,8 +813,9 @@ void main() {
       await pumpWidgetWithRealAsync(tester, buildContentPanelWidget());
 
       // Should show "Create Worktree" title from PanelWrapper
-      // Note: There are 2 "Create Worktree" texts - panel title and button
-      expect(find.text('Create Worktree'), findsNWidgets(2));
+      expect(find.text('Create Worktree'), findsOneWidget);
+      // Button now says "Create" (not "Create Worktree")
+      expect(find.text('Create'), findsOneWidget);
       // Should show create worktree form elements
       expect(find.text('What is a Git Worktree?'), findsOneWidget);
     });
@@ -851,8 +850,9 @@ void main() {
       await pumpWidgetWithRealAsync(tester, buildContentPanelWidget());
 
       // Initially shows create worktree panel elements
-      // (2 "Create Worktree" texts - panel title and button)
-      expect(find.text('Create Worktree'), findsNWidgets(2));
+      // Panel title "Create Worktree" and button "Create"
+      expect(find.text('Create Worktree'), findsOneWidget);
+      expect(find.text('Create'), findsOneWidget);
       expect(find.text('What is a Git Worktree?'), findsOneWidget);
 
       // Switch back to conversation

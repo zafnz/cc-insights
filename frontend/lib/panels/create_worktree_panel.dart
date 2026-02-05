@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
@@ -7,7 +8,6 @@ import '../services/git_service.dart';
 import '../services/persistence_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
-import '../widgets/insights_widgets.dart';
 
 /// Keys for testing CreateWorktreePanel widgets.
 class CreateWorktreePanelKeys {
@@ -17,6 +17,8 @@ class CreateWorktreePanelKeys {
   static const rootField = Key('create_worktree_root_field');
   static const createButton = Key('create_worktree_create_button');
   static const cancelButton = Key('create_worktree_cancel_button');
+  static const branchFromDropdown = Key('create_worktree_branch_from_dropdown');
+  static const folderPickerButton = Key('create_worktree_folder_picker');
 }
 
 /// Panel for creating a new git worktree.
@@ -34,6 +36,13 @@ class CreateWorktreePanel extends StatefulWidget {
   State<CreateWorktreePanel> createState() => _CreateWorktreePanelState();
 }
 
+/// Options for the "Branch from" dropdown.
+enum BranchFromOption {
+  main,
+  originMain,
+  other,
+}
+
 class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   final _branchController = TextEditingController();
   final _rootController = TextEditingController();
@@ -44,6 +53,10 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   List<String>? _errorSuggestions;
   List<String> _availableBranches = [];
   List<String> _existingWorktreeBranches = [];
+
+  // Branch from selection
+  BranchFromOption _branchFromOption = BranchFromOption.main;
+  String? _selectedOtherBranch;
 
   @override
   void initState() {
@@ -204,60 +217,180 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     }
   }
 
+  /// Get the branch to create from based on current selection.
+  String get _branchFrom {
+    switch (_branchFromOption) {
+      case BranchFromOption.main:
+        return 'main';
+      case BranchFromOption.originMain:
+        return 'origin/main';
+      case BranchFromOption.other:
+        return _selectedOtherBranch ?? 'main';
+    }
+  }
+
+  /// Get sorted branches with main and origin/main at top.
+  List<String> get _sortedBranches {
+    final branches = List<String>.from(_availableBranches);
+    // Remove main and origin/main if present
+    branches.remove('main');
+    branches.remove('origin/main');
+    // Sort remaining
+    branches.sort();
+    // Add main and origin/main at top
+    final result = <String>[];
+    if (_availableBranches.contains('main')) {
+      result.add('main');
+    }
+    if (_availableBranches.contains('origin/main')) {
+      result.add('origin/main');
+    }
+    result.addAll(branches);
+    return result;
+  }
+
+  Future<void> _pickFolder() async {
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Select Worktree Base Directory',
+      initialDirectory: _rootController.text.isNotEmpty
+          ? _rootController.text
+          : null,
+    );
+    if (result != null) {
+      setState(() {
+        _rootController.text = result;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
-      children: [
-        // Form fields
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Branch name field with autocomplete
-                _BranchNameField(
-                  controller: _branchController,
-                  availableBranches: _availableBranches,
-                  existingWorktreeBranches: _existingWorktreeBranches,
-                  onCreateRequested: _handleCreate,
-                ),
-                const SizedBox(height: 24),
-                // Action buttons
-                _ActionBar(
-                  isCreating: _isCreating,
-                  onCancel: _handleCancel,
-                  onCreate: _handleCreate,
-                ),
-                const SizedBox(height: 24),
-                // Worktree root directory
-                _WorktreeRootField(controller: _rootController),
-                const SizedBox(height: 8),
-                // Preview of full path
-                _PathPreview(
-                  root: _rootController.text,
-                  branch: _branchController.text,
-                ),
-                // Error card if error
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  _ErrorCard(
-                    message: _errorMessage!,
-                    suggestions: _errorSuggestions,
-                  ),
-                ],
-                const SizedBox(height: 24),
-                // Help text explaining what a worktree is
-                const _WorktreeHelpCard(),
-              ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Branch/worktree name
+          Text(
+            'Branch/worktree name:',
+            style: textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 8),
+          _buildTextField(
+            controller: _branchController,
+            key: CreateWorktreePanelKeys.branchField,
+            autofocus: true,
+            onSubmitted: (_) => _handleCreate(),
+          ),
+          const SizedBox(height: 16),
+
+          // Branch from
+          _BranchFromField(
+            option: _branchFromOption,
+            selectedOtherBranch: _selectedOtherBranch,
+            sortedBranches: _sortedBranches,
+            onOptionChanged: (option) {
+              setState(() {
+                _branchFromOption = option;
+                if (option != BranchFromOption.other) {
+                  _selectedOtherBranch = null;
+                }
+              });
+            },
+            onOtherBranchSelected: (branch) {
+              setState(() {
+                _selectedOtherBranch = branch;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Worktree base
+          Text(
+            'Worktree base:',
+            style: textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: _rootController,
+                  key: CreateWorktreePanelKeys.rootField,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _CompactButton(
+                key: CreateWorktreePanelKeys.folderPickerButton,
+                label: 'F',
+                onPressed: _pickFolder,
+                tooltip: 'Browse for folder',
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Action buttons
+          _ActionBar(
+            isCreating: _isCreating,
+            onCancel: _handleCancel,
+            onCreate: _handleCreate,
+          ),
+
+          // Error card if error
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 16),
+            _ErrorCard(
+              message: _errorMessage!,
+              suggestions: _errorSuggestions,
+            ),
+          ],
+
+          const SizedBox(height: 24),
+          // Help text explaining what a worktree is
+          const _WorktreeHelpCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    Key? key,
+    bool autofocus = false,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colorScheme.outline),
+      ),
+      child: TextField(
+        key: key,
+        controller: controller,
+        autofocus: autofocus,
+        style: textTheme.bodyMedium,
+        onSubmitted: onSubmitted,
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: InputBorder.none,
         ),
-      ],
+      ),
     );
   }
 }
@@ -407,226 +540,143 @@ class _WorktreeHelpCardState extends State<_WorktreeHelpCard> {
   }
 }
 
-/// Branch name text field with autocomplete.
-class _BranchNameField extends StatelessWidget {
-  const _BranchNameField({
-    required this.controller,
-    required this.availableBranches,
-    required this.existingWorktreeBranches,
-    required this.onCreateRequested,
+/// Branch from field with dropdown selection.
+class _BranchFromField extends StatelessWidget {
+  const _BranchFromField({
+    required this.option,
+    required this.selectedOtherBranch,
+    required this.sortedBranches,
+    required this.onOptionChanged,
+    required this.onOtherBranchSelected,
   });
 
-  final TextEditingController controller;
-  final List<String> availableBranches;
-  final List<String> existingWorktreeBranches;
-  final VoidCallback onCreateRequested;
+  final BranchFromOption option;
+  final String? selectedOtherBranch;
+  final List<String> sortedBranches;
+  final ValueChanged<BranchFromOption> onOptionChanged;
+  final ValueChanged<String> onOtherBranchSelected;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Branch Name',
-          style: textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Autocomplete<String>(
-          optionsBuilder: (textEditingValue) {
-            final query = textEditingValue.text.toLowerCase();
-            if (query.isEmpty) {
-              return availableBranches.take(10);
-            }
-            return availableBranches.where(
-              (branch) => branch.toLowerCase().contains(query),
-            );
-          },
-          onSelected: (String selection) {
-            controller.text = selection;
-          },
-          fieldViewBuilder: (
-            context,
-            textEditingController,
-            focusNode,
-            onFieldSubmitted,
-          ) {
-            // Sync with our controller
-            textEditingController.text = controller.text;
-            textEditingController.addListener(() {
-              controller.text = textEditingController.text;
-            });
-
-            return InsightsTextField(
-              key: CreateWorktreePanelKeys.branchField,
-              controller: textEditingController,
-              focusNode: focusNode,
-              autofocus: true,
-              prefixIcon: Icon(
-                Icons.call_split,
-                size: 20,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              onSubmitted: (_) => onCreateRequested(),
-            );
-          },
-          optionsViewBuilder: (context, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options.elementAt(index);
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          option,
-                          style: textTheme.bodySmall,
-                        ),
-                        onTap: () => onSelected(option),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        if (existingWorktreeBranches.isNotEmpty) ...[
-          const SizedBox(height: 4),
+    // If "other" is selected, show full branch dropdown
+    if (option == BranchFromOption.other) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            'Branches already in worktrees: '
-            '${existingWorktreeBranches.join(", ")}',
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontStyle: FontStyle.italic,
+            'Branch from:',
+            style: textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 8),
+          _buildFullBranchDropdown(context, colorScheme, textTheme),
         ],
-      ],
-    );
-  }
-}
+      );
+    }
 
-/// Worktree root directory text field.
-class _WorktreeRootField extends StatelessWidget {
-  const _WorktreeRootField({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // Show simple main/origin/other dropdown
+    return Row(
       children: [
         Text(
-          'Worktree Root Directory',
+          'Branch from',
           style: textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
-        InsightsTextField(
-          controller: controller,
-          prefixIcon: Icon(
-            Icons.folder_outlined,
-            size: 20,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
+        const SizedBox(width: 12),
+        _buildSimpleDropdown(context, colorScheme, textTheme),
       ],
     );
   }
-}
 
-
-/// Shows the computed full path for the worktree.
-class _PathPreview extends StatelessWidget {
-  const _PathPreview({
-    required this.root,
-    required this.branch,
-  });
-
-  final String root;
-  final String branch;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    if (root.isEmpty || branch.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // Sanitize branch for path preview (basic sanitization)
-    final sanitizedBranch = branch
-        .trim()
-        .replaceAll(RegExp(r'\s+'), '-')
-        .replaceAll(RegExp(r'[^\w\-/]'), '');
-
-    if (sanitizedBranch.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final fullPath = path.join(root, 'cci', sanitizedBranch);
-
+  Widget _buildSimpleDropdown(
+    BuildContext context,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-        ),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colorScheme.outline),
       ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.folder_open_outlined,
-            size: 14,
-            color: colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: DropdownButton<BranchFromOption>(
+        key: CreateWorktreePanelKeys.branchFromDropdown,
+        value: option,
+        underline: const SizedBox.shrink(),
+        isDense: true,
+        style: textTheme.bodyMedium,
+        dropdownColor: colorScheme.surfaceContainerHigh,
+        items: const [
+          DropdownMenuItem(
+            value: BranchFromOption.main,
+            child: Text('main'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Full path:',
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  fullPath,
-                  style: textTheme.bodySmall?.copyWith(
-                    fontFamily: 'JetBrains Mono',
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
+          DropdownMenuItem(
+            value: BranchFromOption.originMain,
+            child: Text('origin/main'),
+          ),
+          DropdownMenuItem(
+            value: BranchFromOption.other,
+            child: Text('other...'),
           ),
         ],
+        onChanged: (value) {
+          if (value != null) {
+            onOptionChanged(value);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildFullBranchDropdown(
+    BuildContext context,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colorScheme.outline),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: DropdownButton<String>(
+        key: CreateWorktreePanelKeys.branchFromDropdown,
+        value: selectedOtherBranch,
+        hint: Text(
+          'Select branch...',
+          style: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        underline: const SizedBox.shrink(),
+        isDense: true,
+        isExpanded: true,
+        style: textTheme.bodyMedium,
+        dropdownColor: colorScheme.surfaceContainerHigh,
+        items: sortedBranches.map((branch) {
+          return DropdownMenuItem(
+            value: branch,
+            child: Text(branch),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value != null) {
+            onOtherBranchSelected(value);
+          }
+        },
       ),
     );
   }
 }
+
 
 /// Error card showing error message and suggestions.
 class _ErrorCard extends StatelessWidget {
@@ -728,30 +778,102 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        InsightsOutlinedButton(
+        _CompactButton(
           key: CreateWorktreePanelKeys.cancelButton,
+          label: 'Cancel',
           onPressed: isCreating ? null : onCancel,
-          child: const Text('Cancel'),
         ),
-        const SizedBox(width: 12),
-        InsightsFilledButton(
+        const SizedBox(width: 8),
+        Container(
+          width: 1,
+          height: 20,
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+        const SizedBox(width: 8),
+        _CompactButton(
           key: CreateWorktreePanelKeys.createButton,
+          label: isCreating ? 'Creating...' : 'Create',
           onPressed: isCreating ? null : onCreate,
-          icon: isCreating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.add, size: 18),
-          child: Text(isCreating ? 'Creating...' : 'Create Worktree'),
         ),
       ],
     );
+  }
+}
+
+/// Compact button styled for desktop UI - smaller padding and text.
+class _CompactButton extends StatelessWidget {
+  const _CompactButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.tooltip,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isEnabled = onPressed != null;
+
+    final contentColor = isEnabled
+        ? colorScheme.onSurface
+        : colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+    final borderColor = isEnabled
+        ? colorScheme.outline
+        : colorScheme.outlineVariant.withValues(alpha: 0.3);
+
+    Widget button = Opacity(
+      opacity: isEnabled ? 1.0 : 0.6,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              border: Border.all(color: borderColor),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 12, color: contentColor),
+                  const SizedBox(width: 4),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: contentColor,
+                    ),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (tooltip != null) {
+      button = Tooltip(message: tooltip!, child: button);
+    }
+
+    return button;
   }
 }

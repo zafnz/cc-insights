@@ -156,9 +156,9 @@ void main() {
       );
 
       // Form elements visible
-      expect(find.text('Branch Name'), findsOneWidget);
-      expect(find.text('Worktree Root Directory'), findsOneWidget);
-      expect(find.text('Create Worktree'), findsWidgets);
+      expect(find.text('Branch/worktree name:'), findsOneWidget);
+      expect(find.text('Worktree base:'), findsOneWidget);
+      expect(find.text('Create'), findsOneWidget);
 
       await _takeScreenshot(tester, 'sanity_03_new_worktree_form');
 
