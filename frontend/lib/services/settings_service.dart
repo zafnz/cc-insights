@@ -310,6 +310,21 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: false,
       ),
+      SettingDefinition(
+        key: 'developer.markdownBackend',
+        title: 'Markdown Backend',
+        description:
+            'Which markdown rendering library to use. '
+            '`flutter_markdown_plus` is the current default. '
+            '`gpt_markdown` is the previous backend. Switch to '
+            'compare performance.',
+        type: SettingType.dropdown,
+        defaultValue: 'flutter_markdown_plus',
+        options: [
+          SettingOption(value: 'flutter_markdown_plus', label: 'flutter_markdown_plus'),
+          SettingOption(value: 'gpt_markdown', label: 'gpt_markdown'),
+        ],
+      ),
     ],
   );
 
@@ -483,6 +498,10 @@ class SettingsService extends ChangeNotifier {
         config.showRawMessages = value as bool;
       case 'developer.debugSdkLogging':
         config.debugSdkLogging = value as bool;
+      case 'developer.markdownBackend':
+        config.markdownBackend = value == 'gpt_markdown'
+            ? MarkdownBackend.gptMarkdown
+            : MarkdownBackend.flutterMarkdownPlus;
       case 'logging.filePath':
         config.loggingFilePath = value as String;
       case 'logging.minimumLevel':
