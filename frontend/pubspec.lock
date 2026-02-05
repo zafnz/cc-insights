@@ -281,11 +281,9 @@ packages:
   drag_split_layout:
     dependency: "direct main"
     description:
-      path: "."
-      ref: main
-      resolved-ref: "6c51df8c5ebb0660f6c21fa1bff8a7b01e93a480"
-      url: "https://github.com/zafnz/drag_split_layout.git"
-    source: git
+      path: "../../drag_split_layout"
+      relative: true
+    source: path
     version: "0.1.1"
   equatable:
     dependency: transitive
