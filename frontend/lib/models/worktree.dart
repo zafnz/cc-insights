@@ -1,3 +1,4 @@
+import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/foundation.dart';
 
 import '../services/git_service.dart';
@@ -221,6 +222,11 @@ class WorktreeState extends ChangeNotifier {
     RuntimeConfig.instance.defaultPermissionMode,
   );
 
+  /// Reasoning effort selected in the welcome screen before chat creation.
+  ///
+  /// Null means use the model's default reasoning effort.
+  sdk.ReasoningEffort? _welcomeReasoningEffort;
+
   /// Creates a [WorktreeState] with the given initial data.
   ///
   /// [chats] defaults to an empty list if not provided.
@@ -261,6 +267,14 @@ class WorktreeState extends ChangeNotifier {
   set welcomePermissionMode(PermissionMode value) {
     if (_welcomePermissionMode == value) return;
     _welcomePermissionMode = value;
+    notifyListeners();
+  }
+
+  /// Reasoning effort selection for the welcome screen.
+  sdk.ReasoningEffort? get welcomeReasoningEffort => _welcomeReasoningEffort;
+  set welcomeReasoningEffort(sdk.ReasoningEffort? value) {
+    if (_welcomeReasoningEffort == value) return;
+    _welcomeReasoningEffort = value;
     notifyListeners();
   }
 

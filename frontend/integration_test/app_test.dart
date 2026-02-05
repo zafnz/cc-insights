@@ -109,22 +109,14 @@ void main() {
 
       expect(chatsPanelNewChat, findsOneWidget);
 
-      // Tap "New Chat"
+      // Tap "New Chat" - this should show the welcome/new-chat screen
       await tester.tap(chatsPanelNewChat);
       await safePumpAndSettle(tester);
 
-      // A new chat should appear in the list (timestamp-based name like
-      // "Chat 2/5 14:32"). We verify by checking the chats panel now has
-      // more items - specifically a chat matching "Chat \d+/\d+".
-      final chatEntries = find.descendant(
-        of: find.byType(ChatsPanel),
-        matching: find.textContaining(RegExp(r'Chat \d+/\d+')),
-      );
-      expect(chatEntries, findsWidgets);
-
-      // The welcome header should show "New Chat" label in the
-      // conversation area since no message has been sent yet.
+      // The welcome card should be shown with "New Chat" in the header
+      // and the welcome message.
       expect(find.text('New Chat'), findsWidgets);
+      expect(find.text('Welcome to CC-Insights'), findsOneWidget);
 
       await _takeScreenshot(tester, 'sanity_02_new_chat_created');
     });

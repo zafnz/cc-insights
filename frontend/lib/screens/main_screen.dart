@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
-import '../services/project_restore_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/keyboard_focus_manager.dart';
@@ -129,16 +128,11 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  /// Handles Cmd+N shortcut - creates a new chat session.
+  /// Handles Cmd+N shortcut - shows the new chat / welcome screen.
   void _handleNewChatShortcut() {
     final selection = context.read<SelectionState>();
     if (selection.selectedWorktree == null) return;
-    final restoreService = context.read<ProjectRestoreService>();
-    final now = DateTime.now();
-    final name =
-        'Chat ${now.month}/${now.day} '
-        '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-    selection.createChat(name, restoreService);
+    selection.deselectChat();
   }
 
   /// Handles Cmd+W shortcut - shows the create worktree panel.

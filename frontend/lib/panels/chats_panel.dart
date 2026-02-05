@@ -427,15 +427,9 @@ class _BellOverlayContent extends StatelessWidget {
 class NewChatCard extends StatelessWidget {
   const NewChatCard({super.key});
 
-  Future<void> _createNewChat(BuildContext context) async {
+  void _showNewChatScreen(BuildContext context) {
     final selection = context.read<SelectionState>();
-    final restoreService = context.read<ProjectRestoreService>();
-
-    // Generate a default name based on timestamp
-    final now = DateTime.now();
-    final name = 'Chat ${now.month}/${now.day} ${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-
-    await selection.createChat(name, restoreService);
+    selection.deselectChat();
   }
 
   @override
@@ -446,7 +440,7 @@ class NewChatCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _createNewChat(context),
+        onTap: () => _showNewChatScreen(context),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
