@@ -300,12 +300,41 @@ class WorktreeWatcherService extends ChangeNotifier {
   /// Changes here (commits, pushes, fetches, branch operations)
   /// affect all worktrees. When a change is detected, all
   /// worktrees are refreshed via [forceRefreshAll].
+  ///
+  /// For linked worktrees, the `.git` path is a file pointing to the
+  /// worktree-specific git dir. We resolve the common git dir using
+  /// `git rev-parse --git-common-dir`.
   void _startGitDirWatcher() {
     if (_disposed) return;
+    // Start async resolution without blocking constructor.
+    _resolveAndWatchGitDir();
+  }
 
-    final gitDirPath = '${_project.data.repoRoot}/.git';
+  /// Resolves the common .git directory path and starts watching it.
+  Future<void> _resolveAndWatchGitDir() async {
+    if (_disposed) return;
+
+    final gitPath = '${_project.data.repoRoot}/.git';
+    String? commonGitDir;
+
     try {
-      final dir = Directory(gitDirPath);
+      final fileType = FileSystemEntity.typeSync(gitPath);
+      if (fileType == FileSystemEntityType.directory) {
+        // Primary worktree: .git is the common directory.
+        commonGitDir = gitPath;
+      } else if (fileType == FileSystemEntityType.file) {
+        // Linked worktree: .git is a file. Use git to find common dir.
+        commonGitDir = await _getGitCommonDir(_project.data.repoRoot);
+      }
+    } catch (_) {
+      // Failed to determine git dir type.
+    }
+
+    if (_disposed) return;
+    if (commonGitDir == null) return;
+
+    try {
+      final dir = Directory(commonGitDir);
       if (!dir.existsSync()) return;
 
       _gitDirWatcherSubscription = dir
@@ -317,6 +346,28 @@ class WorktreeWatcherService extends ChangeNotifier {
     } catch (_) {
       // Failed to start watcher (e.g., in tests or bare repos).
     }
+  }
+
+  /// Gets the common .git directory path using git rev-parse.
+  Future<String?> _getGitCommonDir(String workingDir) async {
+    try {
+      final result = await Process.run(
+        'git',
+        ['rev-parse', '--git-common-dir'],
+        workingDirectory: workingDir,
+      );
+      if (result.exitCode == 0) {
+        final path = (result.stdout as String).trim();
+        // Path may be relative; resolve against working directory.
+        if (path.startsWith('/')) {
+          return path;
+        }
+        return Directory(workingDir).uri.resolve(path).toFilePath();
+      }
+    } catch (_) {
+      // Git command failed.
+    }
+    return null;
   }
 
   /// Called when a change is detected in the common .git directory.
