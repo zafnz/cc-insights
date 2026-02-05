@@ -19,6 +19,7 @@ import '../services/sdk_message_handler.dart';
 import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/base_selector_dialog.dart';
+import '../widgets/insights_widgets.dart';
 import '../widgets/commit_dialog.dart';
 import '../widgets/conflict_resolution_dialog.dart';
 import '../widgets/create_pr_dialog.dart';
@@ -699,7 +700,7 @@ class _StatusCounts extends StatelessWidget {
           'Staged: ${data.stagedFiles} files\n'
           'Commits ahead of upstream: ${data.commitsAhead}',
       child: Text(
-        'U / S / C:  '
+        'Uncommitted / Staged / Commits:  '
         '${data.uncommittedFiles} / ${data.stagedFiles} / '
         '${data.commitsAhead}',
         style: textTheme.bodySmall?.copyWith(
@@ -734,36 +735,88 @@ class _BaseSection extends StatelessWidget {
       children: [
         _SectionLabel(label: 'Base'),
         const SizedBox(height: 4),
-        Row(
-          children: [
-            Text(
-              isLocal ? '🏠' : '🌐',
-              style: const TextStyle(fontSize: 12),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                baseRef,
-                style: textTheme.bodySmall?.copyWith(
-                  fontFamily: 'JetBrains Mono',
-                  fontSize: 12,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Use row layout if wide enough, otherwise stack
+            final isWide = constraints.maxWidth > 220;
+            if (isWide) {
+              return Row(
+                children: [
+                  Text(
+                    isLocal ? '🏠' : '🌐',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isLocal ? 'local' : 'remote',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      baseRef,
+                      style: textTheme.bodySmall?.copyWith(
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Spacer(),
+                  InsightsOutlinedButton(
+                    key: InformationPanelKeys.changeBaseButton,
+                    onPressed: onChangeBase,
+                    child: const Text('Change...'),
+                  ),
+                ],
+              );
+            }
+            // Narrow layout: stack vertically
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      isLocal ? '🏠' : '🌐',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isLocal ? 'local' : 'remote',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        baseRef,
+                        style: textTheme.bodySmall?.copyWith(
+                          fontFamily: 'JetBrains Mono',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 4),
-            GestureDetector(
-              key: InformationPanelKeys.changeBaseButton,
-              onTap: onChangeBase,
-              child: Text(
-                '[Change]',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.primary,
-                  fontSize: 11,
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: InsightsOutlinedButton(
+                    key: InformationPanelKeys.changeBaseButton,
+                    onPressed: onChangeBase,
+                    child: const Text('Change...'),
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: 4),
         _AheadBehindIndicator(

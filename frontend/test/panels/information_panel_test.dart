@@ -141,7 +141,8 @@ void main() {
       ).isEmpty();
     });
 
-    testWidgets('shows local base with house emoji', (tester) async {
+    testWidgets('shows local base with house emoji and local label',
+        (tester) async {
       await tester.pumpWidget(buildTestWidget(
         worktreeData: const WorktreeData(
           worktreeRoot: linkedPath,
@@ -160,8 +161,9 @@ void main() {
         find.byKey(InformationPanelKeys.baseSection).evaluate(),
       ).isNotEmpty();
 
-      // House emoji for local base
+      // House emoji and "local" label for local base
       check(find.text('🏠').evaluate()).isNotEmpty();
+      check(find.text('local').evaluate()).isNotEmpty();
 
       // Base ref text
       check(find.text('main').evaluate()).isNotEmpty();
@@ -176,7 +178,7 @@ void main() {
     });
 
     testWidgets(
-      'shows remote base with globe emoji',
+      'shows remote base with globe emoji and remote label',
       (tester) async {
         await tester.pumpWidget(buildTestWidget(
           worktreeData: const WorktreeData(
@@ -189,8 +191,9 @@ void main() {
         ));
         await safePumpAndSettle(tester);
 
-        // Globe emoji for remote base
+        // Globe emoji and "remote" label for remote base
         check(find.text('🌐').evaluate()).isNotEmpty();
+        check(find.text('remote').evaluate()).isNotEmpty();
         check(find.text('origin/main').evaluate()).isNotEmpty();
       },
     );
