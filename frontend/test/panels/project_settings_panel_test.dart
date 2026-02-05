@@ -221,7 +221,10 @@ void main() {
 
         // Should show "main" as the selected value in the dropdown
         final dropdown = tester.widget<DropdownButton<String>>(
-          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+          find.descendant(
+            of: find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+            matching: find.byType(DropdownButton<String>),
+          ),
         );
         expect(dropdown.value, 'main');
       });
@@ -239,7 +242,10 @@ void main() {
         await tester.pump();
 
         final dropdown = tester.widget<DropdownButton<String>>(
-          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+          find.descendant(
+            of: find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+            matching: find.byType(DropdownButton<String>),
+          ),
         );
         expect(dropdown.value, 'origin/main');
       });
@@ -257,7 +263,10 @@ void main() {
 
         // Should show "Custom..." selected
         final dropdown = tester.widget<DropdownButton<String>>(
-          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+          find.descendant(
+            of: find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+            matching: find.byType(DropdownButton<String>),
+          ),
         );
         expect(dropdown.value, 'custom');
 
@@ -288,7 +297,10 @@ void main() {
         await tester.pump();
 
         final dropdown = tester.widget<DropdownButton<String>>(
-          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+          find.descendant(
+            of: find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+            matching: find.byType(DropdownButton<String>),
+          ),
         );
         expect(dropdown.value, 'auto');
       });

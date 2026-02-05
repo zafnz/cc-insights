@@ -705,45 +705,57 @@ class _SettingsContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Default base for new worktrees',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const InsightsDescriptionText(
-            'The base branch used for merge and diff operations. '
-            'New worktrees inherit this setting unless overridden.',
-          ),
-          const SizedBox(height: 12),
-          DropdownButton<String>(
-            key: ProjectSettingsPanelKeys.defaultBaseSelector,
-            value: defaultBaseSelection,
-            isExpanded: true,
-            onChanged: (value) {
-              if (value != null) {
-                onDefaultBaseChanged(value);
-              }
-            },
-            items: const [
-              DropdownMenuItem(
-                value: 'auto',
-                child: Text('Auto (detect upstream)'),
+          // Row layout: title + description on left, dropdown on right
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Default base for new worktrees',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const InsightsDescriptionText(
+                      'The base branch used for merge and diff operations. '
+                      'New worktrees inherit this setting unless overridden.',
+                    ),
+                  ],
+                ),
               ),
-              DropdownMenuItem(
-                value: 'main',
-                child: Text('main'),
-              ),
-              DropdownMenuItem(
-                value: 'origin/main',
-                child: Text('origin/main'),
-              ),
-              DropdownMenuItem(
-                value: 'custom',
-                child: Text('Custom...'),
+              const SizedBox(width: 24),
+              InsightsDropdown<String>(
+                key: ProjectSettingsPanelKeys.defaultBaseSelector,
+                value: defaultBaseSelection,
+                onChanged: (value) {
+                  if (value != null) {
+                    onDefaultBaseChanged(value);
+                  }
+                },
+                items: const [
+                  DropdownMenuItem(
+                    value: 'auto',
+                    child: Text('Auto (detect upstream)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'main',
+                    child: Text('main'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'origin/main',
+                    child: Text('origin/main'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'custom',
+                    child: Text('Custom...'),
+                  ),
+                ],
               ),
             ],
           ),

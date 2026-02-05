@@ -298,6 +298,53 @@ class InsightsOutlinedButton extends StatelessWidget {
   }
 }
 
+/// A compact inline dropdown styled for CC-Insights.
+///
+/// Matches the Settings screen style with filled background, 8px border radius,
+/// and compact padding. Designed to sit inline in a row layout.
+class InsightsDropdown<T> extends StatelessWidget {
+  const InsightsDropdown({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          style: TextStyle(
+            fontSize: 13,
+            color: colorScheme.onSurface,
+          ),
+          dropdownColor: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
 /// Rich text that renders inline \`code\` spans with a highlighted
 /// background, matching the CC-Insights description style.
 class InsightsDescriptionText extends StatelessWidget {
