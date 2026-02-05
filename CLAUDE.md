@@ -242,7 +242,6 @@ The SDK evaluates tool permissions in this order (first match wins):
 - **Composition over inheritance** for widgets and logic
 - **Immutability** - prefer immutable data structures
 - **Concise and declarative** - functional patterns where appropriate
-- **80 character line length**
 - **Naming**: `PascalCase` for classes, `camelCase` for members/functions, `snake_case` for files
 
 ### State Management
