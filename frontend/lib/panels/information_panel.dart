@@ -373,8 +373,10 @@ class _WorktreeInfo extends StatelessWidget {
 
     if (!context.mounted) return;
 
-    // Both cancel and "project default" return null. Only apply if
-    // the result differs from the previous value.
+    // Cancel returns null - don't change anything.
+    if (result == null) return;
+
+    // Only apply if the result differs from the previous value.
     if (result == previousValue) return;
 
     worktree.setBaseOverride(result);
@@ -572,6 +574,7 @@ class _WorktreeInfo extends StatelessWidget {
     final baseRef = data.baseRef ?? 'main';
 
     return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -856,6 +859,7 @@ class _BaseSection extends StatelessWidget {
         _AheadBehindIndicator(
           ahead: data.commitsAheadOfMain,
           behind: data.commitsBehindMain,
+          targetRef: baseRef,
           aheadPrefix: '+',
           behindPrefix: '-',
         ),
@@ -928,6 +932,7 @@ class _UpstreamSection extends StatelessWidget {
           _AheadBehindIndicator(
             ahead: data.commitsAhead,
             behind: data.commitsBehind,
+            targetRef: data.upstreamBranch!,
           ),
         ],
       ],
@@ -939,14 +944,32 @@ class _AheadBehindIndicator extends StatelessWidget {
   const _AheadBehindIndicator({
     required this.ahead,
     required this.behind,
+    required this.targetRef,
     this.aheadPrefix = '\u{2191}',
     this.behindPrefix = '\u{2193}',
   });
 
   final int ahead;
   final int behind;
+  final String targetRef;
   final String aheadPrefix;
   final String behindPrefix;
+
+  String get _tooltipMessage {
+    final lines = <String>[];
+    if (ahead > 0) {
+      lines.add('This branch has $ahead commit${ahead == 1 ? '' : 's'} '
+          'not in $targetRef');
+    }
+    if (behind > 0) {
+      lines.add('$targetRef has $behind commit${behind == 1 ? '' : 's'} '
+          'not in this branch');
+    }
+    if (ahead > 0 && behind > 0) {
+      lines.add('Your branches have diverged.');
+    }
+    return lines.join('\n');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -961,23 +984,26 @@ class _AheadBehindIndicator extends StatelessWidget {
       );
     }
 
-    return RichText(
-      text: TextSpan(
-        style: textTheme.bodySmall,
-        children: [
-          if (ahead > 0)
-            TextSpan(
-              text: '$aheadPrefix$ahead',
-              style: const TextStyle(color: Colors.green),
-            ),
-          if (ahead > 0 && behind > 0)
-            const TextSpan(text: '  '),
-          if (behind > 0)
-            TextSpan(
-              text: '$behindPrefix$behind',
-              style: const TextStyle(color: Colors.orange),
-            ),
-        ],
+    return Tooltip(
+      message: _tooltipMessage,
+      child: RichText(
+        text: TextSpan(
+          style: textTheme.bodySmall,
+          children: [
+            if (ahead > 0)
+              TextSpan(
+                text: '$aheadPrefix$ahead',
+                style: const TextStyle(color: Colors.green),
+              ),
+            if (ahead > 0 && behind > 0)
+              const TextSpan(text: '  '),
+            if (behind > 0)
+              TextSpan(
+                text: '$behindPrefix$behind',
+                style: const TextStyle(color: Colors.orange),
+              ),
+          ],
+        ),
       ),
     );
   }
