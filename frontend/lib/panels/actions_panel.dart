@@ -53,7 +53,6 @@ class _ActionsPanelContent extends StatefulWidget {
 
 class _ActionsPanelContentState extends State<_ActionsPanelContent> {
   final ProjectConfigService _configService = ProjectConfigService();
-  // Start with default config - load from disk only when user interacts
   ProjectConfig _config = const ProjectConfig.empty();
   String? _lastProjectRoot;
 
@@ -65,26 +64,13 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
 
     if (projectRoot != _lastProjectRoot) {
       _lastProjectRoot = projectRoot;
-      // Reset to defaults when project changes - will load on interaction
       _config = const ProjectConfig.empty();
+      _loadConfig();
     }
   }
 
-  /// Loads config from disk if not already loaded.
-  /// Call this before any operation that needs the actual config.
-  Future<ProjectConfig> _ensureConfigLoaded() async {
-    if (_lastProjectRoot == null) return _config;
-
-    final config = await _configService.loadConfig(_lastProjectRoot!);
-    if (mounted) {
-      setState(() => _config = config);
-    }
-    return config;
-  }
-
-  Future<void> _reloadConfig() async {
+  Future<void> _loadConfig() async {
     if (_lastProjectRoot == null) return;
-
     final config = await _configService.loadConfig(_lastProjectRoot!);
     if (mounted) {
       setState(() => _config = config);
@@ -115,7 +101,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
           name,
           newCommand,
         );
-        await _reloadConfig();
+        await _loadConfig();
 
         // Now run the script
         _runScript(name, newCommand, workingDirectory);
@@ -173,7 +159,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
           name,
           newCommand,
         );
-        await _reloadConfig();
+        await _loadConfig();
       }
     }
   }
