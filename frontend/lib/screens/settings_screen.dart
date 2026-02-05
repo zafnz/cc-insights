@@ -6,6 +6,7 @@ import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
 import '../services/settings_service.dart';
 import '../state/theme_state.dart';
+import '../widgets/insights_widgets.dart';
 
 /// Settings screen with sidebar navigation and generic setting renderers.
 class SettingsScreen extends StatefulWidget {
@@ -143,16 +144,8 @@ class _SettingsSidebar extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
+              child: InsightsOutlinedButton(
                 onPressed: onResetToDefaults,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.onSurfaceVariant,
-                  side: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  textStyle: const TextStyle(fontSize: 12),
-                ),
                 child: const Text('Reset to Defaults'),
               ),
             ),
@@ -385,7 +378,7 @@ class _SettingRow extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            _DescriptionText(definition.description),
+            InsightsDescriptionText(definition.description),
             const SizedBox(height: 12),
             _buildInput(context),
           ],
@@ -413,7 +406,7 @@ class _SettingRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                _DescriptionText(definition.description),
+                InsightsDescriptionText(definition.description),
               ],
             ),
           ),
@@ -429,18 +422,18 @@ class _SettingRow extends StatelessWidget {
     return switch (definition.type) {
       SettingType.toggle => _buildToggle(context),
       SettingType.dropdown => _buildDropdown(context),
-      SettingType.number => _NumberInput(
+      SettingType.number => InsightsNumberField(
           value: (value as num).toInt(),
           min: definition.min ?? 0,
           max: definition.max ?? 999,
-          onChanged: onChanged,
+          onChanged: (v) => onChanged(v),
         ),
       SettingType.colorPicker => _ColorPickerInput(
           value: (value as num).toInt(),
           onChanged: onChanged,
           allowDefault: definition.defaultValue == 0,
         ),
-      SettingType.text => _TextInput(
+      SettingType.text => _TextSettingInput(
           value: value as String,
           placeholder: definition.placeholder,
           onChanged: onChanged,
@@ -498,184 +491,12 @@ class _SettingRow extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Description text with inline `code` spans
-// -----------------------------------------------------------------------------
-
-class _DescriptionText extends StatelessWidget {
-  const _DescriptionText(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(
-          fontSize: 13,
-          color: colorScheme.onSurfaceVariant,
-          height: 1.5,
-        ),
-        children: _parseInlineCode(context),
-      ),
-    );
-  }
-
-  List<InlineSpan> _parseInlineCode(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final spans = <InlineSpan>[];
-    final codePattern = RegExp(r'`([^`]+)`');
-    var lastEnd = 0;
-
-    for (final match in codePattern.allMatches(text)) {
-      // Text before the code span
-      if (match.start > lastEnd) {
-        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
-      }
-      // Code span
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              match.group(1)!,
-              style: TextStyle(
-                fontFamily: 'JetBrains Mono',
-                fontSize: 12,
-                color: colorScheme.primary,
-              ),
-            ),
-          ),
-        ),
-      );
-      lastEnd = match.end;
-    }
-
-    // Remaining text after last code span
-    if (lastEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastEnd)));
-    }
-
-    return spans;
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Number input
-// -----------------------------------------------------------------------------
-
-class _NumberInput extends StatefulWidget {
-  const _NumberInput({
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
-
-  final int value;
-  final int min;
-  final int max;
-  final ValueChanged<dynamic> onChanged;
-
-  @override
-  State<_NumberInput> createState() => _NumberInputState();
-}
-
-class _NumberInputState extends State<_NumberInput> {
-  late TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value.toString());
-  }
-
-  @override
-  void didUpdateWidget(_NumberInput oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
-      _controller.text = widget.value.toString();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit(String text) {
-    final parsed = int.tryParse(text);
-    if (parsed != null) {
-      final clamped = parsed.clamp(widget.min, widget.max);
-      widget.onChanged(clamped);
-      _controller.text = clamped.toString();
-    } else {
-      _controller.text = widget.value.toString();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return SizedBox(
-      width: 80,
-      child: TextField(
-        controller: _controller,
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: TextStyle(
-          fontSize: 13,
-          color: colorScheme.onSurface,
-        ),
-        decoration: InputDecoration(
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          filled: true,
-          fillColor: colorScheme.surfaceContainerHighest,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-            ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: colorScheme.primary),
-          ),
-        ),
-        onSubmitted: _submit,
-        onTapOutside: (_) => _submit(_controller.text),
-      ),
-    );
-  }
-}
-
 // ---------------------------------------------------------------------
 // Text input
 // ---------------------------------------------------------------------
 
-class _TextInput extends StatefulWidget {
-  const _TextInput({
+class _TextSettingInput extends StatefulWidget {
+  const _TextSettingInput({
     required this.value,
     this.placeholder,
     required this.onChanged,
@@ -686,10 +507,10 @@ class _TextInput extends StatefulWidget {
   final ValueChanged<dynamic> onChanged;
 
   @override
-  State<_TextInput> createState() => _TextInputState();
+  State<_TextSettingInput> createState() => _TextSettingInputState();
 }
 
-class _TextInputState extends State<_TextInput> {
+class _TextSettingInputState extends State<_TextSettingInput> {
   late TextEditingController _controller;
 
   @override
@@ -699,7 +520,7 @@ class _TextInputState extends State<_TextInput> {
   }
 
   @override
-  void didUpdateWidget(_TextInput oldWidget) {
+  void didUpdateWidget(_TextSettingInput oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value &&
         _controller.text != widget.value) {
@@ -719,48 +540,12 @@ class _TextInputState extends State<_TextInput> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return SizedBox(
       width: 280,
-      child: TextField(
+      child: InsightsTextField(
         controller: _controller,
-        style: TextStyle(
-          fontSize: 13,
-          fontFamily: 'JetBrains Mono',
-          color: colorScheme.onSurface,
-        ),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: widget.placeholder,
-          hintStyle: TextStyle(
-            fontSize: 13,
-            fontFamily: 'JetBrains Mono',
-            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          filled: true,
-          fillColor: colorScheme.surfaceContainerHighest,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-            ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: colorScheme.primary),
-          ),
-        ),
+        hintText: widget.placeholder,
+        monospace: true,
         onSubmitted: _submit,
         onTapOutside: (_) => _submit(_controller.text),
       ),
@@ -1191,42 +976,9 @@ class _TagsSettingsContentState extends State<_TagsSettingsContent> {
                   Expanded(
                     child: SizedBox(
                       height: 36,
-                      child: TextField(
+                      child: InsightsTextField(
                         controller: _newTagController,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: colorScheme.onSurface,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'New tag name...',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          filled: true,
-                          fillColor: colorScheme.surfaceContainerHighest,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant
-                                  .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant
-                                  .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            borderSide: BorderSide(
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        ),
+                        hintText: 'New tag name...',
                         onSubmitted: (_) => _addTag(),
                       ),
                     ),
@@ -1234,16 +986,10 @@ class _TagsSettingsContentState extends State<_TagsSettingsContent> {
                   const SizedBox(width: 8),
                   SizedBox(
                     height: 36,
-                    child: FilledButton.tonalIcon(
+                    child: InsightsTonalButton(
                       onPressed: _addTag,
                       icon: const Icon(Icons.add, size: 16),
                       label: const Text('Add'),
-                      style: FilledButton.styleFrom(
-                        textStyle: const TextStyle(fontSize: 12),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                        ),
-                      ),
                     ),
                   ),
                 ],

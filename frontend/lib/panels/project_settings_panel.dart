@@ -5,6 +5,7 @@ import '../models/project.dart';
 import '../models/project_config.dart';
 import '../services/project_config_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/insights_widgets.dart';
 
 /// Keys for testing ProjectSettingsPanel widgets.
 class ProjectSettingsPanelKeys {
@@ -378,7 +379,7 @@ class _SettingsSidebar extends StatelessWidget {
               children: [
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton.icon(
+                  child: InsightsFilledButton(
                     onPressed: isSaving ? null : onSave,
                     icon: isSaving
                         ? const SizedBox(
@@ -390,27 +391,15 @@ class _SettingsSidebar extends StatelessWidget {
                             ),
                           )
                         : const Icon(Icons.save, size: 16),
-                    label: Text(isSaving ? 'Saving...' : 'Save'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      textStyle: const TextStyle(fontSize: 12),
-                    ),
+                    child: Text(isSaving ? 'Saving...' : 'Save'),
                   ),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton(
+                  child: InsightsOutlinedButton(
                     key: ProjectSettingsPanelKeys.closeButton,
                     onPressed: onClose,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colorScheme.onSurfaceVariant,
-                      side: BorderSide(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      textStyle: const TextStyle(fontSize: 12),
-                    ),
                     child: const Text('Close'),
                   ),
                 ),
@@ -717,120 +706,16 @@ class _HookRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          _DescriptionText(description),
+          InsightsDescriptionText(description),
           const SizedBox(height: 12),
-          TextField(
+          InsightsTextField(
             controller: controller,
-            style: TextStyle(
-              fontSize: 13,
-              fontFamily: 'JetBrains Mono',
-              color: colorScheme.onSurface,
-            ),
-            decoration: InputDecoration(
-              hintText: placeholder,
-              hintStyle: TextStyle(
-                fontSize: 13,
-                fontFamily: 'JetBrains Mono',
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-              ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              filled: true,
-              fillColor: colorScheme.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: colorScheme.primary),
-              ),
-            ),
+            hintText: placeholder,
+            monospace: true,
           ),
         ],
       ),
     );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Description text with inline `code` spans
-// -----------------------------------------------------------------------------
-
-class _DescriptionText extends StatelessWidget {
-  const _DescriptionText(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(
-          fontSize: 13,
-          color: colorScheme.onSurfaceVariant,
-          height: 1.5,
-        ),
-        children: _parseInlineCode(context),
-      ),
-    );
-  }
-
-  List<InlineSpan> _parseInlineCode(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final spans = <InlineSpan>[];
-    final codePattern = RegExp(r'`([^`]+)`');
-    var lastEnd = 0;
-
-    for (final match in codePattern.allMatches(text)) {
-      // Text before the code span
-      if (match.start > lastEnd) {
-        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
-      }
-      // Code span
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              match.group(1)!,
-              style: TextStyle(
-                fontFamily: 'JetBrains Mono',
-                fontSize: 12,
-                color: colorScheme.primary,
-              ),
-            ),
-          ),
-        ),
-      );
-      lastEnd = match.end;
-    }
-
-    // Remaining text after last code span
-    if (lastEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastEnd)));
-    }
-
-    return spans;
   }
 }
 
@@ -882,42 +767,9 @@ class _UserActionRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                InsightsTextField(
                   controller: nameController,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurface,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'e.g., Test',
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                    ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: colorScheme.primary),
-                    ),
-                  ),
+                  hintText: 'e.g., Test',
                 ),
               ],
             ),
@@ -967,44 +819,10 @@ class _UserActionRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                InsightsTextField(
                   controller: commandController,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontFamily: 'JetBrains Mono',
-                    color: colorScheme.onSurface,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'e.g., ./test.sh',
-                    hintStyle: TextStyle(
-                      fontSize: 13,
-                      fontFamily: 'JetBrains Mono',
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                    ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: colorScheme.primary),
-                    ),
-                  ),
+                  hintText: 'e.g., ./test.sh',
+                  monospace: true,
                 ),
               ],
             ),
