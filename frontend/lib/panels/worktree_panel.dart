@@ -468,7 +468,7 @@ class CreateWorktreeCard extends StatelessWidget {
 }
 
 /// A single compact worktree entry in the list.
-class _WorktreeListItem extends StatelessWidget {
+class _WorktreeListItem extends StatefulWidget {
   const _WorktreeListItem({
     super.key,
     required this.worktree,
@@ -481,6 +481,57 @@ class _WorktreeListItem extends StatelessWidget {
   final String repoRoot;
   final bool isSelected;
   final VoidCallback onTap;
+
+  @override
+  State<_WorktreeListItem> createState() => _WorktreeListItemState();
+}
+
+class _WorktreeListItemState extends State<_WorktreeListItem> {
+  /// When true, the next tap will be treated as a double-click.
+  bool _awaitingSecondClick = false;
+
+  /// Timer for resetting _awaitingSecondClick after the double-click window.
+  Timer? _doubleClickTimer;
+
+  /// Duration of the double-click detection window.
+  static const _doubleClickDuration = Duration(milliseconds: 300);
+
+  @override
+  void dispose() {
+    _doubleClickTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleTap(BuildContext context) {
+    final isPrimary = widget.worktree.data.isPrimary;
+
+    if (isPrimary && _awaitingSecondClick) {
+      // This is a double-click on the primary worktree
+      _doubleClickTimer?.cancel();
+      _awaitingSecondClick = false;
+      context.read<SelectionState>().showProjectSettingsPanel();
+    } else {
+      // First click - always select the worktree
+      widget.onTap();
+
+      if (isPrimary) {
+        // Start the double-click detection timer for primary worktree
+        _awaitingSecondClick = true;
+        _doubleClickTimer?.cancel();
+        _doubleClickTimer = Timer(_doubleClickDuration, () {
+          if (mounted) {
+            setState(() {
+              _awaitingSecondClick = false;
+            });
+          }
+        });
+      }
+    }
+  }
+
+  WorktreeState get worktree => widget.worktree;
+  String get repoRoot => widget.repoRoot;
+  bool get isSelected => widget.isSelected;
 
   /// Computes a relative path from the repo root to the worktree.
   /// Returns null for the primary worktree (at repo root).
@@ -750,7 +801,7 @@ class _WorktreeListItem extends StatelessWidget {
                 ? colorScheme.primaryContainer.withValues(alpha: 0.3)
                 : Colors.transparent,
             child: InkWell(
-              onTap: onTap,
+              onTap: () => _handleTap(context),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Column(
