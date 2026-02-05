@@ -12,6 +12,45 @@ import 'persistence_service.dart';
 import 'project_config_service.dart';
 import 'script_execution_service.dart';
 
+/// Calculates the default worktree root directory for a project.
+///
+/// Checks for existing directories in this order:
+/// 1. `{parent}/.{projectName}-wt/`
+/// 2. `{parent}/.{projectName}-worktrees/`
+/// 3. `{parent}/{projectName}-wt/`
+/// 4. `{parent}/{projectName}-worktrees/`
+///
+/// If none exist, returns `{parent}/.{projectName}-wt` as the default.
+///
+/// For example, if [projectRoot] is `/my/project/folder/my-app`:
+/// - Returns `/my/project/folder/.my-app-wt` if it exists
+/// - Or `/my/project/folder/.my-app-worktrees` if it exists
+/// - Or `/my/project/folder/my-app-wt` if it exists
+/// - Or `/my/project/folder/my-app-worktrees` if it exists
+/// - Otherwise returns `/my/project/folder/.my-app-wt` as default
+Future<String> calculateDefaultWorktreeRoot(String projectRoot) async {
+  final parentDir = path.dirname(projectRoot);
+  final projectName = path.basename(projectRoot);
+
+  // List of candidates in priority order
+  final candidates = [
+    path.join(parentDir, '.$projectName-wt'),
+    path.join(parentDir, '.$projectName-worktrees'),
+    path.join(parentDir, '$projectName-wt'),
+    path.join(parentDir, '$projectName-worktrees'),
+  ];
+
+  // Check each candidate in order
+  for (final candidate in candidates) {
+    if (await Directory(candidate).exists()) {
+      return candidate;
+    }
+  }
+
+  // Default to first candidate if none exist
+  return candidates.first;
+}
+
 /// Exception thrown when worktree creation fails.
 ///
 /// Contains a user-friendly message and optional actionable suggestions.

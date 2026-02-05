@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../models/project.dart';
 import '../models/project_config.dart';
+import '../services/persistence_service.dart';
 import '../services/project_config_service.dart';
+import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/insights_widgets.dart';
 
@@ -30,6 +32,10 @@ class ProjectSettingsPanelKeys {
   static const defaultBaseSelector =
       Key('project_settings_default_base_selector');
   static const customBaseField = Key('project_settings_custom_base_field');
+
+  // Worktree settings fields
+  static const defaultWorktreeRootField =
+      Key('project_settings_default_worktree_root_field');
 }
 
 /// Category definition for project settings sidebar.
@@ -48,6 +54,12 @@ class _SettingsCategory {
 }
 
 const _categories = [
+  _SettingsCategory(
+    id: 'worktrees',
+    label: 'Worktrees',
+    icon: Icons.folder_copy_outlined,
+    description: 'Default location for new worktrees',
+  ),
   _SettingsCategory(
     id: 'hooks',
     label: 'Lifecycle Hooks',
@@ -86,6 +98,7 @@ class ProjectSettingsPanel extends StatefulWidget {
 
 class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   late final ProjectConfigService _configService;
+  late final PersistenceService _persistenceService;
   ProjectConfig _config = const ProjectConfig.empty();
   bool _isLoading = true;
   String? _errorMessage;
@@ -104,10 +117,15 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   String _defaultBaseSelection = 'auto';
   final _customBaseController = TextEditingController();
 
+  // Worktree settings
+  final _defaultWorktreeRootController = TextEditingController();
+  String _calculatedWorktreeRoot = '';
+
   @override
   void initState() {
     super.initState();
     _configService = widget.configService ?? ProjectConfigService();
+    _persistenceService = PersistenceService();
     _loadConfig();
   }
 
@@ -118,6 +136,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     _preRemoveController.dispose();
     _postRemoveController.dispose();
     _customBaseController.dispose();
+    _defaultWorktreeRootController.dispose();
     for (final action in _userActions) {
       action.dispose();
     }
@@ -130,10 +149,22 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
 
     try {
       final config = await _configService.loadConfig(projectRoot);
+
+      // Load worktree settings from persistence
+      final projectsIndex = await _persistenceService.loadProjectsIndex();
+      final projectInfo = projectsIndex.projects[projectRoot];
+      final savedWorktreeRoot = projectInfo?.defaultWorktreeRoot;
+
+      // Calculate the default worktree root
+      final calculatedRoot = await calculateDefaultWorktreeRoot(projectRoot);
+
       if (mounted) {
         setState(() {
           _config = config;
           _populateControllers(config);
+          _calculatedWorktreeRoot = calculatedRoot;
+          _defaultWorktreeRootController.text =
+              savedWorktreeRoot ?? calculatedRoot;
           _isLoading = false;
         });
       }
@@ -259,6 +290,20 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     }
   }
 
+  Future<void> _saveWorktreeRoot() async {
+    final project = context.read<ProjectState>();
+    final projectRoot = project.data.repoRoot;
+    final value = _defaultWorktreeRootController.text.trim();
+
+    // Only save if different from calculated default
+    final valueToSave = value == _calculatedWorktreeRoot ? null : value;
+
+    await _persistenceService.updateProjectDefaultWorktreeRoot(
+      projectRoot: projectRoot,
+      defaultWorktreeRoot: valueToSave,
+    );
+  }
+
   void _addUserAction() {
     setState(() {
       _userActions.add(_UserActionEntry(
@@ -327,6 +372,8 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
                 },
                 customBaseController: _customBaseController,
                 onSave: _saveConfig, // For text field blur
+                defaultWorktreeRootController: _defaultWorktreeRootController,
+                onSaveWorktreeRoot: _saveWorktreeRoot,
                 errorMessage: _errorMessage,
               ),
             ),
@@ -504,6 +551,8 @@ class _SettingsContent extends StatelessWidget {
     required this.onDefaultBaseChanged,
     required this.customBaseController,
     required this.onSave,
+    required this.defaultWorktreeRootController,
+    required this.onSaveWorktreeRoot,
     this.errorMessage,
   });
 
@@ -519,6 +568,8 @@ class _SettingsContent extends StatelessWidget {
   final ValueChanged<String> onDefaultBaseChanged;
   final TextEditingController customBaseController;
   final VoidCallback onSave;
+  final TextEditingController defaultWorktreeRootController;
+  final VoidCallback onSaveWorktreeRoot;
   final String? errorMessage;
 
   @override
@@ -545,7 +596,9 @@ class _SettingsContent extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         // Content based on category
-        if (category.id == 'hooks') ...[
+        if (category.id == 'worktrees') ...[
+          _buildWorktreesContent(context),
+        ] else if (category.id == 'hooks') ...[
           _buildHooksContent(context),
         ] else if (category.id == 'actions') ...[
           _buildActionsContent(context),
@@ -558,6 +611,51 @@ class _SettingsContent extends StatelessWidget {
           _buildErrorCard(context, errorMessage!),
         ],
       ],
+    );
+  }
+
+  Widget _buildWorktreesContent(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 700),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Default worktree root',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const InsightsDescriptionText(
+            'The parent directory where new worktrees are created. '
+            'Each worktree will be placed in a subdirectory named after its branch.',
+          ),
+          const SizedBox(height: 12),
+          _AutoSaveTextField(
+            key: ProjectSettingsPanelKeys.defaultWorktreeRootField,
+            controller: defaultWorktreeRootController,
+            hintText: '/path/to/worktrees',
+            monospace: true,
+            onSave: onSaveWorktreeRoot,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'The default is auto-detected by looking for existing directories like '
+            '`.project-wt`, `.project-worktrees`, `project-wt`, or `project-worktrees` '
+            'in the parent folder.',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

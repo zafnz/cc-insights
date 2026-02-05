@@ -926,6 +926,60 @@ class PersistenceService {
   // Cost Tracking Methods
   // ---------------------------------------------------------------------------
 
+  /// Updates the default worktree root for a project in projects.json.
+  ///
+  /// This sets the default parent directory used when creating new worktrees.
+  /// Pass null for [defaultWorktreeRoot] to clear the override and revert to
+  /// the calculated default.
+  ///
+  /// This method is designed to be called fire-and-forget - errors are logged
+  /// but not thrown to avoid blocking UI operations.
+  Future<void> updateProjectDefaultWorktreeRoot({
+    required String projectRoot,
+    required String? defaultWorktreeRoot,
+  }) async {
+    try {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
+
+      if (project == null) {
+        developer.log(
+          'Project not found for default worktree root update: $projectRoot',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      final updatedProject = ProjectInfo(
+        id: project.id,
+        name: project.name,
+        worktrees: project.worktrees,
+        defaultWorktreeRoot: defaultWorktreeRoot,
+      );
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {
+          ...projectsIndex.projects,
+          projectRoot: updatedProject,
+        },
+      );
+
+      await saveProjectsIndex(updatedIndex);
+
+      developer.log(
+        'Updated default worktree root for project $projectRoot: '
+        '${defaultWorktreeRoot ?? 'cleared'}',
+        name: 'PersistenceService',
+      );
+    } catch (e) {
+      developer.log(
+        'Failed to update default worktree root for project $projectRoot: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+    }
+  }
+
   /// Appends a cost tracking entry to the project's tracking.jsonl file.
   ///
   /// This is called when a chat is closed or when a worktree is deleted.
