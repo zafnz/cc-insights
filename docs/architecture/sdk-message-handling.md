@@ -368,7 +368,7 @@ session.updateToolResult(
                          │ JSON Lines (stdout)
                          ▼
                   ┌─────────────┐
-                  │ ClaudeSession│
+                  │ AgentSession │
                   │   Stream    │
                   └──────┬──────┘
                          │

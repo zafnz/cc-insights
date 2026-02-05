@@ -1,6 +1,6 @@
 # Direct Claude CLI Protocol Flow
 
-This document describes the complete protocol for communicating directly with the claude-cli binary, bypassing the Node.js backend and TypeScript SDK.
+This document describes the complete protocol for communicating directly with the claude-cli binary.
 
 ---
 
@@ -474,14 +474,14 @@ $ claude --output-format stream-json --input-format stream-json \
 
 ## Dart SDK Implementation Notes
 
-### Key Differences from Current Node.js Backend
+### Key Design Decisions
 
-| Aspect | Node.js Backend | Direct CLI |
-|--------|-----------------|------------|
-| Message wrapper | `sdk.message` envelope | Direct messages |
-| Permission bridge | `callback.request`/`callback.response` | `control_request`/`control_response` |
-| Session creation | Custom `session.create` | CLI args + `control_request` (initialize) |
-| Process per session | One Node.js process, multiple sessions | One CLI process per session |
+| Aspect | Direct CLI |
+|--------|------------|
+| Message format | Direct JSON messages (no wrapper envelope) |
+| Permission bridge | `control_request`/`control_response` |
+| Session creation | CLI args + `control_request` (initialize) |
+| Process per session | One CLI process per session |
 
 ### Implementation Checklist
 

@@ -17,7 +17,7 @@ This document describes an alternative architecture where the Flutter frontend c
 │                                                     │
 │  ┌─────────────────────────────────────────────┐    │
 │  │  Dart SDK                                   │    │
-│  │  - Spawns Node.js subprocess                │    │
+│  │  - Spawns Claude CLI subprocess              │    │
 │  │  - Communicates via stdin/stdout            │    │
 │  │  - JSON lines protocol                      │    │
 │  └─────────────────────────────────────────────┘    │
@@ -25,8 +25,8 @@ This document describes an alternative architecture where the Flutter frontend c
 │         │ stdin/stdout                              │
 │         ↓                                           │
 │  ┌─────────────────────────────────────────────┐    │
-│  │  backend-node (subprocess)                  │    │
-│  │  - Claude Agent SDK                         │    │
+│  │  Claude CLI (subprocess)                    │    │
+│  │  - Claude API                               │    │
 │  │  - Session management                       │    │
 │  └─────────────────────────────────────────────┘    │
 │                                                     │
@@ -62,7 +62,7 @@ This document describes an alternative architecture where the Flutter frontend c
 │  ┌─────────────────────────────────────────────┐    │
 │  │  Backend Server                             │    │
 │  │  - WebSocket server on :8080                │    │
-│  │  - Spawns Claude SDK subprocess             │    │
+│  │  - Spawns Claude CLI subprocess              │    │
 │  │  - Bridges SDK ↔ WebSocket                  │    │
 │  └─────────────────────────────────────────────┘    │
 │                                                     │
@@ -111,10 +111,10 @@ With the WebSocket architecture, an LLM (Claude) can drive the app via iOS Simul
 
 ### 1. Backend: WebSocket Server
 
-Add a WebSocket server mode to `backend-node`:
+Add a WebSocket server mode to the backend:
 
 ```typescript
-// backend-node/src/websocket-server.ts
+// websocket-server.ts
 import { WebSocketServer, WebSocket } from 'ws';
 import { SessionManager } from './session-manager';
 
@@ -353,7 +353,7 @@ abstract class AgentBackend {
 class BackendFactory {
   /// Spawn a local subprocess backend (macOS/Linux/Windows only)
   static Future<AgentBackend> spawnSubprocess() async {
-    return ClaudeSubprocessBackend.spawn();
+    return BackendFactory.create(type: BackendType.directCli);
   }
 
   /// Connect to a remote WebSocket backend
@@ -415,7 +415,7 @@ flutter run -d macos
 
 ```bash
 # Terminal 1: Start backend server
-cd backend-node
+cd backend
 npm run start:websocket
 # Backend listening on ws://localhost:8080
 
@@ -451,7 +451,7 @@ flutter run -d iPhone
 
 | Component | Effort |
 |-----------|--------|
-| WebSocket server in backend-node | 2-3 hours |
+| WebSocket server in backend | 2-3 hours |
 | WebSocket transport in Dart SDK | 2-3 hours |
 | Backend abstraction (interface) | 1 hour |
 | Enable iOS platform + test | 1 hour |

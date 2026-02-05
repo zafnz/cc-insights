@@ -69,10 +69,7 @@ Set the `DEBUG` environment variable to enable debug logging:
 DEBUG=true flutter run -d macos
 ```
 
-Or edit `backend-node/src/logger.ts` and change:
-```typescript
-private minLevel: LogLevel = "debug"; // Change from "info" to "debug"
-```
+Or set environment variable `LOG_LEVEL=debug` before starting the app.
 
 ## Examples
 
@@ -119,5 +116,4 @@ Errors include full context:
 - Consider adding log rotation if needed
 
 ### Missing debug logs?
-- Ensure `DEBUG=true` is set or change `minLevel` in logger.ts
-- Rebuild the backend: `cd backend-node && npm run build`
+- Ensure `DEBUG=true` is set when running the app

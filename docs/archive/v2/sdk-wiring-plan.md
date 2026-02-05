@@ -2,13 +2,13 @@
 
 ## Overview
 
-This plan covers wiring up the Claude SDK so users can send messages and receive replies. The Dart SDK and Node.js backend are **already fully implemented** - this is purely a wiring/integration task.
+This plan covers wiring up the Claude SDK so users can send messages and receive replies. The Dart SDK and CLI backend are **already fully implemented** - this is purely a wiring/integration task.
 
 ## Current State
 
 ### What's Ready
 - **Dart SDK** (`claude_dart_sdk/`): Complete API for spawning backend, creating sessions, sending messages, receiving streams
-- **Node.js Backend** (`backend-node/`): Complete session management, message routing, permission callbacks
+- **CLI Backend**: Direct CLI communication, session management, message routing, permission callbacks
 - **SdkMessageHandler** (`lib/services/sdk_message_handler.dart`): Parses SDK messages and routes to correct conversation, handles tool pairing, Task tool spawning
 - **ChatState**: Data model ready, just needs session lifecycle methods
 - **MessageInput**: Ready to send messages, just needs callback wiring
@@ -32,8 +32,8 @@ The existing `SdkMessageHandler` takes `ChatState` in its constructor, making it
 │ Flutter App                                                 │
 │                                                             │
 │  ┌─────────────────┐    ┌─────────────────────────────┐    │
-│  │ BackendService  │───>│ ClaudeBackend (Dart SDK)    │    │
-│  │ (ChangeNotifier)│    │  - spawn()                  │    │
+│  │ BackendService  │───>│ AgentBackend (Dart SDK)    │    │
+│  │ (ChangeNotifier)│    │  - create()                 │    │
 │  │                 │    │  - createSession()          │    │
 │  │                 │    │  - dispose()                │    │
 │  └────────┬────────┘    └─────────────────────────────┘    │
@@ -42,7 +42,7 @@ The existing `SdkMessageHandler` takes `ChatState` in its constructor, making it
 │           ▼                                                 │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │ ChatState (ChangeNotifier)                          │   │
-│  │  - _session: ClaudeSession                          │   │
+│  │  - _session: AgentSession                         │   │
 │  │  - _messageSubscription: StreamSubscription         │   │
 │  │  - _permissionSubscription: StreamSubscription      │   │
 │  │                                                     │   │
@@ -68,8 +68,8 @@ The existing `SdkMessageHandler` takes `ChatState` in its constructor, making it
                               │ JSON lines (stdin/stdout)
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Node.js Backend Process                                     │
-│  - SessionManager handles SDK session lifecycle             │
+│ Claude CLI Process                                          │
+│  - Manages session lifecycle                                │
 │  - Routes messages between Dart and Claude API              │
 │  - Forwards permission requests back to Dart                │
 └─────────────────────────────────────────────────────────────┘
@@ -79,13 +79,13 @@ The existing `SdkMessageHandler` takes `ChatState` in its constructor, making it
 
 ### Phase 1: Backend Service
 
-Create a service to manage the Node.js backend subprocess lifecycle.
+Create a service to manage the backend lifecycle.
 
 **File:** `flutter_app_v2/lib/services/backend_service.dart`
 
 ```dart
 class BackendService extends ChangeNotifier {
-  ClaudeBackend? _backend;
+  AgentBackend? _backend;
   bool _isStarting = false;
   String? _error;
 
@@ -101,8 +101,8 @@ class BackendService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _backend = await ClaudeBackend.spawn(
-        backendPath: _getBackendPath(),
+      _backend = await BackendFactory.create(
+        type: BackendType.directCli,
       );
 
       // Monitor backend errors
@@ -119,7 +119,7 @@ class BackendService extends ChangeNotifier {
     }
   }
 
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -140,11 +140,6 @@ class BackendService extends ChangeNotifier {
     super.dispose();
   }
 
-  String _getBackendPath() {
-    // Return path to compiled backend-node executable
-    // Development: use ts-node or compiled JS
-    // Production: bundled executable
-  }
 }
 ```
 
@@ -191,7 +186,7 @@ import '../services/sdk_message_handler.dart';
 class ChatState extends ChangeNotifier {
   // Existing fields...
 
-  ClaudeSession? _session;
+  AgentSession? _session;
   StreamSubscription? _messageSubscription;
   StreamSubscription? _permissionSubscription;
 

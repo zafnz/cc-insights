@@ -1,6 +1,10 @@
-# Direct claude-cli Protocol
+# Direct claude-cli Protocol (Historical)
 
-This document describes the protocol between the TypeScript SDK and the claude-cli, and how we can bypass the Node.js backend to talk directly to the claude-cli from Dart.
+> **Note:** This is a historical document that described the migration plan from the Node.js backend
+> to direct CLI communication. The migration is complete. The Node.js backend has been removed.
+> See `ClaudeCliBackend` in `claude_dart_sdk/lib/src/cli_backend.dart` for the current implementation.
+
+This document describes the protocol between the TypeScript SDK and the claude-cli, and the rationale for bypassing the Node.js backend to talk directly to the claude-cli from Dart.
 
 ---
 
@@ -529,7 +533,7 @@ From `backend-node/src/session-manager.ts` (~596 lines):
 ### 1. claude-cli Spawning
 
 ```dart
-class ClaudeBinaryBackend {
+class ClaudeCliBackend {
   Future<Process> spawnClaude(SessionOptions options) async {
     final args = [
       '--output-format', 'stream-json',
@@ -645,7 +649,7 @@ process.stdin.writeln(jsonEncode(userMessage));
 ### Phase 1: Basic Direct Connection (1-2 days)
 
 **Tasks:**
-- Create `ClaudeBinaryBackend` class
+- Create `ClaudeCliBackend` class
 - Implement claude-cli spawning with CLI args
 - Send `control_request` initialization
 - Parse `control_response`
@@ -767,7 +771,7 @@ process.stdin.writeln(jsonEncode(userMessage));
 1. **Document permission protocol** - Examine captures for permission request/response flow
 2. **Document hook protocol** - Understand how hooks are configured and triggered
 3. **Document control messages** - List all control message types
-4. **Create prototype** - Build minimal `ClaudeBinaryBackend` class
+4. **Create prototype** - Build minimal `ClaudeCliBackend` class
 5. **Test against captures** - Validate protocol implementation against known-good data
 6. **Migrate incrementally** - Add feature flag to switch between backends
 

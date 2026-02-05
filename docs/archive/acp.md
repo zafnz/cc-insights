@@ -20,7 +20,7 @@ Key characteristics:
 
 | Current Architecture | ACP Architecture |
 |---------------------|------------------|
-| Custom Node.js backend | Direct agent spawning |
+| Custom CLI backend | Direct agent spawning |
 | Claude-only | Multi-agent support |
 | Proprietary protocol | Industry standard |
 | SDK wrapper maintenance | Drop-in agent compatibility |
@@ -44,7 +44,7 @@ With ACP, CC-Insights will support:
 CURRENT ARCHITECTURE:
 
 ┌─────────────────┐     JSON lines      ┌─────────────────┐
-│     Flutter     │◄──────────────────►│   Node.js       │
+│     Flutter     │◄──────────────────►│   CLI           │
 │     Frontend    │   custom protocol   │   Backend       │
 └────────┬────────┘                     └────────┬────────┘
          │                                       │
@@ -72,12 +72,11 @@ NEW ARCHITECTURE (ACP):
 
 ### Components to Remove
 
-1. **backend-node/** - Entire directory removed
-   - `index.ts`, `session-manager.ts`, `callback-bridge.ts`
-   - `protocol.ts`, `message-queue.ts`, `logger.ts`
+1. **claude_dart_sdk/ CLI backend** - Replaced with ACP client
+   - `cli_process.dart`, `cli_session.dart`, `cli_backend.dart`
 
 2. **claude_dart_sdk/** - Replace with ACP client
-   - Current `ClaudeBackend` and `ClaudeSession` classes
+   - Current `AgentBackend` and `AgentSession` classes
    - Custom protocol message types
 
 ### Components to Add
@@ -771,7 +770,7 @@ The `ChatState` class needs updates to work with `ACPSessionWrapper`:
 
 ```dart
 class ChatState extends ChangeNotifier {
-  // Replace ClaudeSession with ACPSessionWrapper
+  // Replace AgentSession with ACPSessionWrapper
   ACPSessionWrapper? _session;
   StreamSubscription<SessionUpdate>? _updateSubscription;
   StreamSubscription<PendingPermission>? _permissionSubscription;
@@ -1097,7 +1096,7 @@ class TerminalHandler {
 
 ### Phase 4: Remove Legacy Code (Week 3)
 
-1. Remove `backend-node/` directory entirely
+1. Remove legacy CLI backend code
 2. Remove `claude_dart_sdk/` (old SDK wrapper)
 3. Update all tests to use new ACP layer
 4. Update documentation

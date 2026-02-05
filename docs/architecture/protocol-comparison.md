@@ -1,6 +1,10 @@
-# Protocol Comparison: Dart-Node-TS-Claude
+# Protocol Comparison: Dart-Node-TS-Claude (Historical)
 
-This document compares the three protocol layers in the current architecture and demonstrates why direct Dart ↔ Claude communication is feasible.
+> **Note:** This is a historical document that compares the old Node.js backend architecture
+> with the direct CLI approach. The Node.js backend has been removed entirely.
+> The direct CLI approach (`ClaudeCliBackend`) is now the default and only backend.
+
+This document compares the three protocol layers in the previous architecture and demonstrates why direct Dart ↔ Claude communication was feasible.
 
 ---
 

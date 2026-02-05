@@ -4,11 +4,11 @@ This document describes the architecture for Claude Agent Insights, featuring a 
 
 ## Goals
 
-1. **Direct CLI communication** - No intermediate Node.js backend
+1. **Direct CLI communication** - No intermediate backend process
 2. **Native Dart SDK** - First-class Dart/Flutter API for Claude
 3. **No data loss** - Raw SDK messages forwarded, frontend has full information
 4. **Consistent patterns** - Same stdin/stdout JSON pattern
-5. **Simplified deployment** - No Node.js dependency, just the Claude CLI
+5. **Simplified deployment** - Just the Claude CLI binary
 
 ## Architecture
 
@@ -150,7 +150,7 @@ claude-project/
 
 ## Benefits
 
-1. **Simpler architecture** - No Node.js backend to manage
+1. **Simpler architecture** - No intermediate backend to manage
 2. **Lower memory footprint** - One less process per session
 3. **Easier debugging** - Direct communication with CLI
 4. **Direct access to CLI features** - No translation layer

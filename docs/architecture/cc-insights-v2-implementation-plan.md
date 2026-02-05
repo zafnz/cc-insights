@@ -445,7 +445,7 @@ Create mockups showing the three-panel chat interface:
 
 ## Phase 4: Backend Integration (No UI Input Yet)
 
-**Goal**: Connect to the Node.js backend, create a real ClaudeSession, and display real SDK messages.
+**Goal**: Connect to the CLI backend, create a real AgentSession, and display real SDK messages.
 
 ### Design Decisions
 
@@ -573,7 +573,7 @@ Create mockups showing the input interface:
    - No input box for subagent conversations
 
 3. **Send message flow**:
-   - User types message → Chat.sendMessage() → ClaudeSession.send()
+   - User types message → Chat.sendMessage() → AgentSession.send()
    - Response flows back via SDK message handler
 
 4. **Remove auto-send test prompt** from Phase 4
@@ -1412,7 +1412,7 @@ Create mockups showing final polished application:
 | 1 | Core Models | Data models, SelectionState, mock data display |
 | 2 | Panel Infrastructure | Resizable panels, basic two-column layout |
 | 3 | Chat & Conversation Display | Chat panel, conversation viewer, copied display widgets |
-| 4 | Backend Integration | Real ClaudeSession, SDK message flow |
+| 4 | Backend Integration | Real AgentSession, SDK message flow |
 | 5 | User Input | Message input, send/receive messages, /clear |
 | 6 | Permission Handling | Permission request display, approve/deny flow |
 | 7 | Git Integration | Worktree discovery, real git status |

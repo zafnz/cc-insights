@@ -28,7 +28,7 @@ This document outlines the phased implementation plan for the Dart SDK architect
 **Tasks:**
 
 ### 2.1 Project Setup
-- [ ] Clean out existing `backend-node/src/` files
+- [x] Clean out existing backend files (removed)
 - [ ] Keep `package.json`, update dependencies
 - [ ] Simple `tsconfig.json` for ESM output
 
