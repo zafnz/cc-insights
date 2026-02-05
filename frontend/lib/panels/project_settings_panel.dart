@@ -25,6 +25,36 @@ class ProjectSettingsPanelKeys {
   static const addActionButton = Key('project_settings_add_action_button');
 }
 
+/// Category definition for project settings sidebar.
+class _SettingsCategory {
+  const _SettingsCategory({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.description,
+  });
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String description;
+}
+
+const _categories = [
+  _SettingsCategory(
+    id: 'hooks',
+    label: 'Lifecycle Hooks',
+    icon: Icons.sync_alt,
+    description: 'Scripts that run during worktree operations',
+  ),
+  _SettingsCategory(
+    id: 'actions',
+    label: 'User Actions',
+    icon: Icons.play_circle_outline,
+    description: 'Custom buttons shown in the Actions panel',
+  ),
+];
+
 /// Panel for configuring project-specific settings.
 ///
 /// Settings are stored in `.ccinsights/config.json` at the project root.
@@ -44,6 +74,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
+  String _selectedCategoryId = _categories.first.id;
 
   // Controllers for lifecycle hooks
   final _preCreateController = TextEditingController();
@@ -220,132 +251,167 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     }
 
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final project = context.watch<ProjectState>();
 
-    return Column(
+    return Center(
       key: ProjectSettingsPanelKeys.panel,
-      children: [
-        // Scrollable content
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header with project path
-                _buildHeader(context, project.data.repoRoot),
-                const SizedBox(height: 24),
-
-                // Lifecycle Hooks Section
-                _buildSectionHeader(
-                  context,
-                  'Lifecycle Hooks',
-                  'Scripts that run during worktree operations',
-                  Icons.sync_alt,
-                ),
-                const SizedBox(height: 16),
-                _buildLifecycleHooksSection(context),
-                const SizedBox(height: 32),
-
-                // User Actions Section
-                _buildSectionHeader(
-                  context,
-                  'User Actions',
-                  'Custom buttons shown in the Actions panel',
-                  Icons.play_circle_outline,
-                ),
-                const SizedBox(height: 16),
-                _buildUserActionsSection(context),
-
-                // Error message
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 24),
-                  _buildErrorCard(context, _errorMessage!),
-                ],
-              ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Row(
+          children: [
+            _SettingsSidebar(
+              categories: _categories,
+              selectedCategoryId: _selectedCategoryId,
+              onCategorySelected: (id) {
+                setState(() => _selectedCategoryId = id);
+              },
+              projectRoot: project.data.repoRoot,
+              onClose: _handleClose,
+              onSave: _saveConfig,
+              isSaving: _isSaving,
             ),
-          ),
-        ),
-
-        // Action bar at bottom
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            border: Border(
-              top: BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+            Expanded(
+              child: _SettingsContent(
+                category: _categories.firstWhere(
+                  (c) => c.id == _selectedCategoryId,
+                ),
+                preCreateController: _preCreateController,
+                postCreateController: _postCreateController,
+                preRemoveController: _preRemoveController,
+                postRemoveController: _postRemoveController,
+                userActions: _userActions,
+                onAddUserAction: _addUserAction,
+                onRemoveUserAction: _removeUserAction,
+                errorMessage: _errorMessage,
               ),
             ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                key: ProjectSettingsPanelKeys.closeButton,
-                onPressed: _handleClose,
-                child: const Text('Close'),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: _isSaving ? null : _saveConfig,
-                icon: _isSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.save, size: 18),
-                label: Text(_isSaving ? 'Saving...' : 'Save'),
-              ),
-            ],
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context, String projectRoot) {
+// -----------------------------------------------------------------------------
+// Sidebar
+// -----------------------------------------------------------------------------
+
+class _SettingsSidebar extends StatelessWidget {
+  const _SettingsSidebar({
+    required this.categories,
+    required this.selectedCategoryId,
+    required this.onCategorySelected,
+    required this.projectRoot,
+    required this.onClose,
+    required this.onSave,
+    required this.isSaving,
+  });
+
+  final List<_SettingsCategory> categories;
+  final String selectedCategoryId;
+  final ValueChanged<String> onCategorySelected;
+  final String projectRoot;
+  final VoidCallback onClose;
+  final VoidCallback onSave;
+  final bool isSaving;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(
+    // Extract project name from path
+    final projectName = projectRoot.split('/').last;
+
+    return SizedBox(
+      width: 200,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.settings,
-            size: 24,
-            color: colorScheme.primary,
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text(
+              'Project Settings',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              projectName,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontFamily: 'JetBrains Mono',
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Divider(
+            height: 1,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 8),
+          // Category list
+          for (final category in categories)
+            _CategoryTile(
+              category: category,
+              isSelected: category.id == selectedCategoryId,
+              onTap: () => onCategorySelected(category.id),
+            ),
+          const Spacer(),
+          // Footer with actions
+          Divider(
+            height: 1,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Project Settings',
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isSaving ? null : onSave,
+                    icon: isSaving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save, size: 16),
+                    label: Text(isSaving ? 'Saving...' : 'Save'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  projectRoot,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontFamily: 'JetBrains Mono',
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    key: ProjectSettingsPanelKeys.closeButton,
+                    onPressed: onClose,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: colorScheme.onSurfaceVariant,
+                      side: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                    child: const Text('Close'),
                   ),
                 ),
               ],
@@ -355,80 +421,185 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(
-    BuildContext context,
-    String title,
-    String subtitle,
-    IconData icon,
-  ) {
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({
+    required this.category,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final _SettingsCategory category;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: isSelected
+          ? colorScheme.primary.withValues(alpha: 0.1)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                width: 2,
+                color: isSelected ? colorScheme.primary : Colors.transparent,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                category.icon,
+                size: 16,
+                color: isSelected
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                category.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Content area
+// -----------------------------------------------------------------------------
+
+class _SettingsContent extends StatelessWidget {
+  const _SettingsContent({
+    required this.category,
+    required this.preCreateController,
+    required this.postCreateController,
+    required this.preRemoveController,
+    required this.postRemoveController,
+    required this.userActions,
+    required this.onAddUserAction,
+    required this.onRemoveUserAction,
+    this.errorMessage,
+  });
+
+  final _SettingsCategory category;
+  final TextEditingController preCreateController;
+  final TextEditingController postCreateController;
+  final TextEditingController preRemoveController;
+  final TextEditingController postRemoveController;
+  final List<_UserActionEntry> userActions;
+  final VoidCallback onAddUserAction;
+  final void Function(int) onRemoveUserAction;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Row(
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       children: [
-        Icon(icon, size: 20, color: colorScheme.primary),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              subtitle,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+        // Category header
+        Text(
+          category.label,
+          style: textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
+        const SizedBox(height: 4),
+        Text(
+          category.description,
+          style: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Content based on category
+        if (category.id == 'hooks') ...[
+          _buildHooksContent(context),
+        ] else if (category.id == 'actions') ...[
+          _buildActionsContent(context),
+        ],
+        // Error message
+        if (errorMessage != null) ...[
+          const SizedBox(height: 24),
+          _buildErrorCard(context, errorMessage!),
+        ],
       ],
     );
   }
 
-  Widget _buildLifecycleHooksSection(BuildContext context) {
+  Widget _buildHooksContent(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       children: [
-        _HookField(
+        _HookRow(
           key: ProjectSettingsPanelKeys.preCreateField,
-          label: 'Pre-Create',
-          description: 'Runs before git worktree add',
-          controller: _preCreateController,
-          hookName: 'worktree-pre-create',
+          title: 'Pre-Create',
+          description:
+              'Runs before `git worktree add`. Working directory is the repository root.',
+          controller: preCreateController,
+          placeholder: 'e.g., echo "Creating worktree..."',
         ),
-        const SizedBox(height: 12),
-        _HookField(
+        Divider(
+          height: 48,
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+        _HookRow(
           key: ProjectSettingsPanelKeys.postCreateField,
-          label: 'Post-Create',
-          description: 'Runs after worktree is created (e.g., npm install)',
-          controller: _postCreateController,
-          hookName: 'worktree-post-create',
+          title: 'Post-Create',
+          description:
+              'Runs after worktree is created. Working directory is the new worktree.',
+          controller: postCreateController,
+          placeholder: 'e.g., npm install',
         ),
-        const SizedBox(height: 12),
-        _HookField(
+        Divider(
+          height: 48,
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+        _HookRow(
           key: ProjectSettingsPanelKeys.preRemoveField,
-          label: 'Pre-Remove',
-          description: 'Runs before worktree removal',
-          controller: _preRemoveController,
-          hookName: 'worktree-pre-remove',
+          title: 'Pre-Remove',
+          description:
+              'Runs before worktree removal. Working directory is the worktree being removed.',
+          controller: preRemoveController,
+          placeholder: 'e.g., rm -rf node_modules',
         ),
-        const SizedBox(height: 12),
-        _HookField(
+        Divider(
+          height: 48,
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+        _HookRow(
           key: ProjectSettingsPanelKeys.postRemoveField,
-          label: 'Post-Remove',
-          description: 'Runs after worktree removal',
-          controller: _postRemoveController,
-          hookName: 'worktree-post-remove',
+          title: 'Post-Remove',
+          description:
+              'Runs after worktree removal. Working directory is the repository root.',
+          controller: postRemoveController,
+          placeholder: 'e.g., echo "Worktree removed"',
         ),
       ],
     );
   }
 
-  Widget _buildUserActionsSection(BuildContext context) {
+  Widget _buildActionsContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -436,34 +607,33 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // User action entries
-        ..._userActions.asMap().entries.map((entry) {
-          final index = entry.key;
-          final action = entry.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _UserActionRow(
-              key: ProjectSettingsPanelKeys.userActionField(
-                action.nameController.text.isNotEmpty
-                    ? action.nameController.text
-                    : 'new_$index',
-              ),
-              nameController: action.nameController,
-              commandController: action.commandController,
-              onRemove: () => _removeUserAction(index),
+        for (var i = 0; i < userActions.length; i++) ...[
+          _UserActionRow(
+            key: ProjectSettingsPanelKeys.userActionField(
+              userActions[i].nameController.text.isNotEmpty
+                  ? userActions[i].nameController.text
+                  : 'new_$i',
             ),
-          );
-        }),
-
+            nameController: userActions[i].nameController,
+            commandController: userActions[i].commandController,
+            onRemove: () => onRemoveUserAction(i),
+          ),
+          if (i < userActions.length - 1)
+            Divider(
+              height: 32,
+              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+        ],
+        if (userActions.isNotEmpty) const SizedBox(height: 24),
         // Add action button
         OutlinedButton.icon(
           key: ProjectSettingsPanelKeys.addActionButton,
-          onPressed: _addUserAction,
+          onPressed: onAddUserAction,
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Add Action'),
         ),
-
         // Help text
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Text(
           'Actions appear as buttons in the Actions panel. '
           'Leave the command empty to prompt on first click.',
@@ -511,80 +681,81 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   }
 }
 
-/// A single lifecycle hook field.
-class _HookField extends StatelessWidget {
-  const _HookField({
+// -----------------------------------------------------------------------------
+// Hook row (similar to _SettingRow in SettingsScreen)
+// -----------------------------------------------------------------------------
+
+class _HookRow extends StatelessWidget {
+  const _HookRow({
     super.key,
-    required this.label,
+    required this.title,
     required this.description,
     required this.controller,
-    required this.hookName,
+    required this.placeholder,
   });
 
-  final String label;
+  final String title;
   final String description;
   final TextEditingController controller;
-  final String hookName;
+  final String placeholder;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-        ),
-      ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 700),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          _DescriptionText(description),
+          const SizedBox(height: 12),
           TextField(
             controller: controller,
-            style: textTheme.bodySmall?.copyWith(
+            style: TextStyle(
+              fontSize: 13,
               fontFamily: 'JetBrains Mono',
+              color: colorScheme.onSurface,
             ),
             decoration: InputDecoration(
-              hintText: 'e.g., npm install',
-              hintStyle: textTheme.bodySmall?.copyWith(
+              hintText: placeholder,
+              hintStyle: TextStyle(
+                fontSize: 13,
                 fontFamily: 'JetBrains Mono',
                 color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               ),
-              border: const OutlineInputBorder(),
+              isDense: true,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 10,
               ),
-              isDense: true,
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(color: colorScheme.primary),
+              ),
             ),
           ),
         ],
@@ -593,7 +764,80 @@ class _HookField extends StatelessWidget {
   }
 }
 
-/// A row for editing a user action (name + command).
+// -----------------------------------------------------------------------------
+// Description text with inline `code` spans
+// -----------------------------------------------------------------------------
+
+class _DescriptionText extends StatelessWidget {
+  const _DescriptionText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontSize: 13,
+          color: colorScheme.onSurfaceVariant,
+          height: 1.5,
+        ),
+        children: _parseInlineCode(context),
+      ),
+    );
+  }
+
+  List<InlineSpan> _parseInlineCode(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final spans = <InlineSpan>[];
+    final codePattern = RegExp(r'`([^`]+)`');
+    var lastEnd = 0;
+
+    for (final match in codePattern.allMatches(text)) {
+      // Text before the code span
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      // Code span
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              match.group(1)!,
+              style: TextStyle(
+                fontFamily: 'JetBrains Mono',
+                fontSize: 12,
+                color: colorScheme.primary,
+              ),
+            ),
+          ),
+        ),
+      );
+      lastEnd = match.end;
+    }
+
+    // Remaining text after last code span
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return spans;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// User action row
+// -----------------------------------------------------------------------------
+
 class _UserActionRow extends StatelessWidget {
   const _UserActionRow({
     super.key,
@@ -609,77 +853,161 @@ class _UserActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-        ),
-      ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 700),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Name field
-          SizedBox(
-            width: 120,
-            child: TextField(
-              controller: nameController,
-              style: textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Name',
-                labelStyle: textTheme.labelSmall,
-                hintText: 'Test',
-                border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                isDense: true,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Command field
+          // Left side: name + description
           Expanded(
-            child: TextField(
-              controller: commandController,
-              style: textTheme.bodySmall?.copyWith(
-                fontFamily: 'JetBrains Mono',
-              ),
-              decoration: InputDecoration(
-                labelText: 'Command',
-                labelStyle: textTheme.labelSmall,
-                hintText: './test.sh',
-                hintStyle: textTheme.bodySmall?.copyWith(
-                  fontFamily: 'JetBrains Mono',
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Action Name',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
-                border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+                const SizedBox(height: 6),
+                Text(
+                  'Button label shown in the Actions panel',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
-                isDense: true,
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameController,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurface,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'e.g., Test',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          // Remove button
-          IconButton(
-            icon: Icon(
-              Icons.close,
-              size: 18,
-              color: colorScheme.error,
+          const SizedBox(width: 24),
+          // Right side: command
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Command',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: colorScheme.error,
+                      ),
+                      onPressed: onRemove,
+                      tooltip: 'Remove action',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Shell command to run (empty = prompt)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: commandController,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'JetBrains Mono',
+                    color: colorScheme.onSurface,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'e.g., ./test.sh',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      fontFamily: 'JetBrains Mono',
+                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            onPressed: onRemove,
-            tooltip: 'Remove action',
-            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
