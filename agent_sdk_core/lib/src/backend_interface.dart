@@ -114,4 +114,10 @@ abstract class AgentSession {
   /// Note: This may not be supported by all session implementations.
   /// Check the specific implementation for availability.
   Future<void> setPermissionMode(String? mode);
+
+  /// Set the reasoning effort level for this session.
+  ///
+  /// Only applicable to Codex backends with reasoning-capable models.
+  /// Claude backends will ignore this setting.
+  Future<void> setReasoningEffort(String? effort);
 }

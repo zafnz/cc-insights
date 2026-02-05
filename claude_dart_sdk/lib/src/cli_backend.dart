@@ -335,4 +335,9 @@ class _CliSessionAdapter implements AgentSession {
     }
     await _cliSession.setPermissionMode(mode);
   }
+
+  @override
+  Future<void> setReasoningEffort(String? effort) async {
+    // No-op: Claude CLI does not support reasoning effort levels.
+  }
 }

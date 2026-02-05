@@ -183,6 +183,9 @@ class FakeClaudeSession implements ClaudeSession {
   @override
   Future<void> setPermissionMode(String? mode) async {}
 
+  @override
+  Future<void> setReasoningEffort(String? effort) async {}
+
   // Test-only members
   @override
   final List<String> testSentMessages = [];

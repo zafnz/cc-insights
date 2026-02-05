@@ -807,6 +807,9 @@ class _MockAgentSession implements AgentSession {
   final String sessionId;
 
   @override
+  String? get resolvedSessionId => sessionId;
+
+  @override
   bool get isActive => !_disposed;
 
   @override
@@ -924,4 +927,7 @@ class _MockAgentSession implements AgentSession {
 
   @override
   Future<void> setPermissionMode(String? mode) async {}
+
+  @override
+  Future<void> setReasoningEffort(String? effort) async {}
 }

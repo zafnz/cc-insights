@@ -391,6 +391,9 @@ class MockAgentSession implements AgentSession {
   @override
   Future<void> setPermissionMode(String? mode) async {}
 
+  @override
+  Future<void> setReasoningEffort(String? effort) async {}
+
   /// Emit a message for testing.
   void emitMessage(SDKMessage message) {
     if (_disposed) return;

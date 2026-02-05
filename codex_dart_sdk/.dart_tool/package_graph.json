@@ -1,0 +1,63 @@
+{
+  "roots": [
+    "codex_sdk"
+  ],
+  "packages": [
+    {
+      "name": "codex_sdk",
+      "version": "0.1.0",
+      "dependencies": [
+        "agent_sdk_core",
+        "meta",
+        "uuid"
+      ],
+      "devDependencies": []
+    },
+    {
+      "name": "agent_sdk_core",
+      "version": "0.1.0",
+      "dependencies": [
+        "meta"
+      ]
+    },
+    {
+      "name": "meta",
+      "version": "1.18.1",
+      "dependencies": []
+    },
+    {
+      "name": "uuid",
+      "version": "4.5.2",
+      "dependencies": [
+        "crypto",
+        "fixnum",
+        "meta"
+      ]
+    },
+    {
+      "name": "fixnum",
+      "version": "1.1.1",
+      "dependencies": []
+    },
+    {
+      "name": "crypto",
+      "version": "3.0.7",
+      "dependencies": [
+        "typed_data"
+      ]
+    },
+    {
+      "name": "typed_data",
+      "version": "1.4.0",
+      "dependencies": [
+        "collection"
+      ]
+    },
+    {
+      "name": "collection",
+      "version": "1.19.1",
+      "dependencies": []
+    }
+  ],
+  "configVersion": 1
+}

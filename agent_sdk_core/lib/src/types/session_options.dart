@@ -3,6 +3,7 @@ class SessionOptions {
   const SessionOptions({
     this.model,
     this.permissionMode,
+    this.reasoningEffort,
     this.allowDangerouslySkipPermissions,
     this.permissionPromptToolName,
     this.tools,
@@ -34,6 +35,12 @@ class SessionOptions {
 
   /// Permission mode for the session.
   final PermissionMode? permissionMode;
+
+  /// Reasoning effort level (Codex only).
+  ///
+  /// Controls how much reasoning/thinking the model does before responding.
+  /// Only applicable to Codex backends with reasoning-capable models.
+  final ReasoningEffort? reasoningEffort;
 
   /// Allow bypassing permission checks (required for bypassPermissions mode).
   final bool? allowDangerouslySkipPermissions;
@@ -179,6 +186,46 @@ enum PermissionMode {
       default:
         return PermissionMode.defaultMode;
     }
+  }
+}
+
+/// Reasoning effort level for Codex models.
+///
+/// Controls how much reasoning/thinking the model performs before responding.
+/// See https://platform.openai.com/docs/guides/reasoning
+enum ReasoningEffort {
+  /// No reasoning.
+  none('none', 'None'),
+
+  /// Minimal reasoning.
+  minimal('minimal', 'Minimal'),
+
+  /// Low reasoning effort.
+  low('low', 'Low'),
+
+  /// Medium reasoning effort (default for most models).
+  medium('medium', 'Medium'),
+
+  /// High reasoning effort.
+  high('high', 'High'),
+
+  /// Extra-high reasoning effort.
+  xhigh('xhigh', 'Extra High');
+
+  const ReasoningEffort(this.value, this.label);
+
+  /// The value sent to the Codex API.
+  final String value;
+
+  /// Human-readable label for UI display.
+  final String label;
+
+  static ReasoningEffort? fromString(String? value) {
+    if (value == null) return null;
+    for (final effort in values) {
+      if (effort.value == value) return effort;
+    }
+    return null;
   }
 }
 

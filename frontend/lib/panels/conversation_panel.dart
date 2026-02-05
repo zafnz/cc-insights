@@ -774,6 +774,18 @@ class _ConversationHeader extends StatelessWidget {
                           chat.setPermissionMode(mode);
                         },
                       ),
+                      // Reasoning effort dropdown (Codex only)
+                      if (chat.model.backend == sdk.BackendType.codex) ...[
+                        const SizedBox(width: 8),
+                        _CompactDropdown(
+                          value: chat.reasoningEffort?.label ?? 'Default',
+                          items: _reasoningEffortItems,
+                          onChanged: (value) {
+                            final effort = _reasoningEffortFromLabel(value);
+                            chat.setReasoningEffort(effort);
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -799,12 +811,39 @@ class _ConversationHeader extends StatelessWidget {
 
   static const List<String> _agentItems = ['Claude', 'Codex'];
 
+  /// Labels for reasoning effort dropdown.
+  /// 'Default' means null (use model's default).
+  static const List<String> _reasoningEffortItems = [
+    'Default',
+    'None',
+    'Minimal',
+    'Low',
+    'Medium',
+    'High',
+    'Extra High',
+  ];
+
   String _agentLabel(sdk.BackendType backend) {
     return backend == sdk.BackendType.codex ? 'Codex' : 'Claude';
   }
 
   sdk.BackendType _backendFromAgent(String value) {
     return value == 'Codex' ? sdk.BackendType.codex : sdk.BackendType.directCli;
+  }
+
+  /// Converts a dropdown label to a ReasoningEffort value.
+  /// Returns null for 'Default'.
+  sdk.ReasoningEffort? _reasoningEffortFromLabel(String label) {
+    return switch (label) {
+      'Default' => null,
+      'None' => sdk.ReasoningEffort.none,
+      'Minimal' => sdk.ReasoningEffort.minimal,
+      'Low' => sdk.ReasoningEffort.low,
+      'Medium' => sdk.ReasoningEffort.medium,
+      'High' => sdk.ReasoningEffort.high,
+      'Extra High' => sdk.ReasoningEffort.xhigh,
+      _ => null,
+    };
   }
 
   Future<void> _handleAgentChange(

@@ -1385,6 +1385,11 @@ class CliSessionForTestingImpl implements CliSession {
     // No-op for testing
   }
 
+  @override
+  Future<void> setReasoningEffort(String? effort) async {
+    // No-op for testing
+  }
+
   void sendCallbackResponse(CallbackResponse response) {
     if (_disposed) return;
     _process.send(response.toJson());

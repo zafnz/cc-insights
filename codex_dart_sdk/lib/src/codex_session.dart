@@ -49,6 +49,7 @@ class CodexSession implements AgentSession {
   Map<String, dynamic>? _latestTokenUsage;
   String? _modelOverride;
   String? _currentTurnId;
+  String? _effortOverride;
 
   @override
   bool get isActive => !_disposed;
@@ -468,6 +469,7 @@ class CodexSession implements AgentSession {
         {'type': 'text', 'text': message}
       ],
       if (_modelOverride != null) 'model': _modelOverride,
+      if (_effortOverride != null) 'effort': _effortOverride,
     });
     _extractTurnId(result);
   }
@@ -488,6 +490,7 @@ class CodexSession implements AgentSession {
       'threadId': threadId,
       'input': inputs,
       if (_modelOverride != null) 'model': _modelOverride,
+      if (_effortOverride != null) 'effort': _effortOverride,
     });
     _extractTurnId(result);
   }
@@ -572,6 +575,15 @@ class CodexSession implements AgentSession {
     if (_disposed) {
       throw StateError('Session has been disposed');
     }
+  }
+
+  @override
+  Future<void> setReasoningEffort(String? effort) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    final trimmed = effort?.trim();
+    _effortOverride = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
   void _dispose() {

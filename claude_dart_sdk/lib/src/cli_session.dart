@@ -389,6 +389,15 @@ class CliSession {
     });
   }
 
+  /// Set the reasoning effort level for this session.
+  ///
+  /// Note: This is a no-op for Claude CLI sessions. Reasoning effort is only
+  /// applicable to Codex backends with reasoning-capable models.
+  Future<void> setReasoningEffort(String? effort) async {
+    // No-op: Claude CLI does not support reasoning effort levels.
+    // This method exists to satisfy the AgentSession interface.
+  }
+
   /// Terminate the session.
   Future<void> kill() async {
     if (_disposed) return;

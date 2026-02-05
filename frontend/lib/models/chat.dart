@@ -266,6 +266,12 @@ class ChatState extends ChangeNotifier {
     RuntimeConfig.instance.defaultPermissionMode,
   );
 
+  /// The reasoning effort level for this chat (Codex only).
+  ///
+  /// Controls how much reasoning the model does before responding.
+  /// Only applicable when the backend is Codex. Null means use the default.
+  sdk.ReasoningEffort? _reasoningEffort;
+
   /// The last SDK session ID for this chat, used for session resume.
   ///
   /// Set when a session is created successfully.
@@ -454,6 +460,11 @@ class ChatState extends ChangeNotifier {
   /// The permission mode for this chat.
   PermissionMode get permissionMode => _permissionMode;
 
+  /// The reasoning effort level for this chat (Codex only).
+  ///
+  /// Returns null if using the default effort level or if not applicable.
+  sdk.ReasoningEffort? get reasoningEffort => _reasoningEffort;
+
   /// The last SDK session ID for this chat, used for session resume.
   ///
   /// Null if no session has been started, or if the last session ended.
@@ -538,6 +549,22 @@ class ChatState extends ChangeNotifier {
       _scheduleMetaSave();
       // Update the permission mode on the active session if one exists
       _session?.setPermissionMode(_sdkPermissionMode.value);
+      notifyListeners();
+    }
+  }
+
+  /// Sets the reasoning effort level for this chat (Codex only).
+  ///
+  /// If a session is active and supports mid-session changes, this also
+  /// updates the reasoning effort on the running session.
+  ///
+  /// Pass null to use the default effort level.
+  void setReasoningEffort(sdk.ReasoningEffort? effort) {
+    if (_reasoningEffort != effort) {
+      _reasoningEffort = effort;
+      _scheduleMetaSave();
+      // Update the reasoning effort on the active session if one exists
+      _session?.setReasoningEffort(effort?.value);
       notifyListeners();
     }
   }

@@ -186,6 +186,15 @@ class ClaudeSession implements AgentSession {
     );
   }
 
+  /// Set the reasoning effort level for this session.
+  ///
+  /// Note: This is a no-op for Claude sessions. Reasoning effort is only
+  /// applicable to Codex backends with reasoning-capable models.
+  @override
+  Future<void> setReasoningEffort(String? effort) async {
+    // No-op: Claude does not support reasoning effort levels.
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Internal Message Handlers
   // ═══════════════════════════════════════════════════════════════════════════
