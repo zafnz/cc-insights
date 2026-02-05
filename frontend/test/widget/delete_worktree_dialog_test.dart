@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../fakes/fake_git_service.dart';
 import '../fakes/fake_persistence_service.dart';
 import '../fakes/fake_ask_ai_service.dart';
+import '../fakes/fake_project_config_service.dart';
 import '../test_helpers.dart';
 
 void main() {
@@ -14,6 +15,7 @@ void main() {
   late FakePersistenceService persistenceService;
   late FakeAskAiService askAiService;
   late FakeFileSystemService fileSystemService;
+  late FakeProjectConfigService configService;
 
   const testWorktreePath = '/repo/worktrees/feature';
   const testRepoRoot = '/repo';
@@ -25,6 +27,7 @@ void main() {
     persistenceService = FakePersistenceService();
     askAiService = FakeAskAiService();
     fileSystemService = FakeFileSystemService();
+    configService = FakeProjectConfigService();
 
     // Set up default clean worktree
     gitService.statuses[testWorktreePath] = const GitStatus();
@@ -47,6 +50,7 @@ void main() {
                 persistenceService: persistenceService,
                 askAiService: askAiService,
                 fileSystemService: fileSystemService,
+                configService: configService,
               );
             },
             child: const Text('Open Dialog'),

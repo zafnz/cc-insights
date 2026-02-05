@@ -1,9 +1,14 @@
+import 'dart:developer' as developer;
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
+import '../services/project_config_service.dart';
+import '../services/script_execution_service.dart';
 import 'commit_dialog.dart';
 
 /// Keys for testing DeleteWorktreeDialog widgets.
@@ -46,6 +51,8 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
   required PersistenceService persistenceService,
   required AskAiService askAiService,
   required FileSystemService fileSystemService,
+  ProjectConfigService? configService,
+  ScriptExecutionService? scriptService,
 }) async {
   final result = await showDialog<DeleteWorktreeResult>(
     context: context,
@@ -59,6 +66,8 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
       persistenceService: persistenceService,
       askAiService: askAiService,
       fileSystemService: fileSystemService,
+      configService: configService,
+      scriptService: scriptService,
     ),
   );
   return result ?? DeleteWorktreeResult.cancelled;
@@ -149,6 +158,8 @@ class DeleteWorktreeDialog extends StatefulWidget {
     required this.persistenceService,
     required this.askAiService,
     required this.fileSystemService,
+    this.configService,
+    this.scriptService,
   });
 
   final String worktreePath;
@@ -159,6 +170,8 @@ class DeleteWorktreeDialog extends StatefulWidget {
   final PersistenceService persistenceService;
   final AskAiService askAiService;
   final FileSystemService fileSystemService;
+  final ProjectConfigService? configService;
+  final ScriptExecutionService? scriptService;
 
   @override
   State<DeleteWorktreeDialog> createState() => _DeleteWorktreeDialogState();
@@ -475,6 +488,19 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
       _actionState = _ActionState.deleting;
     });
 
+    // Run pre-remove hook if configured
+    final preRemoveSuccess = await _runPreRemoveHook();
+    if (!preRemoveSuccess) {
+      // Pre-remove hook failed - abort unless force
+      if (!force) {
+        setState(() {
+          _actionState = _ActionState.needsForce;
+        });
+        return;
+      }
+      // Force mode - continue despite hook failure
+    }
+
     _addLog('Removing worktree...', LogEntryStatus.running);
 
     try {
@@ -511,6 +537,9 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           detail: e.toString(),
         );
       }
+
+      // Run post-remove hook if configured
+      await _runPostRemoveHook();
 
       setState(() {
         _actionState = _ActionState.complete;
@@ -550,6 +579,122 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           _actionState = _ActionState.failed;
         });
       }
+    }
+  }
+
+  /// Runs the pre-remove hook if configured. Returns true if successful or no hook.
+  Future<bool> _runPreRemoveHook() async {
+    final configService = widget.configService ?? ProjectConfigService();
+    final config = await configService.loadConfig(widget.repoRoot);
+
+    if (!mounted) return false;
+
+    final preRemoveHook = config.getHook('worktree-pre-remove');
+
+    if (preRemoveHook == null || preRemoveHook.isEmpty) {
+      return true; // No hook configured
+    }
+
+    _addLog('Running pre-remove hook...', LogEntryStatus.running);
+
+    try {
+      final exitCode = await _runHook(
+        hookName: 'worktree-pre-remove',
+        command: preRemoveHook,
+        workingDirectory: widget.worktreePath,
+      );
+
+      if (!mounted) return false;
+
+      if (exitCode == 0) {
+        _updateLastLog(LogEntryStatus.success, message: 'Pre-remove hook completed');
+        return true;
+      } else {
+        _updateLastLog(
+          LogEntryStatus.error,
+          message: 'Pre-remove hook failed (exit code $exitCode)',
+        );
+        return false;
+      }
+    } catch (e) {
+      if (!mounted) return false;
+      _updateLastLog(
+        LogEntryStatus.error,
+        message: 'Pre-remove hook failed',
+        detail: e.toString(),
+      );
+      return false;
+    }
+  }
+
+  /// Runs the post-remove hook if configured. Failures are logged but don't abort.
+  Future<void> _runPostRemoveHook() async {
+    final configService = widget.configService ?? ProjectConfigService();
+    final config = await configService.loadConfig(widget.repoRoot);
+
+    if (!mounted) return;
+
+    final postRemoveHook = config.getHook('worktree-post-remove');
+
+    if (postRemoveHook == null || postRemoveHook.isEmpty) {
+      return; // No hook configured
+    }
+
+    _addLog('Running post-remove hook...', LogEntryStatus.running);
+
+    try {
+      final exitCode = await _runHook(
+        hookName: 'worktree-post-remove',
+        command: postRemoveHook,
+        workingDirectory: widget.repoRoot, // Run in repo root since worktree is gone
+      );
+
+      if (!mounted) return;
+
+      if (exitCode == 0) {
+        _updateLastLog(LogEntryStatus.success, message: 'Post-remove hook completed');
+      } else {
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: 'Post-remove hook exited with code $exitCode',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Post-remove hook had issues',
+        detail: e.toString(),
+      );
+    }
+  }
+
+  /// Runs a lifecycle hook script and returns the exit code.
+  Future<int> _runHook({
+    required String hookName,
+    required String command,
+    required String workingDirectory,
+  }) async {
+    developer.log(
+      'Running hook "$hookName": $command in $workingDirectory',
+      name: 'DeleteWorktreeDialog',
+    );
+
+    if (widget.scriptService != null) {
+      // Use script service to show output in terminal panel
+      return await widget.scriptService!.runScriptSync(
+        name: hookName,
+        command: command,
+        workingDirectory: workingDirectory,
+      );
+    } else {
+      // Run directly without UI
+      final result = await Process.run(
+        '/bin/sh',
+        ['-c', command],
+        workingDirectory: workingDirectory,
+      );
+      return result.exitCode;
     }
   }
 

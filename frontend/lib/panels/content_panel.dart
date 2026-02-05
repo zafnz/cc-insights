@@ -5,8 +5,9 @@ import '../state/selection_state.dart';
 import 'conversation_panel.dart';
 import 'create_worktree_panel.dart';
 import 'panel_wrapper.dart';
+import 'project_settings_panel.dart';
 
-/// Content panel - displays either conversation or create worktree form.
+/// Content panel - displays conversation, create worktree form, or settings.
 ///
 /// Uses [SelectionState.contentPanelMode] to determine which view to show.
 class ContentPanel extends StatelessWidget {
@@ -22,6 +23,11 @@ class ContentPanel extends StatelessWidget {
         title: 'Create Worktree',
         icon: Icons.account_tree,
         child: CreateWorktreePanel(),
+      ),
+      ContentPanelMode.projectSettings => const PanelWrapper(
+        title: 'Project Settings',
+        icon: Icons.settings,
+        child: ProjectSettingsPanel(),
       ),
     };
   }

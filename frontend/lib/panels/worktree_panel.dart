@@ -12,7 +12,9 @@ import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
+import '../services/project_config_service.dart';
 import '../services/project_restore_service.dart';
+import '../services/script_execution_service.dart';
 import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/delete_worktree_dialog.dart';
@@ -520,6 +522,27 @@ class _WorktreeListItem extends StatelessWidget {
     final availableTags = settings.availableTags;
 
     final items = <PopupMenuEntry<String>>[
+      // Project Settings (only for primary worktree)
+      if (data.isPrimary) ...[
+        styledMenuItem(
+          value: 'project_settings',
+          child: Row(
+            children: [
+              Icon(
+                Icons.settings_outlined,
+                size: 16,
+                color: colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Project Settings',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(height: 8),
+      ],
       // Tags submenu header with arrow indicator
       styledMenuItem(
         value: 'tags',
@@ -572,6 +595,8 @@ class _WorktreeListItem extends StatelessWidget {
     if (!context.mounted) return;
 
     switch (result) {
+      case 'project_settings':
+        context.read<SelectionState>().showProjectSettingsPanel();
       case 'tags':
         // Open the tags submenu to the right of the click position.
         _showTagsSubmenu(context, position, availableTags);
@@ -667,6 +692,7 @@ class _WorktreeListItem extends StatelessWidget {
     final askAiService = context.read<AskAiService>();
     final fileSystemService = context.read<FileSystemService>();
     final restoreService = context.read<ProjectRestoreService>();
+    final scriptService = context.read<ScriptExecutionService>();
 
     // Save cost tracking for all chats in this worktree before deletion
     final projectId = PersistenceService.generateProjectId(repoRoot);
@@ -682,6 +708,8 @@ class _WorktreeListItem extends StatelessWidget {
       persistenceService: persistenceService,
       askAiService: askAiService,
       fileSystemService: fileSystemService,
+      configService: ProjectConfigService(),
+      scriptService: scriptService,
     );
 
     if (result == DeleteWorktreeResult.deleted && context.mounted) {

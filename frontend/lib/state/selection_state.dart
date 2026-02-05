@@ -16,6 +16,9 @@ enum ContentPanelMode {
 
   /// Create worktree form
   createWorktree,
+
+  /// Project settings (per-project configuration)
+  projectSettings,
 }
 
 /// Provides a unified view of the current selection state.
@@ -279,6 +282,12 @@ class SelectionState extends ChangeNotifier {
   /// Returns to the normal conversation panel view.
   void showConversationPanel() {
     _contentPanelMode = ContentPanelMode.conversation;
+    notifyListeners();
+  }
+
+  /// Shows the project settings panel in the content area.
+  void showProjectSettingsPanel() {
+    _contentPanelMode = ContentPanelMode.projectSettings;
     notifyListeners();
   }
 }
