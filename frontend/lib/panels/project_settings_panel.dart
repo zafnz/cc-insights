@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/project.dart';
@@ -87,7 +88,6 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   late final ProjectConfigService _configService;
   ProjectConfig _config = const ProjectConfig.empty();
   bool _isLoading = true;
-  bool _isSaving = false;
   String? _errorMessage;
   String _selectedCategoryId = _categories.first.id;
 
@@ -197,7 +197,6 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     final projectRoot = project.data.repoRoot;
 
     setState(() {
-      _isSaving = true;
       _errorMessage = null;
     });
 
@@ -249,22 +248,12 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       if (mounted) {
         setState(() {
           _config = newConfig;
-          _isSaving = false;
         });
-
-        // Show success feedback
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Settings saved'),
-            duration: Duration(seconds: 2),
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _errorMessage = 'Failed to save: $e';
-          _isSaving = false;
         });
       }
     }
@@ -313,8 +302,6 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
               },
               projectRoot: project.data.repoRoot,
               onClose: _handleClose,
-              onSave: _saveConfig,
-              isSaving: _isSaving,
             ),
             VerticalDivider(
               width: 1,
@@ -336,8 +323,10 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
                 defaultBaseSelection: _defaultBaseSelection,
                 onDefaultBaseChanged: (value) {
                   setState(() => _defaultBaseSelection = value);
+                  _saveConfig(); // Auto-save on dropdown change
                 },
                 customBaseController: _customBaseController,
+                onSave: _saveConfig, // For text field blur
                 errorMessage: _errorMessage,
               ),
             ),
@@ -359,8 +348,6 @@ class _SettingsSidebar extends StatelessWidget {
     required this.onCategorySelected,
     required this.projectRoot,
     required this.onClose,
-    required this.onSave,
-    required this.isSaving,
   });
 
   final List<_SettingsCategory> categories;
@@ -368,8 +355,6 @@ class _SettingsSidebar extends StatelessWidget {
   final ValueChanged<String> onCategorySelected;
   final String projectRoot;
   final VoidCallback onClose;
-  final VoidCallback onSave;
-  final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
@@ -418,42 +403,20 @@ class _SettingsSidebar extends StatelessWidget {
               onTap: () => onCategorySelected(category.id),
             ),
           const Spacer(),
-          // Footer with actions
+          // Footer with close button
           Divider(
             height: 1,
             color: colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: InsightsFilledButton(
-                    onPressed: isSaving ? null : onSave,
-                    icon: isSaving
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.save, size: 16),
-                    child: Text(isSaving ? 'Saving...' : 'Save'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: InsightsOutlinedButton(
-                    key: ProjectSettingsPanelKeys.closeButton,
-                    onPressed: onClose,
-                    child: const Text('Close'),
-                  ),
-                ),
-              ],
+            child: SizedBox(
+              width: double.infinity,
+              child: InsightsOutlinedButton(
+                key: ProjectSettingsPanelKeys.closeButton,
+                onPressed: onClose,
+                child: const Text('Close'),
+              ),
             ),
           ),
         ],
@@ -540,6 +503,7 @@ class _SettingsContent extends StatelessWidget {
     required this.defaultBaseSelection,
     required this.onDefaultBaseChanged,
     required this.customBaseController,
+    required this.onSave,
     this.errorMessage,
   });
 
@@ -554,6 +518,7 @@ class _SettingsContent extends StatelessWidget {
   final String defaultBaseSelection;
   final ValueChanged<String> onDefaultBaseChanged;
   final TextEditingController customBaseController;
+  final VoidCallback onSave;
   final String? errorMessage;
 
   @override
@@ -608,6 +573,7 @@ class _SettingsContent extends StatelessWidget {
               'Runs before `git worktree add`. Working directory is the repository root.',
           controller: preCreateController,
           placeholder: 'e.g., echo "Creating worktree..."',
+          onSave: onSave,
         ),
         Divider(
           height: 48,
@@ -620,6 +586,7 @@ class _SettingsContent extends StatelessWidget {
               'Runs after worktree is created. Working directory is the new worktree.',
           controller: postCreateController,
           placeholder: 'e.g., npm install',
+          onSave: onSave,
         ),
         Divider(
           height: 48,
@@ -632,6 +599,7 @@ class _SettingsContent extends StatelessWidget {
               'Runs before worktree removal. Working directory is the worktree being removed.',
           controller: preRemoveController,
           placeholder: 'e.g., rm -rf node_modules',
+          onSave: onSave,
         ),
         Divider(
           height: 48,
@@ -644,6 +612,7 @@ class _SettingsContent extends StatelessWidget {
               'Runs after worktree removal. Working directory is the repository root.',
           controller: postRemoveController,
           placeholder: 'e.g., echo "Worktree removed"',
+          onSave: onSave,
         ),
       ],
     );
@@ -667,6 +636,7 @@ class _SettingsContent extends StatelessWidget {
             nameController: userActions[i].nameController,
             commandController: userActions[i].commandController,
             onRemove: () => onRemoveUserAction(i),
+            onSave: onSave,
           ),
           if (i < userActions.length - 1)
             Divider(
@@ -761,11 +731,12 @@ class _SettingsContent extends StatelessWidget {
           ),
           if (defaultBaseSelection == 'custom') ...[
             const SizedBox(height: 12),
-            InsightsTextField(
+            _AutoSaveTextField(
               key: ProjectSettingsPanelKeys.customBaseField,
               controller: customBaseController,
               hintText: 'e.g., develop, origin/develop',
               monospace: true,
+              onSave: onSave,
             ),
           ],
           const SizedBox(height: 16),
@@ -829,12 +800,14 @@ class _HookRow extends StatelessWidget {
     required this.description,
     required this.controller,
     required this.placeholder,
+    required this.onSave,
   });
 
   final String title;
   final String description;
   final TextEditingController controller;
   final String placeholder;
+  final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -856,10 +829,11 @@ class _HookRow extends StatelessWidget {
           const SizedBox(height: 6),
           InsightsDescriptionText(description),
           const SizedBox(height: 12),
-          InsightsTextField(
+          _AutoSaveTextField(
             controller: controller,
             hintText: placeholder,
             monospace: true,
+            onSave: onSave,
           ),
         ],
       ),
@@ -877,11 +851,13 @@ class _UserActionRow extends StatelessWidget {
     required this.nameController,
     required this.commandController,
     required this.onRemove,
+    required this.onSave,
   });
 
   final TextEditingController nameController;
   final TextEditingController commandController;
   final VoidCallback onRemove;
+  final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -915,9 +891,10 @@ class _UserActionRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                InsightsTextField(
+                _AutoSaveTextField(
                   controller: nameController,
                   hintText: 'e.g., Test',
+                  onSave: onSave,
                 ),
               ],
             ),
@@ -967,10 +944,11 @@ class _UserActionRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                InsightsTextField(
+                _AutoSaveTextField(
                   controller: commandController,
                   hintText: 'e.g., ./test.sh',
                   monospace: true,
+                  onSave: onSave,
                 ),
               ],
             ),
@@ -994,5 +972,84 @@ class _UserActionEntry {
   void dispose() {
     nameController.dispose();
     commandController.dispose();
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Auto-save text field
+// -----------------------------------------------------------------------------
+
+/// A text field that saves on blur and restores the previous value on Esc.
+class _AutoSaveTextField extends StatefulWidget {
+  const _AutoSaveTextField({
+    super.key,
+    required this.controller,
+    required this.onSave,
+    this.hintText,
+    this.monospace = false,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onSave;
+  final String? hintText;
+  final bool monospace;
+
+  @override
+  State<_AutoSaveTextField> createState() => _AutoSaveTextFieldState();
+}
+
+class _AutoSaveTextFieldState extends State<_AutoSaveTextField> {
+  final _focusNode = FocusNode();
+  String _savedValue = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _savedValue = widget.controller.text;
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_focusNode.hasFocus) {
+      // Entering edit mode - remember current value
+      _savedValue = widget.controller.text;
+    } else {
+      // Leaving edit mode - save if value changed
+      if (widget.controller.text != _savedValue) {
+        widget.onSave();
+        _savedValue = widget.controller.text;
+      }
+    }
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      // Restore the saved value and unfocus
+      widget.controller.text = _savedValue;
+      _focusNode.unfocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onKeyEvent: _handleKeyEvent,
+      child: InsightsTextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        hintText: widget.hintText,
+        monospace: widget.monospace,
+      ),
+    );
   }
 }

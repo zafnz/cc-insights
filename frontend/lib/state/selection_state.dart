@@ -91,6 +91,9 @@ class SelectionState extends ChangeNotifier {
   ///
   /// The worktree's previous chat/conversation selection is restored. Panels
   /// will update to show the new worktree's context.
+  ///
+  /// If the project settings panel is currently shown, it will be closed and
+  /// the conversation panel will be shown instead.
   void selectWorktree(WorktreeState worktree) {
     // Mark the previously selected chat as no longer viewed
     final previousChat = selectedChat;
@@ -101,6 +104,11 @@ class SelectionState extends ChangeNotifier {
     // Mark the newly selected worktree's chat as viewed (if any)
     final newChat = worktree.selectedChat;
     newChat?.markAsViewed();
+
+    // Close project settings panel if it's open
+    if (_contentPanelMode == ContentPanelMode.projectSettings) {
+      _contentPanelMode = ContentPanelMode.conversation;
+    }
 
     notifyListeners();
   }

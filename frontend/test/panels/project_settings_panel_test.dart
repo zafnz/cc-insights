@@ -306,29 +306,9 @@ void main() {
       });
     });
 
-    group('saving config', () {
-      testWidgets('saves auto as null defaultBase', (tester) async {
-        await pumpAndLoad(tester, buildTestWidget());
-
-        // Navigate to Git category
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
-        // Tap Save button
-        await tester.runAsync(() async {
-          await tester.tap(find.text('Save'));
-          await Future.delayed(const Duration(milliseconds: 50));
-        });
-        await tester.pump();
-
-        // Check saved config
-        final savedConfig =
-            fakeConfigService.configs['/test/project'];
-        expect(savedConfig, isNotNull);
-        expect(savedConfig!.defaultBase, isNull);
-      });
-
-      testWidgets('saves main selection as defaultBase', (tester) async {
+    group('auto-save config', () {
+      testWidgets('auto-saves main selection on dropdown change',
+          (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         await tester.tap(find.text('Git'));
@@ -342,22 +322,18 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
 
         await tester.tap(find.text('main').last);
-        await tester.pump();
-
-        // Save
         await tester.runAsync(() async {
-          await tester.tap(find.text('Save'));
           await Future.delayed(const Duration(milliseconds: 50));
         });
         await tester.pump();
 
-        final savedConfig =
-            fakeConfigService.configs['/test/project'];
+        // Config should be auto-saved
+        final savedConfig = fakeConfigService.configs['/test/project'];
         expect(savedConfig, isNotNull);
         expect(savedConfig!.defaultBase, 'main');
       });
 
-      testWidgets('saves origin/main selection as defaultBase',
+      testWidgets('auto-saves origin/main selection on dropdown change',
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
@@ -372,58 +348,18 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
 
         await tester.tap(find.text('origin/main').last);
-        await tester.pump();
-
-        // Save
         await tester.runAsync(() async {
-          await tester.tap(find.text('Save'));
           await Future.delayed(const Duration(milliseconds: 50));
         });
         await tester.pump();
 
-        final savedConfig =
-            fakeConfigService.configs['/test/project'];
+        // Config should be auto-saved
+        final savedConfig = fakeConfigService.configs['/test/project'];
         expect(savedConfig, isNotNull);
         expect(savedConfig!.defaultBase, 'origin/main');
       });
 
-      testWidgets('saves custom value as defaultBase', (tester) async {
-        await pumpAndLoad(tester, buildTestWidget());
-
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
-        // Open dropdown and select Custom...
-        await tester.tap(
-          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 200));
-
-        await tester.tap(find.text('Custom...').last);
-        await tester.pump();
-
-        // Enter custom value
-        await tester.enterText(
-          find.byKey(ProjectSettingsPanelKeys.customBaseField),
-          'develop',
-        );
-        await tester.pump();
-
-        // Save
-        await tester.runAsync(() async {
-          await tester.tap(find.text('Save'));
-          await Future.delayed(const Duration(milliseconds: 50));
-        });
-        await tester.pump();
-
-        final savedConfig =
-            fakeConfigService.configs['/test/project'];
-        expect(savedConfig, isNotNull);
-        expect(savedConfig!.defaultBase, 'develop');
-      });
-
-      testWidgets('saves empty custom value as null defaultBase',
+      testWidgets('auto-saves custom on dropdown change then blur',
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
@@ -438,17 +374,69 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
 
         await tester.tap(find.text('Custom...').last);
-        await tester.pump();
-
-        // Leave the custom text field empty and save
         await tester.runAsync(() async {
-          await tester.tap(find.text('Save'));
           await Future.delayed(const Duration(milliseconds: 50));
         });
         await tester.pump();
 
-        final savedConfig =
-            fakeConfigService.configs['/test/project'];
+        // Config should be auto-saved with null (no custom value yet)
+        var savedConfig = fakeConfigService.configs['/test/project'];
+        expect(savedConfig, isNotNull);
+        expect(savedConfig!.defaultBase, isNull);
+
+        // Enter custom value
+        await tester.enterText(
+          find.byKey(ProjectSettingsPanelKeys.customBaseField),
+          'develop',
+        );
+        await tester.pump();
+
+        // Tap on the dropdown to blur the text field and trigger save
+        await tester.tap(
+          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+        );
+        await tester.runAsync(() async {
+          await Future.delayed(const Duration(milliseconds: 50));
+        });
+        await tester.pump();
+        // Close the dropdown by tapping elsewhere
+        await tester.tapAt(Offset.zero);
+        await tester.pump();
+
+        // Config should be updated with custom value
+        savedConfig = fakeConfigService.configs['/test/project'];
+        expect(savedConfig, isNotNull);
+        expect(savedConfig!.defaultBase, 'develop');
+      });
+
+      testWidgets('auto-saves auto selection (null defaultBase)',
+          (tester) async {
+        // Start with a config that has a non-null defaultBase
+        await pumpAndLoad(
+          tester,
+          buildTestWidget(
+            config: const ProjectConfig(defaultBase: 'main'),
+          ),
+        );
+
+        await tester.tap(find.text('Git'));
+        await tester.pump();
+
+        // Open dropdown and select auto
+        await tester.tap(
+          find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        await tester.tap(find.text('Auto (detect upstream)').last);
+        await tester.runAsync(() async {
+          await Future.delayed(const Duration(milliseconds: 50));
+        });
+        await tester.pump();
+
+        // Config should be auto-saved with null defaultBase
+        final savedConfig = fakeConfigService.configs['/test/project'];
         expect(savedConfig, isNotNull);
         expect(savedConfig!.defaultBase, isNull);
       });
