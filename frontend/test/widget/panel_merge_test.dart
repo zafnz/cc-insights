@@ -80,6 +80,7 @@ void main() {
       worktreeWatcher = WorktreeWatcherService(
         gitService: gitService,
         project: project,
+        configService: ProjectConfigService(),
         enablePeriodicPolling: false,
       );
       fakeFileSystem = FakeFileSystemService();

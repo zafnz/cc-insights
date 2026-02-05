@@ -1,14 +1,18 @@
 import 'package:cc_insights_v2/models/project.dart';
+import 'package:cc_insights_v2/models/project_config.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
+import 'package:checks/checks.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../fakes/fake_git_service.dart';
+import '../fakes/fake_project_config_service.dart';
 
 void main() {
   late FakeGitService gitService;
+  late FakeProjectConfigService configService;
   late ProjectState project;
   late WorktreeState primaryWorktree;
 
@@ -18,6 +22,8 @@ void main() {
     gitService = FakeGitService();
     gitService.statuses[repoRoot] = const GitStatus();
     gitService.mainBranches[repoRoot] = 'main';
+
+    configService = FakeProjectConfigService();
 
     primaryWorktree = WorktreeState(
       const WorktreeData(
@@ -45,6 +51,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
 
         // Flush the initial poll for the primary worktree.
@@ -60,6 +67,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
@@ -104,6 +112,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
         async.flushMicrotasks();
 
@@ -145,6 +154,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
@@ -165,6 +175,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
@@ -194,6 +205,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
         async.flushMicrotasks();
         final callsBeforeDispose = gitService.getStatusCalls;
@@ -223,6 +235,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
         async.flushMicrotasks();
         final initialCalls = gitService.getStatusCalls;
@@ -243,6 +256,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
 
         async.flushMicrotasks();
@@ -272,6 +286,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
 
         async.flushMicrotasks();
@@ -290,6 +305,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
 
         async.flushMicrotasks();
@@ -319,6 +335,7 @@ void main() {
         final service = WorktreeWatcherService(
           gitService: gitService,
           project: project,
+          configService: configService,
         );
 
         async.flushMicrotasks();
@@ -333,6 +350,381 @@ void main() {
           gitService.getStatusCalls,
           greaterThanOrEqualTo(initialCalls + 2),
         );
+
+        service.dispose();
+      });
+    });
+  });
+
+  group('base ref resolution', () {
+    late WorktreeState featureWorktree;
+
+    setUp(() {
+      const linkedPath = '/fake/linked';
+      gitService.statuses[linkedPath] = const GitStatus();
+
+      featureWorktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: linkedPath,
+          isPrimary: false,
+          branch: 'feature',
+        ),
+      );
+      project.addWorktree(featureWorktree);
+    });
+
+    test('uses worktree baseOverride when set', () {
+      fakeAsync((async) {
+        featureWorktree.setBaseOverride('develop');
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('develop');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('worktree baseOverride with remote ref sets isRemoteBase', () {
+      fakeAsync((async) {
+        featureWorktree.setBaseOverride('origin/develop');
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('origin/develop');
+          check(resolved.isRemoteBase).equals(true);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('worktree baseOverride with remotes/ prefix sets isRemoteBase',
+        () {
+      fakeAsync((async) {
+        featureWorktree.setBaseOverride('remotes/origin/main');
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result =
+            service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('remotes/origin/main');
+          check(resolved.isRemoteBase).equals(true);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('falls back to project defaultBase when no worktree override',
+        () {
+      fakeAsync((async) {
+        configService.configs[repoRoot] = const ProjectConfig(
+          defaultBase: 'develop',
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('develop');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('project defaultBase with remote ref sets isRemoteBase', () {
+      fakeAsync((async) {
+        configService.configs[repoRoot] = const ProjectConfig(
+          defaultBase: 'origin/main',
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('origin/main');
+          check(resolved.isRemoteBase).equals(true);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('project defaultBase "auto" falls through to auto-detect', () {
+      fakeAsync((async) {
+        configService.configs[repoRoot] = const ProjectConfig(
+          defaultBase: 'auto',
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          // Auto-detect should find local main (no upstream).
+          check(resolved.baseRef).equals('main');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('worktree override takes priority over project defaultBase',
+        () {
+      fakeAsync((async) {
+        featureWorktree.setBaseOverride('release/1.0');
+        configService.configs[repoRoot] = const ProjectConfig(
+          defaultBase: 'develop',
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('release/1.0');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('auto-detect uses remote main when upstream exists', () {
+      fakeAsync((async) {
+        gitService.remoteMainBranches[repoRoot] = 'origin/main';
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(
+          featureWorktree,
+          'origin/feature',
+        );
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('origin/main');
+          check(resolved.isRemoteBase).equals(true);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('auto-detect uses local main when no upstream', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result =
+            service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('main');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test(
+        'auto-detect falls back to local main when upstream exists '
+        'but no remote main found', () {
+      fakeAsync((async) {
+        // upstream exists but no remote main branch configured
+        gitService.remoteMainBranches.clear();
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result = service.resolveBaseRef(
+          featureWorktree,
+          'origin/feature',
+        );
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('main');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('config load failure falls through to auto-detect', () {
+      fakeAsync((async) {
+        configService.shouldThrow = true;
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        final result =
+            service.resolveBaseRef(featureWorktree, null);
+        async.flushMicrotasks();
+
+        result.then((resolved) {
+          check(resolved.baseRef).equals('main');
+          check(resolved.isRemoteBase).equals(false);
+        });
+        async.flushMicrotasks();
+
+        service.dispose();
+      });
+    });
+
+    test('poll updates worktree data with resolved base ref', () {
+      fakeAsync((async) {
+        featureWorktree.setBaseOverride('origin/develop');
+
+        gitService.branchComparisons[
+            '/fake/linked:feature:origin/develop'] = (
+          ahead: 3,
+          behind: 1,
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        // After initial poll, the worktree data should reflect
+        // the override base ref.
+        check(featureWorktree.data.baseRef)
+            .equals('origin/develop');
+        check(featureWorktree.data.isRemoteBase).equals(true);
+        check(featureWorktree.data.commitsAheadOfMain).equals(3);
+        check(featureWorktree.data.commitsBehindMain).equals(1);
+
+        service.dispose();
+      });
+    });
+
+    test('poll uses project default when no worktree override', () {
+      fakeAsync((async) {
+        configService.configs[repoRoot] = const ProjectConfig(
+          defaultBase: 'develop',
+        );
+
+        gitService.branchComparisons[
+            '/fake/linked:feature:develop'] = (
+          ahead: 5,
+          behind: 2,
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        check(featureWorktree.data.baseRef).equals('develop');
+        check(featureWorktree.data.isRemoteBase).equals(false);
+        check(featureWorktree.data.commitsAheadOfMain).equals(5);
+        check(featureWorktree.data.commitsBehindMain).equals(2);
 
         service.dispose();
       });

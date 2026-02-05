@@ -750,6 +750,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           update: (context, project, fileService, selectionState, previous) =>
               previous ?? FileManagerState(project, fileService, selectionState),
         ),
+        // Project config service for reading/writing .ccinsights/config.json
+        Provider<ProjectConfigService>(
+          create: (_) => ProjectConfigService(),
+        ),
         // Worktree watcher service for monitoring git status changes.
         // Self-contained: listens to ProjectState and watches all
         // worktrees automatically. Eager (lazy: false) so it starts
@@ -759,11 +763,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           create: (context) => WorktreeWatcherService(
             gitService: context.read<GitService>(),
             project: context.read<ProjectState>(),
+            configService: context.read<ProjectConfigService>(),
           ),
-        ),
-        // Project config service for reading/writing .ccinsights/config.json
-        Provider<ProjectConfigService>(
-          create: (_) => ProjectConfigService(),
         ),
         // Script execution service for running user actions
         ChangeNotifierProvider<ScriptExecutionService>(

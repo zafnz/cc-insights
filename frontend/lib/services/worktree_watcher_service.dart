@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import 'git_service.dart';
+import 'project_config_service.dart';
 
 /// Per-worktree watcher state.
 ///
@@ -57,6 +58,7 @@ class WorktreeWatcherService extends ChangeNotifier {
 
   final GitService _gitService;
   final ProjectState _project;
+  final ProjectConfigService _configService;
   final bool _enablePeriodicPolling;
   bool _disposed = false;
 
@@ -80,9 +82,11 @@ class WorktreeWatcherService extends ChangeNotifier {
   WorktreeWatcherService({
     required GitService gitService,
     required ProjectState project,
+    required ProjectConfigService configService,
     bool enablePeriodicPolling = true,
   })  : _gitService = gitService,
         _project = project,
+        _configService = configService,
         _enablePeriodicPolling = enablePeriodicPolling {
     _project.addListener(_syncWatchers);
     _syncWatchers();
@@ -212,31 +216,13 @@ class WorktreeWatcherService extends ChangeNotifier {
       final status = await _gitService.getStatus(path);
       final upstream = await _gitService.getUpstream(path);
 
-      // Determine base comparison target per branch:
-      // - If branch has upstream → use remote main (origin/main)
-      // - Otherwise → use local main
-      String? baseRef;
-      var isRemoteBase = false;
-
-      if (upstream != null) {
-        final remoteMain = await _gitService.getRemoteMainBranch(
-          _project.data.repoRoot,
-        );
-        if (remoteMain != null) {
-          baseRef = remoteMain;
-          isRemoteBase = true;
-        }
-      }
-
-      // Fallback to local main if no remote base was found
-      if (baseRef == null) {
-        final localMain = await _gitService.getMainBranch(
-          _project.data.repoRoot,
-        );
-        if (localMain != null) {
-          baseRef = localMain;
-        }
-      }
+      // Resolve the base ref using the override chain:
+      // 1. Per-worktree baseOverride
+      // 2. Project config defaultBase
+      // 3. Auto-detect (remote main if upstream, else local main)
+      final resolved = await _resolveBaseRef(worktree, upstream);
+      final baseRef = resolved.baseRef;
+      final isRemoteBase = resolved.isRemoteBase;
 
       ({int ahead, int behind})? baseComparison;
       if (baseRef != null &&
@@ -289,6 +275,85 @@ class WorktreeWatcherService extends ChangeNotifier {
       // Git poll failed — will retry on next interval.
     }
   }
+
+  // -----------------------------------------------------------------
+  // Base ref resolution
+  // -----------------------------------------------------------------
+
+  /// Resolves the base ref for comparing a worktree's branch.
+  ///
+  /// Resolution chain (first non-null/non-auto wins):
+  /// 1. Per-worktree [WorktreeState.baseOverride]
+  /// 2. Project config [ProjectConfig.defaultBase]
+  /// 3. Auto-detect: remote main (if upstream exists) or local main
+  ///
+  /// Returns a record with the resolved [baseRef] and whether it
+  /// [isRemoteBase] (a remote tracking ref like "origin/main").
+  @visibleForTesting
+  Future<({String? baseRef, bool isRemoteBase})> resolveBaseRef(
+    WorktreeState worktree,
+    String? upstream,
+  ) => _resolveBaseRef(worktree, upstream);
+
+  Future<({String? baseRef, bool isRemoteBase})> _resolveBaseRef(
+    WorktreeState worktree,
+    String? upstream,
+  ) async {
+    final repoRoot = _project.data.repoRoot;
+
+    // 1. Per-worktree override takes highest priority.
+    final override = worktree.baseOverride;
+    if (override != null && override.isNotEmpty) {
+      return (
+        baseRef: override,
+        isRemoteBase: _isRemoteRef(override),
+      );
+    }
+
+    // 2. Project-level default base from config.
+    try {
+      final config = await _configService.loadConfig(repoRoot);
+      final defaultBase = config.defaultBase;
+      if (defaultBase != null &&
+          defaultBase.isNotEmpty &&
+          defaultBase != 'auto') {
+        return (
+          baseRef: defaultBase,
+          isRemoteBase: _isRemoteRef(defaultBase),
+        );
+      }
+    } catch (_) {
+      // Config load failed; fall through to auto-detect.
+    }
+
+    // 3. Auto-detect: remote main if upstream exists, else local main.
+    return _autoDetectBaseRef(upstream, repoRoot);
+  }
+
+  /// Auto-detects the base ref using upstream information.
+  ///
+  /// If the worktree has an upstream, tries the remote main branch
+  /// first. Falls back to local main if no remote main is found.
+  Future<({String? baseRef, bool isRemoteBase})> _autoDetectBaseRef(
+    String? upstream,
+    String repoRoot,
+  ) async {
+    if (upstream != null) {
+      final remoteMain = await _gitService.getRemoteMainBranch(
+        repoRoot,
+      );
+      if (remoteMain != null) {
+        return (baseRef: remoteMain, isRemoteBase: true);
+      }
+    }
+
+    final localMain = await _gitService.getMainBranch(repoRoot);
+    return (baseRef: localMain, isRemoteBase: false);
+  }
+
+  /// Whether a ref string refers to a remote tracking branch.
+  static bool _isRemoteRef(String ref) =>
+      ref.startsWith('origin/') || ref.startsWith('remotes/');
 
   // -----------------------------------------------------------------
   // Common .git directory watcher
