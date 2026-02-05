@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
@@ -7,6 +9,65 @@ import 'types/errors.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 import 'types/usage.dart';
+
+/// Describes the capabilities of a backend implementation.
+///
+/// Each backend declares what features it supports, allowing callers
+/// to adapt their behavior (e.g., hiding unsupported UI controls)
+/// rather than calling methods that silently no-op.
+@immutable
+class BackendCapabilities {
+  const BackendCapabilities({
+    this.supportsHooks = false,
+    this.supportsModelListing = false,
+    this.supportsReasoningEffort = false,
+    this.supportsPermissionModeChange = false,
+    this.supportsModelChange = false,
+  });
+
+  /// Whether the backend supports hook requests (PreToolUse, PostToolUse, etc.).
+  final bool supportsHooks;
+
+  /// Whether the backend can enumerate available models.
+  final bool supportsModelListing;
+
+  /// Whether the backend supports reasoning effort levels.
+  final bool supportsReasoningEffort;
+
+  /// Whether the backend supports mid-session permission mode changes.
+  final bool supportsPermissionModeChange;
+
+  /// Whether the backend supports mid-session model changes.
+  final bool supportsModelChange;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is BackendCapabilities &&
+        other.supportsHooks == supportsHooks &&
+        other.supportsModelListing == supportsModelListing &&
+        other.supportsReasoningEffort == supportsReasoningEffort &&
+        other.supportsPermissionModeChange == supportsPermissionModeChange &&
+        other.supportsModelChange == supportsModelChange;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        supportsHooks,
+        supportsModelListing,
+        supportsReasoningEffort,
+        supportsPermissionModeChange,
+        supportsModelChange,
+      );
+
+  @override
+  String toString() => 'BackendCapabilities('
+      'hooks: $supportsHooks, '
+      'modelListing: $supportsModelListing, '
+      'reasoningEffort: $supportsReasoningEffort, '
+      'permissionModeChange: $supportsPermissionModeChange, '
+      'modelChange: $supportsModelChange)';
+}
 
 /// Abstract interface for agent backends.
 ///
@@ -24,6 +85,9 @@ import 'types/usage.dart';
 /// );
 /// ```
 abstract class AgentBackend {
+  /// The capabilities this backend supports.
+  BackendCapabilities get capabilities;
+
   /// Whether the backend is running.
   bool get isRunning;
 

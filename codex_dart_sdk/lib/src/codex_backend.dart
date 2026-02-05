@@ -16,6 +16,12 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
 
   bool _disposed = false;
 
+  @override
+  BackendCapabilities get capabilities => const BackendCapabilities(
+        supportsModelListing: true,
+        supportsReasoningEffort: true,
+      );
+
   /// Spawn a Codex app-server backend.
   static Future<CodexBackend> create({String? executablePath}) async {
     final process = await CodexProcess.start(
@@ -97,6 +103,14 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
   }) async {
     if (_disposed) {
       throw const BackendProcessError('Backend has been disposed');
+    }
+
+    // Validate options and log warnings for unsupported fields
+    if (options != null) {
+      final validation = options.validateForCodex();
+      for (final warning in validation.warnings) {
+        SdkLogger.instance.warning(warning);
+      }
     }
 
     try {

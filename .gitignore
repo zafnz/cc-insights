@@ -41,3 +41,7 @@ _real_claude
 
 # CC-Insights config (user-specific)
 .ccinsights/
+
+# Dart build artifacts (package-specific)
+codex_dart_sdk/.dart_tool/
+codex_dart_sdk/build/

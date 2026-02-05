@@ -15,10 +15,11 @@ void main() {
       expect(BackendType.directCli.name, equals('directCli'));
     });
 
-    test('has exactly two values', () {
-      expect(BackendType.values, hasLength(2));
+    test('has exactly three values', () {
+      expect(BackendType.values, hasLength(3));
       expect(BackendType.values, contains(BackendType.nodejs));
       expect(BackendType.values, contains(BackendType.directCli));
+      expect(BackendType.values, contains(BackendType.codex));
     });
 
     test('values have distinct indices', () {

@@ -82,6 +82,31 @@ class BackendService extends ChangeNotifier {
   /// Error message for a specific backend, if any.
   String? errorFor(BackendType type) => _errors[type];
 
+  /// Capabilities of the currently active backend.
+  ///
+  /// Returns an empty [BackendCapabilities] (all false) if no backend is started.
+  BackendCapabilities get capabilities {
+    final bt = _backendType;
+    if (bt == null) return const BackendCapabilities();
+    return _backends[bt]?.capabilities ?? const BackendCapabilities();
+  }
+
+  /// Capabilities of a specific backend type.
+  ///
+  /// Returns an empty [BackendCapabilities] (all false) if that backend is not started.
+  BackendCapabilities capabilitiesFor(BackendType type) {
+    return _backends[type]?.capabilities ?? const BackendCapabilities();
+  }
+
+  /// Creates a backend instance. Override in tests to inject fakes.
+  @visibleForTesting
+  Future<AgentBackend> createBackend({
+    required BackendType type,
+    String? executablePath,
+  }) {
+    return BackendFactory.create(type: type, executablePath: executablePath);
+  }
+
   /// Starts the backend.
   ///
   /// This spawns a direct connection to the Claude CLI using the stream-json
@@ -114,10 +139,7 @@ class BackendService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final backend = await BackendFactory.create(
-        type: type,
-        executablePath: executablePath,
-      );
+      final backend = await createBackend(type: type, executablePath: executablePath);
       _backends[type] = backend;
 
       // Monitor backend errors
@@ -180,11 +202,16 @@ class BackendService extends ChangeNotifier {
 
   /// Switches the backend type if possible.
   ///
-  /// Throws [StateError] when active sessions exist.
+  /// Disposes any previously active backend that is not the target [type].
   Future<void> switchBackend({
     required BackendType type,
     String? executablePath,
   }) async {
+    // Dispose backends that are not the target type.
+    final toRemove = _backends.keys.where((k) => k != type).toList();
+    for (final key in toRemove) {
+      await _disposeBackend(key);
+    }
     await start(type: type, executablePath: executablePath);
   }
 
@@ -284,6 +311,16 @@ class BackendService extends ChangeNotifier {
       options: options,
       content: content,
     );
+  }
+
+  /// Disposes a single backend and its associated subscriptions.
+  Future<void> _disposeBackend(BackendType type) async {
+    await _errorSubscriptions.remove(type)?.cancel();
+    await _logSubscriptions.remove(type)?.cancel();
+    final backend = _backends.remove(type);
+    await backend?.dispose();
+    _errors.remove(type);
+    _starting.remove(type);
   }
 
   /// Disposes of the backend service and terminates the subprocess.

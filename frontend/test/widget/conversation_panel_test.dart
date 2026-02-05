@@ -67,6 +67,27 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   String? errorFor(sdk.BackendType type) => null;
 
   @override
+  sdk.BackendCapabilities get capabilities =>
+      const sdk.BackendCapabilities(
+        supportsPermissionModeChange: true,
+        supportsModelChange: true,
+      );
+
+  @override
+  sdk.BackendCapabilities capabilitiesFor(sdk.BackendType type) {
+    if (type == sdk.BackendType.codex) {
+      return const sdk.BackendCapabilities(
+        supportsModelListing: true,
+        supportsReasoningEffort: true,
+      );
+    }
+    return const sdk.BackendCapabilities(
+      supportsPermissionModeChange: true,
+      supportsModelChange: true,
+    );
+  }
+
+  @override
   Future<void> start({
     sdk.BackendType type = sdk.BackendType.directCli,
     String? executablePath,
@@ -82,6 +103,14 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     String? executablePath,
   }) async {
     await start(type: type, executablePath: executablePath);
+  }
+
+  @override
+  Future<sdk.AgentBackend> createBackend({
+    required sdk.BackendType type,
+    String? executablePath,
+  }) async {
+    throw UnimplementedError();
   }
 
   @override

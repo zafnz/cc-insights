@@ -43,6 +43,13 @@ class FakeClaudeBackend implements ClaudeBackend {
   final _logEntriesController = StreamController<LogEntry>.broadcast();
 
   @override
+  BackendCapabilities get capabilities => const BackendCapabilities(
+        supportsHooks: true,
+        supportsPermissionModeChange: true,
+        supportsModelChange: true,
+      );
+
+  @override
   Stream<BackendError> get errors => _errorsController.stream;
 
   @override
@@ -94,6 +101,7 @@ class FakeClaudeBackend implements ClaudeBackend {
     disposed = true;
     await _errorsController.close();
     await _logsController.close();
+    await _logEntriesController.close();
   }
 
   /// Emit an error to the errors stream.
@@ -548,6 +556,65 @@ void main() {
       });
     });
 
+    group('switchBackend()', () {
+      test('disposes old backend when switching to a different type', () async {
+        final cliBackend = FakeClaudeBackend();
+        final codexBackend = FakeClaudeBackend();
+
+        final service = _SwitchableBackendService({
+          BackendType.directCli: cliBackend,
+          BackendType.codex: codexBackend,
+        });
+        addTearDown(service.dispose);
+
+        // Start with directCli
+        await service.start(type: BackendType.directCli);
+        check(service.isReadyFor(BackendType.directCli)).isTrue();
+        check(cliBackend.disposed).isFalse();
+
+        // Switch to codex – should dispose the CLI backend
+        await service.switchBackend(type: BackendType.codex);
+
+        check(cliBackend.disposed).isTrue();
+        check(service.isReadyFor(BackendType.codex)).isTrue();
+        check(service.backendType).equals(BackendType.codex);
+      });
+
+      test('only one backend remains after switch', () async {
+        final cliBackend = FakeClaudeBackend();
+        final codexBackend = FakeClaudeBackend();
+
+        final service = _SwitchableBackendService({
+          BackendType.directCli: cliBackend,
+          BackendType.codex: codexBackend,
+        });
+        addTearDown(service.dispose);
+
+        await service.start(type: BackendType.directCli);
+        await service.switchBackend(type: BackendType.codex);
+
+        // Old backend should not be ready
+        check(service.isReadyFor(BackendType.directCli)).isFalse();
+        // New backend should be ready
+        check(service.isReadyFor(BackendType.codex)).isTrue();
+      });
+
+      test('switching to same type does not dispose it', () async {
+        final cliBackend = FakeClaudeBackend();
+
+        final service = _SwitchableBackendService({
+          BackendType.directCli: cliBackend,
+        });
+        addTearDown(service.dispose);
+
+        await service.start(type: BackendType.directCli);
+        await service.switchBackend(type: BackendType.directCli);
+
+        check(cliBackend.disposed).isFalse();
+        check(service.isReadyFor(BackendType.directCli)).isTrue();
+      });
+    });
+
     group('backend error monitoring', () {
       test('updates error when backend emits error', () async {
         final fakeBackend = FakeClaudeBackend();
@@ -681,5 +748,26 @@ class _TestableBackendService extends BackendService {
     _backendState?.dispose();
     _backendState = null;
     super.dispose();
+  }
+}
+
+/// A backend service subclass that overrides [createBackend] to return
+/// pre-configured fakes per [BackendType], while preserving the real
+/// [start], [switchBackend], and [_disposeBackend] logic.
+class _SwitchableBackendService extends BackendService {
+  _SwitchableBackendService(this._fakeBackends);
+
+  final Map<BackendType, FakeClaudeBackend> _fakeBackends;
+
+  @override
+  Future<AgentBackend> createBackend({
+    required BackendType type,
+    String? executablePath,
+  }) async {
+    final fake = _fakeBackends[type];
+    if (fake == null) {
+      throw StateError('No fake backend configured for $type');
+    }
+    return fake;
   }
 }

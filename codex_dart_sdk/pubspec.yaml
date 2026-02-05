@@ -10,3 +10,6 @@ dependencies:
     path: ../agent_sdk_core
   meta: ^1.11.0
   uuid: ^4.0.0
+
+dev_dependencies:
+  test: ^1.24.0

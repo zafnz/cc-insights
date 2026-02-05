@@ -51,6 +51,12 @@ class ClaudeCliBackend implements AgentBackend {
   SdkLogger get logger => SdkLogger.instance;
 
   @override
+  BackendCapabilities get capabilities => const BackendCapabilities(
+        supportsPermissionModeChange: true,
+        supportsModelChange: true,
+      );
+
+  @override
   bool get isRunning => !_disposed;
 
   @override
@@ -82,6 +88,14 @@ class ClaudeCliBackend implements AgentBackend {
   }) async {
     if (_disposed) {
       throw const BackendProcessError('Backend has been disposed');
+    }
+
+    // Validate options and log warnings for unsupported fields
+    if (options != null) {
+      final validation = options.validateForCli();
+      for (final warning in validation.warnings) {
+        SdkLogger.instance.warning(warning);
+      }
     }
 
     try {
@@ -338,6 +352,9 @@ class _CliSessionAdapter implements AgentSession {
 
   @override
   Future<void> setReasoningEffort(String? effort) async {
-    // No-op: Claude CLI does not support reasoning effort levels.
+    throw UnsupportedError(
+      'Claude CLI does not support reasoning effort. '
+      'Check BackendCapabilities.supportsReasoningEffort before calling.',
+    );
   }
 }

@@ -273,9 +273,13 @@ void main() {
 class MockAgentBackend implements AgentBackend {
   final _errorsController = StreamController<BackendError>.broadcast();
   final _logsController = StreamController<String>.broadcast();
+  final _logEntriesController = StreamController<LogEntry>.broadcast();
   final _sessions = <MockAgentSession>[];
   bool _disposed = false;
   int _sessionCounter = 0;
+
+  @override
+  BackendCapabilities get capabilities => const BackendCapabilities();
 
   @override
   bool get isRunning => !_disposed;
@@ -285,6 +289,9 @@ class MockAgentBackend implements AgentBackend {
 
   @override
   Stream<String> get logs => _logsController.stream;
+
+  @override
+  Stream<LogEntry> get logEntries => _logEntriesController.stream;
 
   @override
   List<AgentSession> get sessions => List.unmodifiable(_sessions);
@@ -318,6 +325,7 @@ class MockAgentBackend implements AgentBackend {
 
     await _errorsController.close();
     await _logsController.close();
+    await _logEntriesController.close();
   }
 }
 
@@ -335,6 +343,9 @@ class MockAgentSession implements AgentSession {
 
   @override
   final String sessionId;
+
+  @override
+  String? get resolvedSessionId => sessionId;
 
   @override
   bool get isActive => !_disposed;

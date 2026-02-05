@@ -265,6 +265,12 @@ class JsonRpcClient {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    for (final completer in _pending.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(StateError('JSON-RPC client disposed'));
+      }
+    }
+    _pending.clear();
     await _inputSub.cancel();
     await _notifications.close();
     await _serverRequests.close();

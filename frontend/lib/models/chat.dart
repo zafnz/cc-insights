@@ -273,6 +273,13 @@ class ChatState extends ChangeNotifier {
   /// Only applicable when the backend is Codex. Null means use the default.
   sdk.ReasoningEffort? _reasoningEffort;
 
+  /// Capabilities of the backend this chat is using.
+  ///
+  /// Set when a session starts. Used to guard mid-session calls so that
+  /// unsupported operations (e.g., setReasoningEffort on CLI) are never
+  /// sent to the backend.
+  sdk.BackendCapabilities _capabilities = const sdk.BackendCapabilities();
+
   /// The last SDK session ID for this chat, used for session resume.
   ///
   /// Set when a session is created successfully.
@@ -486,6 +493,12 @@ class ChatState extends ChangeNotifier {
   /// Returns null if using the default effort level or if not applicable.
   sdk.ReasoningEffort? get reasoningEffort => _reasoningEffort;
 
+  /// Capabilities of the backend this chat is using.
+  ///
+  /// Updated when a session starts. Before the first session, returns
+  /// an empty capabilities object (all false).
+  sdk.BackendCapabilities get capabilities => _capabilities;
+
   /// The last SDK session ID for this chat, used for session resume.
   ///
   /// Null if no session has been started, or if the last session ended.
@@ -574,30 +587,36 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the permission mode for this chat.
   ///
-  /// If a session is active and supports mid-session permission changes, this
-  /// also updates the permission mode on the running session.
+  /// If a session is active and the backend supports mid-session permission
+  /// changes, this also updates the permission mode on the running session.
+  /// If the backend does not support permission mode changes, the value is
+  /// stored locally but not sent to the session.
   void setPermissionMode(PermissionMode mode) {
     if (_permissionMode != mode) {
       _permissionMode = mode;
       _scheduleMetaSave();
-      // Update the permission mode on the active session if one exists
-      _session?.setPermissionMode(_sdkPermissionMode.value);
+      if (_capabilities.supportsPermissionModeChange) {
+        _session?.setPermissionMode(_sdkPermissionMode.value);
+      }
       notifyListeners();
     }
   }
 
-  /// Sets the reasoning effort level for this chat (Codex only).
+  /// Sets the reasoning effort level for this chat.
   ///
-  /// If a session is active and supports mid-session changes, this also
-  /// updates the reasoning effort on the running session.
+  /// If a session is active and the backend supports reasoning effort, this
+  /// also updates the reasoning effort on the running session. If the backend
+  /// does not support reasoning effort, the value is stored locally but not
+  /// sent to the session.
   ///
   /// Pass null to use the default effort level.
   void setReasoningEffort(sdk.ReasoningEffort? effort) {
     if (_reasoningEffort != effort) {
       _reasoningEffort = effort;
       _scheduleMetaSave();
-      // Update the reasoning effort on the active session if one exists
-      _session?.setReasoningEffort(effort?.value);
+      if (_capabilities.supportsReasoningEffort) {
+        _session?.setReasoningEffort(effort?.value);
+      }
       notifyListeners();
     }
   }
@@ -850,6 +869,10 @@ class ChatState extends ChangeNotifier {
       ),
       content: content,
     );
+
+    // Capture capabilities from the backend so mid-session calls
+    // can be guarded without re-querying the backend service.
+    _capabilities = backend.capabilitiesFor(model.backend);
 
     _markStarted();
 

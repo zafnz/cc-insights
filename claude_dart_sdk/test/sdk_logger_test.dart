@@ -172,7 +172,7 @@ void main() {
 
       final entry = receivedLogs
           .firstWhere((e) => e.direction == LogDirection.stderr);
-      expect(entry.level, equals(LogLevel.info));
+      expect(entry.level, equals(LogLevel.debug));
       expect(entry.text, equals('some stderr output'));
     });
 

@@ -23,6 +23,13 @@ class ClaudeBackend implements AgentBackend {
 
   final _errorsController = StreamController<BackendError>.broadcast();
 
+  @override
+  BackendCapabilities get capabilities => const BackendCapabilities(
+        supportsHooks: true,
+        supportsPermissionModeChange: true,
+        supportsModelChange: true,
+      );
+
   /// Stream of backend errors.
   @override
   Stream<BackendError> get errors => _errorsController.stream;

@@ -717,6 +717,7 @@ class _ConversationHeader extends StatelessWidget {
           final showContext = width >= 500;
           final showTokens = width >= 350;
           final isBackendLocked = chat.hasStarted;
+          final caps = backendService.capabilitiesFor(chat.model.backend);
 
           return Row(
             children: [
@@ -750,7 +751,7 @@ class _ConversationHeader extends StatelessWidget {
                             orElse: () => chat.model,
                           );
                           final isModelLoading =
-                              chat.model.backend == sdk.BackendType.codex &&
+                              caps.supportsModelListing &&
                               backendService.isModelListLoadingFor(
                                 chat.model.backend,
                               );
@@ -784,8 +785,8 @@ class _ConversationHeader extends StatelessWidget {
                           chat.setPermissionMode(mode);
                         },
                       ),
-                      // Reasoning effort dropdown (Codex only)
-                      if (chat.model.backend == sdk.BackendType.codex) ...[
+                      // Reasoning effort dropdown (only for backends that support it)
+                      if (caps.supportsReasoningEffort) ...[
                         const SizedBox(width: 8),
                         _CompactDropdown(
                           value: chat.reasoningEffort?.label ?? 'Default',
@@ -1242,11 +1243,13 @@ class WelcomeCard extends StatelessWidget {
 
     Widget buildHeader() {
       final model = worktree?.welcomeModel ?? defaultModel;
+      final caps = backendService.capabilitiesFor(model.backend);
       final isModelLoading =
-          model.backend == sdk.BackendType.codex &&
+          caps.supportsModelListing &&
           backendService.isModelListLoadingFor(model.backend);
       return _WelcomeHeader(
         model: model,
+        caps: caps,
         permissionMode: worktree?.welcomePermissionMode ?? defaultPermissionMode,
         reasoningEffort: worktree?.welcomeReasoningEffort,
         isModelLoading: isModelLoading,
@@ -1493,6 +1496,7 @@ class WelcomeCard extends StatelessWidget {
 class _WelcomeHeader extends StatelessWidget {
   const _WelcomeHeader({
     required this.model,
+    required this.caps,
     required this.permissionMode,
     required this.reasoningEffort,
     required this.onModelChanged,
@@ -1503,6 +1507,7 @@ class _WelcomeHeader extends StatelessWidget {
   });
 
   final ChatModel model;
+  final sdk.BackendCapabilities caps;
   final PermissionMode permissionMode;
   final sdk.ReasoningEffort? reasoningEffort;
   final ValueChanged<ChatModel> onModelChanged;
@@ -1594,8 +1599,8 @@ class _WelcomeHeader extends StatelessWidget {
                       onPermissionChanged(selected);
                     },
                   ),
-                  // Reasoning effort dropdown (Codex only)
-                  if (model.backend == sdk.BackendType.codex) ...[
+                  // Reasoning effort dropdown (capability-gated)
+                  if (caps.supportsReasoningEffort) ...[
                     const SizedBox(width: 8),
                     _CompactDropdown(
                       value: reasoningEffort?.label ?? 'Default',

@@ -1,3 +1,20 @@
+/// Result of validating [SessionOptions] against a specific backend.
+///
+/// Contains a list of [warnings] for options that are set but unsupported
+/// by the target backend. These options will be silently ignored at runtime.
+class OptionsValidationResult {
+  const OptionsValidationResult(this.warnings);
+
+  /// Empty result with no warnings.
+  static const empty = OptionsValidationResult([]);
+
+  /// Human-readable warnings for unsupported options.
+  final List<String> warnings;
+
+  /// Whether validation passed with no warnings.
+  bool get isClean => warnings.isEmpty;
+}
+
 /// Options for creating a Claude session.
 class SessionOptions {
   const SessionOptions({
@@ -161,6 +178,166 @@ class SessionOptions {
     if (fallbackModel != null) json['fallback_model'] = fallbackModel;
 
     return json;
+  }
+
+  /// Validate options for the Claude CLI (direct) backend.
+  ///
+  /// Returns warnings for options that the CLI backend ignores:
+  /// reasoningEffort, allowDangerouslySkipPermissions, permissionPromptToolName,
+  /// tools, plugins, strictMcpConfig, resumeSessionAt, allowedTools,
+  /// disallowedTools, maxThinkingTokens, enableFileCheckpointing,
+  /// additionalDirectories, agents, hooks, sandbox, settingSources, betas,
+  /// outputFormat, fallbackModel.
+  OptionsValidationResult validateForCli() {
+    final warnings = <String>[];
+    if (reasoningEffort != null) {
+      warnings.add('reasoningEffort is ignored by CLI backend');
+    }
+    if (allowDangerouslySkipPermissions != null) {
+      warnings.add('allowDangerouslySkipPermissions is ignored by CLI backend');
+    }
+    if (permissionPromptToolName != null) {
+      warnings.add('permissionPromptToolName is ignored by CLI backend');
+    }
+    if (tools != null) {
+      warnings.add('tools is ignored by CLI backend');
+    }
+    if (plugins != null) {
+      warnings.add('plugins is ignored by CLI backend');
+    }
+    if (strictMcpConfig != null) {
+      warnings.add('strictMcpConfig is ignored by CLI backend');
+    }
+    if (resumeSessionAt != null) {
+      warnings.add('resumeSessionAt is ignored by CLI backend');
+    }
+    if (allowedTools != null) {
+      warnings.add('allowedTools is ignored by CLI backend');
+    }
+    if (disallowedTools != null) {
+      warnings.add('disallowedTools is ignored by CLI backend');
+    }
+    if (maxThinkingTokens != null) {
+      warnings.add('maxThinkingTokens is ignored by CLI backend');
+    }
+    if (enableFileCheckpointing != null) {
+      warnings.add('enableFileCheckpointing is ignored by CLI backend');
+    }
+    if (additionalDirectories != null) {
+      warnings.add('additionalDirectories is ignored by CLI backend');
+    }
+    if (agents != null) {
+      warnings.add('agents is ignored by CLI backend');
+    }
+    if (hooks != null) {
+      warnings.add('hooks is ignored by CLI backend');
+    }
+    if (sandbox != null) {
+      warnings.add('sandbox is ignored by CLI backend');
+    }
+    if (settingSources != null) {
+      warnings.add('settingSources is ignored by CLI backend');
+    }
+    if (betas != null) {
+      warnings.add('betas is ignored by CLI backend');
+    }
+    if (outputFormat != null) {
+      warnings.add('outputFormat is ignored by CLI backend');
+    }
+    if (fallbackModel != null) {
+      warnings.add('fallbackModel is ignored by CLI backend');
+    }
+    return warnings.isEmpty
+        ? OptionsValidationResult.empty
+        : OptionsValidationResult(warnings);
+  }
+
+  /// Validate options for the Codex backend.
+  ///
+  /// Returns warnings for options that the Codex backend ignores:
+  /// permissionMode, allowDangerouslySkipPermissions, permissionPromptToolName,
+  /// tools, plugins, strictMcpConfig, resumeSessionAt, allowedTools,
+  /// disallowedTools, systemPrompt, maxTurns, maxBudgetUsd, maxThinkingTokens,
+  /// includePartialMessages, enableFileCheckpointing, additionalDirectories,
+  /// mcpServers, agents, hooks, sandbox, settingSources, betas, outputFormat,
+  /// fallbackModel.
+  OptionsValidationResult validateForCodex() {
+    final warnings = <String>[];
+    if (permissionMode != null) {
+      warnings.add('permissionMode is ignored by Codex backend');
+    }
+    if (allowDangerouslySkipPermissions != null) {
+      warnings.add('allowDangerouslySkipPermissions is ignored by Codex backend');
+    }
+    if (permissionPromptToolName != null) {
+      warnings.add('permissionPromptToolName is ignored by Codex backend');
+    }
+    if (tools != null) {
+      warnings.add('tools is ignored by Codex backend');
+    }
+    if (plugins != null) {
+      warnings.add('plugins is ignored by Codex backend');
+    }
+    if (strictMcpConfig != null) {
+      warnings.add('strictMcpConfig is ignored by Codex backend');
+    }
+    if (resumeSessionAt != null) {
+      warnings.add('resumeSessionAt is ignored by Codex backend');
+    }
+    if (allowedTools != null) {
+      warnings.add('allowedTools is ignored by Codex backend');
+    }
+    if (disallowedTools != null) {
+      warnings.add('disallowedTools is ignored by Codex backend');
+    }
+    if (systemPrompt != null) {
+      warnings.add('systemPrompt is ignored by Codex backend');
+    }
+    if (maxTurns != null) {
+      warnings.add('maxTurns is ignored by Codex backend');
+    }
+    if (maxBudgetUsd != null) {
+      warnings.add('maxBudgetUsd is ignored by Codex backend');
+    }
+    if (maxThinkingTokens != null) {
+      warnings.add('maxThinkingTokens is ignored by Codex backend');
+    }
+    if (includePartialMessages != null) {
+      warnings.add('includePartialMessages is ignored by Codex backend');
+    }
+    if (enableFileCheckpointing != null) {
+      warnings.add('enableFileCheckpointing is ignored by Codex backend');
+    }
+    if (additionalDirectories != null) {
+      warnings.add('additionalDirectories is ignored by Codex backend');
+    }
+    if (mcpServers != null) {
+      warnings.add('mcpServers is ignored by Codex backend');
+    }
+    if (agents != null) {
+      warnings.add('agents is ignored by Codex backend');
+    }
+    if (hooks != null) {
+      warnings.add('hooks is ignored by Codex backend');
+    }
+    if (sandbox != null) {
+      warnings.add('sandbox is ignored by Codex backend');
+    }
+    if (settingSources != null) {
+      warnings.add('settingSources is ignored by Codex backend');
+    }
+    if (betas != null) {
+      warnings.add('betas is ignored by Codex backend');
+    }
+    if (outputFormat != null) {
+      warnings.add('outputFormat is ignored by Codex backend');
+    }
+    if (fallbackModel != null) {
+      warnings.add('fallbackModel is ignored by Codex backend');
+    }
+    return warnings.isEmpty
+        ? OptionsValidationResult.empty
+        : OptionsValidationResult(warnings);
   }
 }
 

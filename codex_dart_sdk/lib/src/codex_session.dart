@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart';
+import 'package:meta/meta.dart';
 
 import 'codex_process.dart';
 import 'json_rpc.dart';
@@ -45,6 +46,13 @@ class CodexSession implements AgentSession {
   StreamSubscription<JsonRpcServerRequest>? _requestSub;
 
   bool _disposed = false;
+
+  /// Temp image files created during [sendWithContent] that need cleanup.
+  final _tempImagePaths = <String>{};
+
+  /// Exposes tracked temp image paths for testing.
+  @visibleForTesting
+  Set<String> get tempImagePaths => _tempImagePaths;
 
   Map<String, dynamic>? _latestTokenUsage;
   String? _modelOverride;
@@ -486,13 +494,20 @@ class CodexSession implements AgentSession {
       return send('');
     }
 
-    final result = await _process!.sendRequest('turn/start', {
-      'threadId': threadId,
-      'input': inputs,
-      if (_modelOverride != null) 'model': _modelOverride,
-      if (_effortOverride != null) 'effort': _effortOverride,
-    });
-    _extractTurnId(result);
+    // Snapshot the temp paths created for this call so we can clean them up.
+    final tempPaths = Set<String>.of(_tempImagePaths);
+
+    try {
+      final result = await _process!.sendRequest('turn/start', {
+        'threadId': threadId,
+        'input': inputs,
+        if (_modelOverride != null) 'model': _modelOverride,
+        if (_effortOverride != null) 'effort': _effortOverride,
+      });
+      _extractTurnId(result);
+    } finally {
+      _deleteTempFiles(tempPaths);
+    }
   }
 
   void _extractTurnId(Map<String, dynamic> result) {
@@ -525,13 +540,14 @@ class CodexSession implements AgentSession {
     return inputs;
   }
 
-  Future<String> _writeTempImage(String base64, String? mediaType) async {
-    final bytes = base64Decode(base64);
+  Future<String> _writeTempImage(String base64Data, String? mediaType) async {
+    final bytes = base64Decode(base64Data);
     final ext = _extensionForMediaType(mediaType);
     final file = await File(
       '${Directory.systemTemp.path}/codex-image-${_nextUuid()}.$ext',
     ).create();
     await file.writeAsBytes(bytes, flush: true);
+    _tempImagePaths.add(file.path);
     return file.path;
   }
 
@@ -572,9 +588,10 @@ class CodexSession implements AgentSession {
 
   @override
   Future<void> setPermissionMode(String? mode) async {
-    if (_disposed) {
-      throw StateError('Session has been disposed');
-    }
+    throw UnsupportedError(
+      'Codex does not support mid-session permission mode changes. '
+      'Check BackendCapabilities.supportsPermissionModeChange before calling.',
+    );
   }
 
   @override
@@ -586,9 +603,21 @@ class CodexSession implements AgentSession {
     _effortOverride = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
+  void _deleteTempFiles(Set<String> paths) {
+    for (final path in paths) {
+      try {
+        File(path).deleteSync();
+      } on FileSystemException {
+        // Ignore — file may already be deleted.
+      }
+      _tempImagePaths.remove(path);
+    }
+  }
+
   void _dispose() {
     if (_disposed) return;
     _disposed = true;
+    _deleteTempFiles(Set<String>.of(_tempImagePaths));
     _notificationSub?.cancel();
     _requestSub?.cancel();
     _messagesController.close();

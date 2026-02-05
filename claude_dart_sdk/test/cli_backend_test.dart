@@ -42,6 +42,18 @@ void main() {
       });
     });
 
+    group('capabilities', () {
+      test('supports permission mode change and model change', () {
+        final backend = ClaudeCliBackend();
+
+        expect(backend.capabilities.supportsPermissionModeChange, isTrue);
+        expect(backend.capabilities.supportsModelChange, isTrue);
+        expect(backend.capabilities.supportsHooks, isFalse);
+        expect(backend.capabilities.supportsModelListing, isFalse);
+        expect(backend.capabilities.supportsReasoningEffort, isFalse);
+      });
+    });
+
     group('initial state', () {
       test('isRunning is true after creation', () {
         final backend = ClaudeCliBackend();
@@ -721,8 +733,15 @@ class _MockableCliBackend implements AgentBackend {
   final _sessions = <String, _MockAgentSession>{};
   final _errorsController = StreamController<BackendError>.broadcast();
   final _logsController = StreamController<String>.broadcast();
+  final _logEntriesController = StreamController<LogEntry>.broadcast();
 
   bool _disposed = false;
+
+  @override
+  BackendCapabilities get capabilities => const BackendCapabilities(
+        supportsPermissionModeChange: true,
+        supportsModelChange: true,
+      );
 
   @override
   bool get isRunning => !_disposed;
@@ -732,6 +751,9 @@ class _MockableCliBackend implements AgentBackend {
 
   @override
   Stream<String> get logs => _logsController.stream;
+
+  @override
+  Stream<LogEntry> get logEntries => _logEntriesController.stream;
 
   @override
   List<AgentSession> get sessions => List.unmodifiable(_sessions.values);
@@ -779,6 +801,7 @@ class _MockableCliBackend implements AgentBackend {
 
     await _errorsController.close();
     await _logsController.close();
+    await _logEntriesController.close();
   }
 }
 
