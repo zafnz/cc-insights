@@ -30,6 +30,21 @@ MarkdownStyleSheet buildMarkdownStyleSheet(
       color: colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(4),
     ),
+    blockquote: TextStyle(
+      fontSize: fontSize,
+      color: colorScheme.onSurfaceVariant,
+      fontStyle: FontStyle.italic,
+    ),
+    blockquoteDecoration: BoxDecoration(
+      color: colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(4),
+      border: Border(
+        left: BorderSide(
+          color: colorScheme.outline,
+          width: 3,
+        ),
+      ),
+    ),
   );
 }
 
