@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Information Panel Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Material 3 deep purple seed - dark mode derived palette */
+    --surface: #141218;
+    --surface-container-highest: #36343b;
+    --surface-container-high: #2b2930;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+
+    /* Semantic colors */
+    --green: #4caf50;
+    --orange: #ff9800;
+    --blue: #2196f3;
+    --red: #f44336;
+
+    /* Font */
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: #0e0c11;
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 32px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .panel {
+    width: 280px;
+    background: var(--surface);
+    border-radius: 4px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+  }
+
+  /* Panel Header */
+  .panel-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--surface-container-highest);
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+    gap: 6px;
+  }
+
+  .panel-header .icon {
+    font-size: 14px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+  }
+
+  .panel-header .title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .panel-header .drag-handle {
+    font-size: 14px;
+    color: rgba(202, 196, 208, 0.5);
+    flex-shrink: 0;
+  }
+
+  /* Panel Content */
+  .panel-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Section Label */
+  .section-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.02em;
+  }
+
+  /* Status Counts Row */
+  .status-counts {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface-variant);
+  }
+
+  .status-counts .label {
+    color: rgba(202, 196, 208, 0.7);
+  }
+
+  /* Base Section */
+  .base-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .base-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .base-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .base-label {
+    font-size: 13px;
+    color: var(--on-surface);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .base-label .ref-type {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface-variant);
+  }
+
+  .change-btn {
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--on-surface);
+    background: transparent;
+    border: 1px solid var(--outline);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: var(--font-system);
+  }
+
+  .change-btn:hover {
+    background: rgba(208, 188, 255, 0.08);
+  }
+
+  .divergence-stats {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding-left: 21px;
+  }
+
+  .divergence-stats .ahead {
+    color: var(--green);
+  }
+
+  .divergence-stats .behind {
+    color: var(--orange);
+  }
+
+  .divergence-stats .separator {
+    color: var(--on-surface-variant);
+    padding: 0 4px;
+  }
+
+  /* Upstream Section */
+  .upstream-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .upstream-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .upstream-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .upstream-label {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+  }
+
+  .upstream-label .muted {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: rgba(202, 196, 208, 0.6);
+  }
+
+  .upstream-label .tracking-ref {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface);
+  }
+
+  .upstream-stats {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding-left: 21px;
+  }
+
+  .upstream-stats .up {
+    color: var(--green);
+  }
+
+  .upstream-stats .down {
+    color: var(--on-surface-variant);
+  }
+
+  /* Section Divider */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    margin-top: 4px;
+  }
+
+  .section-divider::before,
+  .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(73, 69, 79, 0.4);
+  }
+
+  .section-divider .divider-label {
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--on-surface-variant);
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+
+  /* Compact Buttons */
+  .compact-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border: 1px solid var(--outline);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--on-surface);
+    font-size: 10px;
+    font-weight: 400;
+    font-family: var(--font-system);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .compact-btn:hover {
+    background: rgba(208, 188, 255, 0.08);
+  }
+
+  .compact-btn:disabled,
+  .compact-btn.disabled {
+    opacity: 0.4;
+    cursor: default;
+    border-color: rgba(73, 69, 79, 0.3);
+  }
+
+  .compact-btn:disabled:hover,
+  .compact-btn.disabled:hover {
+    background: transparent;
+  }
+
+  .compact-btn .btn-icon {
+    font-size: 12px;
+  }
+
+  /* Button Row */
+  .btn-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .btn-row .compact-btn {
+    flex: 1;
+  }
+
+  /* Working Tree Info Row */
+  .working-tree-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* Status row layout */
+  .info-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .info-row .info-label {
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+  }
+
+  .info-row .info-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface);
+  }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <span class="icon">&#xe0b8;</span><!-- call_split icon approximation -->
+    <span class="title">formatting-of-buttons-and-input-boxes</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <!-- Panel Content -->
+  <div class="panel-content">
+
+    <!-- Working Tree Section -->
+    <div class="working-tree-section">
+      <div class="section-label">Working tree</div>
+      <div class="status-counts">
+        <span class="label">Uncommitted / Staged / Commits:</span>&nbsp;
+        0 / 0 / 3
+      </div>
+    </div>
+
+    <!-- Base Section -->
+    <div class="base-section">
+      <div class="section-label">Base</div>
+      <div class="base-row">
+        <span class="base-icon">&#x1F3E0;</span>
+        <span class="base-label">local <span class="ref-type">main</span></span>
+        <button class="change-btn">Change&hellip;</button>
+      </div>
+      <div class="divergence-stats">
+        <span class="ahead">+3</span>
+        <span class="separator">&nbsp;</span>
+        <span class="behind">&minus;0</span>
+      </div>
+    </div>
+
+    <!-- Upstream Section -->
+    <div class="upstream-section">
+      <div class="section-label">Upstream</div>
+      <div class="upstream-row">
+        <span class="upstream-icon">&#x2601;</span>
+        <span class="upstream-label">&mdash; <span class="muted">(not published)</span></span>
+      </div>
+    </div>
+
+    <!-- Local actions -->
+    <div class="section-divider">
+      <span class="divider-label">Local actions</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x21BB;</span>
+        Rebase onto main
+      </button>
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2934;</span>
+        Merge main into branch
+      </button>
+    </div>
+
+    <!-- Integrate locally -->
+    <div class="section-divider">
+      <span class="divider-label">Integrate locally</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2934;</span>
+        Merge branch &#x2192; main
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- VARIANT 2: Remote base, not published                        -->
+<!-- ============================================================ -->
+
+<div class="panel">
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <span class="icon">&#xe0b8;</span>
+    <span class="title">formatting-of-buttons-and-input-boxes</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <!-- Panel Content -->
+  <div class="panel-content">
+
+    <!-- Working Tree Section -->
+    <div class="working-tree-section">
+      <div class="section-label">Working tree</div>
+      <div class="status-counts">
+        <span class="label">Uncommitted / Staged / Commits:</span>&nbsp;
+        0 / 0 / 3
+      </div>
+    </div>
+
+    <!-- Base Section -->
+    <div class="base-section">
+      <div class="section-label">Base</div>
+      <div class="base-row">
+        <span class="base-icon">&#x1F310;</span>
+        <span class="base-label"><span class="ref-type">origin/main</span></span>
+        <button class="change-btn">Change&hellip;</button>
+      </div>
+      <div class="divergence-stats">
+        <span class="ahead">+3</span>
+        <span class="separator">&nbsp;</span>
+        <span class="behind">&minus;2</span>
+      </div>
+    </div>
+
+    <!-- Upstream Section -->
+    <div class="upstream-section">
+      <div class="section-label">Upstream</div>
+      <div class="upstream-row">
+        <span class="upstream-icon">&#x2601;</span>
+        <span class="upstream-label">&mdash; <span class="muted">(not published)</span></span>
+      </div>
+    </div>
+
+    <!-- Remote-base actions -->
+    <div class="section-divider">
+      <span class="divider-label">Remote-base actions</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x21BB;</span>
+        Rebase onto origin/main
+      </button>
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2934;</span>
+        Merge origin/main into branch
+      </button>
+    </div>
+
+    <!-- Publish -->
+    <div class="section-divider">
+      <span class="divider-label">Publish</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2191;</span>
+        Push to origin/formatting-of-buttons&hellip;
+      </button>
+    </div>
+
+    <!-- Pull Request -->
+    <div class="section-divider">
+      <span class="divider-label">Pull Request</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn disabled">
+        <span class="btn-icon">&#x2197;</span>
+        Create PR (push required)
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- VARIANT 3: Remote base, published with upstream tracking      -->
+<!-- ============================================================ -->
+
+<div class="panel">
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <span class="icon">&#xe0b8;</span>
+    <span class="title">formatting-of-buttons-and-input-boxes</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <!-- Panel Content -->
+  <div class="panel-content">
+
+    <!-- Working Tree Section -->
+    <div class="working-tree-section">
+      <div class="section-label">Working tree</div>
+      <div class="status-counts">
+        <span class="label">Uncommitted / Staged / Commits:</span>&nbsp;
+        0 / 0 / 3
+      </div>
+    </div>
+
+    <!-- Base Section -->
+    <div class="base-section">
+      <div class="section-label">Base</div>
+      <div class="base-row">
+        <span class="base-icon">&#x1F310;</span>
+        <span class="base-label"><span class="ref-type">origin/main</span></span>
+        <button class="change-btn">Change&hellip;</button>
+      </div>
+      <div class="divergence-stats">
+        <span class="ahead">+3</span>
+        <span class="separator">&nbsp;</span>
+        <span class="behind">&minus;2</span>
+      </div>
+    </div>
+
+    <!-- Upstream Section (with tracking) -->
+    <div class="upstream-section">
+      <div class="section-label">Upstream</div>
+      <div class="upstream-row">
+        <span class="upstream-icon">&#x2601;</span>
+        <span class="upstream-label"><span class="tracking-ref">origin/formatting-of-buttons&hellip;</span></span>
+      </div>
+      <div class="upstream-stats">
+        <span class="up">&#x2191;1</span>
+        <span>&nbsp;</span>
+        <span class="down">&#x2193;0</span>
+      </div>
+    </div>
+
+    <!-- Remote-base actions -->
+    <div class="section-divider">
+      <span class="divider-label">Remote-base actions</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x21BB;</span>
+        Rebase onto origin/main
+      </button>
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2934;</span>
+        Merge origin/main into branch
+      </button>
+    </div>
+
+    <!-- Sync -->
+    <div class="section-divider">
+      <span class="divider-label">Sync</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2191;</span>
+        Push
+      </button>
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2193;</span>
+        Pull / Rebase
+      </button>
+    </div>
+
+    <!-- Pull Request -->
+    <div class="section-divider">
+      <span class="divider-label">Pull Request</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="compact-btn">
+        <span class="btn-icon">&#x2197;</span>
+        Create PR
+      </button>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
