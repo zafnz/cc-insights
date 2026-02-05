@@ -177,7 +177,7 @@ void main() {
     });
 
     testWidgets(
-      'shows remote base with globe emoji and remote label',
+      'shows remote base with globe emoji (no "remote" prefix)',
       (tester) async {
         await tester.pumpWidget(buildTestWidget(
           worktreeData: const WorktreeData(
@@ -193,8 +193,8 @@ void main() {
         // Globe emoji for remote base
         check(find.text('🌐').evaluate()).isNotEmpty();
 
-        // Combined "remote origin/main" text (now using same font)
-        check(find.text('remote origin/main').evaluate()).isNotEmpty();
+        // Just "origin/main" (no "remote" prefix since origin/ implies remote)
+        check(find.text('origin/main').evaluate()).isNotEmpty();
       },
     );
 

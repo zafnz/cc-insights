@@ -784,6 +784,9 @@ class _BaseSection extends StatelessWidget {
           builder: (context, constraints) {
             // Use row layout if wide enough, otherwise stack
             final isWide = constraints.maxWidth > 220;
+            // Build label: "local main" for local, just "origin/main" for remote
+            final baseLabel = isLocal ? 'local $baseRef' : baseRef;
+
             if (isWide) {
               return Row(
                 children: [
@@ -794,15 +797,16 @@ class _BaseSection extends StatelessWidget {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      '${isLocal ? 'local' : 'remote'} $baseRef',
+                      baseLabel,
                       style: textTheme.bodySmall?.copyWith(
                         fontFamily: 'JetBrains Mono',
                         fontSize: 12,
                       ),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   _CompactButton(
                     key: InformationPanelKeys.changeBaseButton,
                     onPressed: onChangeBase,
@@ -824,12 +828,13 @@ class _BaseSection extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        '${isLocal ? 'local' : 'remote'} $baseRef',
+                        baseLabel,
                         style: textTheme.bodySmall?.copyWith(
                           fontFamily: 'JetBrains Mono',
                           fontSize: 12,
                         ),
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                   ],
