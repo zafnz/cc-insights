@@ -806,7 +806,7 @@ class _BaseSection extends StatelessWidget {
                       maxLines: 1,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const Spacer(),
                   _CompactButton(
                     key: InformationPanelKeys.changeBaseButton,
                     onPressed: onChangeBase,
