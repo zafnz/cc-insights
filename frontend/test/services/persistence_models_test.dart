@@ -110,6 +110,7 @@ void main() {
       final meta = ChatMeta(
         model: 'sonnet',
         backendType: 'direct',
+        hasStarted: false,
         permissionMode: 'acceptEdits',
         createdAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
         lastActiveAt: DateTime.utc(2025, 1, 27, 14, 30, 0),
@@ -179,6 +180,7 @@ void main() {
       final original = ChatMeta(
         model: 'sonnet',
         backendType: 'direct',
+        hasStarted: false,
         permissionMode: 'plan',
         createdAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
         lastActiveAt: DateTime.utc(2025, 1, 27, 14, 30, 0),
