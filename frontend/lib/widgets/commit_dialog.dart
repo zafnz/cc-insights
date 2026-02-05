@@ -442,10 +442,21 @@ $fileList''';
 
   // --- Build methods ---
 
-  /// Handle keyboard shortcut for commit (Cmd+Enter on Mac, Ctrl+Enter elsewhere)
+  /// Handle keyboard shortcuts:
+  /// - Cmd/Ctrl+Enter: commit
+  /// - Escape: cancel
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
+    // Escape to cancel (if not committing)
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (!_isCommitting) {
+        Navigator.of(context).pop(false);
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Cmd/Ctrl+Enter to commit
     final isMac = Platform.isMacOS;
     final isModifierPressed = isMac
         ? HardwareKeyboard.instance.isMetaPressed
