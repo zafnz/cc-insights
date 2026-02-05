@@ -8,6 +8,9 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
+    // Disable automatic window tabbing (removes "Show Tab Bar" from View menu)
+    NSWindow.allowsAutomaticWindowTabbing = false
+
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
