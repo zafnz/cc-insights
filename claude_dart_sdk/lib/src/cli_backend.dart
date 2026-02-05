@@ -68,6 +68,9 @@ class ClaudeCliBackend implements AgentBackend {
   }
 
   @override
+  Stream<LogEntry> get logEntries => SdkLogger.instance.logs;
+
+  @override
   List<AgentSession> get sessions => List.unmodifiable(_sessions.values);
 
   @override

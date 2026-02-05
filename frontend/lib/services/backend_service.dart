@@ -35,7 +35,7 @@ class BackendService extends ChangeNotifier {
   final Map<BackendType, AgentBackend> _backends = {};
   final Map<BackendType, StreamSubscription<BackendError>>
       _errorSubscriptions = {};
-  final Map<BackendType, StreamSubscription<String>> _logSubscriptions = {};
+  final Map<BackendType, StreamSubscription<LogEntry>> _logSubscriptions = {};
   final Map<BackendType, String?> _errors = {};
   final Set<BackendType> _starting = {};
 
@@ -121,13 +121,45 @@ class BackendService extends ChangeNotifier {
         notifyListeners();
       });
 
-      // Forward backend logs to LogService
-      _logSubscriptions[type] = backend.logs.listen((line) {
+      // Forward backend log entries to LogService
+      _logSubscriptions[type] = backend.logEntries.listen((entry) {
+        // Map SDK log level to app log level
+        final level = switch (entry.level) {
+          LogLevel.debug => app_log.LogLevel.debug,
+          LogLevel.info => app_log.LogLevel.info,
+          LogLevel.warning => app_log.LogLevel.warn,
+          LogLevel.error => app_log.LogLevel.error,
+        };
+
+        // Determine log type based on direction
+        final logType = switch (entry.direction) {
+          LogDirection.stdin => 'send',
+          LogDirection.stdout => 'recv',
+          LogDirection.stderr => 'stderr',
+          LogDirection.internal => 'internal',
+          null => 'message',
+        };
+
+        // Build the message payload with structured data
+        final message = <String, dynamic>{
+          'backend': type.name,
+        };
+        if (entry.direction != null) {
+          message['direction'] = entry.direction!.name;
+        }
+        if (entry.data != null) {
+          message['content'] = entry.data;
+        } else if (entry.text != null) {
+          message['text'] = entry.text;
+        } else {
+          message['text'] = entry.message;
+        }
+
         app_log.LogService.instance.log(
           service: type == BackendType.codex ? 'Codex' : 'ClaudeCLI',
-          level: app_log.LogLevel.debug,
-          type: 'stderr',
-          message: {'text': line, 'backend': type.name},
+          level: level,
+          type: logType,
+          message: message,
         );
       });
 

@@ -39,11 +39,17 @@ class FakeClaudeBackend implements ClaudeBackend {
   /// Logs stream controller for simulating backend logs.
   final _logsController = StreamController<String>.broadcast();
 
+  /// Log entries stream controller for simulating structured log entries.
+  final _logEntriesController = StreamController<LogEntry>.broadcast();
+
   @override
   Stream<BackendError> get errors => _errorsController.stream;
 
   @override
   Stream<String> get logs => _logsController.stream;
+
+  @override
+  Stream<LogEntry> get logEntries => _logEntriesController.stream;
 
   @override
   String? get logFilePath => '/tmp/fake-backend.log';

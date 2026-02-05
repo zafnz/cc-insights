@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import 'backend_interface.dart';
 import 'protocol.dart';
+import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/errors.dart';

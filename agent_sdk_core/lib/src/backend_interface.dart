@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/errors.dart';
@@ -29,8 +30,14 @@ abstract class AgentBackend {
   /// Stream of backend errors.
   Stream<BackendError> get errors;
 
-  /// Stream of log messages.
+  /// Stream of log messages (plain text, for backwards compatibility).
   Stream<String> get logs;
+
+  /// Stream of structured log entries.
+  ///
+  /// Provides structured log data with direction, content, and metadata.
+  /// Prefer this over [logs] for new code as it preserves JSON structure.
+  Stream<LogEntry> get logEntries;
 
   /// Create a new session.
   ///

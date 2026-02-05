@@ -31,6 +31,10 @@ class ClaudeBackend implements AgentBackend {
   @override
   Stream<String> get logs => _protocol.stderrLogs;
 
+  /// Stream of structured log entries.
+  @override
+  Stream<LogEntry> get logEntries => SdkLogger.instance.logs;
+
   /// Path to the backend log file, if file logging is enabled.
   String? get logFilePath => _protocol.logFilePath;
 

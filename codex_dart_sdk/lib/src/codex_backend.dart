@@ -34,6 +34,9 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
   Stream<String> get logs => _process.logs;
 
   @override
+  Stream<LogEntry> get logEntries => _process.logEntries;
+
+  @override
   List<AgentSession> get sessions => List.unmodifiable(_sessions.values);
 
   @override

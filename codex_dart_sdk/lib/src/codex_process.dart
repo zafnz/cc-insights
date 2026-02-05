@@ -26,13 +26,16 @@ class CodexProcess {
   })  : _process = process,
         _client = client {
     _setupStderr();
+    _setupProtocolLogs();
   }
 
   final Process _process;
   final JsonRpcClient _client;
 
   final _logsController = StreamController<String>.broadcast();
+  final _logEntriesController = StreamController<LogEntry>.broadcast();
   StreamSubscription<String>? _stderrSub;
+  StreamSubscription<LogEntry>? _protocolLogSub;
 
   bool _disposed = false;
 
@@ -42,8 +45,11 @@ class CodexProcess {
   /// Stream of server requests (requires response).
   Stream<JsonRpcServerRequest> get serverRequests => _client.serverRequests;
 
-  /// Stream of stderr log lines.
+  /// Stream of stderr log lines (for backwards compatibility).
   Stream<String> get logs => _logsController.stream;
+
+  /// Stream of structured log entries.
+  Stream<LogEntry> get logEntries => _logEntriesController.stream;
 
   static Future<CodexProcess> start(
     CodexProcessConfig config, {
@@ -128,15 +134,31 @@ class CodexProcess {
         .transform(const LineSplitter())
         .listen((line) {
           _logsController.add(line);
+          _logEntriesController.add(LogEntry(
+            level: LogLevel.debug,
+            message: 'stderr',
+            timestamp: DateTime.now(),
+            direction: LogDirection.stderr,
+            text: line,
+          ));
           SdkLogger.instance.logStderr(line);
         });
+  }
+
+  void _setupProtocolLogs() {
+    _protocolLogSub = _client.protocolLogEntries.listen((entry) {
+      _logsController.add(entry.toString());
+      _logEntriesController.add(entry);
+    });
   }
 
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
     await _stderrSub?.cancel();
+    await _protocolLogSub?.cancel();
     await _logsController.close();
+    await _logEntriesController.close();
     await _client.dispose();
     _process.kill();
     await _process.exitCode;

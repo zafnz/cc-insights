@@ -64,6 +64,7 @@ class JsonRpcClient {
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
   final _serverRequests =
       StreamController<JsonRpcServerRequest>.broadcast();
+  final _protocolLogEntries = StreamController<LogEntry>.broadcast();
 
   final _pending = <Object, Completer<Map<String, dynamic>>>{};
 
@@ -72,6 +73,9 @@ class JsonRpcClient {
 
   Stream<JsonRpcNotification> get notifications => _notifications.stream;
   Stream<JsonRpcServerRequest> get serverRequests => _serverRequests.stream;
+
+  /// Stream of structured protocol log entries.
+  Stream<LogEntry> get protocolLogEntries => _protocolLogEntries.stream;
 
   Future<Map<String, dynamic>> sendRequest(
     String method,
@@ -126,6 +130,13 @@ class JsonRpcClient {
         .replaceAll('\u2028', r'\u2028')
         .replaceAll('\u2029', r'\u2029');
     _logEdge('sdk-stdin', message);
+    _protocolLogEntries.add(LogEntry(
+      level: LogLevel.debug,
+      message: 'SEND',
+      timestamp: DateTime.now(),
+      direction: LogDirection.stdin,
+      data: message,
+    ));
     _output(json);
   }
 
@@ -143,6 +154,13 @@ class JsonRpcClient {
 
     _logger.logIncoming(json);
     _logEdge('sdk-stdout', json);
+    _protocolLogEntries.add(LogEntry(
+      level: LogLevel.debug,
+      message: 'RECV',
+      timestamp: DateTime.now(),
+      direction: LogDirection.stdout,
+      data: json,
+    ));
 
     if (json.containsKey('method')) {
       final method = json['method'] as String?;
@@ -247,5 +265,6 @@ class JsonRpcClient {
     await _inputSub.cancel();
     await _notifications.close();
     await _serverRequests.close();
+    await _protocolLogEntries.close();
   }
 }
