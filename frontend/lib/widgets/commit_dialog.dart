@@ -1,4 +1,7 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../config/fonts.dart';
@@ -439,6 +442,26 @@ $fileList''';
 
   // --- Build methods ---
 
+  /// Handle keyboard shortcut for commit (Cmd+Enter on Mac, Ctrl+Enter elsewhere)
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    final isMac = Platform.isMacOS;
+    final isModifierPressed = isMac
+        ? HardwareKeyboard.instance.isMetaPressed
+        : HardwareKeyboard.instance.isControlPressed;
+
+    if (isModifierPressed && event.logicalKey == LogicalKeyboardKey.enter) {
+      final canCommit =
+          _messageController.text.trim().isNotEmpty && !_isCommitting;
+      if (canCommit) {
+        _commit();
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -448,28 +471,31 @@ $fileList''';
     final dialogWidth = (size.width * 0.8).clamp(600.0, 1200.0);
     final dialogHeight = (size.height * 0.8).clamp(400.0, 800.0);
 
-    return Dialog(
-      key: CommitDialogKeys.dialog,
-      child: Container(
-        width: dialogWidth,
-        height: dialogHeight,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(colorScheme),
-            // Content
-            Expanded(
-              child: _buildContent(colorScheme),
-            ),
-            // Error message
-            if (_error != null) _buildError(colorScheme),
-            // Footer
-            _buildFooter(colorScheme),
-          ],
+    return Focus(
+      onKeyEvent: _handleKeyEvent,
+      child: Dialog(
+        key: CommitDialogKeys.dialog,
+        child: Container(
+          width: dialogWidth,
+          height: dialogHeight,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              // Header
+              _buildHeader(colorScheme),
+              // Content
+              Expanded(
+                child: _buildContent(colorScheme),
+              ),
+              // Error message
+              if (_error != null) _buildError(colorScheme),
+              // Footer
+              _buildFooter(colorScheme),
+            ],
+          ),
         ),
       ),
     );
@@ -1155,7 +1181,30 @@ $fileList''';
                       color: Colors.white,
                     ),
                   )
-                : const Text('Commit'),
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Commit'),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          Platform.isMacOS ? '\u{2318}\u{21A9}' : 'Ctrl+\u{21A9}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
