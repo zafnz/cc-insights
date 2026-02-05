@@ -80,7 +80,7 @@ class _ToolCardState extends State<ToolCard> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    entry.toolName,
+                    _formatToolName(entry.toolName),
                     style: const TextStyle(
                       fontWeight: FontWeight.w500,
                       fontSize: 13,
@@ -159,7 +159,29 @@ class _ToolCardState extends State<ToolCard> {
     );
   }
 
+  /// Formats tool name for display.
+  ///
+  /// MCP tools have names like `mcp__<mcp-name>__<tool_name>` and are
+  /// formatted as `MCP(mcp-name:tool_name)`.
+  String _formatToolName(String toolName) {
+    final mcpMatch = RegExp(r'^mcp__([^_]+)__(.+)$').firstMatch(toolName);
+    if (mcpMatch != null) {
+      final mcpName = mcpMatch.group(1)!;
+      final mcpToolName = mcpMatch.group(2)!;
+      return 'MCP($mcpName:$mcpToolName)';
+    }
+    return toolName;
+  }
+
+  /// Returns true if the tool name matches the MCP pattern.
+  bool _isMcpTool(String toolName) {
+    return toolName.startsWith('mcp__');
+  }
+
   IconData _getToolIcon(String toolName) {
+    if (_isMcpTool(toolName)) {
+      return Icons.extension;
+    }
     return switch (toolName) {
       'Read' => Icons.description,
       'Write' => Icons.edit_document,
@@ -178,6 +200,9 @@ class _ToolCardState extends State<ToolCard> {
   }
 
   Color _getToolColor(String toolName) {
+    if (_isMcpTool(toolName)) {
+      return Colors.indigo;
+    }
     return switch (toolName) {
       'Read' || 'Write' || 'Edit' => Colors.blue,
       'Glob' || 'Grep' => Colors.purple,
