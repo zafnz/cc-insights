@@ -351,7 +351,8 @@ class ChatReference {
 
 /// Information about a worktree stored in `projects.json`.
 ///
-/// Contains the worktree type, name, list of chats, and assigned tags.
+/// Contains the worktree type, name, list of chats, assigned tags, and
+/// optional base branch override.
 /// All fields are immutable.
 @immutable
 class WorktreeInfo {
@@ -367,12 +368,19 @@ class WorktreeInfo {
   /// Tag names assigned to this worktree.
   final List<String> tags;
 
+  /// Per-worktree base branch override.
+  ///
+  /// When set, overrides the project-level `defaultBase` for this worktree.
+  /// Null means "use the project default".
+  final String? baseOverride;
+
   /// Creates a [WorktreeInfo] instance.
   const WorktreeInfo({
     required this.type,
     required this.name,
     this.chats = const [],
     this.tags = const [],
+    this.baseOverride,
   });
 
   /// Creates a primary worktree with the given name.
@@ -380,6 +388,7 @@ class WorktreeInfo {
     required this.name,
     this.chats = const [],
     this.tags = const [],
+    this.baseOverride,
   }) : type = 'primary';
 
   /// Creates a linked worktree with the given name.
@@ -387,6 +396,7 @@ class WorktreeInfo {
     required this.name,
     this.chats = const [],
     this.tags = const [],
+    this.baseOverride,
   }) : type = 'linked';
 
   /// Whether this is the primary worktree (repo root).
@@ -396,17 +406,24 @@ class WorktreeInfo {
   bool get isLinked => type == 'linked';
 
   /// Creates a copy with the given fields replaced.
+  ///
+  /// Use [clearBaseOverride] to set [baseOverride] to null (revert to
+  /// project default).
   WorktreeInfo copyWith({
     String? type,
     String? name,
     List<ChatReference>? chats,
     List<String>? tags,
+    String? baseOverride,
+    bool clearBaseOverride = false,
   }) {
     return WorktreeInfo(
       type: type ?? this.type,
       name: name ?? this.name,
       chats: chats ?? this.chats,
       tags: tags ?? this.tags,
+      baseOverride:
+          clearBaseOverride ? null : (baseOverride ?? this.baseOverride),
     );
   }
 
@@ -417,6 +434,7 @@ class WorktreeInfo {
       'name': name,
       'chats': chats.map((c) => c.toJson()).toList(),
       'tags': tags,
+      if (baseOverride != null) 'baseOverride': baseOverride,
     };
   }
 
@@ -431,6 +449,7 @@ class WorktreeInfo {
           .map((c) => ChatReference.fromJson(c as Map<String, dynamic>))
           .toList(),
       tags: tagsList.cast<String>(),
+      baseOverride: json['baseOverride'] as String?,
     );
   }
 
@@ -441,7 +460,8 @@ class WorktreeInfo {
         other.type == type &&
         other.name == name &&
         listEquals(other.chats, chats) &&
-        listEquals(other.tags, tags);
+        listEquals(other.tags, tags) &&
+        other.baseOverride == baseOverride;
   }
 
   @override
@@ -450,12 +470,14 @@ class WorktreeInfo {
         name,
         Object.hashAll(chats),
         Object.hashAll(tags),
+        baseOverride,
       );
 
   @override
   String toString() {
     return 'WorktreeInfo(type: $type, name: $name, '
-        'chats: ${chats.length}, tags: $tags)';
+        'chats: ${chats.length}, tags: $tags, '
+        'baseOverride: $baseOverride)';
   }
 }
 

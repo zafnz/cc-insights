@@ -460,6 +460,89 @@ void main() {
       });
     });
 
+    group('baseOverride', () {
+      test('defaults to null', () {
+        // Arrange & Act
+        final state = WorktreeState(createTestData());
+
+        // Assert
+        check(state.baseOverride).isNull();
+      });
+
+      test('initializes from constructor', () {
+        // Arrange & Act
+        final state = WorktreeState(
+          createTestData(),
+          baseOverride: 'develop',
+        );
+
+        // Assert
+        check(state.baseOverride).equals('develop');
+      });
+
+      test('setBaseOverride updates value and notifies listeners', () {
+        // Arrange
+        final state = WorktreeState(createTestData());
+        var notified = false;
+        state.addListener(() => notified = true);
+
+        // Act
+        state.setBaseOverride('develop');
+
+        // Assert
+        check(state.baseOverride).equals('develop');
+        check(notified).isTrue();
+      });
+
+      test('setBaseOverride with same value does not notify listeners', () {
+        // Arrange
+        final state = WorktreeState(
+          createTestData(),
+          baseOverride: 'develop',
+        );
+        var notified = false;
+        state.addListener(() => notified = true);
+
+        // Act
+        state.setBaseOverride('develop');
+
+        // Assert
+        check(state.baseOverride).equals('develop');
+        check(notified).isFalse();
+      });
+
+      test('setBaseOverride to null clears override and notifies', () {
+        // Arrange
+        final state = WorktreeState(
+          createTestData(),
+          baseOverride: 'develop',
+        );
+        var notified = false;
+        state.addListener(() => notified = true);
+
+        // Act
+        state.setBaseOverride(null);
+
+        // Assert
+        check(state.baseOverride).isNull();
+        check(notified).isTrue();
+      });
+
+      test('setBaseOverride null to null does not notify', () {
+        // Arrange
+        final state = WorktreeState(createTestData());
+        var notified = false;
+        state.addListener(() => notified = true);
+
+        // Act
+        state.setBaseOverride(null);
+
+        // Assert
+        check(state.baseOverride).isNull();
+        check(notified).isFalse();
+      });
+    });
+
     group('dispose()', () {
       test('disposes all chats', () {
         // Arrange

@@ -175,6 +175,7 @@ class ProjectRestoreService {
       ),
       chats: chats,
       tags: worktreeInfo.tags,
+      baseOverride: worktreeInfo.baseOverride,
     );
   }
 

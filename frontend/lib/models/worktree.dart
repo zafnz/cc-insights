@@ -199,7 +199,11 @@ class WorktreeState extends ChangeNotifier {
   /// Tag names assigned to this worktree.
   List<String> _tags;
 
-
+  /// Per-worktree base branch override.
+  ///
+  /// When set, overrides the project-level `defaultBase` for merge
+  /// comparisons. Null means "use the project default".
+  String? _baseOverride;
 
   /// Draft text typed in the welcome screen before any chat is created.
   ///
@@ -231,10 +235,17 @@ class WorktreeState extends ChangeNotifier {
   ///
   /// [chats] defaults to an empty list if not provided.
   /// [tags] defaults to an empty list if not provided.
-  WorktreeState(this._data, {List<ChatState>? chats, List<String>? tags})
-    : _chats = chats ?? [],
-      _tags = tags ?? [],
-      _selectedChat = null;
+  /// [baseOverride] is the per-worktree base branch override (null = use
+  /// project default).
+  WorktreeState(
+    this._data, {
+    List<ChatState>? chats,
+    List<String>? tags,
+    String? baseOverride,
+  }) : _chats = chats ?? [],
+       _tags = tags ?? [],
+       _baseOverride = baseOverride,
+       _selectedChat = null;
 
   /// The immutable data for this worktree.
   WorktreeData get data => _data;
@@ -297,7 +308,18 @@ class WorktreeState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The per-worktree base branch override, or null to use project default.
+  String? get baseOverride => _baseOverride;
 
+  /// Sets the per-worktree base branch override.
+  ///
+  /// Pass null to clear the override and revert to the project default.
+  /// Does not notify listeners if the value hasn't changed.
+  void setBaseOverride(String? value) {
+    if (_baseOverride == value) return;
+    _baseOverride = value;
+    notifyListeners();
+  }
 
   /// Replaces the entire [WorktreeData] with a new instance.
   ///

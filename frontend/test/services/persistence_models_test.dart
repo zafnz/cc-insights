@@ -430,6 +430,144 @@ void main() {
 
       check(restored).equals(original);
     });
+
+    test('creates with baseOverride', () {
+      const worktree = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'develop',
+      );
+
+      check(worktree.baseOverride).equals('develop');
+    });
+
+    test('baseOverride defaults to null', () {
+      const worktree = WorktreeInfo.primary(name: 'main');
+
+      check(worktree.baseOverride).isNull();
+    });
+
+    test('toJson omits baseOverride when null', () {
+      const worktree = WorktreeInfo.primary(name: 'main');
+
+      final json = worktree.toJson();
+
+      check(json.containsKey('baseOverride')).isFalse();
+    });
+
+    test('toJson includes baseOverride when set', () {
+      const worktree = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'develop',
+      );
+
+      final json = worktree.toJson();
+
+      check(json['baseOverride']).equals('develop');
+    });
+
+    test('fromJson restores baseOverride', () {
+      final json = {
+        'type': 'linked',
+        'name': 'feature',
+        'chats': <dynamic>[],
+        'baseOverride': 'develop',
+      };
+
+      final worktree = WorktreeInfo.fromJson(json);
+
+      check(worktree.baseOverride).equals('develop');
+    });
+
+    test('fromJson handles missing baseOverride', () {
+      final json = {
+        'type': 'linked',
+        'name': 'feature',
+        'chats': <dynamic>[],
+      };
+
+      final worktree = WorktreeInfo.fromJson(json);
+
+      check(worktree.baseOverride).isNull();
+    });
+
+    test('round-trip preserves baseOverride', () {
+      const original = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'origin/develop',
+      );
+
+      final json = jsonEncode(original.toJson());
+      final restored = WorktreeInfo.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+
+      check(restored).equals(original);
+      check(restored.baseOverride).equals('origin/develop');
+    });
+
+    test('round-trip preserves null baseOverride', () {
+      const original = WorktreeInfo.linked(name: 'feature');
+
+      final json = jsonEncode(original.toJson());
+      final restored = WorktreeInfo.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+
+      check(restored).equals(original);
+      check(restored.baseOverride).isNull();
+    });
+
+    test('copyWith updates baseOverride', () {
+      const original = WorktreeInfo.linked(name: 'feature');
+
+      final modified = original.copyWith(baseOverride: 'develop');
+
+      check(modified.baseOverride).equals('develop');
+      check(modified.name).equals('feature');
+    });
+
+    test('copyWith preserves baseOverride when not specified', () {
+      const original = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'develop',
+      );
+
+      final modified = original.copyWith(name: 'other');
+
+      check(modified.baseOverride).equals('develop');
+    });
+
+    test('copyWith clears baseOverride with clearBaseOverride', () {
+      const original = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'develop',
+      );
+
+      final modified = original.copyWith(clearBaseOverride: true);
+
+      check(modified.baseOverride).isNull();
+    });
+
+    test('equality includes baseOverride', () {
+      const a = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'develop',
+      );
+      const b = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'develop',
+      );
+      const c = WorktreeInfo.linked(
+        name: 'feature',
+        baseOverride: 'main',
+      );
+      const d = WorktreeInfo.linked(name: 'feature');
+
+      check(a == b).isTrue();
+      check(a.hashCode).equals(b.hashCode);
+      check(a == c).isFalse();
+      check(a == d).isFalse();
+    });
   });
 
   group('ProjectInfo', () {
