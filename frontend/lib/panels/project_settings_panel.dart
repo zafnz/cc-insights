@@ -55,10 +55,10 @@ class _SettingsCategory {
 
 const _categories = [
   _SettingsCategory(
-    id: 'worktrees',
-    label: 'Worktrees',
-    icon: Icons.folder_copy_outlined,
-    description: 'Default location for new worktrees',
+    id: 'git',
+    label: 'Git',
+    icon: Icons.call_split,
+    description: 'Default branch and worktree settings',
   ),
   _SettingsCategory(
     id: 'hooks',
@@ -71,12 +71,6 @@ const _categories = [
     label: 'User Actions',
     icon: Icons.play_circle_outline,
     description: 'Custom buttons shown in the Actions panel',
-  ),
-  _SettingsCategory(
-    id: 'git',
-    label: 'Git',
-    icon: Icons.call_split,
-    description: 'Default branch comparison settings',
   ),
 ];
 
@@ -596,14 +590,12 @@ class _SettingsContent extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         // Content based on category
-        if (category.id == 'worktrees') ...[
-          _buildWorktreesContent(context),
+        if (category.id == 'git') ...[
+          _buildGitContent(context),
         ] else if (category.id == 'hooks') ...[
           _buildHooksContent(context),
         ] else if (category.id == 'actions') ...[
           _buildActionsContent(context),
-        ] else if (category.id == 'git') ...[
-          _buildGitContent(context),
         ],
         // Error message
         if (errorMessage != null) ...[
@@ -611,51 +603,6 @@ class _SettingsContent extends StatelessWidget {
           _buildErrorCard(context, errorMessage!),
         ],
       ],
-    );
-  }
-
-  Widget _buildWorktreesContent(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 700),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Default worktree root',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const InsightsDescriptionText(
-            'The parent directory where new worktrees are created. '
-            'Each worktree will be placed in a subdirectory named after its branch.',
-          ),
-          const SizedBox(height: 12),
-          _AutoSaveTextField(
-            key: ProjectSettingsPanelKeys.defaultWorktreeRootField,
-            controller: defaultWorktreeRootController,
-            hintText: '/path/to/worktrees',
-            monospace: true,
-            onSave: onSaveWorktreeRoot,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'The default is auto-detected by looking for existing directories like '
-            '`.project-wt`, `.project-worktrees`, `project-wt`, or `project-worktrees` '
-            'in the parent folder.',
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -773,7 +720,43 @@ class _SettingsContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row layout: title + description on left, dropdown on right
+          // Default worktree root
+          Text(
+            'Default worktree root',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const InsightsDescriptionText(
+            'The parent directory where new worktrees are created. '
+            'Each worktree will be placed in a subdirectory named after its branch.',
+          ),
+          const SizedBox(height: 12),
+          _AutoSaveTextField(
+            key: ProjectSettingsPanelKeys.defaultWorktreeRootField,
+            controller: defaultWorktreeRootController,
+            hintText: '/path/to/worktrees',
+            monospace: true,
+            onSave: onSaveWorktreeRoot,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'The default is auto-detected by looking for existing directories like '
+            '`.project-wt`, `.project-worktrees`, `project-wt`, or `project-worktrees` '
+            'in the parent folder.',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          Divider(
+            height: 48,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+          // Default base for new worktrees
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

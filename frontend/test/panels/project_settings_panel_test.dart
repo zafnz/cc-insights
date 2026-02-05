@@ -83,7 +83,8 @@ void main() {
       testWidgets('shows Git category in sidebar', (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        expect(find.text('Git'), findsOneWidget);
+        // Git is shown in sidebar and as header (since it's selected by default)
+        expect(find.text('Git'), findsNWidgets(2));
       });
 
       testWidgets('shows all three categories', (tester) async {
@@ -91,18 +92,16 @@ void main() {
 
         expect(find.text('Lifecycle Hooks'), findsWidgets);
         expect(find.text('User Actions'), findsWidgets);
-        expect(find.text('Git'), findsOneWidget);
+        // Git is shown in sidebar and as header (since it's selected by default)
+        expect(find.text('Git'), findsNWidgets(2));
       });
 
       testWidgets('selecting Git shows Git content', (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        // Tap on Git category
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is already selected by default, so content should be visible
         // Git header and description should be visible
-        expect(find.text('Default branch comparison settings'),
+        expect(find.text('Default branch and worktree settings'),
             findsOneWidget);
         expect(find.text('Default base for new worktrees'),
             findsOneWidget);
@@ -117,10 +116,7 @@ void main() {
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        // Navigate to Git category
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default, so content should be visible
         // Dropdown should be present
         expect(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -134,9 +130,7 @@ void main() {
       testWidgets('shows description text', (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         expect(
           find.textContaining('Auto-detect checks for an upstream'),
           findsOneWidget,
@@ -147,9 +141,7 @@ void main() {
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         expect(
           find.byKey(ProjectSettingsPanelKeys.customBaseField),
           findsNothing,
@@ -159,9 +151,7 @@ void main() {
       testWidgets('selecting Custom shows text field', (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Open the dropdown
         await tester.tap(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -184,9 +174,7 @@ void main() {
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Open the dropdown
         await tester.tap(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -216,9 +204,7 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Should show "main" as the selected value in the dropdown
         final dropdown = tester.widget<DropdownButton<String>>(
           find.descendant(
@@ -238,9 +224,7 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         final dropdown = tester.widget<DropdownButton<String>>(
           find.descendant(
             of: find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -258,9 +242,7 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Should show "Custom..." selected
         final dropdown = tester.widget<DropdownButton<String>>(
           find.descendant(
@@ -293,9 +275,7 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         final dropdown = tester.widget<DropdownButton<String>>(
           find.descendant(
             of: find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -311,9 +291,7 @@ void main() {
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Open dropdown and select main
         await tester.tap(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -337,9 +315,7 @@ void main() {
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Open dropdown and select origin/main
         await tester.tap(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -363,9 +339,7 @@ void main() {
           (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Open dropdown and select Custom...
         await tester.tap(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
@@ -419,9 +393,7 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Git'));
-        await tester.pump();
-
+        // Git is selected by default
         // Open dropdown and select auto
         await tester.tap(
           find.byKey(ProjectSettingsPanelKeys.defaultBaseSelector),
