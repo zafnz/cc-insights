@@ -12,18 +12,34 @@ import '../services/ask_ai_service.dart';
 import '../services/backend_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
+import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
 import '../services/sdk_message_handler.dart';
 import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/base_selector_dialog.dart';
 import '../widgets/commit_dialog.dart';
 import '../widgets/conflict_resolution_dialog.dart';
 import '../widgets/create_pr_dialog.dart';
 import 'panel_wrapper.dart';
 
-/// Workflow mode for how branches integrate with main.
-enum WorkflowMode { local, pr }
+/// Keys for testing InformationPanel widgets.
+class InformationPanelKeys {
+  InformationPanelKeys._();
+
+  static const commitButton = Key('info_panel_commit');
+  static const changeBaseButton = Key('info_panel_change_base');
+  static const rebaseOntoBaseButton = Key('info_panel_rebase_onto_base');
+  static const mergeBaseButton = Key('info_panel_merge_base');
+  static const mergeBranchIntoMainButton =
+      Key('info_panel_merge_branch_into_main');
+  static const pushButton = Key('info_panel_push');
+  static const pullRebaseButton = Key('info_panel_pull_rebase');
+  static const createPrButton = Key('info_panel_create_pr');
+  static const baseSection = Key('info_panel_base_section');
+  static const upstreamSection = Key('info_panel_upstream_section');
+}
 
 /// Information panel - shows git branch/status info for the selected worktree.
 class InformationPanel extends StatelessWidget {
@@ -60,8 +76,7 @@ class _InformationContent extends StatelessWidget {
     return ListenableBuilder(
       listenable: worktree,
       builder: (context, _) => _WorktreeInfo(
-        data: worktree.data,
-        worktreeRoot: worktree.data.worktreeRoot,
+        worktree: worktree,
         onStatusChanged: () {
           // Force an immediate refresh of the git status
           try {
@@ -100,31 +115,19 @@ class _NoWorktreeSelected extends StatelessWidget {
   }
 }
 
-class _WorktreeInfo extends StatefulWidget {
+class _WorktreeInfo extends StatelessWidget {
   const _WorktreeInfo({
-    required this.data,
-    required this.worktreeRoot,
+    required this.worktree,
     required this.onStatusChanged,
   });
 
-  final WorktreeData data;
-  final String worktreeRoot;
+  final WorktreeState worktree;
   final VoidCallback onStatusChanged;
 
-  @override
-  State<_WorktreeInfo> createState() => _WorktreeInfoState();
-}
-
-class _WorktreeInfoState extends State<_WorktreeInfo> {
-  WorkflowMode _workflowMode = WorkflowMode.local;
-  String _updateSource = 'main';
-
-  WorktreeData get data => widget.data;
-  String get worktreeRoot => widget.worktreeRoot;
-  VoidCallback get onStatusChanged => widget.onStatusChanged;
+  WorktreeData get data => worktree.data;
+  String get worktreeRoot => data.worktreeRoot;
 
   Future<void> _showCommitDialog(BuildContext context) async {
-    // Get services from providers
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
     final fileSystemService = context.read<FileSystemService>();
@@ -142,53 +145,13 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     }
   }
 
-  Future<void> _handleUpdateFromMain(
+  Future<void> _handleUpdateFromBase(
     BuildContext context,
     MergeOperationType operation,
   ) async {
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
-
-    // In PR mode, fetch from origin first
-    if (_workflowMode == WorkflowMode.pr) {
-      try {
-        await gitService.fetch(worktreeRoot);
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to fetch from origin: $e')),
-        );
-        return;
-      }
-    }
-
-    // Detect main branch
-    String? mainBranch;
-    try {
-      mainBranch =
-          await gitService.getMainBranch(project.data.repoRoot);
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Failed to detect main branch: $e')),
-      );
-      return;
-    }
-
-    if (mainBranch == null) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Could not detect main branch')),
-      );
-      return;
-    }
-
-    // In PR mode, rebase/merge against origin/main
-    final targetBranch = _workflowMode == WorkflowMode.pr
-        ? 'origin/$mainBranch'
-        : mainBranch;
+    final baseRef = data.baseRef ?? 'main';
 
     if (!context.mounted) return;
 
@@ -196,7 +159,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       context: context,
       worktreePath: worktreeRoot,
       branch: data.branch,
-      mainBranch: targetBranch,
+      mainBranch: baseRef,
       operation: operation,
       gitService: gitService,
     );
@@ -210,7 +173,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       await _openConflictManagerChat(
         context,
         branch: data.branch,
-        mainBranch: mainBranch,
+        mainBranch: baseRef,
         worktreePath: worktreeRoot,
         mainWorktreePath: mainWorktreePath,
         operation: operation,
@@ -278,6 +241,70 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     onStatusChanged();
   }
 
+  Future<void> _handlePush(
+    BuildContext context, {
+    bool setUpstream = false,
+  }) async {
+    final gitService = context.read<GitService>();
+    try {
+      await gitService.push(worktreeRoot, setUpstream: setUpstream);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Push failed: $e')),
+      );
+      return;
+    }
+    onStatusChanged();
+  }
+
+  Future<void> _handlePullRebase(BuildContext context) async {
+    final gitService = context.read<GitService>();
+    final project = context.read<ProjectState>();
+
+    try {
+      await gitService.fetch(worktreeRoot);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fetch failed: $e')),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final upstream = data.upstreamBranch;
+    if (upstream == null) return;
+
+    final result = await showConflictResolutionDialog(
+      context: context,
+      worktreePath: worktreeRoot,
+      branch: data.branch,
+      mainBranch: upstream,
+      operation: MergeOperationType.rebase,
+      gitService: gitService,
+    );
+
+    if (!context.mounted) return;
+
+    if (result == ConflictResolutionResult.resolveWithClaude) {
+      final mainWorktreePath =
+          project.primaryWorktree.data.worktreeRoot;
+
+      await _openConflictManagerChat(
+        context,
+        branch: data.branch,
+        mainBranch: upstream,
+        worktreePath: worktreeRoot,
+        mainWorktreePath: mainWorktreePath,
+        operation: MergeOperationType.rebase,
+      );
+    }
+
+    onStatusChanged();
+  }
+
   Future<void> _handleCreatePr(BuildContext context) async {
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
@@ -336,6 +363,36 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     }
   }
 
+  Future<void> _handleChangeBase(BuildContext context) async {
+    final previousValue = worktree.baseOverride;
+    final result = await showBaseSelectorDialog(
+      context,
+      currentBaseOverride: previousValue,
+    );
+
+    if (!context.mounted) return;
+
+    // Both cancel and "project default" return null. Only apply if
+    // the result differs from the previous value.
+    if (result == previousValue) return;
+
+    worktree.setBaseOverride(result);
+
+    try {
+      final project = context.read<ProjectState>();
+      final persistence = context.read<PersistenceService>();
+      persistence.updateWorktreeBaseOverride(
+        projectRoot: project.data.repoRoot,
+        worktreePath: worktreeRoot,
+        baseOverride: result,
+      );
+    } catch (_) {
+      // PersistenceService may not be available in tests
+    }
+
+    onStatusChanged();
+  }
+
   Future<void> _openConflictManagerChat(
     BuildContext context, {
     required String branch,
@@ -349,8 +406,8 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final backend = context.read<BackendService>();
     final messageHandler = context.read<SdkMessageHandler>();
     final restoreService = context.read<ProjectRestoreService>();
-    final worktree = selection.selectedWorktree;
-    if (worktree == null) return;
+    final wt = selection.selectedWorktree;
+    if (wt == null) return;
 
     final operationName =
         operation == MergeOperationType.rebase ? 'rebasing' : 'merging';
@@ -385,18 +442,20 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final aiModel = RuntimeConfig.instance.aiAssistanceModel;
     if (aiModel != 'disabled') {
       final backend = RuntimeConfig.instance.defaultBackend;
-      chat.setModel(ChatModelCatalog.defaultForBackend(backend, aiModel));
+      chat.setModel(
+        ChatModelCatalog.defaultForBackend(backend, aiModel),
+      );
     }
 
     // Add to worktree and select it
-    worktree.addChat(chat, select: true);
+    wt.addChat(chat, select: true);
     selection.selectChat(chat);
 
     // Persist the new chat (fire-and-forget)
     restoreService
         .addChatToWorktree(
           project.data.repoRoot,
-          worktree.data.worktreeRoot,
+          wt.data.worktreeRoot,
           chat,
         )
         .catchError((error) {
@@ -471,7 +530,8 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
         .getMainBranch(project.data.repoRoot);
     if (!context.mounted) return;
 
-    final operation = data.conflictOperation ?? MergeOperationType.merge;
+    final operation =
+        data.conflictOperation ?? MergeOperationType.merge;
     final mainWorktreePath =
         project.primaryWorktree.data.worktreeRoot;
 
@@ -485,60 +545,43 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     );
   }
 
-  /// Whether the update-from-main buttons should be enabled.
-  bool get _canUpdateFromMain =>
+  // -- Enable/disable logic --
+
+  bool get _canUpdateFromBase =>
       data.commitsBehindMain > 0 && !data.isPrimary;
 
-  /// Whether the merge-into-main button should be enabled.
-  /// Enabled when ahead of main and not behind (safe fast-forward merge).
   bool get _canMergeIntoMain =>
       data.commitsAheadOfMain > 0 &&
       data.commitsBehindMain == 0 &&
       !data.isPrimary;
 
-  /// Tooltip for the merge-into-main button when disabled.
-  String? get _mergeIntoMainTooltip {
-    if (data.isPrimary) return 'Cannot merge primary worktree';
-    if (data.commitsAheadOfMain == 0) return 'No commits to merge';
-    if (data.commitsBehindMain > 0) {
-      return 'Update this branch with the latest from main '
-          'before merging it back in';
-    }
-    return null;
-  }
+  bool get _canPush =>
+      data.upstreamBranch != null && data.commitsAhead > 0;
 
-  /// Whether the create-PR button should be enabled.
+  bool get _canPullRebase =>
+      data.upstreamBranch != null && data.commitsBehind > 0;
+
   bool get _canCreatePr =>
-      data.commitsAheadOfMain > 0 && !data.isPrimary;
-
-  /// Tooltip for the create-PR button when disabled.
-  String? get _createPrTooltip {
-    if (data.isPrimary) {
-      return 'Cannot create PR from primary worktree';
-    }
-    if (data.commitsAheadOfMain == 0) return 'No commits to push';
-    return null;
-  }
+      data.commitsAheadOfMain > 0 &&
+      data.upstreamBranch != null &&
+      !data.isPrimary;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final baseRef = data.baseRef ?? 'main';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Status counts
+          // A. Working Tree section
+          _SectionLabel(label: 'Working tree'),
+          const SizedBox(height: 4),
           _StatusCounts(data: data),
           const SizedBox(height: 8),
-
-          // Ahead/behind main
-          _DivergenceInfo(data: data),
-          const SizedBox(height: 16),
-
-          // Stage and commit button (enabled when there are changes)
           _CompactButton(
+            key: InformationPanelKeys.commitButton,
             onPressed: data.uncommittedFiles > 0 ||
                     data.stagedFiles > 0
                 ? () => _showCommitDialog(context)
@@ -550,23 +593,32 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                 ? 'No uncommitted files'
                 : null,
           ),
-          // Workflow mode toggle (only for non-primary worktrees)
+
+          // B. Base section (non-primary only)
           if (!data.isPrimary) ...[
-            const SizedBox(height: 12),
-            _CompactToggle<WorkflowMode>(
-              value: _workflowMode,
-              options: const [
-                (WorkflowMode.local, 'Local', Icons.computer),
-                (WorkflowMode.pr, 'PRs', Icons.cloud_upload),
-              ],
-              onChanged: (v) => setState(() => _workflowMode = v),
+            const SizedBox(height: 16),
+            _BaseSection(
+              key: InformationPanelKeys.baseSection,
+              data: data,
+              baseRef: baseRef,
+              onChangeBase: () => _handleChangeBase(context),
             ),
           ],
-          const SizedBox(height: 12),
 
+          // C. Upstream section (non-primary only)
+          if (!data.isPrimary) ...[
+            const SizedBox(height: 16),
+            _UpstreamSection(
+              key: InformationPanelKeys.upstreamSection,
+              data: data,
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // D/E. Actions or Conflict section
           if (data.hasMergeConflict ||
               data.conflictOperation != null) ...[
-            // Conflict/operation in progress section
             _ConflictInProgress(
               data: data,
               onAbort: () => _handleAbortConflict(context),
@@ -575,100 +627,58 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
               onContinue: () =>
                   _handleContinueConflict(context),
             ),
-          ] else ...[
-            // Update from main section
-            _SectionDividerWithDropdown(
-              prefix: 'Update from ',
-              value: _updateSource,
-              options: const ['main', 'origin/main'],
-              tooltips: const {
-                'main':
-                    'Use changes from the local main branch.\n'
-                    'Use this when working locally and not\n'
-                    'in a GitHub Pull Request setup.',
-                'origin/main':
-                    'Use changes from the remote (origin)\n'
-                        'main branch. Use this when using\n'
-                        'GitHub to manage your merges.',
-              },
-              onChanged: (v) =>
-                  setState(() => _updateSource = v),
-              colorScheme: colorScheme,
+          ] else if (!data.isPrimary) ...[
+            _ActionsSection(
+              data: data,
+              baseRef: baseRef,
+              canUpdateFromBase: _canUpdateFromBase,
+              canMergeIntoMain: _canMergeIntoMain,
+              canPush: _canPush,
+              canPullRebase: _canPullRebase,
+              canCreatePr: _canCreatePr,
+              onRebaseOntoBase: () => _handleUpdateFromBase(
+                context,
+                MergeOperationType.rebase,
+              ),
+              onMergeBase: () => _handleUpdateFromBase(
+                context,
+                MergeOperationType.merge,
+              ),
+              onMergeIntoMain: () =>
+                  _handleMergeIntoMain(context),
+              onPush: () => _handlePush(
+                context,
+                setUpstream:
+                    data.upstreamBranch == null,
+              ),
+              onPullRebase: () =>
+                  _handlePullRebase(context),
+              onCreatePr: () => _handleCreatePr(context),
             ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: _CompactButton(
-                    onPressed: _canUpdateFromMain
-                        ? () => _handleUpdateFromMain(
-                              context,
-                              MergeOperationType.rebase,
-                            )
-                        : null,
-                    label: 'Rebase',
-                    icon: Icons.low_priority,
-                    tooltip: _canUpdateFromMain
-                        ? 'Replay your commits on top of main'
-                        : 'Already up-to-date with main',
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _CompactButton(
-                    onPressed: _canUpdateFromMain
-                        ? () => _handleUpdateFromMain(
-                              context,
-                              MergeOperationType.merge,
-                            )
-                        : null,
-                    label: 'Merge',
-                    icon: Icons.merge,
-                    tooltip: _canUpdateFromMain
-                        ? 'Create a merge commit from main'
-                        : 'Already up-to-date with main',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Integrate section - changes based on workflow mode
-            if (_workflowMode == WorkflowMode.local) ...[
-              _SectionDivider(
-                label: 'Integrate into main',
-                colorScheme: colorScheme,
-              ),
-              const SizedBox(height: 6),
-              _CompactButton(
-                onPressed: _canMergeIntoMain
-                    ? () => _handleMergeIntoMain(context)
-                    : null,
-                label: 'Merge',
-                icon: Icons.merge,
-                tooltip: _canMergeIntoMain
-                    ? null
-                    : _mergeIntoMainTooltip,
-              ),
-            ] else ...[
-              _SectionDivider(
-                label: 'Push to remote',
-                colorScheme: colorScheme,
-              ),
-              const SizedBox(height: 6),
-              _CompactButton(
-                onPressed: _canCreatePr
-                    ? () => _handleCreatePr(context)
-                    : null,
-                label: 'Create & Push PR',
-                icon: Icons.cloud_upload,
-                tooltip: _canCreatePr
-                    ? null
-                    : _createPrTooltip,
-              ),
-            ],
           ],
         ],
+      ),
+    );
+  }
+}
+
+// -- Section widgets --
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Text(
+      label,
+      style: textTheme.labelSmall?.copyWith(
+        color: colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -689,8 +699,9 @@ class _StatusCounts extends StatelessWidget {
           'Staged: ${data.stagedFiles} files\n'
           'Commits ahead of upstream: ${data.commitsAhead}',
       child: Text(
-        'Uncommitted/Staged/Commits: '
-        '${data.uncommittedFiles}/${data.stagedFiles}/${data.commitsAhead}',
+        'Uncommitted / Staged / Commits:  '
+        '${data.uncommittedFiles} / ${data.stagedFiles} / '
+        '${data.commitsAhead}',
         style: textTheme.bodySmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
         ),
@@ -699,75 +710,334 @@ class _StatusCounts extends StatelessWidget {
   }
 }
 
-class _DivergenceInfo extends StatelessWidget {
-  const _DivergenceInfo({required this.data});
+class _BaseSection extends StatelessWidget {
+  const _BaseSection({
+    super.key,
+    required this.data,
+    required this.baseRef,
+    required this.onChangeBase,
+  });
+
+  final WorktreeData data;
+  final String baseRef;
+  final VoidCallback onChangeBase;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final icon =
+        data.isRemoteBase ? Icons.public : Icons.home;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel(label: 'Base'),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                baseRef,
+                style: textTheme.bodySmall?.copyWith(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        _CompactButton(
+          key: InformationPanelKeys.changeBaseButton,
+          onPressed: onChangeBase,
+          label: 'Change...',
+          icon: Icons.edit,
+        ),
+        const SizedBox(height: 4),
+        _AheadBehindIndicator(
+          ahead: data.commitsAheadOfMain,
+          behind: data.commitsBehindMain,
+          aheadPrefix: '+',
+          behindPrefix: '-',
+        ),
+      ],
+    );
+  }
+}
+
+class _UpstreamSection extends StatelessWidget {
+  const _UpstreamSection({
+    super.key,
+    required this.data,
+  });
 
   final WorktreeData data;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final ahead = data.commitsAheadOfMain;
-    final behind = data.commitsBehindMain;
-    final baseIcon = data.isRemoteBase ? '\u{1F310}' : '\u{1F3E0}';
-    final baseName = data.baseRef ?? 'main';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel(label: 'Upstream'),
+        const SizedBox(height: 4),
+        if (data.upstreamBranch == null)
+          Row(
+            children: [
+              Icon(
+                Icons.cloud_off,
+                size: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '(not published)',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          Row(
+            children: [
+              Icon(
+                Icons.cloud,
+                size: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  data.upstreamBranch!,
+                  style: textTheme.bodySmall?.copyWith(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 12,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _AheadBehindIndicator(
+            ahead: data.commitsAhead,
+            behind: data.commitsBehind,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AheadBehindIndicator extends StatelessWidget {
+  const _AheadBehindIndicator({
+    required this.ahead,
+    required this.behind,
+    this.aheadPrefix = '\u{2191}',
+    this.behindPrefix = '\u{2193}',
+  });
+
+  final int ahead;
+  final int behind;
+  final String aheadPrefix;
+  final String behindPrefix;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
 
     if (ahead == 0 && behind == 0) {
-      return Tooltip(
-        message: '$baseIcon base: $baseName\n'
-            'Your branch is up to date',
-        child: Text(
-          '$baseIcon Up to date with $baseName',
-          style: textTheme.bodySmall?.copyWith(
-            color: Colors.green,
-          ),
+      return Text(
+        'Up to date',
+        style: textTheme.bodySmall?.copyWith(
+          color: Colors.green,
         ),
       );
     }
 
-    final tooltipLines = <String>['$baseIcon base: $baseName'];
-    if (ahead > 0) {
-      tooltipLines.add(
-        'Your ${data.branch} branch has $ahead '
-        '${ahead == 1 ? 'commit' : 'commits'} not present on '
-        '$baseName',
-      );
-    }
-    if (behind > 0) {
-      tooltipLines.add(
-        '$baseName has $behind '
-        '${behind == 1 ? 'commit' : 'commits'} not present on '
-        'your ${data.branch} branch',
-      );
-    }
-    if (ahead > 0 && behind > 0) {
-      tooltipLines.add('Your branches have diverged');
-    }
-
-    return Tooltip(
-      message: tooltipLines.join('\n'),
-      child: RichText(
-        text: TextSpan(
-          style: textTheme.bodySmall,
-          children: [
-            TextSpan(text: '$baseIcon '),
-            if (ahead > 0)
-              TextSpan(
-                text: '\u{2191}$ahead ahead',
-                style: const TextStyle(color: Colors.green),
-              ),
-            if (ahead > 0 && behind > 0)
-              const TextSpan(text: '  '),
-            if (behind > 0)
-              TextSpan(
-                text: '\u{2193}$behind behind',
-                style: const TextStyle(color: Colors.orange),
-              ),
-          ],
-        ),
+    return RichText(
+      text: TextSpan(
+        style: textTheme.bodySmall,
+        children: [
+          if (ahead > 0)
+            TextSpan(
+              text: '$aheadPrefix$ahead',
+              style: const TextStyle(color: Colors.green),
+            ),
+          if (ahead > 0 && behind > 0)
+            const TextSpan(text: '  '),
+          if (behind > 0)
+            TextSpan(
+              text: '$behindPrefix$behind',
+              style: const TextStyle(color: Colors.orange),
+            ),
+        ],
       ),
     );
+  }
+}
+
+class _ActionsSection extends StatelessWidget {
+  const _ActionsSection({
+    required this.data,
+    required this.baseRef,
+    required this.canUpdateFromBase,
+    required this.canMergeIntoMain,
+    required this.canPush,
+    required this.canPullRebase,
+    required this.canCreatePr,
+    required this.onRebaseOntoBase,
+    required this.onMergeBase,
+    required this.onMergeIntoMain,
+    required this.onPush,
+    required this.onPullRebase,
+    required this.onCreatePr,
+  });
+
+  final WorktreeData data;
+  final String baseRef;
+  final bool canUpdateFromBase;
+  final bool canMergeIntoMain;
+  final bool canPush;
+  final bool canPullRebase;
+  final bool canCreatePr;
+  final VoidCallback onRebaseOntoBase;
+  final VoidCallback onMergeBase;
+  final VoidCallback onMergeIntoMain;
+  final VoidCallback onPush;
+  final VoidCallback onPullRebase;
+  final VoidCallback onCreatePr;
+
+  bool get _isLocalBase => !data.isRemoteBase;
+  bool get _hasUpstream => data.upstreamBranch != null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Row 1: Rebase / Merge onto base
+        Row(
+          children: [
+            Expanded(
+              child: _CompactButton(
+                key: InformationPanelKeys.rebaseOntoBaseButton,
+                onPressed:
+                    canUpdateFromBase ? onRebaseOntoBase : null,
+                label: 'Rebase onto $baseRef',
+                icon: Icons.low_priority,
+                tooltip: canUpdateFromBase
+                    ? null
+                    : 'Already up-to-date with $baseRef',
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _CompactButton(
+                key: InformationPanelKeys.mergeBaseButton,
+                onPressed:
+                    canUpdateFromBase ? onMergeBase : null,
+                label: 'Merge $baseRef into branch',
+                icon: Icons.merge,
+                tooltip: canUpdateFromBase
+                    ? null
+                    : 'Already up-to-date with $baseRef',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // State-specific actions
+        if (_isLocalBase) ...[
+          _CompactButton(
+            key: InformationPanelKeys.mergeBranchIntoMainButton,
+            onPressed:
+                canMergeIntoMain ? onMergeIntoMain : null,
+            label: 'Merge branch \u{2192} $baseRef',
+            icon: Icons.merge,
+            tooltip: _mergeIntoMainTooltip,
+          ),
+        ] else if (!_hasUpstream) ...[
+          _CompactButton(
+            key: InformationPanelKeys.pushButton,
+            onPressed: onPush,
+            label: 'Push to origin/${data.branch}...',
+            icon: Icons.cloud_upload,
+          ),
+          const SizedBox(height: 8),
+          _CompactButton(
+            key: InformationPanelKeys.createPrButton,
+            onPressed: null,
+            label: 'Create PR',
+            icon: Icons.open_in_new,
+            tooltip: 'Push required before creating PR',
+          ),
+        ] else ...[
+          Row(
+            children: [
+              Expanded(
+                child: _CompactButton(
+                  key: InformationPanelKeys.pushButton,
+                  onPressed: canPush ? onPush : null,
+                  label: 'Push',
+                  icon: Icons.cloud_upload,
+                  tooltip: canPush
+                      ? null
+                      : 'Nothing to push',
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _CompactButton(
+                  key: InformationPanelKeys.pullRebaseButton,
+                  onPressed:
+                      canPullRebase ? onPullRebase : null,
+                  label: 'Pull / Rebase',
+                  icon: Icons.cloud_download,
+                  tooltip: canPullRebase
+                      ? null
+                      : 'Already up-to-date with upstream',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _CompactButton(
+            key: InformationPanelKeys.createPrButton,
+            onPressed: canCreatePr ? onCreatePr : null,
+            label: 'Create PR',
+            icon: Icons.open_in_new,
+            tooltip: _createPrTooltip,
+          ),
+        ],
+      ],
+    );
+  }
+
+  String? get _mergeIntoMainTooltip {
+    if (data.commitsAheadOfMain == 0) return 'No commits to merge';
+    if (data.commitsBehindMain > 0) {
+      return 'Update this branch with the latest from $baseRef '
+          'before merging it back in';
+    }
+    return null;
+  }
+
+  String? get _createPrTooltip {
+    if (data.commitsAheadOfMain == 0) return 'No commits to push';
+    return null;
   }
 }
 
@@ -803,7 +1073,7 @@ class _ConflictInProgress extends StatelessWidget {
     if (resolved) {
       bannerColor = Colors.green.shade700;
       bannerIcon = Icons.check_circle_outline;
-      bannerText = 'Conflicts resolved — ready to continue';
+      bannerText = 'Conflicts resolved \u{2014} ready to continue';
     } else {
       bannerColor = Colors.orange.shade700;
       bannerIcon = Icons.warning_amber;
@@ -887,219 +1157,10 @@ class _ConflictInProgress extends StatelessWidget {
   }
 }
 
-class _SectionDivider extends StatelessWidget {
-  const _SectionDivider({
-    required this.label,
-    required this.colorScheme,
-  });
-
-  final String label;
-  final ColorScheme colorScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          label,
-          style: textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-}
-
-/// Section divider with an inline popup menu for selecting a value.
-class _SectionDividerWithDropdown extends StatelessWidget {
-  const _SectionDividerWithDropdown({
-    required this.prefix,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-    required this.colorScheme,
-    this.tooltips,
-  });
-
-  final String prefix;
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-  final ColorScheme colorScheme;
-  final Map<String, String>? tooltips;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final style = textTheme.labelSmall?.copyWith(
-      color: colorScheme.onSurfaceVariant,
-    );
-
-    final tooltip = tooltips?[value];
-
-    Widget child = GestureDetector(
-      onTap: () {
-        final renderBox =
-            context.findRenderObject() as RenderBox;
-        final offset = renderBox.localToGlobal(Offset.zero);
-        final size = renderBox.size;
-        showMenu<String>(
-          context: context,
-          position: RelativeRect.fromLTRB(
-            offset.dx + size.width / 2,
-            offset.dy + size.height,
-            offset.dx + size.width / 2,
-            offset.dy + size.height,
-          ),
-          items: options
-              .map(
-                (o) => PopupMenuItem<String>(
-                  height: 32,
-                  value: o,
-                  child: Text(o, style: textTheme.bodySmall),
-                ),
-              )
-              .toList(),
-        ).then((selected) {
-          if (selected != null) {
-            onChanged(selected);
-          }
-        });
-      },
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              '$prefix$value',
-              style: style,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Icon(
-            Icons.arrow_drop_down,
-            size: 14,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ],
-      ),
-    );
-
-    if (tooltip != null) {
-      child = Tooltip(message: tooltip, child: child);
-    }
-
-    return child;
-  }
-}
-
-/// Compact segmented toggle matching [_CompactButton] sizing.
-class _CompactToggle<T> extends StatelessWidget {
-  const _CompactToggle({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final T value;
-  final List<(T, String, IconData)> options;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Row(
-      children: [
-        for (var i = 0; i < options.length; i++)
-          Expanded(
-            child: _buildSegment(
-              context,
-              option: options[i],
-              isSelected: options[i].$1 == value,
-              isFirst: i == 0,
-              isLast: i == options.length - 1,
-              colorScheme: colorScheme,
-              textTheme: textTheme,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSegment(
-    BuildContext context, {
-    required (T, String, IconData) option,
-    required bool isSelected,
-    required bool isFirst,
-    required bool isLast,
-    required ColorScheme colorScheme,
-    required TextTheme textTheme,
-  }) {
-    final (val, label, icon) = option;
-    final contentColor = isSelected
-        ? colorScheme.onSurface
-        : colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
-    final bgColor = isSelected
-        ? colorScheme.surfaceContainerHighest
-        : Colors.transparent;
-    final borderColor = colorScheme.outlineVariant;
-
-    final radius = BorderRadius.horizontal(
-      left: isFirst ? const Radius.circular(4) : Radius.zero,
-      right: isLast ? const Radius.circular(4) : Radius.zero,
-    );
-
-    return Material(
-      color: bgColor,
-      borderRadius: radius,
-      child: InkWell(
-        onTap: () => onChanged(val),
-        borderRadius: radius,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 4,
-          ),
-          decoration: BoxDecoration(
-            border: Border.all(color: borderColor),
-            borderRadius: radius,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 12, color: contentColor),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: textTheme.labelSmall
-                      ?.copyWith(color: contentColor),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-
 /// Compact button styled for desktop UI - smaller padding and text.
 class _CompactButton extends StatelessWidget {
   const _CompactButton({
+    super.key,
     required this.label,
     required this.onPressed,
     this.icon,
@@ -1132,7 +1193,10 @@ class _CompactButton extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(4),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 4,
+            ),
             decoration: BoxDecoration(
               border: Border.all(color: borderColor),
               borderRadius: BorderRadius.circular(4),
@@ -1148,7 +1212,9 @@ class _CompactButton extends StatelessWidget {
                 Flexible(
                   child: Text(
                     label,
-                    style: textTheme.labelSmall?.copyWith(color: contentColor),
+                    style: textTheme.labelSmall?.copyWith(
+                      color: contentColor,
+                    ),
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
                   ),
