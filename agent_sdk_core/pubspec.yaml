@@ -1,0 +1,9 @@
+name: agent_sdk_core
+description: Shared interfaces and types for agent backends
+version: 0.1.0
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  meta: ^1.11.0

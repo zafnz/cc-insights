@@ -3,6 +3,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/content_panel.dart';
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -327,6 +328,7 @@ void main() {
     late TestGitService testGitService;
     late ProjectState projectState;
     late SelectionState selectionState;
+    late BackendService backendService;
 
     setUp(() {
       testGitService = TestGitService();
@@ -367,6 +369,7 @@ void main() {
       ));
 
       selectionState = resources.track(SelectionState(projectState));
+      backendService = resources.track(BackendService());
     });
 
     tearDown(() async {
@@ -379,6 +382,7 @@ void main() {
           Provider<GitService>.value(value: testGitService),
           ChangeNotifierProvider.value(value: projectState),
           ChangeNotifierProvider.value(value: selectionState),
+          ChangeNotifierProvider<BackendService>.value(value: backendService),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -709,6 +713,7 @@ void main() {
     late TestGitService testGitService;
     late ProjectState projectState;
     late SelectionState selectionState;
+    late BackendService backendService;
 
     setUp(() {
       testGitService = TestGitService();
@@ -739,6 +744,7 @@ void main() {
       ));
 
       selectionState = resources.track(SelectionState(projectState));
+      backendService = resources.track(BackendService());
     });
 
     tearDown(() async {
@@ -751,6 +757,7 @@ void main() {
           Provider<GitService>.value(value: testGitService),
           ChangeNotifierProvider.value(value: projectState),
           ChangeNotifierProvider.value(value: selectionState),
+          ChangeNotifierProvider<BackendService>.value(value: backendService),
         ],
         child: const MaterialApp(
           home: Scaffold(
@@ -846,6 +853,7 @@ void main() {
     late ProjectState projectState;
     late SelectionState selectionState;
     late SettingsService settingsService;
+    late BackendService backendService;
 
     setUp(() {
       testGitService = TestGitService();
@@ -879,6 +887,7 @@ void main() {
       ));
 
       selectionState = resources.track(SelectionState(projectState));
+      backendService = resources.track(BackendService());
     });
 
     tearDown(() async {
@@ -892,6 +901,7 @@ void main() {
           Provider<GitService>.value(value: testGitService),
           ChangeNotifierProvider.value(value: projectState),
           ChangeNotifierProvider.value(value: selectionState),
+          ChangeNotifierProvider<BackendService>.value(value: backendService),
           ChangeNotifierProvider<SettingsService>.value(
             value: settingsService,
           ),

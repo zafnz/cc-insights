@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
@@ -7,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../models/agent.dart';
 import '../models/chat.dart';
+import '../models/chat_model.dart';
 import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
@@ -367,6 +369,7 @@ class _ConversationPanelState extends State<ConversationPanel>
 
   @override
   Widget build(BuildContext context) {
+    context.watch<BackendService>();
     final selection = context.watch<SelectionState>();
     final chat = selection.selectedChat;
 
@@ -710,7 +713,7 @@ class _ConversationHeader extends StatelessWidget {
 
           return Row(
             children: [
-              // Left side: model and permission dropdowns
+              // Left side: agent, model, and permission dropdowns
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -719,15 +722,35 @@ class _ConversationHeader extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _CompactDropdown(
-                        value: chat.model.label,
-                        items:
-                            ClaudeModel.values.map((m) => m.label).toList(),
+                        value: _agentLabel(chat.model.backend),
+                        items: _agentItems,
                         onChanged: (value) {
-                          final model = ClaudeModel.values.firstWhere(
-                            (m) => m.label == value,
-                            orElse: () => ClaudeModel.opus,
+                          unawaited(
+                            _handleAgentChange(context, chat, value),
                           );
-                          chat.setModel(model);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Builder(
+                        builder: (context) {
+                          final models = ChatModelCatalog.forBackend(
+                            chat.model.backend,
+                          );
+                          final selected = models.firstWhere(
+                            (m) => m.id == chat.model.id,
+                            orElse: () => chat.model,
+                          );
+                          return _CompactDropdown(
+                            value: selected.label,
+                            items: models.map((m) => m.label).toList(),
+                            onChanged: (value) {
+                              final model = models.firstWhere(
+                                (m) => m.label == value,
+                                orElse: () => selected,
+                              );
+                              chat.setModel(model);
+                            },
+                          );
                         },
                       ),
                       const SizedBox(width: 8),
@@ -764,6 +787,50 @@ class _ConversationHeader extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  static const List<String> _agentItems = ['Claude', 'Codex'];
+
+  String _agentLabel(sdk.BackendType backend) {
+    return backend == sdk.BackendType.codex ? 'Codex' : 'Claude';
+  }
+
+  sdk.BackendType _backendFromAgent(String value) {
+    return value == 'Codex' ? sdk.BackendType.codex : sdk.BackendType.directCli;
+  }
+
+  Future<void> _handleAgentChange(
+    BuildContext context,
+    ChatState chat,
+    String value,
+  ) async {
+    final backendType = _backendFromAgent(value);
+    if (backendType == chat.model.backend) return;
+
+    if (chat.hasActiveSession) {
+      _showBackendSwitchError(
+        context,
+        'End the active session before switching agents.',
+      );
+      return;
+    }
+
+    final backendService = context.read<BackendService>();
+    await backendService.start(type: backendType);
+    final error = backendService.errorFor(backendType);
+    if (error != null) {
+      _showBackendSwitchError(context, error);
+      return;
+    }
+
+    final model = ChatModelCatalog.defaultForBackend(backendType, null);
+    chat.setModel(model);
+  }
+
+  void _showBackendSwitchError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 }
@@ -1069,13 +1136,28 @@ class WelcomeCard extends StatelessWidget {
         // Header with model/permission selectors
         _WelcomeHeader(
           model: worktree?.welcomeModel ??
-              ClaudeModel.fromApiName(
+              ChatModelCatalog.defaultForBackend(
+                RuntimeConfig.instance.defaultBackend,
                 RuntimeConfig.instance.defaultModel,
               ),
           permissionMode: worktree?.welcomePermissionMode ??
               PermissionMode.fromApiName(
                 RuntimeConfig.instance.defaultPermissionMode,
               ),
+          onAgentChanged: (backendType) async {
+            final backendService = context.read<BackendService>();
+            await backendService.start(type: backendType);
+            final error = backendService.errorFor(backendType);
+            if (error != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(error)),
+              );
+              return;
+            }
+
+            final model = ChatModelCatalog.defaultForBackend(backendType, null);
+            worktree?.welcomeModel = model;
+          },
           onModelChanged: (model) => worktree?.welcomeModel = model,
           onPermissionChanged: (mode) =>
               worktree?.welcomePermissionMode = mode,
@@ -1293,12 +1375,14 @@ class _WelcomeHeader extends StatelessWidget {
     required this.permissionMode,
     required this.onModelChanged,
     required this.onPermissionChanged,
+    required this.onAgentChanged,
   });
 
-  final ClaudeModel model;
+  final ChatModel model;
   final PermissionMode permissionMode;
-  final ValueChanged<ClaudeModel> onModelChanged;
+  final ValueChanged<ChatModel> onModelChanged;
   final ValueChanged<PermissionMode> onPermissionChanged;
+  final ValueChanged<sdk.BackendType> onAgentChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1340,14 +1424,31 @@ class _WelcomeHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   _CompactDropdown(
-                    value: model.label,
-                    items: ClaudeModel.values.map((m) => m.label).toList(),
+                    value: _agentLabel(model.backend),
+                    items: _agentItems,
                     onChanged: (value) {
-                      final selected = ClaudeModel.values.firstWhere(
-                        (m) => m.label == value,
-                        orElse: () => ClaudeModel.opus,
+                      onAgentChanged(_backendFromAgent(value));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Builder(
+                    builder: (context) {
+                      final models = ChatModelCatalog.forBackend(model.backend);
+                      final selected = models.firstWhere(
+                        (m) => m.id == model.id,
+                        orElse: () => model,
                       );
-                      onModelChanged(selected);
+                      return _CompactDropdown(
+                        value: selected.label,
+                        items: models.map((m) => m.label).toList(),
+                        onChanged: (value) {
+                          final next = models.firstWhere(
+                            (m) => m.label == value,
+                            orElse: () => selected,
+                          );
+                          onModelChanged(next);
+                        },
+                      );
                     },
                   ),
                   const SizedBox(width: 8),
@@ -1370,6 +1471,16 @@ class _WelcomeHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static const List<String> _agentItems = ['Claude', 'Codex'];
+
+  String _agentLabel(sdk.BackendType backend) {
+    return backend == sdk.BackendType.codex ? 'Codex' : 'Claude';
+  }
+
+  sdk.BackendType _backendFromAgent(String value) {
+    return value == 'Codex' ? sdk.BackendType.codex : sdk.BackendType.directCli;
   }
 }
 

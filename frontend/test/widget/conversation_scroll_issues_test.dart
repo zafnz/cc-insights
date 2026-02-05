@@ -8,6 +8,7 @@ import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 import 'package:cc_insights_v2/widgets/output_entries/output_entry_widget.dart';
@@ -21,6 +22,7 @@ void main() {
     late ProjectState project;
     late SelectionState selectionState;
     late ChatState chat;
+    late BackendService backendService;
 
     /// Creates a chat with the specified number of entries.
     ChatState createChatWithEntries(String name, int entryCount) {
@@ -110,6 +112,7 @@ void main() {
       ));
 
       selectionState = resources.track(SelectionState(project));
+      backendService = resources.track(BackendService());
     });
 
     tearDown(() async {
@@ -129,6 +132,7 @@ void main() {
           providers: [
             ChangeNotifierProvider.value(value: project),
             ChangeNotifierProvider.value(value: selectionState),
+            ChangeNotifierProvider<BackendService>.value(value: backendService),
           ],
           child: Scaffold(
             body: KeyboardFocusManager(

@@ -210,6 +210,9 @@ class _CliSessionAdapter implements AgentSession {
   String get sessionId => _cliSession.sessionId;
 
   @override
+  String? get resolvedSessionId => _cliSession.sessionId;
+
+  @override
   bool get isActive => !_disposed && _cliSession.isActive;
 
   @override

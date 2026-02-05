@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:codex_sdk/codex_sdk.dart' as codex;
+
 import 'backend_interface.dart';
 import 'cli_backend.dart';
 import 'core.dart';
@@ -11,6 +13,9 @@ enum BackendType {
 
   /// Direct claude-cli (new, default)
   directCli,
+
+  /// Codex app-server backend
+  codex,
 }
 
 /// Factory for creating agent backends.
@@ -46,8 +51,9 @@ class BackendFactory {
   ///
   /// [type] - The backend type to create. Defaults to [BackendType.directCli].
   ///   This can be overridden by the `CLAUDE_BACKEND` environment variable.
-  /// [executablePath] - Path to claude-cli (for direct CLI backend).
-  ///   Defaults to `CLAUDE_CODE_PATH` env var or 'claude'.
+  /// [executablePath] - Path to claude-cli or codex (depending on backend).
+  ///   Defaults to `CLAUDE_CODE_PATH` env var or 'claude' for Claude, and
+  ///   'codex' for Codex.
   /// [nodeBackendPath] - Path to the Node.js backend script (for Node.js
   ///   backend). Required when using [BackendType.nodejs].
   /// [nodeExecutable] - Path to Node.js executable (for Node.js backend).
@@ -78,6 +84,9 @@ class BackendFactory {
           backendPath: nodeBackendPath,
           nodeExecutable: nodeExecutable,
         );
+
+      case BackendType.codex:
+        return codex.CodexBackend.create(executablePath: executablePath);
     }
   }
 
@@ -99,7 +108,10 @@ class BackendFactory {
       case 'direct':
       case 'directcli':
       case 'cli':
+      case 'claude':
         return BackendType.directCli;
+      case 'codex':
+        return BackendType.codex;
       default:
         // Unrecognized value, use the default
         return type;
@@ -121,7 +133,10 @@ class BackendFactory {
       case 'direct':
       case 'directcli':
       case 'cli':
+      case 'claude':
         return BackendType.directCli;
+      case 'codex':
+        return BackendType.codex;
       default:
         return null;
     }

@@ -324,10 +324,10 @@ void main() {
         await tester.tap(find.text('Session'));
         await safePumpAndSettle(tester);
 
-        // Find the permission mode dropdown (second dropdown in Session)
+        // Find the permission mode dropdown (third dropdown in Session)
         final dropdowns = find.byType(DropdownButton<String>);
-        // There should be 2 dropdowns: Default Model and Permission Mode
-        expect(dropdowns, findsNWidgets(2));
+        // There should be 3 dropdowns: Backend, Model, Permission Mode
+        expect(dropdowns, findsNWidgets(3));
         await tester.tap(dropdowns.last);
         await safePumpAndSettle(tester);
 

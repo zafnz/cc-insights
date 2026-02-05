@@ -6,6 +6,10 @@ environment:
   sdk: ^3.0.0
 
 dependencies:
+  agent_sdk_core:
+    path: ../agent_sdk_core
+  codex_sdk:
+    path: ../codex_dart_sdk
   meta: ^1.11.0
   uuid: ^4.0.0
   path: ^1.9.0

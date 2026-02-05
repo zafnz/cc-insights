@@ -237,7 +237,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       _backend = mockBackend;
     } else {
       _backend = BackendService();
-      _backend!.start();
     }
 
     // Create the project restore service for persistence operations
@@ -248,7 +247,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Create and load the settings service (fire-and-forget load)
     _settingsService = SettingsService();
-    _settingsService!.load();
+    _settingsService!.load().then((_) {
+      if (!shouldUseMock && widget.backendService == null) {
+        _backend?.start(type: RuntimeConfig.instance.defaultBackend);
+      }
+    });
 
     // Create the AskAI service for one-shot AI queries
     _askAiService = AskAiService();

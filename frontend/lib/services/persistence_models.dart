@@ -75,8 +75,11 @@ class ContextInfo {
 /// All fields are immutable.
 @immutable
 class ChatMeta {
-  /// The Claude model API name (e.g., "claude-sonnet-4").
+  /// The model identifier (backend-specific).
   final String model;
+
+  /// Backend type identifier (e.g., "direct", "codex", "nodejs").
+  final String backendType;
 
   /// The permission mode API name (e.g., "default", "acceptEdits").
   final String permissionMode;
@@ -101,6 +104,7 @@ class ChatMeta {
   /// Creates a [ChatMeta] instance.
   const ChatMeta({
     required this.model,
+    required this.backendType,
     required this.permissionMode,
     required this.createdAt,
     required this.lastActiveAt,
@@ -111,12 +115,14 @@ class ChatMeta {
 
   /// Creates a [ChatMeta] with default values for a new chat.
   factory ChatMeta.create({
-    String model = 'claude-sonnet-4',
+    String model = 'opus',
     String permissionMode = 'default',
+    String backendType = 'direct',
   }) {
     final now = DateTime.now();
     return ChatMeta(
       model: model,
+      backendType: backendType,
       permissionMode: permissionMode,
       createdAt: now,
       lastActiveAt: now,
@@ -129,6 +135,7 @@ class ChatMeta {
   /// Creates a copy with the given fields replaced.
   ChatMeta copyWith({
     String? model,
+    String? backendType,
     String? permissionMode,
     DateTime? createdAt,
     DateTime? lastActiveAt,
@@ -138,6 +145,7 @@ class ChatMeta {
   }) {
     return ChatMeta(
       model: model ?? this.model,
+      backendType: backendType ?? this.backendType,
       permissionMode: permissionMode ?? this.permissionMode,
       createdAt: createdAt ?? this.createdAt,
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
@@ -151,6 +159,7 @@ class ChatMeta {
   Map<String, dynamic> toJson() {
     return {
       'model': model,
+      'backendType': backendType,
       'permissionMode': permissionMode,
       'createdAt': createdAt.toIso8601String(),
       'lastActiveAt': lastActiveAt.toIso8601String(),
@@ -182,7 +191,8 @@ class ChatMeta {
     final modelUsageJson = json['modelUsage'] as List<dynamic>? ?? [];
 
     return ChatMeta(
-      model: json['model'] as String? ?? 'claude-sonnet-4',
+      model: json['model'] as String? ?? 'opus',
+      backendType: json['backendType'] as String? ?? 'direct',
       permissionMode: json['permissionMode'] as String? ?? 'default',
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -222,6 +232,7 @@ class ChatMeta {
     if (identical(this, other)) return true;
     return other is ChatMeta &&
         other.model == model &&
+        other.backendType == backendType &&
         other.permissionMode == permissionMode &&
         other.createdAt == createdAt &&
         other.lastActiveAt == lastActiveAt &&
@@ -234,6 +245,7 @@ class ChatMeta {
   int get hashCode {
     return Object.hash(
       model,
+      backendType,
       permissionMode,
       createdAt,
       lastActiveAt,
@@ -245,7 +257,8 @@ class ChatMeta {
 
   @override
   String toString() {
-    return 'ChatMeta(model: $model, permissionMode: $permissionMode, '
+    return 'ChatMeta(model: $model, backendType: $backendType, '
+        'permissionMode: $permissionMode, '
         'createdAt: $createdAt, lastActiveAt: $lastActiveAt)';
   }
 }

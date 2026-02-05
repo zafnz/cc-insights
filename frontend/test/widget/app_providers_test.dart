@@ -51,8 +51,19 @@ class FakeBackendService extends BackendService {
   }
 
   @override
-  Future<void> start() async {
+  Future<void> start({
+    BackendType type = BackendType.directCli,
+    String? executablePath,
+  }) async {
     // No-op in fake - use simulateStart() to control state
+  }
+
+  @override
+  Future<void> switchBackend({
+    required BackendType type,
+    String? executablePath,
+  }) async {
+    // No-op in fake.
   }
 
   @override
@@ -67,6 +78,23 @@ class FakeBackendService extends BackendService {
     }
     return _FakeClaudeSession();
   }
+
+  @override
+  Future<AgentSession> createSessionForBackend({
+    required BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    return createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
+  }
 }
 
 /// Minimal fake session for testing.
@@ -76,6 +104,9 @@ class _FakeClaudeSession implements ClaudeSession {
 
   @override
   String? sdkSessionId = 'fake-sdk-session';
+
+  @override
+  String? get resolvedSessionId => sdkSessionId ?? sessionId;
 
   @override
   Stream<SDKMessage> get messages => const Stream.empty();

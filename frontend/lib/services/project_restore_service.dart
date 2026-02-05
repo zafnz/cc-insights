@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:path/path.dart' as p;
 
 import '../models/chat.dart';
+import '../models/chat_model.dart';
 import '../models/conversation.dart';
 import '../models/cost_tracking.dart';
 import '../models/project.dart';
@@ -235,7 +236,8 @@ class ProjectRestoreService {
 
   /// Applies ChatMeta settings to a ChatState.
   void _applyMetaToChat(ChatState chat, ChatMeta meta) {
-    chat.setModel(ClaudeModel.fromApiName(meta.model));
+    final backend = ChatModelCatalog.backendFromValue(meta.backendType);
+    chat.setModel(ChatModelCatalog.defaultForBackend(backend, meta.model));
     chat.setPermissionMode(PermissionMode.fromApiName(meta.permissionMode));
   }
 

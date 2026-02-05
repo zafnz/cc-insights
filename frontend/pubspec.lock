@@ -9,6 +9,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "91.0.0"
+  agent_sdk_core:
+    dependency: "direct overridden"
+    description:
+      path: "../agent_sdk_core"
+      relative: true
+    source: path
+    version: "0.1.0"
   analyzer:
     dependency: transitive
     description:
@@ -168,6 +175,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.1"
+  codex_sdk:
+    dependency: "direct overridden"
+    description:
+      path: "../codex_dart_sdk"
+      relative: true
+    source: path
+    version: "0.1.0"
   collection:
     dependency: transitive
     description:

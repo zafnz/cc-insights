@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cc_insights_v2/models/chat.dart';
+import 'package:cc_insights_v2/models/chat_model.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/persistence_models.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
@@ -179,9 +180,8 @@ void main() {
         );
         await persistence.saveProjectsIndex(projectsIndex);
 
-        // Create chat meta with specific settings
-        // Note: model name must match ClaudeModel.apiName (e.g., 'opus', not
-        // 'claude-opus-4')
+        // Create chat meta with specific settings.
+        // Note: model name must match ChatModelCatalog IDs (e.g., 'opus').
         await persistence.saveChatMeta(
           projectId,
           'chat-meta-test',
@@ -198,7 +198,7 @@ void main() {
 
         // Assert
         final chat = project.primaryWorktree.chats[0];
-        check(chat.model).equals(ClaudeModel.opus);
+        check(chat.model).equals(ChatModelCatalog.claudeModels.last);
         check(chat.permissionMode).equals(PermissionMode.acceptEdits);
       });
     });

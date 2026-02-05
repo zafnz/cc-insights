@@ -3,6 +3,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/chats_panel.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/project_restore_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -17,6 +18,7 @@ void main() {
     late ProjectState project;
     late SelectionState selection;
     late SettingsService settingsService;
+    late BackendService backendService;
 
     /// Creates a project with just the primary worktree (no chats).
     ProjectState createEmptyProject() {
@@ -44,6 +46,9 @@ void main() {
             create: (_) => selection,
             update: (_, __, previous) => previous!,
           ),
+          ChangeNotifierProvider<BackendService>.value(
+            value: backendService,
+          ),
           Provider<ProjectRestoreService>(
             create: (_) => ProjectRestoreService(),
           ),
@@ -61,9 +66,11 @@ void main() {
       project = createEmptyProject();
       selection = SelectionState(project);
       settingsService = SettingsService(configPath: '/tmp/test_settings.json');
+      backendService = BackendService();
     });
 
     tearDown(() {
+      backendService.dispose();
       settingsService.dispose();
     });
 

@@ -76,7 +76,8 @@ void main() {
     test('create() generates defaults', () {
       final meta = ChatMeta.create();
 
-      check(meta.model).equals('claude-sonnet-4');
+      check(meta.model).equals('opus');
+      check(meta.backendType).equals('direct');
       check(meta.permissionMode).equals('default');
       check(meta.context.currentTokens).equals(0);
       check(meta.usage.inputTokens).equals(0);
@@ -84,27 +85,31 @@ void main() {
 
     test('create() accepts custom model and permission', () {
       final meta = ChatMeta.create(
-        model: 'claude-opus-4',
+        model: 'sonnet',
         permissionMode: 'acceptEdits',
+        backendType: 'direct',
       );
 
-      check(meta.model).equals('claude-opus-4');
+      check(meta.model).equals('sonnet');
+      check(meta.backendType).equals('direct');
       check(meta.permissionMode).equals('acceptEdits');
     });
 
     test('copyWith preserves unchanged fields', () {
-      final original = ChatMeta.create(model: 'claude-sonnet-4');
+      final original = ChatMeta.create(model: 'sonnet');
 
-      final modified = original.copyWith(model: 'claude-opus-4');
+      final modified = original.copyWith(model: 'opus');
 
-      check(modified.model).equals('claude-opus-4');
+      check(modified.model).equals('opus');
+      check(modified.backendType).equals('direct');
       check(modified.permissionMode).equals('default');
       check(modified.createdAt).equals(original.createdAt);
     });
 
     test('toJson produces correct structure', () {
       final meta = ChatMeta(
-        model: 'claude-sonnet-4',
+        model: 'sonnet',
+        backendType: 'direct',
         permissionMode: 'acceptEdits',
         createdAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
         lastActiveAt: DateTime.utc(2025, 1, 27, 14, 30, 0),
@@ -120,7 +125,8 @@ void main() {
 
       final json = meta.toJson();
 
-      check(json['model']).equals('claude-sonnet-4');
+      check(json['model']).equals('sonnet');
+      check(json['backendType']).equals('direct');
       check(json['permissionMode']).equals('acceptEdits');
       check(json['createdAt']).equals('2025-01-27T10:00:00.000Z');
       check(json['lastActiveAt']).equals('2025-01-27T14:30:00.000Z');
@@ -130,7 +136,8 @@ void main() {
 
     test('fromJson restores correctly', () {
       final json = {
-        'model': 'claude-opus-4',
+        'model': 'opus',
+        'backendType': 'direct',
         'permissionMode': 'bypassPermissions',
         'createdAt': '2025-01-27T10:00:00.000Z',
         'lastActiveAt': '2025-01-27T14:30:00.000Z',
@@ -146,7 +153,8 @@ void main() {
 
       final meta = ChatMeta.fromJson(json);
 
-      check(meta.model).equals('claude-opus-4');
+      check(meta.model).equals('opus');
+      check(meta.backendType).equals('direct');
       check(meta.permissionMode).equals('bypassPermissions');
       check(meta.createdAt).equals(DateTime.utc(2025, 1, 27, 10, 0, 0));
       check(meta.lastActiveAt).equals(DateTime.utc(2025, 1, 27, 14, 30, 0));
@@ -160,7 +168,8 @@ void main() {
 
       final meta = ChatMeta.fromJson(json);
 
-      check(meta.model).equals('claude-sonnet-4');
+      check(meta.model).equals('opus');
+      check(meta.backendType).equals('direct');
       check(meta.permissionMode).equals('default');
       check(meta.context.currentTokens).equals(0);
       check(meta.usage.inputTokens).equals(0);
@@ -168,7 +177,8 @@ void main() {
 
     test('round-trip preserves data', () {
       final original = ChatMeta(
-        model: 'claude-sonnet-4',
+        model: 'sonnet',
+        backendType: 'direct',
         permissionMode: 'plan',
         createdAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
         lastActiveAt: DateTime.utc(2025, 1, 27, 14, 30, 0),

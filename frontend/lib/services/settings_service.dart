@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/material.dart';
 
 import '../models/setting_definition.dart';
@@ -204,6 +205,19 @@ class SettingsService extends ChangeNotifier {
     description: 'Default settings for new chat sessions',
     icon: Icons.chat_outlined,
     settings: [
+      SettingDefinition(
+        key: 'session.defaultBackend',
+        title: 'Default Backend',
+        description:
+            'Choose the default backend for new chats. '
+            '`Claude` uses the Claude CLI. `Codex` uses the Codex app-server.',
+        type: SettingType.dropdown,
+        defaultValue: 'direct',
+        options: [
+          SettingOption(value: 'direct', label: 'Claude'),
+          SettingOption(value: 'codex', label: 'Codex'),
+        ],
+      ),
       SettingDefinition(
         key: 'session.defaultModel',
         title: 'Default Model',
@@ -490,6 +504,11 @@ class SettingsService extends ChangeNotifier {
         config.desktopNotifications = value as bool;
       case 'session.defaultModel':
         config.defaultModel = value as String;
+      case 'session.defaultBackend':
+        final backend =
+            BackendFactory.parseType(value as String?) ??
+                BackendType.directCli;
+        config.defaultBackend = backend;
       case 'session.defaultPermissionMode':
         config.defaultPermissionMode = value as String;
       case 'session.streamOfThought':

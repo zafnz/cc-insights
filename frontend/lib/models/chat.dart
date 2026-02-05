@@ -11,34 +11,10 @@ import '../services/persistence_service.dart';
 import '../services/runtime_config.dart';
 import '../services/sdk_message_handler.dart';
 import 'agent.dart';
+import 'chat_model.dart';
 import 'context_tracker.dart';
 import 'conversation.dart';
 import 'output_entry.dart';
-
-/// Available Claude models.
-enum ClaudeModel {
-  haiku('Haiku', 'haiku'),
-  sonnet('Sonnet', 'sonnet'),
-  opus('Opus', 'opus');
-
-  const ClaudeModel(this.label, this.apiName);
-
-  /// Display label for the model.
-  final String label;
-
-  /// API name sent to the backend.
-  final String apiName;
-
-  /// Finds a [ClaudeModel] by its API name string.
-  ///
-  /// Falls back to [opus] if no match is found.
-  static ClaudeModel fromApiName(String apiName) {
-    return ClaudeModel.values.firstWhere(
-      (m) => m.apiName == apiName,
-      orElse: () => ClaudeModel.opus,
-    );
-  }
-}
 
 /// Permission modes for tool execution.
 enum PermissionMode {
@@ -277,10 +253,9 @@ class ChatState extends ChangeNotifier {
   /// Null means the primary conversation is selected.
   String? _selectedConversationId;
 
-  /// The selected Claude model for this chat.
-  ///
-  /// Initialized from [RuntimeConfig.instance.defaultModel].
-  ClaudeModel _model = ClaudeModel.fromApiName(
+  /// The selected model for this chat.
+  ChatModel _model = ChatModelCatalog.defaultForBackend(
+    RuntimeConfig.instance.defaultBackend,
     RuntimeConfig.instance.defaultModel,
   );
 
@@ -473,8 +448,8 @@ class ChatState extends ChangeNotifier {
   /// Subagent conversations are read-only.
   bool get isInputEnabled => _selectedConversationId == null;
 
-  /// The selected Claude model for this chat.
-  ClaudeModel get model => _model;
+  /// The selected model for this chat.
+  ChatModel get model => _model;
 
   /// The permission mode for this chat.
   PermissionMode get permissionMode => _permissionMode;
@@ -539,16 +514,16 @@ class ChatState extends ChangeNotifier {
     }
   }
 
-  /// Sets the Claude model for this chat.
+  /// Sets the model for this chat.
   ///
   /// If a session is active and supports mid-session model changes, this also
   /// updates the model on the running session.
-  void setModel(ClaudeModel model) {
+  void setModel(ChatModel model) {
     if (_model != model) {
       _model = model;
       _scheduleMetaSave();
       // Update the model on the active session if one exists
-      _session?.setModel(model.apiName);
+      _session?.setModel(model.id.isEmpty ? null : model.id);
       notifyListeners();
     }
   }
@@ -798,11 +773,12 @@ class ChatState extends ChangeNotifier {
     }
 
     // Create session with current settings, including resume if available
-    _session = await backend.createSession(
+    _session = await backend.createSessionForBackend(
+      type: model.backend,
       prompt: prompt,
       cwd: worktreeRoot,
       options: sdk.SessionOptions(
-        model: model.apiName,
+        model: model.id.isEmpty ? null : model.id,
         permissionMode: _sdkPermissionMode,
         resume: _lastSessionId,
         // Load permission rules and MCP servers from user, project, and local settings files
@@ -819,9 +795,7 @@ class ChatState extends ChangeNotifier {
     // For ClaudeSession, use sdkSessionId (the SDK's session ID).
     // For other AgentSession implementations, use sessionId directly.
     final session = _session!;
-    final newSessionId = session is sdk.ClaudeSession
-        ? session.sdkSessionId
-        : session.sessionId;
+    final newSessionId = session.resolvedSessionId ?? session.sessionId;
     if (newSessionId != null && newSessionId != _lastSessionId) {
       developer.log(
         'Session created with ID: $newSessionId',
@@ -1449,7 +1423,8 @@ class ChatState extends ChangeNotifier {
     if (_projectId == null) return;
     try {
       final meta = ChatMeta(
-        model: _model.apiName,
+        model: _model.id,
+        backendType: _backendTypeValue,
         permissionMode: _permissionMode.apiName,
         createdAt: _data.createdAt ?? DateTime.now(),
         lastActiveAt: DateTime.now(),
@@ -1465,6 +1440,14 @@ class ChatState extends ChangeNotifier {
       // Log error but don't throw - persistence failures shouldn't break UI
       debugPrint('Failed to save chat meta: $e');
     }
+  }
+
+  String get _backendTypeValue {
+    return switch (_model.backend) {
+      sdk.BackendType.codex => 'codex',
+      sdk.BackendType.nodejs => 'nodejs',
+      sdk.BackendType.directCli => 'direct',
+    };
   }
 
   /// Persists the session ID to projects.json.

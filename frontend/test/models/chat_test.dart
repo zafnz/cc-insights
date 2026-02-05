@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cc_insights_v2/models/agent.dart';
 import 'package:cc_insights_v2/models/chat.dart';
+import 'package:cc_insights_v2/models/chat_model.dart';
 import 'package:cc_insights_v2/models/conversation.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
@@ -11,21 +12,21 @@ import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('ClaudeModel.fromApiName', () {
-    test('resolves haiku', () {
-      check(ClaudeModel.fromApiName('haiku')).equals(ClaudeModel.haiku);
+  group('ChatModelCatalog.defaultForBackend', () {
+    test('resolves preferred model for Claude', () {
+      final model = ChatModelCatalog.defaultForBackend(
+        sdk.BackendType.directCli,
+        'haiku',
+      );
+      check(model).equals(ChatModelCatalog.claudeModels.first);
     });
 
-    test('resolves sonnet', () {
-      check(ClaudeModel.fromApiName('sonnet')).equals(ClaudeModel.sonnet);
-    });
-
-    test('resolves opus', () {
-      check(ClaudeModel.fromApiName('opus')).equals(ClaudeModel.opus);
-    });
-
-    test('falls back to opus for unknown', () {
-      check(ClaudeModel.fromApiName('unknown')).equals(ClaudeModel.opus);
+    test('falls back to first model for unknown', () {
+      final model = ChatModelCatalog.defaultForBackend(
+        sdk.BackendType.directCli,
+        'unknown',
+      );
+      check(model).equals(ChatModelCatalog.claudeModels.first);
     });
   });
 
@@ -67,7 +68,7 @@ void main() {
       final chat = ChatState(
         ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
       );
-      check(chat.model).equals(ClaudeModel.opus);
+      check(chat.model).equals(ChatModelCatalog.claudeModels.last);
       check(chat.permissionMode).equals(PermissionMode.defaultMode);
     });
 
@@ -78,7 +79,7 @@ void main() {
       final chat = ChatState(
         ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
       );
-      check(chat.model).equals(ClaudeModel.haiku);
+      check(chat.model).equals(ChatModelCatalog.claudeModels.first);
       check(chat.permissionMode).equals(PermissionMode.acceptEdits);
     });
   });

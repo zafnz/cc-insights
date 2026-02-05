@@ -64,6 +64,23 @@ class FakeBackendService extends BackendService {
 
     return sessionToReturn!;
   }
+
+  @override
+  Future<sdk.AgentSession> createSessionForBackend({
+    required sdk.BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    return createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
+  }
 }
 
 /// Fake implementation of [ClaudeSession] for testing.
@@ -97,6 +114,9 @@ class FakeClaudeSession implements ClaudeSession {
 
   @override
   String? sdkSessionId;
+
+  @override
+  String? get resolvedSessionId => sdkSessionId ?? sessionId;
 
   @override
   Future<void> send(String message) async {

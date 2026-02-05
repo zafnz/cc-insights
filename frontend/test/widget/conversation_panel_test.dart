@@ -38,6 +38,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
 
   /// Whether the backend is ready.
   bool _isReady = true;
+  sdk.BackendType? _backendType = sdk.BackendType.directCli;
 
   @override
   bool get isReady => _isReady;
@@ -49,9 +50,35 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   String? get error => null;
 
   @override
-  Future<void> start() async {
+  sdk.BackendType? get backendType => _backendType;
+
+  @override
+  bool isReadyFor(sdk.BackendType type) {
+    return _isReady && _backendType == type;
+  }
+
+  @override
+  bool isStartingFor(sdk.BackendType type) => false;
+
+  @override
+  String? errorFor(sdk.BackendType type) => null;
+
+  @override
+  Future<void> start({
+    sdk.BackendType type = sdk.BackendType.directCli,
+    String? executablePath,
+  }) async {
     _isReady = true;
+    _backendType = type;
     notifyListeners();
+  }
+
+  @override
+  Future<void> switchBackend({
+    required sdk.BackendType type,
+    String? executablePath,
+  }) async {
+    await start(type: type, executablePath: executablePath);
   }
 
   @override
@@ -72,6 +99,23 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     }
 
     return sessionToReturn ?? FakeClaudeSession();
+  }
+
+  @override
+  Future<sdk.AgentSession> createSessionForBackend({
+    required sdk.BackendType type,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    return createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
   }
 
   void reset() {
@@ -109,6 +153,9 @@ class FakeClaudeSession implements sdk.ClaudeSession {
 
   @override
   String? sdkSessionId = 'fake-sdk-session-id';
+
+  @override
+  String? get resolvedSessionId => sdkSessionId ?? sessionId;
 
   @override
   Stream<sdk.SDKMessage> get messages => _messagesController.stream;

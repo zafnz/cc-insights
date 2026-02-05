@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
@@ -95,6 +96,9 @@ class RuntimeConfig extends ChangeNotifier {
 
   /// Default Claude model for new chats.
   String _defaultModel = 'opus';
+
+  /// Default backend for new chats.
+  BackendType _defaultBackend = BackendType.directCli;
 
   /// Default permission mode for new chats.
   String _defaultPermissionMode = 'default';
@@ -326,6 +330,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Default backend for new chats.
+  BackendType get defaultBackend => _defaultBackend;
+
+  set defaultBackend(BackendType value) {
+    if (_defaultBackend != value) {
+      _defaultBackend = value;
+      notifyListeners();
+    }
+  }
+
   /// Default permission mode for new chats.
   String get defaultPermissionMode => _defaultPermissionMode;
 
@@ -421,6 +435,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._aiChatLabelModel = 'haiku';
     _instance._desktopNotifications = true;
     _instance._defaultModel = 'opus';
+    _instance._defaultBackend = BackendType.directCli;
     _instance._defaultPermissionMode = 'default';
     _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;

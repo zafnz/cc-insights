@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/chat.dart';
+import '../models/chat_model.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
@@ -383,7 +384,8 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     // Set the model to the AI assistance model
     final aiModel = RuntimeConfig.instance.aiAssistanceModel;
     if (aiModel != 'disabled') {
-      chat.setModel(ClaudeModel.fromApiName(aiModel));
+      final backend = RuntimeConfig.instance.defaultBackend;
+      chat.setModel(ChatModelCatalog.defaultForBackend(backend, aiModel));
     }
 
     // Add to worktree and select it

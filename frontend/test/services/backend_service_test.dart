@@ -136,6 +136,9 @@ class FakeClaudeSession implements ClaudeSession {
   String? sdkSessionId = 'fake-sdk-session-id';
 
   @override
+  String? get resolvedSessionId => sdkSessionId ?? sessionId;
+
+  @override
   Stream<SDKMessage> get messages => const Stream.empty();
 
   @override
@@ -587,7 +590,10 @@ class _TestableBackendService extends BackendService {
   String? get error => _errorState;
 
   @override
-  Future<void> start() async {
+  Future<void> start({
+    BackendType type = BackendType.directCli,
+    String? executablePath,
+  }) async {
     if (_isDisposed) return;
     if (isReady || isStarting) return;
 
@@ -633,6 +639,23 @@ class _TestableBackendService extends BackendService {
       throw StateError('Backend not started. Call start() first.');
     }
     return _backendState!.createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
+  }
+
+  @override
+  Future<AgentSession> createSessionForBackend({
+    required BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    return createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,

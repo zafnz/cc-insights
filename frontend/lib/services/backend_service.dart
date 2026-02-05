@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/chat_model.dart';
+
 /// Service for managing the Claude backend lifecycle.
 ///
 /// This service handles spawning and disposing the Claude CLI backend process,
@@ -29,21 +31,51 @@ import 'package:flutter/foundation.dart';
 /// backendService.dispose();
 /// ```
 class BackendService extends ChangeNotifier {
-  AgentBackend? _backend;
-  StreamSubscription<BackendError>? _errorSubscription;
-  bool _isStarting = false;
-  String? _error;
+  final Map<BackendType, AgentBackend> _backends = {};
+  final Map<BackendType, StreamSubscription<BackendError>>
+      _errorSubscriptions = {};
+  final Map<BackendType, String?> _errors = {};
+  final Set<BackendType> _starting = {};
+
+  BackendType? _backendType;
 
   /// Whether the backend is ready to accept session creation requests.
-  bool get isReady => _backend != null && _error == null;
+  bool get isReady {
+    final backendType = _backendType;
+    if (backendType == null) return false;
+    return _backends.containsKey(backendType) &&
+        _errors[backendType] == null;
+  }
 
   /// Whether the backend is currently starting up.
-  bool get isStarting => _isStarting;
+  bool get isStarting {
+    final backendType = _backendType;
+    if (backendType == null) return false;
+    return _starting.contains(backendType);
+  }
 
   /// The current error message, if any.
-  String? get error => _error;
+  String? get error {
+    final backendType = _backendType;
+    if (backendType == null) return null;
+    return _errors[backendType];
+  }
 
-  /// Starts the Claude CLI backend.
+  /// The currently active backend type, if any.
+  BackendType? get backendType => _backendType;
+
+  /// Whether a specific backend is ready.
+  bool isReadyFor(BackendType type) {
+    return _backends.containsKey(type) && _errors[type] == null;
+  }
+
+  /// Whether a specific backend is currently starting.
+  bool isStartingFor(BackendType type) => _starting.contains(type);
+
+  /// Error message for a specific backend, if any.
+  String? errorFor(BackendType type) => _errors[type];
+
+  /// Starts the backend.
   ///
   /// This spawns a direct connection to the Claude CLI using the stream-json
   /// protocol. The CLI path can be configured via the `CLAUDE_CODE_PATH`
@@ -54,30 +86,115 @@ class BackendService extends ChangeNotifier {
   ///
   /// After calling this method, check [isReady] to verify the backend started
   /// successfully, or [error] to see what went wrong.
-  Future<void> start() async {
-    if (_backend != null || _isStarting) return;
+  Future<void> start({
+    BackendType type = BackendType.directCli,
+    String? executablePath,
+  }) async {
+    _backendType = type;
+    final existing = _backends[type];
+    if (existing != null) {
+      unawaited(_refreshModelsIfSupported(type, existing));
+      notifyListeners();
+      return;
+    }
 
-    _isStarting = true;
-    _error = null;
+    if (_starting.contains(type)) {
+      return;
+    }
+
+    _starting.add(type);
+    _errors[type] = null;
     notifyListeners();
 
     try {
-      _backend = await BackendFactory.create(
-        type: BackendType.directCli,
+      final backend = await BackendFactory.create(
+        type: type,
+        executablePath: executablePath,
       );
+      _backends[type] = backend;
 
       // Monitor backend errors
-      _errorSubscription = _backend!.errors.listen((error) {
-        _error = error.toString();
+      _errorSubscriptions[type] = backend.errors.listen((error) {
+        _errors[type] = error.toString();
         notifyListeners();
       });
+
+      unawaited(_refreshModelsIfSupported(type, backend));
     } catch (e) {
-      _error = e.toString();
-      _backend = null;
+      _errors[type] = e.toString();
+      _backends.remove(type);
     } finally {
-      _isStarting = false;
+      _starting.remove(type);
       notifyListeners();
     }
+  }
+
+  /// Switches the backend type if possible.
+  ///
+  /// Throws [StateError] when active sessions exist.
+  Future<void> switchBackend({
+    required BackendType type,
+    String? executablePath,
+  }) async {
+    await start(type: type, executablePath: executablePath);
+  }
+
+  Future<void> _refreshModelsIfSupported(
+    BackendType type,
+    AgentBackend backend,
+  ) async {
+    if (backend is! ModelListingBackend) return;
+
+    try {
+      final modelBackend = backend as ModelListingBackend;
+      final models = await modelBackend.listModels();
+      if (models.isEmpty) return;
+
+      if (type == BackendType.codex) {
+        final mapped = models
+            .where((model) => model.value.trim().isNotEmpty)
+            .map((model) {
+          final label = model.displayName.trim().isEmpty
+              ? model.value
+              : model.displayName.trim();
+          return ChatModel(
+            id: model.value.trim(),
+            label: label,
+            backend: BackendType.codex,
+          );
+        }).toList();
+
+        if (mapped.isNotEmpty) {
+          ChatModelCatalog.updateCodexModels(mapped);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to refresh model list: $e');
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Creates a session for a specific backend type.
+  Future<AgentSession> createSessionForBackend({
+    required BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    await start(type: type, executablePath: executablePath);
+    final backend = _backends[type];
+    if (backend == null) {
+      throw StateError('Backend not started. Call start() first.');
+    }
+    return backend.createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
   }
 
   /// Creates a new Claude session.
@@ -98,10 +215,15 @@ class BackendService extends ChangeNotifier {
     SessionOptions? options,
     List<ContentBlock>? content,
   }) async {
-    if (_backend == null) {
+    final backendType = _backendType;
+    if (backendType == null) {
       throw StateError('Backend not started. Call start() first.');
     }
-    return _backend!.createSession(
+    final backend = _backends[backendType];
+    if (backend == null) {
+      throw StateError('Backend not started. Call start() first.');
+    }
+    return backend.createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
@@ -115,10 +237,17 @@ class BackendService extends ChangeNotifier {
   /// the backend process is properly terminated.
   @override
   void dispose() {
-    _errorSubscription?.cancel();
-    _errorSubscription = null;
-    _backend?.dispose();
-    _backend = null;
+    for (final sub in _errorSubscriptions.values) {
+      sub.cancel();
+    }
+    _errorSubscriptions.clear();
+    for (final backend in _backends.values) {
+      backend.dispose();
+    }
+    _backends.clear();
+    _errors.clear();
+    _starting.clear();
+    _backendType = null;
     super.dispose();
   }
 }

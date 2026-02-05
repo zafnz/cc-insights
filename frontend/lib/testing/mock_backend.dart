@@ -125,7 +125,10 @@ class MockBackendService extends BackendService {
   ///
   /// This immediately sets [isReady] to true without spawning any process.
   @override
-  Future<void> start() async {
+  Future<void> start({
+    BackendType type = BackendType.directCli,
+    String? executablePath,
+  }) async {
     if (_disposed) {
       throw StateError('MockBackendService has been disposed');
     }
@@ -311,6 +314,23 @@ class MockBackendService extends BackendService {
     });
 
     return session;
+  }
+
+  @override
+  Future<AgentSession> createSessionForBackend({
+    required BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    return createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
   }
 
   /// Get a session by ID.

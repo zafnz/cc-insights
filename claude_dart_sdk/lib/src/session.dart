@@ -40,6 +40,10 @@ class ClaudeSession implements AgentSession {
   /// The SDK session ID (from Claude Code).
   String? sdkSessionId;
 
+  /// Session ID suitable for resume.
+  @override
+  String? get resolvedSessionId => sdkSessionId ?? sessionId;
+
   final _messagesController = StreamController<SDKMessage>.broadcast();
   final _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
