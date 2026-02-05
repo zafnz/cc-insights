@@ -48,6 +48,7 @@ class CodexSession implements AgentSession {
 
   Map<String, dynamic>? _latestTokenUsage;
   String? _modelOverride;
+  String? _currentTurnId;
 
   @override
   bool get isActive => !_disposed;
@@ -78,6 +79,8 @@ class CodexSession implements AgentSession {
         _handleThreadStarted(params);
       case 'thread/tokenUsage/updated':
         _handleTokenUsageUpdated(params);
+      case 'turn/started':
+        _handleTurnStarted(params);
       case 'item/started':
         _handleItemStarted(params);
       case 'item/completed':
@@ -204,6 +207,14 @@ class CodexSession implements AgentSession {
     });
   }
 
+  void _handleTurnStarted(Map<String, dynamic> params) {
+    final id = params['threadId'] as String?;
+    if (id != threadId) return;
+
+    final turn = params['turn'] as Map<String, dynamic>?;
+    _currentTurnId = turn?['id'] as String?;
+  }
+
   void _handleTokenUsageUpdated(Map<String, dynamic> params) {
     final id = params['threadId'] as String?;
     if (id != threadId) return;
@@ -302,6 +313,7 @@ class CodexSession implements AgentSession {
   void _handleTurnCompleted(Map<String, dynamic> params) {
     final id = params['threadId'] as String?;
     if (id != threadId) return;
+    _currentTurnId = null;
 
     final usage = _latestTokenUsage?['total'] as Map<String, dynamic>?;
     final inputTokens = (usage?['inputTokens'] as num?)?.toInt() ?? 0;
@@ -450,13 +462,14 @@ class CodexSession implements AgentSession {
     }
     if (_isTestSession) return;
 
-    await _process!.sendRequest('turn/start', {
+    final result = await _process!.sendRequest('turn/start', {
       'threadId': threadId,
       'input': [
         {'type': 'text', 'text': message}
       ],
       if (_modelOverride != null) 'model': _modelOverride,
     });
+    _extractTurnId(result);
   }
 
   @override
@@ -471,11 +484,20 @@ class CodexSession implements AgentSession {
       return send('');
     }
 
-    await _process!.sendRequest('turn/start', {
+    final result = await _process!.sendRequest('turn/start', {
       'threadId': threadId,
       'input': inputs,
       if (_modelOverride != null) 'model': _modelOverride,
     });
+    _extractTurnId(result);
+  }
+
+  void _extractTurnId(Map<String, dynamic> result) {
+    final turn = result['turn'] as Map<String, dynamic>?;
+    final turnId = turn?['id'] as String?;
+    if (turnId != null) {
+      _currentTurnId = turnId;
+    }
   }
 
   Future<List<Map<String, dynamic>>> _convertContent(
@@ -522,8 +544,11 @@ class CodexSession implements AgentSession {
   @override
   Future<void> interrupt() async {
     if (_disposed || _isTestSession) return;
+    final turnId = _currentTurnId;
+    if (turnId == null) return;
     await _process!.sendRequest('turn/interrupt', {
       'threadId': threadId,
+      'turnId': turnId,
     });
   }
 
