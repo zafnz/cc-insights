@@ -1130,38 +1130,48 @@ class WelcomeCard extends StatelessWidget {
     final project = context.watch<ProjectState>();
     final selection = context.watch<SelectionState>();
     final worktree = selection.selectedWorktree;
+    final defaultModel = ChatModelCatalog.defaultForBackend(
+      RuntimeConfig.instance.defaultBackend,
+      RuntimeConfig.instance.defaultModel,
+    );
+    final defaultPermissionMode = PermissionMode.fromApiName(
+      RuntimeConfig.instance.defaultPermissionMode,
+    );
+
+    Widget buildHeader() {
+      return _WelcomeHeader(
+        model: worktree?.welcomeModel ?? defaultModel,
+        permissionMode: worktree?.welcomePermissionMode ?? defaultPermissionMode,
+        onAgentChanged: (backendType) async {
+          final backendService = context.read<BackendService>();
+          await backendService.start(type: backendType);
+          final error = backendService.errorFor(backendType);
+          if (error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error)),
+            );
+            return;
+          }
+
+          final model = ChatModelCatalog.defaultForBackend(backendType, null);
+          worktree?.welcomeModel = model;
+        },
+        onModelChanged: (model) => worktree?.welcomeModel = model,
+        onPermissionChanged: (mode) =>
+            worktree?.welcomePermissionMode = mode,
+      );
+    }
 
     return Column(
       children: [
         // Header with model/permission selectors
-        _WelcomeHeader(
-          model: worktree?.welcomeModel ??
-              ChatModelCatalog.defaultForBackend(
-                RuntimeConfig.instance.defaultBackend,
-                RuntimeConfig.instance.defaultModel,
-              ),
-          permissionMode: worktree?.welcomePermissionMode ??
-              PermissionMode.fromApiName(
-                RuntimeConfig.instance.defaultPermissionMode,
-              ),
-          onAgentChanged: (backendType) async {
-            final backendService = context.read<BackendService>();
-            await backendService.start(type: backendType);
-            final error = backendService.errorFor(backendType);
-            if (error != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(error)),
-              );
-              return;
-            }
-
-            final model = ChatModelCatalog.defaultForBackend(backendType, null);
-            worktree?.welcomeModel = model;
-          },
-          onModelChanged: (model) => worktree?.welcomeModel = model,
-          onPermissionChanged: (mode) =>
-              worktree?.welcomePermissionMode = mode,
-        ),
+        if (worktree == null)
+          buildHeader()
+        else
+          ListenableBuilder(
+            listenable: worktree,
+            builder: (context, _) => buildHeader(),
+          ),
         Expanded(
           child: SingleChildScrollView(
             child: Center(

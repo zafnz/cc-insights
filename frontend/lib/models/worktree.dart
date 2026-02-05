@@ -250,12 +250,19 @@ class WorktreeState extends ChangeNotifier {
 
   /// Model selection for the welcome screen.
   ChatModel get welcomeModel => _welcomeModel;
-  set welcomeModel(ChatModel value) => _welcomeModel = value;
+  set welcomeModel(ChatModel value) {
+    if (_welcomeModel == value) return;
+    _welcomeModel = value;
+    notifyListeners();
+  }
 
   /// Permission mode selection for the welcome screen.
   PermissionMode get welcomePermissionMode => _welcomePermissionMode;
-  set welcomePermissionMode(PermissionMode value) =>
-      _welcomePermissionMode = value;
+  set welcomePermissionMode(PermissionMode value) {
+    if (_welcomePermissionMode == value) return;
+    _welcomePermissionMode = value;
+    notifyListeners();
+  }
 
   /// The tag names assigned to this worktree.
   List<String> get tags => List.unmodifiable(_tags);
