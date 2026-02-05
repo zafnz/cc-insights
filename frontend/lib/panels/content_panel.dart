@@ -34,25 +34,38 @@ class ContentPanel extends StatelessWidget {
 
   Widget _buildConversationPanel(BuildContext context, SelectionState selection) {
     final chat = selection.selectedChat;
-    final conversation = chat?.selectedConversation;
 
-    // Build the title: "Conversation" or "Conversation - <name>"
-    String title = 'Conversation';
-    if (chat != null && conversation != null) {
-      if (conversation.isPrimary) {
-        title = 'Conversation - ${chat.data.name}';
-      } else {
-        // For subagent conversations, show the task description or fallback
-        final subagentTitle = conversation.taskDescription ??
-            'Subagent #${conversation.subagentNumber ?? '?'}';
-        title = 'Conversation - $subagentTitle';
-      }
+    if (chat == null) {
+      return const PanelWrapper(
+        title: 'Conversation',
+        icon: Icons.chat_bubble_outline,
+        child: ConversationPanel(),
+      );
     }
 
-    return PanelWrapper(
-      title: title,
-      icon: Icons.chat_bubble_outline,
-      child: const ConversationPanel(),
+    return ListenableBuilder(
+      listenable: chat,
+      builder: (context, _) {
+        final conversation = chat.selectedConversation;
+
+        // Build the title: "Conversation" or "Conversation - <name>"
+        String title = 'Conversation';
+        if (conversation != null) {
+          if (conversation.isPrimary) {
+            title = 'Conversation - ${chat.data.name}';
+          } else {
+            final subagentTitle = conversation.taskDescription ??
+                'Subagent #${conversation.subagentNumber ?? '?'}';
+            title = 'Conversation - $subagentTitle';
+          }
+        }
+
+        return PanelWrapper(
+          title: title,
+          icon: Icons.chat_bubble_outline,
+          child: const ConversationPanel(),
+        );
+      },
     );
   }
 }
