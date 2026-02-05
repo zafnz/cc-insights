@@ -313,22 +313,11 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
 
     // If there's a focused script and we don't have a tab for it, create one
     if (script != null && !_scriptToTabId.containsKey(script.id)) {
-      _createScriptTab(script);
-    }
-
-    // If there's a focused script, switch to its tab
-    if (script != null && _scriptToTabId.containsKey(script.id)) {
-      final tabId = _scriptToTabId[script.id]!;
-      final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
-      if (tabIndex != -1 && tabIndex != _activeTabIndex) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            setState(() {
-              _activeTabIndex = tabIndex;
-            });
-          }
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_scriptToTabId.containsKey(script.id)) {
+          _createScriptTab(script);
+        }
+      });
     }
 
     // Handle auto-close for successful script tabs

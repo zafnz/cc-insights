@@ -389,7 +389,7 @@ void main() {
 
       await tester.pump();
 
-      // Should have been notified multiple times (start, output, complete)
+      // Should have been notified multiple times (start, complete)
       expect(notificationCount, greaterThan(0));
 
       scriptService.removeListener(listener);

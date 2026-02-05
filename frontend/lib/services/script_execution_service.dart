@@ -37,13 +37,7 @@ class RunningScript {
   /// Stream of raw bytes for xterm terminal.
   Stream<Uint8List> get outputStream => _outputController.stream;
 
-  /// Buffered stdout output (for legacy text display if needed).
-  final StringBuffer _stdout = StringBuffer();
-
-  /// Buffered stderr output (for legacy text display if needed).
-  final StringBuffer _stderr = StringBuffer();
-
-  /// Combined output (stdout and stderr interleaved, for legacy text display).
+  /// Combined output buffer (used by tests).
   final StringBuffer _combined = StringBuffer();
 
   /// Exit code, or null if still running.
@@ -71,34 +65,12 @@ class RunningScript {
   /// Whether the script completed with an error (exit code != 0).
   bool get isError => exitCode != null && exitCode != 0;
 
-  /// Get stdout output.
-  String get stdout => _stdout.toString();
-
-  /// Get stderr output.
-  String get stderr => _stderr.toString();
-
   /// Get combined output.
   String get output => _combined.toString();
 
   /// Append raw bytes to the output stream (for xterm).
   void appendBytes(Uint8List data) {
     _outputController.add(data);
-  }
-
-  /// Append to stdout.
-  void appendStdout(String data) {
-    _stdout.write(data);
-    _combined.write(data);
-    // Also send to xterm as bytes
-    _outputController.add(Uint8List.fromList(utf8.encode(data)));
-  }
-
-  /// Append to stderr.
-  void appendStderr(String data) {
-    _stderr.write(data);
-    _combined.write(data);
-    // Also send to xterm as bytes
-    _outputController.add(Uint8List.fromList(utf8.encode(data)));
   }
 
   /// Close the output stream (call when script completes).
@@ -112,10 +84,13 @@ class RunningScript {
 
 /// Service for executing scripts and tracking their output.
 ///
-/// This is a ChangeNotifier that notifies listeners when:
+/// This is a ChangeNotifier that notifies listeners on lifecycle events:
 /// - A new script starts
-/// - Script output is received
 /// - A script completes
+/// - Focus changes or scripts are cleared
+///
+/// Output data flows directly to xterm terminals via
+/// [RunningScript.outputStream] without triggering widget rebuilds.
 class ScriptExecutionService extends ChangeNotifier {
   /// All running and recently completed scripts.
   final Map<String, RunningScript> _scripts = {};
@@ -156,8 +131,8 @@ class ScriptExecutionService extends ChangeNotifier {
 
   /// Run a script and track its execution.
   ///
-  /// Returns the [RunningScript] immediately. Subscribe to this service's
-  /// notifications to receive output updates and completion.
+  /// Returns the [RunningScript] immediately. The service notifies listeners
+  /// on start and completion. Output flows via [RunningScript.outputStream].
   Future<RunningScript> runScript({
     required String name,
     required String command,
@@ -197,16 +172,12 @@ class ScriptExecutionService extends ChangeNotifier {
     // Track subscriptions for cleanup
     _subscriptions[id] = [];
 
-    // Stream PTY output (combines stdout and stderr)
-    // PTY output is already in raw bytes, perfect for xterm
+    // Stream PTY output to xterm terminal via broadcast stream.
+    // No notifyListeners() here — xterm handles rendering internally.
     final outputSub = pty.output.listen((data) {
-      // Send raw bytes to xterm
       script.appendBytes(data);
-      // Also decode for legacy text buffer
       final text = utf8.decode(data, allowMalformed: true);
-      script._stdout.write(text);
       script._combined.write(text);
-      notifyListeners();
     });
     _subscriptions[id]!.add(outputSub);
 
