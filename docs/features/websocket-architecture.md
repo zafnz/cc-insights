@@ -181,17 +181,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-class ClaudeWebSocketBackend implements ClaudeBackend {
+class WebSocketBackend implements AgentBackend {
   WebSocketChannel? _channel;
   final String _url;
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final Map<String, Completer<dynamic>> _pendingRequests = {};
   int _requestId = 0;
 
-  ClaudeWebSocketBackend._(this._url);
+  WebSocketBackend._(this._url);
 
-  static Future<ClaudeWebSocketBackend> connect(String url) async {
-    final backend = ClaudeWebSocketBackend._(url);
+  static Future<WebSocketBackend> connect(String url) async {
+    final backend = WebSocketBackend._(url);
     backend._channel = WebSocketChannel.connect(Uri.parse(url));
 
     // Listen for messages
@@ -230,7 +230,7 @@ class ClaudeWebSocketBackend implements ClaudeBackend {
   }
 
   @override
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -243,7 +243,7 @@ class ClaudeWebSocketBackend implements ClaudeBackend {
     });
 
     final sessionId = response['sessionId'] as String;
-    return ClaudeWebSocketSession(
+    return WebSocketSession(
       backend: this,
       sessionId: sessionId,
     );
@@ -295,14 +295,14 @@ class ClaudeWebSocketBackend implements ClaudeBackend {
   }
 }
 
-class ClaudeWebSocketSession implements ClaudeSession {
-  final ClaudeWebSocketBackend _backend;
+class WebSocketSession implements AgentSession {
+  final WebSocketBackend _backend;
 
   @override
   final String sessionId;
 
-  ClaudeWebSocketSession({
-    required ClaudeWebSocketBackend backend,
+  WebSocketSession({
+    required WebSocketBackend backend,
     required this.sessionId,
   }) : _backend = backend;
 
@@ -339,8 +339,8 @@ Create an interface that both subprocess and WebSocket backends implement:
 
 ```dart
 // claude_dart_sdk/lib/src/backend_interface.dart
-abstract class ClaudeBackend {
-  Future<ClaudeSession> createSession({
+abstract class AgentBackend {
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -350,15 +350,15 @@ abstract class ClaudeBackend {
 }
 
 // Factory for creating backends
-class ClaudeBackendFactory {
+class BackendFactory {
   /// Spawn a local subprocess backend (macOS/Linux/Windows only)
-  static Future<ClaudeBackend> spawnSubprocess() async {
+  static Future<AgentBackend> spawnSubprocess() async {
     return ClaudeSubprocessBackend.spawn();
   }
 
   /// Connect to a remote WebSocket backend
-  static Future<ClaudeBackend> connectWebSocket(String url) async {
-    return ClaudeWebSocketBackend.connect(url);
+  static Future<AgentBackend> connectWebSocket(String url) async {
+    return WebSocketBackend.connect(url);
   }
 }
 ```
@@ -370,7 +370,7 @@ class ClaudeBackendFactory {
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-Future<ClaudeBackend> createBackend() async {
+Future<AgentBackend> createBackend() async {
   // Web or mobile: use WebSocket
   if (kIsWeb || Platform.isIOS || Platform.isAndroid) {
     // Could be configured via environment or settings
@@ -378,11 +378,11 @@ Future<ClaudeBackend> createBackend() async {
       'BACKEND_URL',
       defaultValue: 'ws://localhost:8080',
     );
-    return ClaudeBackendFactory.connectWebSocket(backendUrl);
+    return BackendFactory.connectWebSocket(backendUrl);
   }
 
   // Desktop: can use subprocess (existing behavior)
-  return ClaudeBackendFactory.spawnSubprocess();
+  return BackendFactory.spawnSubprocess();
 }
 
 void main() async {

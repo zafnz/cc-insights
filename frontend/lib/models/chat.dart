@@ -208,7 +208,7 @@ class ChatState extends ChangeNotifier {
   /// The SDK session for this chat.
   ///
   /// Null when no session is active. This is the abstract [AgentSession]
-  /// interface which works with both the direct CLI and Node.js backends.
+  /// interface which works with both the direct CLI and Codex backends.
   sdk.AgentSession? _session;
 
   /// Subscription to the session's message stream.
@@ -877,8 +877,7 @@ class ChatState extends ChangeNotifier {
     _markStarted();
 
     // Store the new session ID for future resume.
-    // For ClaudeSession, use sdkSessionId (the SDK's session ID).
-    // For other AgentSession implementations, use sessionId directly.
+    // Use resolvedSessionId which returns the SDK's session ID if available.
     final session = _session!;
     final newSessionId = session.resolvedSessionId ?? session.sessionId;
     if (newSessionId != null && newSessionId != _lastSessionId) {
@@ -1258,13 +1257,12 @@ class ChatState extends ChangeNotifier {
   /// Marks the chat as having an active session for testing purposes.
   ///
   /// This is used in tests where we need to simulate an active session
-  /// without having an actual [ClaudeSession] instance.
+  /// without having an actual [AgentSession] instance.
   @visibleForTesting
   void setHasActiveSessionForTesting(bool hasSession) {
     if (hasSession) {
-      // We can't create a real ClaudeSession, but for testing hasActiveSession
-      // we need _session to be non-null. Since ClaudeSession has a private
-      // constructor, we use a sentinel approach with a test-only field.
+      // For testing hasActiveSession we use a sentinel approach with a
+      // test-only field rather than creating a real session.
       _testHasActiveSession = true;
     } else {
       _testHasActiveSession = false;
@@ -1593,7 +1591,6 @@ class ChatState extends ChangeNotifier {
   String get _backendTypeValue {
     return switch (_model.backend) {
       sdk.BackendType.codex => 'codex',
-      sdk.BackendType.nodejs => 'nodejs',
       sdk.BackendType.directCli => 'direct',
     };
   }

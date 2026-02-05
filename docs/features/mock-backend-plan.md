@@ -11,11 +11,11 @@ Flutter App
     ↓ (Provider)
 SessionProvider
     ↓
-ClaudeSession (Dart SDK)
+AgentSession (Dart SDK)
     ↓ (stdout/stdin - JSON lines)
-Backend Node.js Process
+Claude CLI Process
     ↓
-Session Manager → Claude Agent SDK → Claude API
+Claude API
 ```
 
 ### Existing Mock Infrastructure
@@ -24,8 +24,8 @@ The project already has a mock infrastructure in `flutter_app/test/integration/m
 
 | File | Purpose |
 |------|---------|
-| `mock_backend.dart` | `MockClaudeBackend` - creates mock sessions without subprocess |
-| `mock_session.dart` | `MockClaudeSession` - simulates SDK message streams |
+| `mock_backend.dart` | `MockAgentBackend` - creates mock sessions without subprocess |
+| `mock_session.dart` | `MockAgentSession` - simulates SDK message streams |
 | `mock_protocol.dart` | `MockProtocol` - factory helpers for creating SDK messages |
 
 **Current Usage**: Tests programmatically call methods like:
@@ -44,9 +44,9 @@ The existing mock infrastructure works for **unit/widget tests** where test code
 
 ## Proposed Solution: Command-Driven Mock Mode
 
-### Approach: Extend MockClaudeSession with Command Protocol
+### Approach: Extend MockAgentSession with Command Protocol
 
-Add a **command interpreter** to `MockClaudeSession` that intercepts messages sent via `send()` and executes mock commands instead of forwarding them.
+Add a **command interpreter** to `MockAgentSession` that intercepts messages sent via `send()` and executes mock commands instead of forwarding them.
 
 ### Command Protocol
 
@@ -105,7 +105,7 @@ Commands are JSON objects with a `__mock__` wrapper:
 
 ### Implementation Plan
 
-#### Phase 1: Extend MockClaudeSession (Core)
+#### Phase 1: Extend MockAgentSession (Core)
 
 **File**: `flutter_app/test/integration/mocks/mock_session.dart`
 
@@ -157,7 +157,7 @@ Future<void> _executeCommand(Map<String, dynamic> command) async {
 
 #### Phase 2: Add Missing Simulation Methods
 
-Extend `MockClaudeSession` with:
+Extend `MockAgentSession` with:
 
 ```dart
 /// Send system init message
@@ -296,7 +296,7 @@ Add helpers to make writing tests easier:
 **File**: `flutter_app/test/integration/test_helpers.dart`
 
 ```dart
-extension MockSessionTestHelpers on MockClaudeSession {
+extension MockSessionTestHelpers on MockAgentSession {
   /// Send a mock command via the normal message flow
   Future<void> executeCommand(Map<String, dynamic> command) async {
     await send(jsonEncode({'__mock__': command}));
@@ -324,7 +324,7 @@ extension MockSessionTestHelpers on MockClaudeSession {
 
 ```dart
 testWidgets('handles permission request with suggestions', (tester) async {
-  final mockBackend = MockClaudeBackend();
+  final mockBackend = MockAgentBackend();
   await tester.pumpWidget(createTestApp(mockBackend));
 
   // Create session through normal UI flow
@@ -359,7 +359,7 @@ testWidgets('handles permission request with suggestions', (tester) async {
 });
 
 testWidgets('handles compaction event', (tester) async {
-  final mockBackend = MockClaudeBackend();
+  final mockBackend = MockAgentBackend();
   await tester.pumpWidget(createTestApp(mockBackend));
 
   // ... setup session ...
@@ -388,7 +388,7 @@ testWidgets('handles compaction event', (tester) async {
 
 ### 1. Separate Mock Backend Process
 
-**Approach**: Create a Node.js mock backend that understands mock commands.
+**Approach**: Create a separate mock backend process that understands mock commands.
 
 **Pros**:
 - Tests the full communication stack
@@ -411,9 +411,9 @@ testWidgets('handles compaction event', (tester) async {
 **Cons**:
 - More complex to implement
 - Still need to generate mock messages somehow
-- The current `MockClaudeSession` already handles this layer
+- The current `MockAgentSession` already handles this layer
 
-**Decision**: Not recommended. `MockClaudeSession` provides the right abstraction.
+**Decision**: Not recommended. `MockAgentSession` provides the right abstraction.
 
 ### 3. HTTP Interception (for real API mocking)
 
@@ -435,7 +435,7 @@ testWidgets('handles compaction event', (tester) async {
 
 | Phase | Effort | Deliverable |
 |-------|--------|-------------|
-| Phase 1 | Low | Command parsing in `MockClaudeSession.send()` |
+| Phase 1 | Low | Command parsing in `MockAgentSession.send()` |
 | Phase 2 | Medium | Missing simulation methods (system, stream, hook) |
 | Phase 3 | Medium | Predefined scenarios for common patterns |
 | Phase 4 | Low | Test helper extensions |
@@ -463,7 +463,7 @@ Create tests for the mock infrastructure itself:
 // test/integration/mocks/mock_session_test.dart
 void main() {
   test('executes text_response command', () async {
-    final session = MockClaudeSession(...);
+    final session = MockAgentSession(...);
     final messages = <SDKMessage>[];
     session.messages.listen(messages.add);
 

@@ -119,7 +119,6 @@ class CliProcess {
     final args = <String>[
       '--output-format',
       'stream-json',
-      '--verbose',
       '--input-format',
       'stream-json',
       '--permission-prompt-tool',

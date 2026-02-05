@@ -15,7 +15,7 @@ class MockResponseConfig {
     this.permissionTrigger,
   });
 
-  /// Whether to automatically reply when [ClaudeSession.send] is called.
+  /// Whether to automatically reply when [TestSession.send] is called.
   final bool autoReply;
 
   /// Delay before sending the automatic reply.
@@ -62,13 +62,13 @@ class PermissionTriggerConfig {
 
 /// Callback for configuring a test session before it's returned.
 typedef TestSessionConfigurator = void Function(
-  ClaudeSession session,
+  TestSession session,
   MockResponseConfig config,
 );
 
 /// A mock implementation of [BackendService] for testing.
 ///
-/// Uses [ClaudeSession.forTesting] to create real session instances that
+/// Uses [TestSession] to create real session instances that
 /// can be controlled via test message emission. This allows integration
 /// tests to verify the full message flow without a real backend.
 ///
@@ -91,16 +91,16 @@ class MockBackendService extends BackendService {
   MockBackendService();
 
   final _uuid = const Uuid();
-  final _sessions = <String, ClaudeSession>{};
+  final _sessions = <String, TestSession>{};
 
   bool _mockIsReady = false;
   bool _mockIsStarting = false;
   String? _mockError;
 
-  ClaudeSession? _lastCreatedSession;
+  TestSession? _lastCreatedSession;
 
   /// The most recently created session.
-  ClaudeSession? get lastCreatedSession => _lastCreatedSession;
+  TestSession? get lastCreatedSession => _lastCreatedSession;
 
   /// Configuration for the next session to be created.
   ///
@@ -108,7 +108,7 @@ class MockBackendService extends BackendService {
   MockResponseConfig nextSessionConfig = const MockResponseConfig();
 
   /// All active test sessions.
-  Map<String, ClaudeSession> get sessions => Map.unmodifiable(_sessions);
+  Map<String, TestSession> get sessions => Map.unmodifiable(_sessions);
 
   bool _disposed = false;
 
@@ -147,10 +147,10 @@ class MockBackendService extends BackendService {
 
   /// Create a new test Claude session.
   ///
-  /// Returns a [ClaudeSession.forTesting] instance that can emit messages
+  /// Returns a [TestSession] instance that can emit messages
   /// and tracks sent messages.
   @override
-  Future<ClaudeSession> createSession({
+  Future<TestSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -166,7 +166,7 @@ class MockBackendService extends BackendService {
     final sessionId = _uuid.v4();
     final sdkSessionId = _uuid.v4();
 
-    final session = ClaudeSession.forTesting(
+    final session = TestSession(
       sessionId: sessionId,
       sdkSessionId: sdkSessionId,
     );
@@ -334,7 +334,7 @@ class MockBackendService extends BackendService {
   }
 
   /// Get a session by ID.
-  ClaudeSession? getSession(String sessionId) {
+  TestSession? getSession(String sessionId) {
     return _sessions[sessionId];
   }
 

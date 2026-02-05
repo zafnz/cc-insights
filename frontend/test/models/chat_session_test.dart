@@ -10,18 +10,15 @@ import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:claude_sdk/claude_sdk.dart'
     show
         APIAssistantMessage,
-        ClaudeSession,
         ContentBlock,
         HookRequest,
-        McpServerStatus,
-        ModelInfo,
         PermissionDenyResponse,
         PermissionRequest,
         PermissionResponse,
         SDKAssistantMessage,
         SDKMessage,
         SessionOptions,
-        SlashCommand,
+        TestSession,
         TextBlock;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,7 +30,7 @@ import '../test_helpers.dart';
 
 /// Fake implementation of [BackendService] for testing.
 class FakeBackendService extends BackendService {
-  FakeClaudeSession? sessionToReturn;
+  FakeTestSession? sessionToReturn;
   SessionOptions? lastOptions;
   String? lastPrompt;
   String? lastCwd;
@@ -44,7 +41,7 @@ class FakeBackendService extends BackendService {
   bool get isReady => true;
 
   @override
-  Future<ClaudeSession> createSession({
+  Future<sdk.AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -83,8 +80,8 @@ class FakeBackendService extends BackendService {
   }
 }
 
-/// Fake implementation of [ClaudeSession] for testing.
-class FakeClaudeSession implements ClaudeSession {
+/// Fake implementation of [TestSession] for testing.
+class FakeTestSession implements TestSession {
   final StreamController<SDKMessage> _messagesController =
       StreamController<SDKMessage>.broadcast();
   final StreamController<PermissionRequest> _permissionRequestsController =
@@ -138,15 +135,6 @@ class FakeClaudeSession implements ClaudeSession {
   Future<void> interrupt() async {
     interruptCalled = true;
   }
-
-  @override
-  Future<List<ModelInfo>> supportedModels() async => [];
-
-  @override
-  Future<List<SlashCommand>> supportedCommands() async => [];
-
-  @override
-  Future<List<McpServerStatus>> mcpServerStatus() async => [];
 
   @override
   Future<void> setModel(String? model) async {}
@@ -303,7 +291,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path/to/worktree'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -328,7 +316,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        backend.sessionToReturn = FakeClaudeSession();
+        backend.sessionToReturn = FakeTestSession();
         final handler = FakeSdkMessageHandler();
         var notified = false;
         state.addListener(() => notified = true);
@@ -350,7 +338,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        backend.sessionToReturn = FakeClaudeSession();
+        backend.sessionToReturn = FakeTestSession();
         final handler = FakeSdkMessageHandler();
 
         await state.startSession(
@@ -379,7 +367,7 @@ void main() {
         );
         final state = resources.track(ChatState(chatData));
         final backend = FakeBackendService();
-        backend.sessionToReturn = FakeClaudeSession();
+        backend.sessionToReturn = FakeTestSession();
         final handler = FakeSdkMessageHandler();
 
         // Act & Assert
@@ -400,7 +388,7 @@ void main() {
         // Use app's PermissionMode
         state.setPermissionMode(PermissionMode.acceptEdits);
         final backend = FakeBackendService();
-        backend.sessionToReturn = FakeClaudeSession();
+        backend.sessionToReturn = FakeTestSession();
         final handler = FakeSdkMessageHandler();
 
         // Act
@@ -425,7 +413,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -467,7 +455,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -491,7 +479,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -522,7 +510,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        backend.sessionToReturn = FakeClaudeSession();
+        backend.sessionToReturn = FakeTestSession();
         final handler = FakeSdkMessageHandler();
 
         await state.startSession(
@@ -673,7 +661,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -706,7 +694,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -742,7 +730,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 
@@ -772,7 +760,7 @@ void main() {
           ChatState.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
-        final session = FakeClaudeSession();
+        final session = FakeTestSession();
         backend.sessionToReturn = session;
         final handler = FakeSdkMessageHandler();
 

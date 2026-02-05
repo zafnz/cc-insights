@@ -28,7 +28,7 @@ import '../test_helpers.dart';
 /// Tracks calls to createSession and allows controlling the returned session.
 class FakeBackendService extends ChangeNotifier implements BackendService {
   /// The session to return from createSession.
-  FakeClaudeSession? sessionToReturn;
+  FakeTestSession? sessionToReturn;
 
   /// If set, createSession will throw this error.
   Object? createSessionError;
@@ -114,7 +114,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   }
 
   @override
-  Future<sdk.ClaudeSession> createSession({
+  Future<sdk.AgentSession> createSession({
     required String prompt,
     required String cwd,
     sdk.SessionOptions? options,
@@ -130,7 +130,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
       throw createSessionError!;
     }
 
-    return sessionToReturn ?? FakeClaudeSession();
+    return sessionToReturn ?? FakeTestSession();
   }
 
   @override
@@ -170,8 +170,8 @@ class _CreateSessionCall {
   final sdk.SessionOptions? options;
 }
 
-/// Minimal fake ClaudeSession for testing.
-class FakeClaudeSession implements sdk.ClaudeSession {
+/// Minimal fake TestSession for testing.
+class FakeTestSession implements sdk.TestSession {
   final _messagesController = StreamController<sdk.SDKMessage>.broadcast();
   final _permissionsController =
       StreamController<sdk.PermissionRequest>.broadcast();
@@ -215,15 +215,6 @@ class FakeClaudeSession implements sdk.ClaudeSession {
 
   @override
   Future<void> kill() async {}
-
-  @override
-  Future<List<sdk.ModelInfo>> supportedModels() async => [];
-
-  @override
-  Future<List<sdk.SlashCommand>> supportedCommands() async => [];
-
-  @override
-  Future<List<sdk.McpServerStatus>> mcpServerStatus() async => [];
 
   @override
   Future<void> setModel(String? model) async {}
@@ -397,7 +388,7 @@ void main() {
       testWidgets('submitting when no active session calls startSession',
           (tester) async {
         // Setup: session will be created successfully
-        final fakeSession = FakeClaudeSession();
+        final fakeSession = FakeTestSession();
         fakeBackend.sessionToReturn = fakeSession;
 
         await tester.pumpWidget(buildTestWidget());
@@ -459,7 +450,7 @@ void main() {
       testWidgets('submitting with active session calls sendMessage',
           (tester) async {
         // Setup: create a fake session and mark chat as having active session
-        final fakeSession = FakeClaudeSession();
+        final fakeSession = FakeTestSession();
         fakeBackend.sessionToReturn = fakeSession;
 
         // Start a session first by sending the first message

@@ -9,16 +9,19 @@ claude_dart_sdk/
 ├── lib/
 │   ├── claude_sdk.dart              # Public exports
 │   └── src/
-│       ├── backend.dart             # ClaudeBackend
-│       ├── session.dart             # ClaudeSession
+│       ├── backend_interface.dart   # AgentBackend / AgentSession interfaces
+│       ├── backend_factory.dart     # BackendFactory (CLI + Codex)
+│       ├── cli_backend.dart         # ClaudeCliBackend (default)
+│       ├── cli_session.dart         # CliSession (direct CLI communication)
+│       ├── cli_process.dart         # CLI subprocess management
+│       ├── session.dart             # TestSession (test-only)
 │       ├── single_request.dart      # ClaudeSingleRequest (one-shot CLI)
-│       ├── protocol.dart            # JSON line I/O
 │       └── types/
 │           ├── sdk_messages.dart    # All SDK message types
 │           ├── session_options.dart # Configuration options
 │           ├── callbacks.dart       # Permission/hook requests
 │           ├── content_blocks.dart  # Text, tool use, etc.
-│           ├── tool_types.dart      # Tool input/output
+│           ├── control_messages.dart # CLI control protocol types
 │           └── usage.dart           # Usage, costs
 ├── pubspec.yaml
 └── test/
@@ -30,9 +33,23 @@ claude_dart_sdk/
 // claude_sdk.dart
 library claude_sdk;
 
-// Core classes
-export 'src/backend.dart' show ClaudeBackend;
-export 'src/session.dart' show ClaudeSession;
+// Test session (for widget/integration tests)
+export 'src/session.dart';
+
+// Backend abstraction interface
+export 'src/backend_interface.dart';
+
+// CLI process management
+export 'src/cli_process.dart';
+
+// CLI session (direct claude-cli communication)
+export 'src/cli_session.dart';
+
+// CLI backend (direct claude-cli backend implementation)
+export 'src/cli_backend.dart';
+
+// Backend factory (unified backend creation)
+export 'src/backend_factory.dart';
 
 // Single request (one-shot CLI)
 export 'src/single_request.dart';
@@ -47,44 +64,33 @@ export 'src/types/usage.dart';
 
 ---
 
-## ClaudeBackend
+## AgentBackend
 
-Manages the backend process and session lifecycle. This is the legacy Node.js
-backend implementation. For new code, prefer using `BackendFactory` with
-`BackendType.directCli` (the default) which communicates directly with the
-Claude CLI.
+Abstract interface for agent backends. Implementations include `ClaudeCliBackend`
+(direct CLI communication, the default) and `CodexBackend`.
 
 ```dart
-/// Manages the Node.js backend process (legacy implementation).
-/// See BackendFactory for the recommended direct CLI approach.
-class ClaudeBackend {
-  /// Spawn a new backend process.
-  ///
-  /// [backendPath] is the path to the backend executable or script.
-  /// If not provided, attempts to find it relative to the application.
-  static Future<ClaudeBackend> spawn({String? backendPath});
-
-  /// Whether the backend process is running.
+/// Abstract interface for agent backends.
+abstract class AgentBackend {
+  /// Whether the backend is running.
   bool get isRunning;
 
-  /// Stream of errors from the backend process.
+  /// Stream of errors from the backend.
   Stream<BackendError> get errors;
 
-  /// Create a new Claude session.
+  /// Create a new session.
   ///
-  /// Returns a [ClaudeSession] that can be used to interact with Claude.
-  Future<ClaudeSession> createSession({
+  /// Returns an [AgentSession] that can be used to interact with the agent.
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
   });
 
   /// List all active sessions.
-  List<ClaudeSession> get sessions;
+  List<AgentSession> get sessions;
 
   /// Dispose of the backend and all sessions.
-  ///
-  /// This kills the backend process and cleans up resources.
   Future<void> dispose();
 }
 ```
@@ -92,8 +98,8 @@ class ClaudeBackend {
 ### Usage Example
 
 ```dart
-// Spawn the backend
-final backend = await ClaudeBackend.spawn();
+// Create the backend via factory
+final backend = await BackendFactory.create(type: BackendType.directCli);
 
 // Create a session
 final session = await backend.createSession(
@@ -113,13 +119,13 @@ await backend.dispose();
 
 ---
 
-## ClaudeSession
+## AgentSession
 
-Represents an active Claude session.
+Represents an active agent session.
 
 ```dart
-/// An active Claude session.
-class ClaudeSession {
+/// An active agent session.
+class AgentSession {
   /// Unique session identifier.
   String get sessionId;
 
@@ -760,7 +766,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 
 Future<void> main() async {
   // Start backend
-  final backend = await ClaudeBackend.spawn();
+  final backend = await BackendFactory.create(type: BackendType.directCli);
 
   try {
     // Create session

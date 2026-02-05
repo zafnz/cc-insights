@@ -79,7 +79,7 @@ class ChatMeta {
   /// The model identifier (backend-specific).
   final String model;
 
-  /// Backend type identifier (e.g., "direct", "codex", "nodejs").
+  /// Backend type identifier (e.g., "direct", "codex").
   final String backendType;
 
   /// Whether this chat has started at least once.

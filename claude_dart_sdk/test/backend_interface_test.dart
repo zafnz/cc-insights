@@ -5,13 +5,11 @@ import 'package:test/test.dart';
 
 void main() {
   group('AgentBackend interface', () {
-    test('ClaudeBackend implements AgentBackend', () {
-      // Verify at compile time that ClaudeBackend implements AgentBackend
+    test('ClaudeCliBackend implements AgentBackend', () {
+      // Verify at compile time that ClaudeCliBackend implements AgentBackend
       // This test passes if the code compiles
-      expect(ClaudeBackend, isA<Type>());
+      expect(ClaudeCliBackend, isA<Type>());
 
-      // We can't easily instantiate ClaudeBackend without a real process,
-      // but we can verify the type hierarchy exists
       final mock = MockAgentBackend();
       expect(mock, isA<AgentBackend>());
     });
@@ -51,9 +49,9 @@ void main() {
   });
 
   group('AgentSession interface', () {
-    test('ClaudeSession.forTesting implements AgentSession', () {
+    test('TestSession implements AgentSession', () {
       // Create a test session and verify it implements AgentSession
-      final session = ClaudeSession.forTesting(sessionId: 'test-123');
+      final session = TestSession(sessionId: 'test-123');
 
       expect(session, isA<AgentSession>());
 
@@ -83,7 +81,7 @@ void main() {
     });
 
     test('AgentSession.isActive reflects session state', () async {
-      final session = ClaudeSession.forTesting(sessionId: 'test-active');
+      final session = TestSession(sessionId: 'test-active');
 
       expect(session.isActive, isTrue);
 
@@ -93,7 +91,7 @@ void main() {
     });
 
     test('AgentSession.send accepts string message', () async {
-      final session = ClaudeSession.forTesting(sessionId: 'test-send');
+      final session = TestSession(sessionId: 'test-send');
 
       // Should not throw
       await session.send('Hello, Claude!');
@@ -102,7 +100,7 @@ void main() {
     });
 
     test('AgentSession.sendWithContent accepts content blocks', () async {
-      final session = ClaudeSession.forTesting(sessionId: 'test-content');
+      final session = TestSession(sessionId: 'test-content');
 
       // Should not throw
       await session.sendWithContent([
@@ -200,9 +198,9 @@ void main() {
       expect(messagesReceived.first, isA<SDKMessage>());
     });
 
-    test('ClaudeSession can be used as AgentSession', () async {
-      // This test ensures ClaudeSession can be assigned to AgentSession
-      AgentSession session = ClaudeSession.forTesting(sessionId: 'polymorphic');
+    test('TestSession can be used as AgentSession', () async {
+      // This test ensures TestSession can be assigned to AgentSession
+      AgentSession session = TestSession(sessionId: 'polymorphic');
 
       expect(session.sessionId, equals('polymorphic'));
       expect(session.isActive, isTrue);

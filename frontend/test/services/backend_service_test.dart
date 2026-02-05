@@ -8,15 +8,15 @@ import 'package:flutter_test/flutter_test.dart';
 import '../test_helpers.dart';
 
 // =============================================================================
-// FAKE CLAUDE BACKEND
+// FAKE AGENT BACKEND
 // =============================================================================
 
-/// Fake implementation of ClaudeBackend for testing BackendService.
+/// Fake implementation of AgentBackend for testing BackendService.
 ///
 /// This fake allows controlling the behavior of createSession and simulating
-/// errors without needing a real Node.js subprocess.
-class FakeClaudeBackend implements ClaudeBackend {
-  FakeClaudeBackend();
+/// errors without needing a real subprocess.
+class FakeAgentBackend implements AgentBackend {
+  FakeAgentBackend();
 
   /// Sessions that have been created via [createSession].
   final List<_FakeSessionRequest> createdSessions = [];
@@ -25,7 +25,7 @@ class FakeClaudeBackend implements ClaudeBackend {
   Object? createSessionError;
 
   /// If set, [createSession] will complete with this session.
-  ClaudeSession? sessionToReturn;
+  AgentSession? sessionToReturn;
 
   /// Delay before [createSession] completes.
   Duration? createSessionDelay;
@@ -68,7 +68,7 @@ class FakeClaudeBackend implements ClaudeBackend {
   List<AgentSession> get sessions => [];
 
   @override
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -93,7 +93,7 @@ class FakeClaudeBackend implements ClaudeBackend {
     }
 
     // Return a minimal fake session
-    return FakeClaudeSession();
+    return FakeAgentSession();
   }
 
   @override
@@ -141,16 +141,13 @@ class _FakeSessionRequest {
   final SessionOptions? options;
 }
 
-/// Minimal fake ClaudeSession for testing.
-class FakeClaudeSession implements ClaudeSession {
+/// Minimal fake AgentSession for testing.
+class FakeAgentSession implements AgentSession {
   @override
   String get sessionId => 'fake-session-id';
 
   @override
-  String? sdkSessionId = 'fake-sdk-session-id';
-
-  @override
-  String? get resolvedSessionId => sdkSessionId ?? sessionId;
+  String? get resolvedSessionId => 'fake-sdk-session-id';
 
   @override
   Stream<SDKMessage> get messages => const Stream.empty();
@@ -177,15 +174,6 @@ class FakeClaudeSession implements ClaudeSession {
   Future<void> kill() async {}
 
   @override
-  Future<List<ModelInfo>> supportedModels() async => [];
-
-  @override
-  Future<List<SlashCommand>> supportedCommands() async => [];
-
-  @override
-  Future<List<McpServerStatus>> mcpServerStatus() async => [];
-
-  @override
   Future<void> setModel(String? model) async {}
 
   @override
@@ -193,25 +181,6 @@ class FakeClaudeSession implements ClaudeSession {
 
   @override
   Future<void> setReasoningEffort(String? effort) async {}
-
-  // Test-only members
-  @override
-  final List<String> testSentMessages = [];
-
-  @override
-  Future<void> Function(String message)? onTestSend;
-
-  @override
-  void emitTestMessage(SDKMessage message) {}
-
-  @override
-  Future<PermissionResponse> emitTestPermissionRequest({
-    required String id,
-    required String toolName,
-    required Map<String, dynamic> toolInput,
-    String? toolUseId,
-  }) async =>
-      PermissionDenyResponse(message: 'Test deny');
 }
 
 // =============================================================================
@@ -368,7 +337,7 @@ void main() {
 
     group('createSession() when ready', () {
       test('delegates to backend', () async {
-        final fakeBackend = FakeClaudeBackend();
+        final fakeBackend = FakeAgentBackend();
         final service = _TestableBackendService();
         addTearDown(service.dispose);
 
@@ -388,7 +357,7 @@ void main() {
       });
 
       test('passes options to backend', () async {
-        final fakeBackend = FakeClaudeBackend();
+        final fakeBackend = FakeAgentBackend();
         final service = _TestableBackendService();
         addTearDown(service.dispose);
 
@@ -442,7 +411,7 @@ void main() {
 
     group('dispose()', () {
       test('cleans up backend', () async {
-        final fakeBackend = FakeClaudeBackend();
+        final fakeBackend = FakeAgentBackend();
         final service = _TestableBackendService();
         service.fakeBackend = fakeBackend;
 
@@ -462,7 +431,7 @@ void main() {
       });
 
       test('cleans up error subscription', () async {
-        final fakeBackend = FakeClaudeBackend();
+        final fakeBackend = FakeAgentBackend();
         final service = _TestableBackendService();
         service.fakeBackend = fakeBackend;
 
@@ -534,7 +503,7 @@ void main() {
       });
 
       test('called when backend error is received', () async {
-        final fakeBackend = FakeClaudeBackend();
+        final fakeBackend = FakeAgentBackend();
         final service = _TestableBackendService();
         addTearDown(service.dispose);
 
@@ -558,8 +527,8 @@ void main() {
 
     group('switchBackend()', () {
       test('disposes old backend when switching to a different type', () async {
-        final cliBackend = FakeClaudeBackend();
-        final codexBackend = FakeClaudeBackend();
+        final cliBackend = FakeAgentBackend();
+        final codexBackend = FakeAgentBackend();
 
         final service = _SwitchableBackendService({
           BackendType.directCli: cliBackend,
@@ -581,8 +550,8 @@ void main() {
       });
 
       test('only one backend remains after switch', () async {
-        final cliBackend = FakeClaudeBackend();
-        final codexBackend = FakeClaudeBackend();
+        final cliBackend = FakeAgentBackend();
+        final codexBackend = FakeAgentBackend();
 
         final service = _SwitchableBackendService({
           BackendType.directCli: cliBackend,
@@ -600,7 +569,7 @@ void main() {
       });
 
       test('switching to same type does not dispose it', () async {
-        final cliBackend = FakeClaudeBackend();
+        final cliBackend = FakeAgentBackend();
 
         final service = _SwitchableBackendService({
           BackendType.directCli: cliBackend,
@@ -617,7 +586,7 @@ void main() {
 
     group('backend error monitoring', () {
       test('updates error when backend emits error', () async {
-        final fakeBackend = FakeClaudeBackend();
+        final fakeBackend = FakeAgentBackend();
         final service = _TestableBackendService();
         addTearDown(service.dispose);
 
@@ -644,7 +613,7 @@ void main() {
 /// A testable version of BackendService that allows injecting a fake backend
 /// and controlling spawn behavior.
 class _TestableBackendService extends BackendService {
-  FakeClaudeBackend? fakeBackend;
+  FakeAgentBackend? fakeBackend;
   bool shouldFailSpawn = false;
   Duration? spawnDelay;
   int spawnCount = 0;
@@ -652,7 +621,7 @@ class _TestableBackendService extends BackendService {
   // State tracking
   bool _isStartingState = false;
   String? _errorState;
-  FakeClaudeBackend? _backendState;
+  FakeAgentBackend? _backendState;
   StreamSubscription<BackendError>? _errorSub;
   bool _isDisposed = false;
 
@@ -687,7 +656,7 @@ class _TestableBackendService extends BackendService {
       }
 
       spawnCount++;
-      fakeBackend ??= FakeClaudeBackend();
+      fakeBackend ??= FakeAgentBackend();
       _backendState = fakeBackend;
 
       // Monitor backend errors
@@ -757,7 +726,7 @@ class _TestableBackendService extends BackendService {
 class _SwitchableBackendService extends BackendService {
   _SwitchableBackendService(this._fakeBackends);
 
-  final Map<BackendType, FakeClaudeBackend> _fakeBackends;
+  final Map<BackendType, FakeAgentBackend> _fakeBackends;
 
   @override
   Future<AgentBackend> createBackend({

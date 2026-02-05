@@ -38,7 +38,7 @@ agent_sdk_core/
 - `claude_sdk.dart` barrel file continues to export everything (no change
   for downstream consumers)
 - Claude-specific types stay: `SDKMessage` hierarchy, `CliProcess`,
-  `CliSession`, `ClaudeCliBackend`, `ClaudeBackend`, `ClaudeSession`,
+  `CliSession`, `ClaudeCliBackend`, `AgentBackend`, `AgentSession`,
   control messages, protocol
 
 ### Changes to `AgentSession` interface
@@ -91,12 +91,12 @@ abstract class MessageHandler {
 - File stays at same path or rename to `claude_message_handler.dart`
 - Update all imports
 
-### Fix ClaudeSession type check in ChatState
+### Fix AgentSession type check in ChatState
 
 In `chat.dart` line 774, replace:
 
 ```dart
-final newSessionId = session is sdk.ClaudeSession
+final newSessionId = session is sdk.AgentSession
     ? session.sdkSessionId
     : session.sessionId;
 ```
@@ -113,7 +113,7 @@ In `backend_factory.dart`, add `codex` to the enum (factory throws
 `UnimplementedError` for now):
 
 ```dart
-enum BackendType { nodejs, directCli, codex }
+enum BackendType { directCli, codex }
 ```
 
 ### Verification

@@ -3,13 +3,13 @@
 > **Note:** This document describes the original Node.js backend implementation plan.
 > The architecture has since evolved to use direct CLI communication as the default.
 > See `BackendFactory` with `BackendType.directCli` for the current recommended approach.
-> The Node.js backend remains available via `BackendType.nodejs` for backwards compatibility.
+> The Node.js backend has been removed entirely.
 
 This document outlines the phased implementation plan for the Dart SDK architecture.
 
 ## Phase 1: Protocol Specification
 
-**Goal:** Define the complete JSON protocol between Dart SDK and Node backend.
+**Goal:** Define the complete JSON protocol between Dart SDK and backend.
 
 **Deliverables:**
 - [ ] Document all Dart → Backend messages
@@ -21,9 +21,9 @@ This document outlines the phased implementation plan for the Dart SDK architect
 
 ---
 
-## Phase 2: Node Backend Rewrite
+## Phase 2: Backend Rewrite (Historical - Node.js backend removed)
 
-**Goal:** Implement the thin Node.js backend (~200 lines).
+**Goal:** Originally implemented a thin Node.js backend (~200 lines). This has been replaced by direct CLI communication.
 
 **Tasks:**
 
@@ -138,14 +138,14 @@ This document outlines the phased implementation plan for the Dart SDK architect
 - [ ] `BackendProtocol` - send/receive with message routing
 - [ ] Message ID generation and correlation
 
-### 4.2 ClaudeBackend
-- [ ] `spawn()` - start backend process
+### 4.2 AgentBackend
+- [ ] Backend interface
 - [ ] Process lifecycle management
 - [ ] Message routing to sessions
 - [ ] `createSession()` - create new session
 - [ ] `dispose()` - cleanup
 
-### 4.3 ClaudeSession
+### 4.3 AgentSession
 - [ ] Session state management
 - [ ] `messages` stream - all SDK messages
 - [ ] `send()` - send follow-up
@@ -195,7 +195,7 @@ This document outlines the phased implementation plan for the Dart SDK architect
 - [ ] Handle backend path (bundled vs dev)
 
 ### 5.3 Provider Refactor
-- [ ] New `AppState` holding `ClaudeBackend`
+- [ ] New `AppState` holding `AgentBackend`
 - [ ] Session creation via SDK
 - [ ] Wire SDK streams to state
 - [ ] Simplify session state (SDK owns truth)
@@ -242,7 +242,7 @@ This document outlines the phased implementation plan for the Dart SDK architect
 - [ ] User-friendly error messages
 
 ### 6.2 Bundling
-- [ ] Bundle Node backend with `pkg` or similar
+- [ ] Bundle backend executable
 - [ ] Determine backend location at runtime
 - [ ] Handle first-run setup
 
@@ -263,7 +263,7 @@ This document outlines the phased implementation plan for the Dart SDK architect
 ```
 Week 1:
 ├── Phase 1: Protocol spec (1 day)
-├── Phase 2: Node backend (2-3 days)
+├── Phase 2: Backend (2-3 days)
 └── Phase 3: Dart types (1-2 days)
 
 Week 2:

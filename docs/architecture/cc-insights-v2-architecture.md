@@ -221,7 +221,7 @@ class ChatState extends ChangeNotifier {
   ChatData _data;
 
   // Runtime state (ephemeral - only exists while session active)
-  ClaudeSession? _session;
+  AgentSession? _session;
   Map<String, Agent> _activeAgents = {};
 
   // Selection
@@ -607,7 +607,7 @@ Future: Merge operations may involve cross-chat coordination (one Claude session
 
 | Component | Location | Notes |
 |-----------|----------|-------|
-| Dart SDK | `claude_dart_sdk/` | ClaudeBackend, ClaudeSession, Protocol, all types |
+| Dart SDK | `claude_dart_sdk/` | AgentBackend, AgentSession, ClaudeCliBackend, all types |
 | Session Model | `flutter_app/lib/models/session.dart` | Agent, OutputEntry classes (rename file) |
 | Tool Card | `flutter_app/lib/widgets/tool_card.dart` | Tool rendering with expandable cards |
 | Output Panel | `flutter_app/lib/widgets/output_panel.dart` | Smart scrolling behavior |
@@ -711,9 +711,9 @@ Future: Full conversation logs for session resumption (entries populated with Ou
 ```
 Claude API
     ↓
-Node.js Backend (session-manager.ts)
+Claude CLI (subprocess)
     ↓ stdout (JSON lines)
-Dart SDK (Protocol → ClaudeSession)
+Dart SDK (CliProcess → CliSession)
     ↓ Stream<SDKMessage>
 SDK Message Handler
     ↓ Updates
@@ -729,9 +729,9 @@ UI Input
     ↓
 ChatProvider.sendMessage()
     ↓
-Chat.ensureSession() → ClaudeSession.send()
+Chat.ensureSession() → CliSession.send()
     ↓ stdin (JSON lines)
-Node.js Backend
+Claude CLI
     ↓
 Claude API
 ```
@@ -750,12 +750,12 @@ Panels receive their context from SelectionState. They don't manage which worktr
 
 ### 2. Chat Owns Session Lifecycle
 
-The Chat model manages its ClaudeSession internally:
+The Chat model manages its AgentSession internally:
 
 - Creates session on first message
 - Destroys session on `/clear`
 - Recreates session on next message after `/clear`
-- UI never directly touches ClaudeSession
+- UI never directly touches AgentSession
 
 ### 3. SDK Concepts Stay Internal
 

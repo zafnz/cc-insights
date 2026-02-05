@@ -75,7 +75,7 @@ class ChatModelCatalog {
   static List<ChatModel> forBackend(BackendType backend) {
     return switch (backend) {
       BackendType.codex => codexModels,
-      BackendType.nodejs || BackendType.directCli => claudeModels,
+      BackendType.directCli => claudeModels,
     };
   }
 
@@ -83,9 +83,6 @@ class ChatModelCatalog {
     switch (value) {
       case 'codex':
         return BackendType.codex;
-      case 'nodejs':
-      case 'node':
-        return BackendType.nodejs;
       case 'direct':
       case 'directcli':
       case 'cli':

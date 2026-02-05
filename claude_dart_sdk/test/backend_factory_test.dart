@@ -5,37 +5,28 @@ import 'package:test/test.dart';
 
 void main() {
   group('BackendType enum', () {
-    test('has nodejs value', () {
-      expect(BackendType.nodejs, isA<BackendType>());
-      expect(BackendType.nodejs.name, equals('nodejs'));
-    });
-
     test('has directCli value', () {
       expect(BackendType.directCli, isA<BackendType>());
       expect(BackendType.directCli.name, equals('directCli'));
     });
 
-    test('has exactly three values', () {
-      expect(BackendType.values, hasLength(3));
-      expect(BackendType.values, contains(BackendType.nodejs));
+    test('has codex value', () {
+      expect(BackendType.codex, isA<BackendType>());
+      expect(BackendType.codex.name, equals('codex'));
+    });
+
+    test('has exactly two values', () {
+      expect(BackendType.values, hasLength(2));
       expect(BackendType.values, contains(BackendType.directCli));
       expect(BackendType.values, contains(BackendType.codex));
     });
 
     test('values have distinct indices', () {
-      expect(BackendType.nodejs.index, isNot(BackendType.directCli.index));
+      expect(BackendType.directCli.index, isNot(BackendType.codex.index));
     });
   });
 
   group('BackendFactory.parseType', () {
-    test('parses "nodejs" to BackendType.nodejs', () {
-      expect(BackendFactory.parseType('nodejs'), equals(BackendType.nodejs));
-    });
-
-    test('parses "node" to BackendType.nodejs', () {
-      expect(BackendFactory.parseType('node'), equals(BackendType.nodejs));
-    });
-
     test('parses "direct" to BackendType.directCli', () {
       expect(BackendFactory.parseType('direct'), equals(BackendType.directCli));
     });
@@ -51,11 +42,19 @@ void main() {
       expect(BackendFactory.parseType('cli'), equals(BackendType.directCli));
     });
 
+    test('parses "codex" to BackendType.codex', () {
+      expect(BackendFactory.parseType('codex'), equals(BackendType.codex));
+    });
+
+    test('returns null for legacy "nodejs" and "node" values', () {
+      expect(BackendFactory.parseType('nodejs'), isNull);
+      expect(BackendFactory.parseType('node'), isNull);
+    });
+
     test('is case insensitive', () {
-      expect(BackendFactory.parseType('NODEJS'), equals(BackendType.nodejs));
-      expect(BackendFactory.parseType('NodeJs'), equals(BackendType.nodejs));
       expect(BackendFactory.parseType('DIRECT'), equals(BackendType.directCli));
       expect(BackendFactory.parseType('CLI'), equals(BackendType.directCli));
+      expect(BackendFactory.parseType('CODEX'), equals(BackendType.codex));
     });
 
     test('returns null for unrecognized values', () {
@@ -133,31 +132,6 @@ void main() {
 
         await backend.dispose();
       });
-    });
-
-    group('with nodejs type', () {
-      test('throws ArgumentError when nodeBackendPath is null', () async {
-        expect(
-          () => BackendFactory.create(type: BackendType.nodejs),
-          throwsA(isA<ArgumentError>()),
-        );
-      });
-
-      test('throws ArgumentError with descriptive message', () async {
-        try {
-          await BackendFactory.create(type: BackendType.nodejs);
-          fail('Expected ArgumentError');
-        } catch (e) {
-          expect(e, isA<ArgumentError>());
-          expect(
-            (e as ArgumentError).message,
-            contains('nodeBackendPath is required'),
-          );
-        }
-      });
-
-      // Note: We can't easily test successful Node.js backend creation
-      // without a real Node.js backend path, so we focus on error cases
     });
 
     group('default type', () {

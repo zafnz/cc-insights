@@ -203,8 +203,8 @@ void main() {
       expect(args, contains('--verbose'));
     });
 
-    test('always includes verbose flag (required for stream-json)', () {
-      // Arrange - verbose is always included now regardless of config
+    test('does not include verbose flag when disabled', () {
+      // Arrange
       final config = CliProcessConfig(
         cwd: '/test',
         verbose: false,
@@ -213,8 +213,22 @@ void main() {
       // Act
       final args = CliProcess.buildArguments(config);
 
-      // Assert - verbose is always included because stream-json requires it
-      expect(args, contains('--verbose'));
+      // Assert
+      expect(args, isNot(contains('--verbose')));
+    });
+
+    test('includes verbose flag exactly once when enabled', () {
+      // Arrange
+      final config = CliProcessConfig(
+        cwd: '/test',
+        verbose: true,
+      );
+
+      // Act
+      final args = CliProcess.buildArguments(config);
+
+      // Assert
+      expect(args.where((a) => a == '--verbose').length, equals(1));
     });
 
     test('builds complete argument list with all options', () {

@@ -1,17 +1,17 @@
 # Direct Claude CLI Implementation Plan
 
-This document outlines the implementation plan for migrating the Dart SDK from the Node.js backend to direct claude-cli communication.
+This document outlines the implementation plan for migrating the Dart SDK to direct claude-cli communication.
 
 ---
 
 ## Overview
 
-**Goal:** Replace the Node.js backend with direct Dart ↔ claude-cli communication.
+**Goal:** Implement direct Dart ↔ claude-cli communication.
 
 **Benefits:**
-- Remove Node.js dependency (~1,200 lines of TypeScript deleted)
-- Lower memory footprint (one less process)
-- Simpler architecture and debugging
+- Simpler architecture (no intermediate process)
+- Lower memory footprint
+- Simpler debugging
 - Direct access to CLI features
 
 **Approach:** Incremental implementation with feature flag to switch between backends.
@@ -325,11 +325,11 @@ class CliPermissionRequest {
 ## Task 4: Backend Abstraction Interface
 
 ### Goal
-Create an abstract interface that both the Node.js backend and direct CLI can implement, enabling future support for alternative backends (e.g., Codex).
+Create an abstract interface that backends implement, enabling support for alternative backends (e.g., Codex).
 
 ### Deliverables
 - `claude_dart_sdk/lib/src/backend_interface.dart` - Abstract interface
-- Update existing `ClaudeBackend` to implement the interface
+- Create `ClaudeCliBackend` implementing the interface
 
 ### API Design
 
@@ -393,12 +393,12 @@ abstract class AgentSession {
 
 ### Tests
 - `claude_dart_sdk/test/backend_interface_test.dart`
-  - Verify existing `ClaudeBackend` implements interface
+  - Verify `ClaudeCliBackend` implements interface
   - Test interface contract with mock implementation
 
 ### Acceptance Criteria
 - [x] Abstract interface defined
-- [x] Existing `ClaudeBackend` implements interface (no breaking changes)
+- [x] `ClaudeCliBackend` implements interface
 - [x] Interface is minimal but complete
 - [x] All tests pass (18 new tests)
 
@@ -406,10 +406,10 @@ abstract class AgentSession {
 
 **Implementation Notes:**
 - Created `claude_dart_sdk/lib/src/backend_interface.dart` with `AgentBackend` and `AgentSession` abstract classes
-- Updated `ClaudeBackend` in `backend.dart` to implement `AgentBackend`
-- Updated `ClaudeSession` in `session.dart` to implement `AgentSession`
-- Added `sessions` getter to `ClaudeBackend` returning unmodifiable list
-- Added `isActive` getter to `ClaudeSession`
+- Created `ClaudeCliBackend` implementing `AgentBackend`
+- Created `TestSession` in `session.dart` (test-only session implementation)
+- Added `sessions` getter to `ClaudeCliBackend` returning unmodifiable list
+- Added `isActive` getter to `AgentSession`
 - Updated frontend fake implementations to include new required members
 - All 143 claude_dart_sdk tests pass, all 955 frontend tests pass
 
@@ -570,7 +570,7 @@ void main() {
 ## Task 7: Feature Flag and Backend Selection
 
 ### Goal
-Add a feature flag to switch between Node.js backend and direct CLI backend.
+Add a factory for selecting backend type.
 
 ### Deliverables
 - `claude_dart_sdk/lib/src/backend_factory.dart` - Factory for creating backends
@@ -581,11 +581,11 @@ Add a feature flag to switch between Node.js backend and direct CLI backend.
 ```dart
 /// Backend type selection.
 enum BackendType {
-  /// Node.js backend (current, legacy)
-  nodejs,
-
-  /// Direct claude-cli (new)
+  /// Direct claude-cli (default)
   directCli,
+
+  /// Codex backend
+  codex,
 }
 
 /// Factory for creating backends.
@@ -594,14 +594,13 @@ class BackendFactory {
   static Future<AgentBackend> create({
     BackendType type = BackendType.directCli,
     String? executablePath,
-    String? nodeBackendPath,
   });
 }
 ```
 
 ### Environment Variable Support
-- `CLAUDE_BACKEND=nodejs` - Use Node.js backend
 - `CLAUDE_BACKEND=direct` - Use direct CLI (default)
+- `CLAUDE_BACKEND=codex` - Use Codex backend
 
 ### Tests
 - `claude_dart_sdk/test/backend_factory_test.dart`
@@ -619,10 +618,10 @@ class BackendFactory {
 
 **Implementation Notes:**
 - Created `claude_dart_sdk/lib/src/backend_factory.dart` with `BackendType` enum and `BackendFactory` class
-- Supports multiple aliases: `nodejs`/`node`, `direct`/`directcli`/`cli`
+- Supports multiple aliases: `direct`/`directcli`/`cli`, `codex`
 - Environment variable parsing is case-insensitive
 - Default to `directCli` when no env var is set
-- Throws `ArgumentError` if `nodejs` selected without `nodeBackendPath`
+- Throws `ArgumentError` for unsupported backend types
 - 31 tests for the backend factory
 - All 226 claude_dart_sdk tests pass (217 passed, 9 skipped integration tests)
 
@@ -635,16 +634,12 @@ Update the Flutter frontend to use the new backend abstraction.
 
 ### Deliverables
 - Update `frontend/lib/services/backend_service.dart` - Use `BackendFactory`
-- Update any direct `ClaudeBackend` references
+- Update any direct backend references
 
 ### Changes Required
 
 1. **Backend Service:**
    ```dart
-   // Before
-   final backend = await ClaudeBackend.spawn(backendPath: nodePath);
-
-   // After
    final backend = await BackendFactory.create(
      type: BackendType.directCli,
    );
@@ -664,7 +659,7 @@ Update the Flutter frontend to use the new backend abstraction.
 ### Acceptance Criteria
 - [x] Frontend uses `BackendFactory`
 - [x] All existing frontend tests pass
-- [x] Permission UI works correctly (type checks for ClaudeSession-specific features)
+- [x] Permission UI works correctly (type checks for session-specific features)
 - [x] AskUserQuestion UI works correctly (unchanged - uses same PermissionRequest type)
 - [x] No regressions in functionality (all 955 frontend tests pass)
 
@@ -672,12 +667,11 @@ Update the Flutter frontend to use the new backend abstraction.
 
 **Implementation Notes:**
 - Updated `frontend/lib/services/backend_service.dart` to use `BackendFactory.create()` with `BackendType.directCli` as default
-- Changed `_backend` type from `ClaudeBackend` to `AgentBackend`
-- Changed `createSession()` return type from `ClaudeSession` to `AgentSession`
+- `_backend` type is `AgentBackend`
+- `createSession()` return type is `AgentSession`
 - Updated `frontend/lib/models/chat.dart` to use `AgentSession` for session storage
-- Added type checks for `ClaudeSession`-specific methods (`setModel`, `setPermissionMode`, `sdkSessionId`)
+- Added type checks for session-specific methods (`setModel`, `setPermissionMode`, `sdkSessionId`)
 - Updated `frontend/test/services/backend_service_test.dart` to return `AgentSession`
-- `_getNodeBackendPath()` now returns `null` when Node.js backend is not found (for env var override support)
 - All 955 frontend tests pass, all 226 claude_dart_sdk tests pass (217 passed, 9 skipped)
 
 ---
@@ -685,10 +679,10 @@ Update the Flutter frontend to use the new backend abstraction.
 ## Task 9: Cleanup and Documentation
 
 ### Goal
-Remove Node.js backend code and update documentation.
+Remove legacy backend code and update documentation.
 
 ### Deliverables
-- Delete `backend-node/` directory
+- Delete `backend-node/` directory (done)
 - Update `CLAUDE.md` architecture documentation
 - Update `README.md`
 - Update build scripts
@@ -697,8 +691,8 @@ Remove Node.js backend code and update documentation.
 
 1. **CLAUDE.md:**
    - Update architecture diagram
-   - Remove Node.js backend references
-   - Document new direct CLI approach
+   - Remove legacy backend references
+   - Document direct CLI approach
 
 2. **README.md:**
    - Update setup instructions
@@ -712,7 +706,7 @@ Remove Node.js backend code and update documentation.
 
 ### Acceptance Criteria
 - [x] `backend-node/` directory deleted
-- [x] No remaining references to Node.js backend in active code
+- [x] No remaining references to legacy backend in active code
 - [x] Documentation updated
 - [x] Build scripts updated
 - [x] All tests pass
@@ -724,7 +718,7 @@ Remove Node.js backend code and update documentation.
 - Updated `CLAUDE.md` with new direct CLI architecture
 - Updated `README.md` with new setup instructions (no Node.js required)
 - Simplified `build.sh` and `run.sh` scripts
-- Removed Node.js backend build phase from Xcode project
+- Removed legacy backend build phase from Xcode project
 - Updated `backend_service.dart` to remove Node.js fallback code
 - Updated `docs/dart-sdk/` documentation (00-overview, 02-protocol, 05-flutter-integration, 07-quick-reference)
 - Deleted obsolete `docs/dart-sdk/04-node-backend.md`
@@ -754,7 +748,7 @@ Tasks 1-3 can be developed in parallel with Tasks 4-5 by different developers.
 
 ## Risk Mitigation
 
-1. **Feature flag approach** allows rollback to Node.js backend if issues arise
+1. **Factory approach** allows switching between backend types
 2. **Integration tests** catch protocol mismatches early
 3. **Interface abstraction** ensures frontend changes are minimal
 4. **Incremental migration** reduces blast radius of changes
@@ -767,5 +761,5 @@ Tasks 1-3 can be developed in parallel with Tasks 4-5 by different developers.
 - [x] All integration tests pass (when enabled)
 - [x] Frontend works with direct CLI backend
 - [x] No regressions in functionality
-- [x] Node.js backend removed
+- [x] Legacy backend removed
 - [x] Documentation updated

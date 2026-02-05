@@ -19,7 +19,7 @@ import '../test_helpers.dart';
 
 /// Fake implementation of BackendService for testing provider setup.
 ///
-/// This fake avoids spawning the real Node.js backend subprocess.
+/// This fake avoids spawning a real backend subprocess.
 class FakeBackendService extends BackendService {
   bool _isReady = false;
   bool _isStarting = false;
@@ -67,7 +67,7 @@ class FakeBackendService extends BackendService {
   }
 
   @override
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
@@ -76,7 +76,7 @@ class FakeBackendService extends BackendService {
     if (!_isReady) {
       throw StateError('Backend not started. Call start() first.');
     }
-    return _FakeClaudeSession();
+    return _FakeTestSession();
   }
 
   @override
@@ -98,7 +98,7 @@ class FakeBackendService extends BackendService {
 }
 
 /// Minimal fake session for testing.
-class _FakeClaudeSession implements ClaudeSession {
+class _FakeTestSession implements TestSession {
   @override
   String get sessionId => 'fake-session';
 
@@ -131,15 +131,6 @@ class _FakeClaudeSession implements ClaudeSession {
 
   @override
   Future<void> kill() async {}
-
-  @override
-  Future<List<ModelInfo>> supportedModels() async => [];
-
-  @override
-  Future<List<SlashCommand>> supportedCommands() async => [];
-
-  @override
-  Future<List<McpServerStatus>> mcpServerStatus() async => [];
 
   @override
   Future<void> setModel(String? model) async {}

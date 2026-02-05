@@ -432,32 +432,6 @@ class CliSession {
     final now = DateTime.now().microsecondsSinceEpoch;
     return 'req-$now-${now.hashCode.toRadixString(16)}';
   }
-
-  static SessionCreateOptions? _convertToSessionCreateOptions(
-    SessionOptions? options,
-  ) {
-    if (options == null) return null;
-
-    String? systemPromptString;
-    if (options.systemPrompt != null) {
-      final json = options.systemPrompt!.toJson();
-      if (json is String) {
-        systemPromptString = json;
-      }
-    }
-
-    return SessionCreateOptions(
-      model: options.model,
-      permissionMode: options.permissionMode?.value,
-      systemPrompt: systemPromptString,
-      mcpServers: options.mcpServers != null
-          ? options.mcpServers!.map((k, v) => MapEntry(k, v.toJson()))
-          : null,
-      maxTurns: options.maxTurns,
-      maxBudgetUsd: options.maxBudgetUsd,
-      resume: options.resume,
-    );
-  }
 }
 
 /// A permission request from the CLI.

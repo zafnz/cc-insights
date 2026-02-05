@@ -14,8 +14,7 @@ import 'types/session_options.dart';
 /// Backend that communicates directly with claude-cli.
 ///
 /// This class implements [AgentBackend] and manages the lifecycle of
-/// claude-cli processes for each session. Unlike [ClaudeBackend] which
-/// uses a single Node.js process, this backend spawns a separate
+/// claude-cli processes for each session, spawning a separate
 /// claude-cli process for each session.
 ///
 /// Example:

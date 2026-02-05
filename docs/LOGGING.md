@@ -4,31 +4,13 @@ This document describes the comprehensive logging system for debugging the backe
 
 ## Architecture
 
-### Backend (Node.js)
-
-**Logger Utility** (`backend-node/src/logger.ts`):
-- Writes structured logs to **stderr** with timestamps and log levels
-- Automatically creates log files in `~/tmp/claude-agent-insights/backend-*.log`
-- Log levels: `debug`, `info`, `warn`, `error`
-- Default level: `info` (set `DEBUG=true` env var for `debug` level)
-
-**What Gets Logged**:
-- Process lifecycle (startup, shutdown, signals)
-- All incoming messages from Dart SDK
-- Session lifecycle (create, send, interrupt, kill)
-- SDK message processing
-- Permission requests and responses
-- Hook callbacks
-- Query method calls
-- All errors with stack traces
-
 ### Dart SDK
 
-**Protocol Layer** (`claude_dart_sdk/lib/src/protocol.dart`):
-- Captures all stderr from the Node.js backend
-- Exposes stderr as a `Stream<String>` via `ClaudeBackend.logs`
+**CLI Process** (`claude_dart_sdk/lib/src/cli_process.dart`):
+- Captures all stderr from the Claude CLI process
+- Exposes stderr as a `Stream<String>` via `AgentBackend.logs`
 - Writes logs to `~/tmp/claude-agent-insights/dart-sdk-*.log`
-- Prints all backend logs to Flutter console with `[backend]` prefix
+- Prints all CLI logs to Flutter console with `[backend]` prefix
 
 ### Flutter App
 

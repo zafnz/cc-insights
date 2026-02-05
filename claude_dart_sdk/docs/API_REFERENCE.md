@@ -912,7 +912,7 @@ For unit testing without actual CLI connections.
 
 ```dart
 // Create a test session
-final session = ClaudeSession.forTesting(sessionId: 'test-123');
+final session = TestSession(sessionId: 'test-123');
 
 // Emit test messages
 session.emitTestMessage(SDKAssistantMessage(

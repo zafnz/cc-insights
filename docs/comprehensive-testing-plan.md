@@ -31,8 +31,8 @@ The focus management system works as follows:
 flutter_app/test/
 ├── integration/
 │   ├── mocks/
-│   │   ├── mock_backend.dart           # Mock ClaudeBackend
-│   │   ├── mock_session.dart           # Mock ClaudeSession
+│   │   ├── mock_backend.dart           # MockAgentBackend
+│   │   ├── mock_session.dart           # MockAgentSession
 │   │   └── mock_protocol.dart          # Helper for SDK message creation
 │   ├── focus_management_test.dart      # MessageInput focus behavior tests
 │   ├── ask_user_question_test.dart     # AskUserQuestion focus tests
@@ -193,14 +193,14 @@ flutter_app/test/
 import 'package:claude_sdk/claude_sdk.dart';
 import 'dart:async';
 
-/// Mock implementation of ClaudeBackend for testing
-class MockClaudeBackend implements ClaudeBackend {
+/// Mock implementation of AgentBackend for testing
+class MockAgentBackend implements AgentBackend {
   final StreamController<BackendError> _errorsController =
       StreamController<BackendError>.broadcast();
   final StreamController<String> _logsController =
       StreamController<String>.broadcast();
 
-  final List<MockClaudeSession> _sessions = [];
+  final List<MockAgentSession> _sessions = [];
   bool _disposed = false;
 
   @override
@@ -217,12 +217,12 @@ class MockClaudeBackend implements ClaudeBackend {
 
   /// Create a mock session with controllable behavior
   @override
-  Future<ClaudeSession> createSession({
+  Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
   }) async {
-    final session = MockClaudeSession(
+    final session = MockAgentSession(
       sessionId: 'session-${_sessions.length + 1}',
       sdkSessionId: 'sdk-${_sessions.length + 1}',
       prompt: prompt,
@@ -260,13 +260,13 @@ class MockClaudeBackend implements ClaudeBackend {
   }
 
   /// Get a created session by index for test control
-  MockClaudeSession? getSession(int index) {
+  MockAgentSession? getSession(int index) {
     if (index < 0 || index >= _sessions.length) return null;
     return _sessions[index];
   }
 
   /// Get the most recently created session
-  MockClaudeSession? get latestSession =>
+  MockAgentSession? get latestSession =>
       _sessions.isEmpty ? null : _sessions.last;
 }
 ```
@@ -277,8 +277,8 @@ class MockClaudeBackend implements ClaudeBackend {
 import 'package:claude_sdk/claude_sdk.dart';
 import 'dart:async';
 
-/// Mock implementation of ClaudeSession for testing
-class MockClaudeSession implements ClaudeSession {
+/// Mock implementation of AgentSession for testing
+class MockAgentSession implements AgentSession {
   @override
   final String sessionId;
 
@@ -299,7 +299,7 @@ class MockClaudeSession implements ClaudeSession {
   final List<String> _sentMessages = [];
   final List<String> _permissionResponses = [];
 
-  MockClaudeSession({
+  MockAgentSession({
     required this.sessionId,
     required this.sdkSessionId,
     required this.prompt,
@@ -456,7 +456,7 @@ import 'mocks/mock_backend.dart';
 
 class TestHelpers {
   /// Create a test app with mock backend
-  static Widget createTestApp(MockClaudeBackend mockBackend) {
+  static Widget createTestApp(MockAgentBackend mockBackend) {
     final backendService = BackendService();
     // Inject mock backend (requires modifying BackendService to accept mock)
     // Or wrap BackendService entirely
@@ -604,12 +604,12 @@ To parallelize the work, we'll use 4 specialized agents:
 
 **Tasks**:
 1. Create `flutter_app/test/integration/mocks/mock_backend.dart`
-   - Implement `MockClaudeBackend` class
+   - Implement `MockAgentBackend` class
    - Include test control methods
    - Add comprehensive documentation
 
 2. Create `flutter_app/test/integration/mocks/mock_session.dart`
-   - Implement `MockClaudeSession` class
+   - Implement `MockAgentSession` class
    - Include methods for sending all SDK message types
    - Add test control methods
 
