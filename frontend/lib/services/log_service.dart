@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,7 +13,7 @@ enum LogLevel {
   bool meetsThreshold(LogLevel threshold) => index >= threshold.index;
 }
 
-/// A structured log entry.
+/// A structured log entry (used only for file output).
 class LogEntry {
   const LogEntry({
     required this.timestamp,
@@ -31,21 +30,6 @@ class LogEntry {
   final String type;
   final String? worktree;
   final Map<String, dynamic> message;
-
-  /// Creates a log entry from JSON (for loading from file).
-  factory LogEntry.fromJson(Map<String, dynamic> json) {
-    return LogEntry(
-      timestamp: DateTime.parse(json['timestamp'] as String),
-      service: json['service'] as String,
-      level: LogLevel.values.firstWhere(
-        (l) => l.name == json['level'],
-        orElse: () => LogLevel.info,
-      ),
-      type: json['type'] as String,
-      worktree: json['worktree'] as String?,
-      message: Map<String, dynamic>.from(json['message'] as Map),
-    );
-  }
 
   /// Converts to JSON for persistence.
   Map<String, dynamic> toJson() {
@@ -64,30 +48,12 @@ class LogEntry {
 
   /// Convenience getter for text messages.
   String? get text => message['text'] as String?;
-
-  @override
-  String toString() {
-    final buffer = StringBuffer();
-    buffer.write('[${timestamp.toIso8601String()}]');
-    buffer.write('[$service]');
-    buffer.write('[${level.name.toUpperCase()}]');
-    buffer.write('[$type]');
-    if (worktree != null) {
-      buffer.write('[$worktree]');
-    }
-    if (message.containsKey('text')) {
-      buffer.write(' ${message['text']}');
-    } else {
-      buffer.write(' ${jsonEncode(message)}');
-    }
-    return buffer.toString();
-  }
 }
 
 /// Central logging service for the application.
 ///
-/// All application components should log through this service to enable
-/// unified log viewing, filtering, and persistence.
+/// Writes logs directly to disk if a file path is configured.
+/// No in-memory storage - this is a write-only service.
 ///
 /// Usage:
 /// ```dart
@@ -108,23 +74,12 @@ class LogService {
 
   static final LogService instance = LogService._();
 
-  final List<LogEntry> _entries = [];
-  final _controller = StreamController<LogEntry>.broadcast();
-
   // File logging state
-  File? _logFile;
+  IOSink? _sink;
   String? _logFilePath;
-  final _writeQueue = <String>[];
-  bool _isWriting = false;
 
   // Filtering
   LogLevel _minimumLevel = LogLevel.debug;
-
-  /// Stream of all log entries.
-  Stream<LogEntry> get logs => _controller.stream;
-
-  /// All stored log entries.
-  List<LogEntry> get entries => List.unmodifiable(_entries);
 
   /// The current minimum log level for file output.
   LogLevel get minimumLevel => _minimumLevel;
@@ -135,60 +90,39 @@ class LogService {
   /// The current log file path, or null if file logging is disabled.
   String? get logFilePath => _logFilePath;
 
-  /// Maximum entries to keep in memory.
-  static const maxEntries = 10000;
-
   // ---------------------------------------------------------------------------
   // File logging
   // ---------------------------------------------------------------------------
 
   /// Enables file logging to the specified path.
   void enableFileLogging(String path) {
-    if (_logFilePath == path) return;
+    if (_logFilePath == path && _sink != null) return;
+
+    // Close existing sink if any
+    _sink?.close();
+    _sink = null;
+
     try {
       final file = File(path);
       final parent = file.parent;
       if (!parent.existsSync()) {
         parent.createSync(recursive: true);
       }
-      _logFile = file;
+      _sink = file.openWrite(mode: FileMode.append);
       _logFilePath = path;
-      info('LogService', 'config', 'File logging enabled: $path');
     } catch (e) {
-      error('LogService', 'config', 'Failed to enable file logging: $e');
+      // Silently fail - logging should not crash the app
+      _sink = null;
+      _logFilePath = null;
     }
   }
 
   /// Disables file logging.
   Future<void> disableFileLogging() async {
-    // Wait for pending writes to complete
-    while (_isWriting || _writeQueue.isNotEmpty) {
-      await Future.delayed(const Duration(milliseconds: 10));
-    }
-    _logFile = null;
+    await _sink?.flush();
+    await _sink?.close();
+    _sink = null;
     _logFilePath = null;
-  }
-
-  void _queueWrite(String line) {
-    if (_logFile == null) return;
-    _writeQueue.add(line);
-    _processWriteQueue();
-  }
-
-  Future<void> _processWriteQueue() async {
-    if (_isWriting || _writeQueue.isEmpty || _logFile == null) return;
-
-    _isWriting = true;
-    try {
-      while (_writeQueue.isNotEmpty && _logFile != null) {
-        final line = _writeQueue.removeAt(0);
-        _logFile!.writeAsStringSync('$line\n', mode: FileMode.append);
-      }
-    } catch (_) {
-      // Silently ignore write errors to avoid disrupting the main app
-    } finally {
-      _isWriting = false;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -203,6 +137,9 @@ class LogService {
     required Map<String, dynamic> message,
     String? worktree,
   }) {
+    // Skip if below threshold or no file configured
+    if (!level.meetsThreshold(_minimumLevel) || _sink == null) return;
+
     final entry = LogEntry(
       timestamp: DateTime.now(),
       service: service,
@@ -212,21 +149,7 @@ class LogService {
       message: message,
     );
 
-    // Add to in-memory list
-    _entries.add(entry);
-    if (_entries.length > maxEntries) {
-      _entries.removeRange(0, _entries.length - maxEntries);
-    }
-
-    // Emit to stream
-    if (!_controller.isClosed) {
-      _controller.add(entry);
-    }
-
-    // Write to file if enabled and meets threshold
-    if (level.meetsThreshold(_minimumLevel)) {
-      _queueWrite(entry.toJsonLine());
-    }
+    _sink!.writeln(entry.toJsonLine());
   }
 
   /// Convenience method for logging a simple text message.
@@ -301,14 +224,8 @@ class LogService {
     );
   }
 
-  /// Clears all in-memory log entries.
-  void clear() {
-    _entries.clear();
-  }
-
   /// Disposes resources.
   Future<void> dispose() async {
     await disableFileLogging();
-    await _controller.close();
   }
 }

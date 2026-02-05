@@ -316,7 +316,6 @@ void main() {
       expect(find.byTooltip('Agents'), findsOneWidget);
       expect(find.byTooltip('Conversation'), findsOneWidget);
       expect(find.byTooltip('Settings'), findsOneWidget);
-      expect(find.byTooltip('Logs'), findsOneWidget);
 
       await _takeScreenshot(tester, '09_navigation_rail');
     });

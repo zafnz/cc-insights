@@ -1,4 +1,7 @@
 {
+  "actions": {
+    "worktree-post-create": "./init.sh"
+  },
   "user-actions": {
     "Test": "cd frontend && flutter test",
     "Run": "./run.sh"

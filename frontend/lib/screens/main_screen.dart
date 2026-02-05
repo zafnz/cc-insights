@@ -12,7 +12,6 @@ import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
 import 'file_manager_screen.dart';
-import 'log_viewer_screen.dart';
 import 'settings_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
@@ -150,9 +149,9 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Whether the given nav index needs keyboard interception suspended.
   ///
-  /// Settings and Logs screens have text fields that need direct keyboard
-  /// input, so we suspend the global keyboard interception for them.
-  bool _needsKeyboardSuspension(int index) => index == 2 || index == 3;
+  /// Settings screen has text fields that need direct keyboard input,
+  /// so we suspend the global keyboard interception for it.
+  bool _needsKeyboardSuspension(int index) => index == 2;
 
   /// Handles navigation destination changes (nav rail).
   ///
@@ -566,8 +565,6 @@ class _MainScreenState extends State<MainScreen> {
                         const FileManagerScreen(),
                         // Index 2: Settings screen
                         const SettingsScreen(),
-                        // Index 3: Log Viewer screen
-                        LogViewerScreen(isVisible: _selectedNavIndex == 3),
                       ],
                     ),
                   ),
