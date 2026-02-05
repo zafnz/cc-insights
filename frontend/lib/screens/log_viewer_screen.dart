@@ -6,20 +6,38 @@ import 'package:flutter/services.dart';
 
 import '../services/log_service.dart';
 
+/// An exclude filter that hides log entries where message[field] == value.
+class ExcludeFilter {
+  const ExcludeFilter({required this.field, required this.value});
+  final String field;
+  final String value;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExcludeFilter && field == other.field && value == other.value;
+
+  @override
+  int get hashCode => Object.hash(field, value);
+}
+
 /// Screen for viewing application logs in real-time.
 class LogViewerScreen extends StatefulWidget {
-  const LogViewerScreen({super.key});
+  const LogViewerScreen({super.key, this.isVisible = true});
+
+  /// Whether this screen is currently visible (active in IndexedStack).
+  /// When false, the refresh timer is paused to save resources.
+  final bool isVisible;
 
   @override
   State<LogViewerScreen> createState() => _LogViewerScreenState();
 }
 
 class _LogViewerScreenState extends State<LogViewerScreen> {
-  late List<LogEntry> _entries;
-  StreamSubscription<LogEntry>? _subscription;
   final ScrollController _scrollController = ScrollController();
   bool _autoScroll = true;
   bool _isAtBottom = true;
+  bool _isVisible = false;
 
   // Filters
   LogLevel _minimumLevel = LogLevel.debug;
@@ -29,38 +47,59 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
+  // Exclude filters: list of {field: String, value: String} pairs
+  // If message[field] == value, the entry is excluded
+  List<ExcludeFilter> _excludeFilters = [];
+
+  // Refresh control - only update UI when visible
+  int _refreshCounter = 0;
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
-    _entries = List.of(LogService.instance.entries);
-    _subscription = LogService.instance.logs.listen(_onLogEntry);
     _scrollController.addListener(_onScroll);
+    _isVisible = widget.isVisible;
+    if (_isVisible) _startRefreshTimer();
+  }
+
+  @override
+  void didUpdateWidget(LogViewerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isVisible != widget.isVisible) {
+      _onVisibilityChanged(widget.isVisible);
+    }
   }
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _stopRefreshTimer();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _onLogEntry(LogEntry entry) {
-    setState(() {
-      _entries.add(entry);
-      // Keep in sync with LogService's cap
-      if (_entries.length > LogService.maxEntries) {
-        _entries.removeRange(0, _entries.length - LogService.maxEntries);
-      }
+  void _startRefreshTimer() {
+    if (_refreshTimer != null) return;
+    _refreshTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (mounted && _isVisible) setState(() => _refreshCounter++);
     });
-    if (_autoScroll && _isAtBottom) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(
-            _scrollController.position.maxScrollExtent,
-          );
-        }
-      });
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  /// Called when this widget becomes visible or hidden.
+  void _onVisibilityChanged(bool visible) {
+    _isVisible = visible;
+    if (visible) {
+      _startRefreshTimer();
+      // Refresh immediately when becoming visible
+      if (mounted) setState(() => _refreshCounter++);
+    } else {
+      _stopRefreshTimer();
     }
   }
 
@@ -69,51 +108,77 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
     final pos = _scrollController.position;
     final atBottom = pos.pixels >= pos.maxScrollExtent - 50;
     if (atBottom != _isAtBottom) {
-      setState(() => _isAtBottom = atBottom);
+      _isAtBottom = atBottom;
     }
   }
 
+  /// Get entries directly from LogService (no local copy).
+  List<LogEntry> get _entries => LogService.instance.entries;
+
   /// Get unique worktrees from all entries.
   Set<String> get _availableWorktrees {
-    return _entries
-        .where((e) => e.worktree != null)
-        .map((e) => e.worktree!)
-        .toSet();
+    final worktrees = <String>{};
+    for (final e in _entries) {
+      if (e.worktree != null) worktrees.add(e.worktree!);
+    }
+    return worktrees;
   }
 
   /// Get unique services from all entries.
   Set<String> get _availableServices {
-    return _entries.map((e) => e.service).toSet();
+    final services = <String>{};
+    for (final e in _entries) {
+      services.add(e.service);
+    }
+    return services;
   }
 
   /// Get unique types from all entries.
   Set<String> get _availableTypes {
-    return _entries.map((e) => e.type).toSet();
+    final types = <String>{};
+    for (final e in _entries) {
+      types.add(e.type);
+    }
+    return types;
   }
 
   List<LogEntry> get _filteredEntries {
-    return _entries.where((entry) {
+    final result = <LogEntry>[];
+    final query = _searchQuery.toLowerCase();
+    final hasSearch = query.isNotEmpty;
+
+    for (final entry in _entries) {
       // Level filter (show entries at or above minimum level)
-      if (!entry.level.meetsThreshold(_minimumLevel)) return false;
+      if (!entry.level.meetsThreshold(_minimumLevel)) continue;
 
       // Worktree filter
       if (_selectedWorktree != null && entry.worktree != _selectedWorktree) {
-        return false;
+        continue;
       }
 
       // Service filter
       if (_selectedService != null && entry.service != _selectedService) {
-        return false;
+        continue;
       }
 
       // Type filter
       if (_selectedType != null && entry.type != _selectedType) {
-        return false;
+        continue;
       }
 
+      // Exclude filters - if any match, exclude the entry
+      var excluded = false;
+      for (final filter in _excludeFilters) {
+        final fieldValue = entry.message[filter.field];
+        if (fieldValue != null && fieldValue.toString() == filter.value) {
+          excluded = true;
+          break;
+        }
+      }
+      if (excluded) continue;
+
       // Search filter
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
+      if (hasSearch) {
         final matchesService = entry.service.toLowerCase().contains(query);
         final matchesType = entry.type.toLowerCase().contains(query);
         final matchesWorktree =
@@ -121,23 +186,38 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
         final matchesText =
             entry.message['text']?.toString().toLowerCase().contains(query) ??
                 false;
-        final matchesData = jsonEncode(entry.message).toLowerCase().contains(query);
         if (!matchesService &&
             !matchesType &&
             !matchesWorktree &&
-            !matchesText &&
-            !matchesData) {
-          return false;
+            !matchesText) {
+          // Skip expensive JSON encode unless other checks fail
+          final matchesData =
+              jsonEncode(entry.message).toLowerCase().contains(query);
+          if (!matchesData) continue;
         }
       }
 
-      return true;
-    }).toList();
+      result.add(entry);
+    }
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
+    // Use _refreshCounter to trigger rebuilds (suppresses unused warning)
+    _refreshCounter;
     final filtered = _filteredEntries;
+
+    // Auto-scroll to bottom after build if enabled
+    if (_autoScroll && _isAtBottom && filtered.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(
+            _scrollController.position.maxScrollExtent,
+          );
+        }
+      });
+    }
 
     return Row(
       children: [
@@ -161,11 +241,22 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
           onTypeChanged: (type) {
             setState(() => _selectedType = type);
           },
+          excludeFilters: _excludeFilters,
+          onExcludeFilterAdded: (filter) {
+            setState(() => _excludeFilters = [..._excludeFilters, filter]);
+          },
+          onExcludeFilterRemoved: (filter) {
+            setState(() {
+              _excludeFilters = _excludeFilters
+                  .where((f) => f != filter)
+                  .toList();
+            });
+          },
           totalCount: _entries.length,
           filteredCount: filtered.length,
           onClear: () {
             LogService.instance.clear();
-            setState(() => _entries.clear());
+            setState(() {});
           },
         ),
         VerticalDivider(
@@ -268,6 +359,9 @@ class _LogSidebar extends StatelessWidget {
     required this.selectedType,
     required this.availableTypes,
     required this.onTypeChanged,
+    required this.excludeFilters,
+    required this.onExcludeFilterAdded,
+    required this.onExcludeFilterRemoved,
     required this.totalCount,
     required this.filteredCount,
     required this.onClear,
@@ -284,6 +378,9 @@ class _LogSidebar extends StatelessWidget {
   final String? selectedType;
   final Set<String> availableTypes;
   final ValueChanged<String?> onTypeChanged;
+  final List<ExcludeFilter> excludeFilters;
+  final ValueChanged<ExcludeFilter> onExcludeFilterAdded;
+  final ValueChanged<ExcludeFilter> onExcludeFilterRemoved;
   final int totalCount;
   final int filteredCount;
   final VoidCallback onClear;
@@ -364,6 +461,13 @@ class _LogSidebar extends StatelessWidget {
                     allLabel: 'All Types',
                     onChanged: onTypeChanged,
                   ),
+                ),
+                const SizedBox(height: 16),
+                // Exclude filters
+                _ExcludeFiltersSection(
+                  filters: excludeFilters,
+                  onFilterAdded: onExcludeFilterAdded,
+                  onFilterRemoved: onExcludeFilterRemoved,
                 ),
               ],
             ),
@@ -518,6 +622,262 @@ class _FilterDropdown extends StatelessWidget {
           ],
           onChanged: onChanged,
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exclude filters section
+// ---------------------------------------------------------------------------
+
+class _ExcludeFiltersSection extends StatefulWidget {
+  const _ExcludeFiltersSection({
+    required this.filters,
+    required this.onFilterAdded,
+    required this.onFilterRemoved,
+  });
+
+  final List<ExcludeFilter> filters;
+  final ValueChanged<ExcludeFilter> onFilterAdded;
+  final ValueChanged<ExcludeFilter> onFilterRemoved;
+
+  @override
+  State<_ExcludeFiltersSection> createState() => _ExcludeFiltersSectionState();
+}
+
+class _ExcludeFiltersSectionState extends State<_ExcludeFiltersSection> {
+  final _fieldController = TextEditingController();
+  final _valueController = TextEditingController();
+
+  @override
+  void dispose() {
+    _fieldController.dispose();
+    _valueController.dispose();
+    super.dispose();
+  }
+
+  void _addFilter() {
+    final field = _fieldController.text.trim();
+    final value = _valueController.text.trim();
+    if (field.isEmpty || value.isEmpty) return;
+
+    final filter = ExcludeFilter(field: field, value: value);
+    if (!widget.filters.contains(filter)) {
+      widget.onFilterAdded(filter);
+      _fieldController.clear();
+      _valueController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EXCLUDE FILTERS',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Existing filters
+          if (widget.filters.isNotEmpty) ...[
+            ...widget.filters.map((filter) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: _ExcludeFilterChip(
+                    filter: filter,
+                    onRemoved: () => widget.onFilterRemoved(filter),
+                  ),
+                )),
+            const SizedBox(height: 4),
+          ],
+          // Add new filter inputs
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 26,
+                  child: TextField(
+                    controller: _fieldController,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'JetBrains Mono',
+                      color: colorScheme.onSurface,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'field',
+                      hintStyle: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      filled: true,
+                      fillColor: colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: colorScheme.primary),
+                      ),
+                    ),
+                    onSubmitted: (_) => _addFilter(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: SizedBox(
+                  height: 26,
+                  child: TextField(
+                    controller: _valueController,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'JetBrains Mono',
+                      color: colorScheme.onSurface,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'value',
+                      hintStyle: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      filled: true,
+                      fillColor: colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: colorScheme.primary),
+                      ),
+                    ),
+                    onSubmitted: (_) => _addFilter(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            height: 24,
+            child: OutlinedButton(
+              onPressed: _addFilter,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colorScheme.onSurfaceVariant,
+                side: BorderSide(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                textStyle: const TextStyle(fontSize: 10),
+              ),
+              child: const Text('Add Exclude'),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Hides entries where message[field] == value',
+            style: TextStyle(
+              fontSize: 9,
+              fontStyle: FontStyle.italic,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExcludeFilterChip extends StatelessWidget {
+  const _ExcludeFilterChip({
+    required this.filter,
+    required this.onRemoved,
+  });
+
+  final ExcludeFilter filter;
+  final VoidCallback onRemoved;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: colorScheme.error.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.remove_circle_outline,
+            size: 10,
+            color: colorScheme.error,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              '${filter.field} = ${filter.value}',
+              style: TextStyle(
+                fontSize: 10,
+                fontFamily: 'JetBrains Mono',
+                color: colorScheme.onSurface,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemoved,
+            child: Icon(
+              Icons.close,
+              size: 12,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

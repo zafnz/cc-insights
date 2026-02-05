@@ -567,7 +567,7 @@ class _MainScreenState extends State<MainScreen> {
                         // Index 2: Settings screen
                         const SettingsScreen(),
                         // Index 3: Log Viewer screen
-                        const LogViewerScreen(),
+                        LogViewerScreen(isVisible: _selectedNavIndex == 3),
                       ],
                     ),
                   ),
