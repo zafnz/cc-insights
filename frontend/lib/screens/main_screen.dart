@@ -162,6 +162,14 @@ class _MainScreenState extends State<MainScreen> {
     final wasSuspended = _needsKeyboardSuspension(oldIndex);
     final needsSuspension = _needsKeyboardSuspension(newIndex);
 
+    // When leaving the main view (index 0), unfocus everything so that
+    // widgets hidden by IndexedStack (like the terminal) don't keep a
+    // stale keyboard suspension. IndexedStack keeps children mounted,
+    // so Focus.onFocusChange won't fire on its own.
+    if (oldIndex == 0 && newIndex != 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+
     // Update the selected index first
     setState(() => _selectedNavIndex = newIndex);
 
