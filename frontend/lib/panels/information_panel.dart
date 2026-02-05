@@ -699,7 +699,7 @@ class _StatusCounts extends StatelessWidget {
           'Staged: ${data.stagedFiles} files\n'
           'Commits ahead of upstream: ${data.commitsAhead}',
       child: Text(
-        'Uncommitted / Staged / Commits:  '
+        'U / S / C:  '
         '${data.uncommittedFiles} / ${data.stagedFiles} / '
         '${data.commitsAhead}',
         style: textTheme.bodySmall?.copyWith(
@@ -726,8 +726,8 @@ class _BaseSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final icon =
-        data.isRemoteBase ? Icons.public : Icons.home;
+    // Use house emoji for local, globe icon for remote
+    final isLocal = !data.isRemoteBase;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -736,9 +736,12 @@ class _BaseSection extends StatelessWidget {
         const SizedBox(height: 4),
         Row(
           children: [
-            Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+            Text(
+              isLocal ? '🏠' : '🌐',
+              style: const TextStyle(fontSize: 12),
+            ),
             const SizedBox(width: 6),
-            Expanded(
+            Flexible(
               child: Text(
                 baseRef,
                 style: textTheme.bodySmall?.copyWith(
@@ -748,14 +751,19 @@ class _BaseSection extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              key: InformationPanelKeys.changeBaseButton,
+              onTap: onChangeBase,
+              child: Text(
+                '[Change]',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.primary,
+                  fontSize: 11,
+                ),
+              ),
+            ),
           ],
-        ),
-        const SizedBox(height: 4),
-        _CompactButton(
-          key: InformationPanelKeys.changeBaseButton,
-          onPressed: onChangeBase,
-          label: 'Change...',
-          icon: Icons.edit,
         ),
         const SizedBox(height: 4),
         _AheadBehindIndicator(
@@ -927,35 +935,26 @@ class _ActionsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Row 1: Rebase / Merge onto base
-        Row(
-          children: [
-            Expanded(
-              child: _CompactButton(
-                key: InformationPanelKeys.rebaseOntoBaseButton,
-                onPressed:
-                    canUpdateFromBase ? onRebaseOntoBase : null,
-                label: 'Rebase onto $baseRef',
-                icon: Icons.low_priority,
-                tooltip: canUpdateFromBase
-                    ? null
-                    : 'Already up-to-date with $baseRef',
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _CompactButton(
-                key: InformationPanelKeys.mergeBaseButton,
-                onPressed:
-                    canUpdateFromBase ? onMergeBase : null,
-                label: 'Merge $baseRef into branch',
-                icon: Icons.merge,
-                tooltip: canUpdateFromBase
-                    ? null
-                    : 'Already up-to-date with $baseRef',
-              ),
-            ),
-          ],
+        // Rebase onto base
+        _CompactButton(
+          key: InformationPanelKeys.rebaseOntoBaseButton,
+          onPressed: canUpdateFromBase ? onRebaseOntoBase : null,
+          label: 'Rebase onto $baseRef',
+          icon: Icons.low_priority,
+          tooltip: canUpdateFromBase
+              ? null
+              : 'Already up-to-date with $baseRef',
+        ),
+        const SizedBox(height: 6),
+        // Merge base into branch
+        _CompactButton(
+          key: InformationPanelKeys.mergeBaseButton,
+          onPressed: canUpdateFromBase ? onMergeBase : null,
+          label: 'Merge $baseRef into branch',
+          icon: Icons.merge,
+          tooltip: canUpdateFromBase
+              ? null
+              : 'Already up-to-date with $baseRef',
         ),
         const SizedBox(height: 8),
 

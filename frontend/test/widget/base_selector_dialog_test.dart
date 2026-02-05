@@ -6,36 +6,25 @@ import 'package:flutter_test/flutter_test.dart';
 import '../test_helpers.dart';
 
 void main() {
-  /// Pumps a [MaterialApp] that immediately shows the [BaseSelectorDialog]
-  /// via [showDialog]. The dialog result is captured in [result].
-  Future<String?> pumpDialog(
+  /// Pumps a [MaterialApp] that shows the [BaseSelectorDialog] when a button
+  /// is tapped. Returns after the dialog is open.
+  Future<void> pumpDialog(
     WidgetTester tester, {
     String? currentBaseOverride,
   }) async {
-    String? dialogResult;
-    bool dialogReturned = false;
-
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Builder(
             builder: (context) {
-              // Show the dialog on first build via a post-frame callback.
               return ElevatedButton(
                 onPressed: () async {
-                  final raw = await showDialog<String?>(
+                  await showDialog<String?>(
                     context: context,
                     builder: (_) => BaseSelectorDialog(
                       currentBaseOverride: currentBaseOverride,
                     ),
                   );
-                  // Decode the sentinel to null.
-                  if (raw == '__project_default__') {
-                    dialogResult = null;
-                  } else {
-                    dialogResult = raw;
-                  }
-                  dialogReturned = true;
                 },
                 child: const Text('Open'),
               );
@@ -49,27 +38,20 @@ void main() {
     // Tap the button to open the dialog.
     await tester.tap(find.text('Open'));
     await safePumpAndSettle(tester);
-
-    return dialogResult;
-  }
-
-  /// Waits for the dialog to close and returns the result.
-  /// This is a helper to pump after tapping Apply/Cancel.
-  Future<void> waitForDialogClose(WidgetTester tester) async {
-    await safePumpAndSettle(tester);
   }
 
   group('BaseSelectorDialog', () {
     testWidgets('shows all options', (tester) async {
       await pumpDialog(tester);
 
-      // Verify all option labels are displayed.
-      expect(find.text('Use project default'), findsOneWidget);
+      // Verify radio options are displayed.
       expect(find.text('main'), findsOneWidget);
       expect(find.text('origin/main'), findsOneWidget);
-      expect(find.text('Custom...'), findsOneWidget);
 
-      // Verify title and description.
+      // Custom text field should always be visible with hint.
+      expect(find.byKey(BaseSelectorDialogKeys.customField), findsOneWidget);
+
+      // Verify title.
       expect(find.text('Change Base Ref'), findsOneWidget);
 
       // Verify action buttons.
@@ -77,13 +59,12 @@ void main() {
       expect(find.text('Apply'), findsOneWidget);
     });
 
-    testWidgets('pre-selects "Use project default" when value is null',
-        (tester) async {
+    testWidgets('pre-selects "main" when value is null', (tester) async {
       await pumpDialog(tester, currentBaseOverride: null);
 
-      // The project default radio should be selected.
+      // The main radio should be selected.
       final radio = tester.widget<RadioListTile<dynamic>>(
-        find.byKey(BaseSelectorDialogKeys.projectDefaultOption),
+        find.byKey(BaseSelectorDialogKeys.mainOption),
       );
       check(radio.checked).equals(true);
     });
@@ -112,22 +93,44 @@ void main() {
         (tester) async {
       await pumpDialog(tester, currentBaseOverride: 'develop');
 
-      final radio = tester.widget<RadioListTile<dynamic>>(
+      // Custom radio should be selected.
+      final radio = tester.widget<Radio<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.customOption),
       );
-      check(radio.checked).equals(true);
+      check(radio.groupValue).equals(radio.value);
 
-      // Custom text field should be visible with the value.
+      // Custom text field should have the value.
       final textField = tester.widget<TextField>(
         find.byKey(BaseSelectorDialogKeys.customField),
       );
       check(textField.controller!.text).equals('develop');
     });
 
-    testWidgets('selecting "main" and applying calls returns "main"',
+    testWidgets('selecting "main" and applying returns "main"',
         (tester) async {
-      // Start with project default selected.
-      await pumpDialog(tester, currentBaseOverride: null);
+      String? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await showBaseSelectorDialog(
+                      context,
+                      currentBaseOverride: 'origin/main',
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Open'));
+      await safePumpAndSettle(tester);
 
       // Tap the "main" radio.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.mainOption));
@@ -135,68 +138,82 @@ void main() {
 
       // Tap Apply.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await waitForDialogClose(tester);
+      await safePumpAndSettle(tester);
 
-      // Dialog should be closed.
-      expect(find.byKey(BaseSelectorDialogKeys.dialog), findsNothing);
+      check(result).equals('main');
     });
 
-    testWidgets('selecting "Use project default" returns null',
+    testWidgets('selecting "origin/main" and applying returns "origin/main"',
         (tester) async {
-      // Start with "main" selected.
-      await pumpDialog(tester, currentBaseOverride: 'main');
-
-      // Tap "Use project default".
-      await tester.tap(
-        find.byKey(BaseSelectorDialogKeys.projectDefaultOption),
+      String? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await showBaseSelectorDialog(
+                      context,
+                      currentBaseOverride: 'main',
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
       );
-      await tester.pump();
-
-      // Tap Apply.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await waitForDialogClose(tester);
-
-      // Dialog should be closed.
-      expect(find.byKey(BaseSelectorDialogKeys.dialog), findsNothing);
-    });
-
-    testWidgets('selecting "origin/main" and applying closes dialog',
-        (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Open'));
+      await safePumpAndSettle(tester);
 
       await tester.tap(find.byKey(BaseSelectorDialogKeys.originMainOption));
       await tester.pump();
 
       await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await waitForDialogClose(tester);
+      await safePumpAndSettle(tester);
 
-      expect(find.byKey(BaseSelectorDialogKeys.dialog), findsNothing);
+      check(result).equals('origin/main');
     });
 
-    testWidgets('custom field appears when Custom is selected',
-        (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
+    testWidgets('tapping custom field selects custom option', (tester) async {
+      await pumpDialog(tester, currentBaseOverride: 'main');
 
-      // Custom field should not be visible initially.
-      expect(find.byKey(BaseSelectorDialogKeys.customField), findsNothing);
+      // Verify main is selected initially.
+      var mainRadio = tester.widget<RadioListTile<dynamic>>(
+        find.byKey(BaseSelectorDialogKeys.mainOption),
+      );
+      check(mainRadio.checked).equals(true);
 
-      // Tap "Custom...".
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.customOption));
+      // Tap the custom text field.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
       await tester.pump();
 
-      // Custom field should now be visible.
-      expect(find.byKey(BaseSelectorDialogKeys.customField), findsOneWidget);
+      // Custom radio should now be selected.
+      final customRadio = tester.widget<Radio<dynamic>>(
+        find.byKey(BaseSelectorDialogKeys.customOption),
+      );
+      check(customRadio.groupValue).equals(customRadio.value);
     });
 
     testWidgets('Apply is disabled when Custom is selected but field is empty',
         (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
+      await pumpDialog(tester, currentBaseOverride: 'main');
 
-      // Tap "Custom...".
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.customOption));
+      // Tap the custom text field to select custom option.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
       await tester.pump();
 
-      // Apply should be disabled (empty custom field).
+      // Clear any text.
+      await tester.enterText(
+        find.byKey(BaseSelectorDialogKeys.customField),
+        '',
+      );
+      await tester.pump();
+
+      // Apply should be disabled.
       final applyButton = tester.widget<FilledButton>(
         find.byKey(BaseSelectorDialogKeys.applyButton),
       );
@@ -204,10 +221,10 @@ void main() {
     });
 
     testWidgets('Apply is enabled when Custom has text', (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
+      await pumpDialog(tester, currentBaseOverride: 'main');
 
-      // Tap "Custom...".
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.customOption));
+      // Tap the custom text field.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
       await tester.pump();
 
       // Type a custom ref.
@@ -226,10 +243,32 @@ void main() {
 
     testWidgets('custom field value is returned when applying',
         (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
+      String? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await showBaseSelectorDialog(
+                      context,
+                      currentBaseOverride: 'main',
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Open'));
+      await safePumpAndSettle(tester);
 
-      // Tap "Custom...".
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.customOption));
+      // Tap custom field.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
       await tester.pump();
 
       // Type a custom ref.
@@ -241,14 +280,35 @@ void main() {
 
       // Tap Apply.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await waitForDialogClose(tester);
+      await safePumpAndSettle(tester);
 
-      // Dialog should be closed.
-      expect(find.byKey(BaseSelectorDialogKeys.dialog), findsNothing);
+      check(result).equals('origin/develop');
     });
 
-    testWidgets('cancel closes dialog without applying', (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'main');
+    testWidgets('cancel closes dialog and returns null', (tester) async {
+      String? result = 'sentinel';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await showBaseSelectorDialog(
+                      context,
+                      currentBaseOverride: 'main',
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Open'));
+      await safePumpAndSettle(tester);
 
       // Select a different option.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.originMainOption));
@@ -256,29 +316,42 @@ void main() {
 
       // Tap Cancel.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.cancelButton));
-      await waitForDialogClose(tester);
+      await safePumpAndSettle(tester);
 
       // Dialog should be closed.
       expect(find.byKey(BaseSelectorDialogKeys.dialog), findsNothing);
+      // Result should be null (unchanged).
+      check(result).isNull();
     });
 
-    testWidgets('subtitle text is shown for project default option',
+    testWidgets('submitting custom field via keyboard applies',
         (tester) async {
-      await pumpDialog(tester);
-
-      expect(
-        find.text('Inherits from project settings'),
-        findsOneWidget,
+      String? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await showBaseSelectorDialog(
+                      context,
+                      currentBaseOverride: 'main',
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
       );
-    });
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Open'));
+      await safePumpAndSettle(tester);
 
-    testWidgets(
-        'submitting custom field via keyboard applies when field is valid',
-        (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
-
-      // Tap "Custom...".
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.customOption));
+      // Tap custom field.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
       await tester.pump();
 
       // Type a custom ref and submit via keyboard.
@@ -287,206 +360,9 @@ void main() {
         'release/v2',
       );
       await tester.testTextInput.receiveAction(TextInputAction.done);
-      await waitForDialogClose(tester);
-
-      // Dialog should be closed.
-      expect(find.byKey(BaseSelectorDialogKeys.dialog), findsNothing);
-    });
-  });
-
-  group('BaseSelectorDialog with onChanged callback', () {
-    testWidgets('selecting main calls onChanged with "main"',
-        (tester) async {
-      String? result;
-      bool called = false;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () async {
-                    final raw = await showDialog<String?>(
-                      context: context,
-                      builder: (_) => const BaseSelectorDialog(
-                        currentBaseOverride: null,
-                      ),
-                    );
-                    if (raw == '__project_default__') {
-                      result = null;
-                    } else {
-                      result = raw;
-                    }
-                    called = true;
-                  },
-                  child: const Text('Open'),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-      await safePumpAndSettle(tester);
-      await tester.tap(find.text('Open'));
       await safePumpAndSettle(tester);
 
-      // Select main.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.mainOption));
-      await tester.pump();
-
-      // Apply.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await safePumpAndSettle(tester);
-
-      check(called).equals(true);
-      check(result).equals('main');
-    });
-
-    testWidgets('selecting project default calls onChanged with null',
-        (tester) async {
-      String? result = 'sentinel';
-      bool called = false;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () async {
-                    final raw = await showDialog<String?>(
-                      context: context,
-                      builder: (_) => const BaseSelectorDialog(
-                        currentBaseOverride: 'main',
-                      ),
-                    );
-                    if (raw == '__project_default__') {
-                      result = null;
-                    } else {
-                      result = raw;
-                    }
-                    called = true;
-                  },
-                  child: const Text('Open'),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-      await safePumpAndSettle(tester);
-      await tester.tap(find.text('Open'));
-      await safePumpAndSettle(tester);
-
-      // Select project default.
-      await tester.tap(
-        find.byKey(BaseSelectorDialogKeys.projectDefaultOption),
-      );
-      await tester.pump();
-
-      // Apply.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await safePumpAndSettle(tester);
-
-      check(called).equals(true);
-      check(result).isNull();
-    });
-
-    testWidgets('custom value is returned correctly', (tester) async {
-      String? result;
-      bool called = false;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () async {
-                    final raw = await showDialog<String?>(
-                      context: context,
-                      builder: (_) => const BaseSelectorDialog(
-                        currentBaseOverride: null,
-                      ),
-                    );
-                    if (raw == '__project_default__') {
-                      result = null;
-                    } else {
-                      result = raw;
-                    }
-                    called = true;
-                  },
-                  child: const Text('Open'),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-      await safePumpAndSettle(tester);
-      await tester.tap(find.text('Open'));
-      await safePumpAndSettle(tester);
-
-      // Select custom.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.customOption));
-      await tester.pump();
-
-      // Enter custom value.
-      await tester.enterText(
-        find.byKey(BaseSelectorDialogKeys.customField),
-        'develop',
-      );
-      await tester.pump();
-
-      // Apply.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
-      await safePumpAndSettle(tester);
-
-      check(called).equals(true);
-      check(result).equals('develop');
-    });
-
-    testWidgets('cancel does not trigger onChanged', (tester) async {
-      bool called = false;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () async {
-                    final raw = await showDialog<String?>(
-                      context: context,
-                      builder: (_) => const BaseSelectorDialog(
-                        currentBaseOverride: 'main',
-                      ),
-                    );
-                    // Cancel returns null (no sentinel), so raw is null.
-                    if (raw != null) {
-                      called = true;
-                    }
-                  },
-                  child: const Text('Open'),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-      await safePumpAndSettle(tester);
-      await tester.tap(find.text('Open'));
-      await safePumpAndSettle(tester);
-
-      // Change selection then cancel.
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.originMainOption));
-      await tester.pump();
-
-      await tester.tap(find.byKey(BaseSelectorDialogKeys.cancelButton));
-      await safePumpAndSettle(tester);
-
-      check(called).equals(false);
+      check(result).equals('release/v2');
     });
   });
 }

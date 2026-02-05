@@ -7,17 +7,13 @@ class BaseSelectorDialogKeys {
   /// The dialog itself.
   static const dialog = Key('base_selector_dialog');
 
-  /// Radio tile for "Use project default".
-  static const projectDefaultOption =
-      Key('base_selector_project_default_option');
-
   /// Radio tile for "main".
   static const mainOption = Key('base_selector_main_option');
 
   /// Radio tile for "origin/main".
   static const originMainOption = Key('base_selector_origin_main_option');
 
-  /// Radio tile for "Custom...".
+  /// Radio for "Custom" option.
   static const customOption = Key('base_selector_custom_option');
 
   /// Text field for custom ref input.
@@ -33,34 +29,21 @@ class BaseSelectorDialogKeys {
 /// Shows a dialog to select a base ref override for a worktree.
 ///
 /// [currentBaseOverride] is the current per-worktree override value,
-/// or null if the worktree uses the project default.
+/// or null if using the default (main).
 ///
 /// Returns the new base override value: a ref string like "main" or
-/// "origin/main", or null to clear the override (use project default).
-/// Returns the unchanged value if cancelled (callers should compare
-/// with the original to detect changes, or use the [onChanged] variant).
+/// "origin/main", or null if cancelled.
 Future<String?> showBaseSelectorDialog(
   BuildContext context, {
   String? currentBaseOverride,
 }) async {
-  final result = await showDialog<String?>(
+  return showDialog<String?>(
     context: context,
     builder: (context) => BaseSelectorDialog(
       currentBaseOverride: currentBaseOverride,
     ),
   );
-  if (result == _projectDefaultSentinel) return null;
-  return result;
 }
-
-/// The sentinel value used internally to distinguish "user chose project
-/// default (null)" from "user cancelled the dialog (also null)".
-///
-/// When the dialog returns this value, it means the user explicitly
-/// selected "Use project default". Callers using [showBaseSelectorDialog]
-/// receive null for this case; callers that want to distinguish
-/// cancellation should check the raw dialog result.
-const _projectDefaultSentinel = '__project_default__';
 
 /// Dialog for selecting a base ref override for a worktree.
 ///
@@ -81,7 +64,7 @@ class BaseSelectorDialog extends StatefulWidget {
 }
 
 /// The selection categories. "custom" means the user typed a freeform ref.
-enum _BaseOption { projectDefault, main, originMain, custom }
+enum _BaseOption { main, originMain, custom }
 
 class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
   late _BaseOption _selected;
@@ -91,10 +74,7 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
   void initState() {
     super.initState();
     final current = widget.currentBaseOverride;
-    if (current == null) {
-      _selected = _BaseOption.projectDefault;
-      _customController = TextEditingController();
-    } else if (current == 'main') {
+    if (current == null || current == 'main') {
       _selected = _BaseOption.main;
       _customController = TextEditingController();
     } else if (current == 'origin/main') {
@@ -115,8 +95,6 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
   /// Resolves the current selection to the value to return from the dialog.
   String? _resolveValue() {
     switch (_selected) {
-      case _BaseOption.projectDefault:
-        return null;
       case _BaseOption.main:
         return 'main';
       case _BaseOption.originMain:
@@ -136,8 +114,7 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
 
   void _handleApply() {
     final value = _resolveValue();
-    // Use sentinel to distinguish "project default" from cancel.
-    Navigator.of(context).pop(value ?? _projectDefaultSentinel);
+    Navigator.of(context).pop(value);
   }
 
   @override
@@ -163,12 +140,6 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
             ),
             const SizedBox(height: 16),
             _buildRadioTile(
-              key: BaseSelectorDialogKeys.projectDefaultOption,
-              title: 'Use project default',
-              subtitle: 'Inherits from project settings',
-              value: _BaseOption.projectDefault,
-            ),
-            _buildRadioTile(
               key: BaseSelectorDialogKeys.mainOption,
               title: 'main',
               value: _BaseOption.main,
@@ -180,45 +151,56 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
               value: _BaseOption.originMain,
               monospace: true,
             ),
-            _buildRadioTile(
-              key: BaseSelectorDialogKeys.customOption,
-              title: 'Custom...',
-              value: _BaseOption.custom,
-            ),
-            if (_selected == _BaseOption.custom) ...[
-              Padding(
-                padding: const EdgeInsets.only(left: 40, top: 4),
-                child: TextField(
-                  key: BaseSelectorDialogKeys.customField,
-                  controller: _customController,
-                  autofocus: true,
-                  style: textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'JetBrains Mono',
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: 'e.g., develop, origin/develop',
-                    hintStyle: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.5,
-                      ),
+            // Custom option with inline text field
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Radio<_BaseOption>(
+                  key: BaseSelectorDialogKeys.customOption,
+                  value: _BaseOption.custom,
+                  groupValue: _selected,
+                  onChanged: (value) {
+                    if (value != null) setState(() => _selected = value);
+                  },
+                ),
+                Expanded(
+                  child: TextField(
+                    key: BaseSelectorDialogKeys.customField,
+                    controller: _customController,
+                    style: textTheme.bodyMedium?.copyWith(
                       fontFamily: 'JetBrains Mono',
                       fontSize: 13,
                     ),
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Custom',
+                      hintStyle: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 13,
+                      ),
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
+                    onTap: () {
+                      // Select the custom option when tapping the text field
+                      if (_selected != _BaseOption.custom) {
+                        setState(() => _selected = _BaseOption.custom);
+                      }
+                    },
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) {
+                      if (_canApply) _handleApply();
+                    },
                   ),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) {
-                    if (_canApply) _handleApply();
-                  },
                 ),
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
