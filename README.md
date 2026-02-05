@@ -1,22 +1,26 @@
 # CC Insights - Insights into Claude Code
 
-Yet another Claude Code coordinator desktop GUI application.
+Yet another Claude & Codex coordinator desktop GUI application.
 
 ## What's different this time?
 <img align=right width="500" height="458" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
-- Designed specifically for **Vibe coding** - your almost exclusive focus is on Claude and what it is doing.
-- **FULL** context tracking, cost tracking, token reporting. You get to see way more!
-- See exactly what **subagents** are doing (each agent gets its own window, or you can have them integrated)
-- Works with your **existing Claude subscription** - uses the authorised SDK so won't be blocked by Anthropic.
-- This program does not require a subscription or an account beyond what Claude requires.
+- Designed specifically for **Vibe coding** - your almost exclusive focus is on the AI agents and what they are doing.
+- **With Claude**
+  - With Claude **FULL** context tracking, cost tracking, token reporting. You get to see way more!
+  - See exactly what **subagents** are doing (each agent gets its own window, or you can have them integrated)
+- Works with your **existing Claude/Codex subscriptions** - uses the authorised methods to communicate with no hacks or workarounds.
+- This program does not require a subscription or an account beyond what Claude/Codex requires.
 
+## Claude & Codex
+
+This application now supports both Claude and Codex backends, but Claude is the first class citizen, Codex is still new. 
 
 ## More features
 
-- **Multi-agent visualization** - See main agents and subagents in a tree structure
-- **Real-time output streaming** - Watch Claude's responses and tool usage as they happen
+- **Multi-agent visualization** - See main agents and subagents of claude in a tree structure
+- **Real-time output streaming** - Watch the agents' responses and tool usage as they happen
 - **Tool execution monitoring** - View tool inputs, outputs, and results
 - **Interactive Q&A** - Answer questions from Claude directly in the UI
 - **Session management** - Create, monitor, and terminate multiple sessions
@@ -96,7 +100,7 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 🧩 Drag-and-drop panel layout | ✅ | Flexible resizable panels |
 | 📦 Auto containerisation | ❌ | |
 | 🤖 Z.ai GLM subscription | ❌ | Coming soon |
-| 🧠 Codex backend | ❌ | Coming soon |
+| 🧠 Codex backend | ✅ | Basic support now there |
 | 🧠 Z.ai backend | ❌ | Coming soon |
 
 ## Proudly Self Hoisted
@@ -142,6 +146,7 @@ If you wish to contribute, this section is for you.
 - **Flutter 3.10+**
 - **Claude CLI** - Install with `npm install -g @anthropic-ai/claude-code` or via your package manager
 - **Claude account OR Anthropic API key** - As long as the `claude` CLI works for you, CC-Insights will work for you
+- **Codex CLI** (Optional)
 
 ### Architecture
 
