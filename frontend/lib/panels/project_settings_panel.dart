@@ -24,6 +24,11 @@ class ProjectSettingsPanelKeys {
   static const userActionPrefix = 'project_settings_user_action_';
   static Key userActionField(String name) => Key('$userActionPrefix$name');
   static const addActionButton = Key('project_settings_add_action_button');
+
+  // Git settings fields
+  static const defaultBaseSelector =
+      Key('project_settings_default_base_selector');
+  static const customBaseField = Key('project_settings_custom_base_field');
 }
 
 /// Category definition for project settings sidebar.
@@ -54,6 +59,12 @@ const _categories = [
     icon: Icons.play_circle_outline,
     description: 'Custom buttons shown in the Actions panel',
   ),
+  _SettingsCategory(
+    id: 'git',
+    label: 'Git',
+    icon: Icons.call_split,
+    description: 'Default branch comparison settings',
+  ),
 ];
 
 /// Panel for configuring project-specific settings.
@@ -63,14 +74,17 @@ const _categories = [
 /// - Lifecycle hooks (worktree-pre-create, worktree-post-create, etc.)
 /// - User-defined action buttons
 class ProjectSettingsPanel extends StatefulWidget {
-  const ProjectSettingsPanel({super.key});
+  const ProjectSettingsPanel({super.key, this.configService});
+
+  /// Optional config service for dependency injection (used in tests).
+  final ProjectConfigService? configService;
 
   @override
   State<ProjectSettingsPanel> createState() => _ProjectSettingsPanelState();
 }
 
 class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
-  final ProjectConfigService _configService = ProjectConfigService();
+  late final ProjectConfigService _configService;
   ProjectConfig _config = const ProjectConfig.empty();
   bool _isLoading = true;
   bool _isSaving = false;
@@ -86,9 +100,14 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   // User actions - stored as list of (name, command) pairs for editing
   List<_UserActionEntry> _userActions = [];
 
+  // Git settings
+  String _defaultBaseSelection = 'auto';
+  final _customBaseController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
+    _configService = widget.configService ?? ProjectConfigService();
     _loadConfig();
   }
 
@@ -98,6 +117,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     _postCreateController.dispose();
     _preRemoveController.dispose();
     _postRemoveController.dispose();
+    _customBaseController.dispose();
     for (final action in _userActions) {
       action.dispose();
     }
@@ -133,6 +153,19 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     _postCreateController.text = config.actions['worktree-post-create'] ?? '';
     _preRemoveController.text = config.actions['worktree-pre-remove'] ?? '';
     _postRemoveController.text = config.actions['worktree-post-remove'] ?? '';
+
+    // Populate default base
+    final base = config.defaultBase;
+    if (base == null || base == 'auto') {
+      _defaultBaseSelection = 'auto';
+      _customBaseController.text = '';
+    } else if (base == 'main' || base == 'origin/main') {
+      _defaultBaseSelection = base;
+      _customBaseController.text = '';
+    } else {
+      _defaultBaseSelection = 'custom';
+      _customBaseController.text = base;
+    }
 
     // Dispose old user action controllers
     for (final action in _userActions) {
@@ -194,9 +227,21 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
         }
       }
 
+      // Resolve default base value
+      String? defaultBase;
+      if (_defaultBaseSelection == 'main' ||
+          _defaultBaseSelection == 'origin/main') {
+        defaultBase = _defaultBaseSelection;
+      } else if (_defaultBaseSelection == 'custom') {
+        final custom = _customBaseController.text.trim();
+        defaultBase = custom.isNotEmpty ? custom : null;
+      }
+      // 'auto' or anything else => null (use auto-detect)
+
       final newConfig = ProjectConfig(
         actions: actions,
         userActions: userActions.isEmpty ? null : userActions,
+        defaultBase: defaultBase,
       );
 
       await _configService.saveConfig(projectRoot, newConfig);
@@ -288,6 +333,11 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
                 userActions: _userActions,
                 onAddUserAction: _addUserAction,
                 onRemoveUserAction: _removeUserAction,
+                defaultBaseSelection: _defaultBaseSelection,
+                onDefaultBaseChanged: (value) {
+                  setState(() => _defaultBaseSelection = value);
+                },
+                customBaseController: _customBaseController,
                 errorMessage: _errorMessage,
               ),
             ),
@@ -453,13 +503,16 @@ class _CategoryTile extends StatelessWidget {
                     : colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 10),
-              Text(
-                category.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
+              Flexible(
+                child: Text(
+                  category.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -484,6 +537,9 @@ class _SettingsContent extends StatelessWidget {
     required this.userActions,
     required this.onAddUserAction,
     required this.onRemoveUserAction,
+    required this.defaultBaseSelection,
+    required this.onDefaultBaseChanged,
+    required this.customBaseController,
     this.errorMessage,
   });
 
@@ -495,6 +551,9 @@ class _SettingsContent extends StatelessWidget {
   final List<_UserActionEntry> userActions;
   final VoidCallback onAddUserAction;
   final void Function(int) onRemoveUserAction;
+  final String defaultBaseSelection;
+  final ValueChanged<String> onDefaultBaseChanged;
+  final TextEditingController customBaseController;
   final String? errorMessage;
 
   @override
@@ -525,6 +584,8 @@ class _SettingsContent extends StatelessWidget {
           _buildHooksContent(context),
         ] else if (category.id == 'actions') ...[
           _buildActionsContent(context),
+        ] else if (category.id == 'git') ...[
+          _buildGitContent(context),
         ],
         // Error message
         if (errorMessage != null) ...[
@@ -632,6 +693,81 @@ class _SettingsContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGitContent(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 700),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Default base for new worktrees',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const InsightsDescriptionText(
+            'The base branch used for merge and diff operations. '
+            'New worktrees inherit this setting unless overridden.',
+          ),
+          const SizedBox(height: 12),
+          DropdownButton<String>(
+            key: ProjectSettingsPanelKeys.defaultBaseSelector,
+            value: defaultBaseSelection,
+            isExpanded: true,
+            onChanged: (value) {
+              if (value != null) {
+                onDefaultBaseChanged(value);
+              }
+            },
+            items: const [
+              DropdownMenuItem(
+                value: 'auto',
+                child: Text('Auto (detect upstream)'),
+              ),
+              DropdownMenuItem(
+                value: 'main',
+                child: Text('main'),
+              ),
+              DropdownMenuItem(
+                value: 'origin/main',
+                child: Text('origin/main'),
+              ),
+              DropdownMenuItem(
+                value: 'custom',
+                child: Text('Custom...'),
+              ),
+            ],
+          ),
+          if (defaultBaseSelection == 'custom') ...[
+            const SizedBox(height: 12),
+            InsightsTextField(
+              key: ProjectSettingsPanelKeys.customBaseField,
+              controller: customBaseController,
+              hintText: 'e.g., develop, origin/develop',
+              monospace: true,
+            ),
+          ],
+          const SizedBox(height: 16),
+          Text(
+            'Auto-detect checks for an upstream remote and uses '
+            '`origin/main` if it exists, otherwise falls back '
+            'to local `main`.',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
