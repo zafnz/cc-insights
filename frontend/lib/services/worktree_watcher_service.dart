@@ -56,6 +56,11 @@ class WorktreeWatcherService extends ChangeNotifier {
   /// are higher signal (commit, push, fetch).
   static const gitDirPollInterval = Duration(seconds: 5);
 
+  /// Interval for periodic `git fetch origin` to keep remote refs
+  /// up to date. All worktrees share the same `.git` directory, so
+  /// a single fetch at the project repo root is sufficient.
+  static const fetchInterval = Duration(minutes: 2);
+
   final GitService _gitService;
   final ProjectState _project;
   final ProjectConfigService _configService;
@@ -72,6 +77,12 @@ class WorktreeWatcherService extends ChangeNotifier {
   Timer? _gitDirPollTimer;
   DateTime? _gitDirLastPollTime;
   bool _gitDirPollPending = false;
+
+  /// Timer for periodic `git fetch origin`.
+  Timer? _fetchTimer;
+
+  /// Timestamp of the last completed fetch.
+  DateTime? _lastFetchTime;
 
   /// Creates a [WorktreeWatcherService] that automatically watches
   /// all worktrees in [project].
@@ -91,6 +102,7 @@ class WorktreeWatcherService extends ChangeNotifier {
     _project.addListener(_syncWatchers);
     _syncWatchers();
     _startGitDirWatcher();
+    _startPeriodicFetch();
   }
 
   /// Reconciles active watchers with the project's worktree list.
@@ -478,6 +490,45 @@ class WorktreeWatcherService extends ChangeNotifier {
   void onGitDirChanged() => _onGitDirChanged();
 
   // -----------------------------------------------------------------
+  // Periodic git fetch
+  // -----------------------------------------------------------------
+
+  /// Starts the periodic `git fetch origin` timer.
+  ///
+  /// Disabled when [_enablePeriodicPolling] is false (tests).
+  void _startPeriodicFetch() {
+    if (!_enablePeriodicPolling) return;
+    _fetchTimer = Timer.periodic(fetchInterval, (_) => _fetchOrigin());
+  }
+
+  /// Runs `git fetch` against the project repo root and refreshes
+  /// all worktrees afterwards.
+  ///
+  /// Network failures are non-fatal and silently ignored — status
+  /// polls will continue with stale remote refs until the next
+  /// successful fetch.
+  Future<void> _fetchOrigin() async {
+    if (_disposed) return;
+    _lastFetchTime = DateTime.now();
+    try {
+      await _gitService.fetch(_project.data.repoRoot);
+    } catch (_) {
+      // Network failures are non-fatal.
+    }
+    if (!_disposed) {
+      await forceRefreshAll();
+    }
+  }
+
+  /// Triggers a fetch for testing purposes.
+  @visibleForTesting
+  Future<void> fetchOrigin() => _fetchOrigin();
+
+  /// The timestamp of the last completed fetch, for testing.
+  @visibleForTesting
+  DateTime? get lastFetchTime => _lastFetchTime;
+
+  // -----------------------------------------------------------------
 
   /// Forces an immediate git status poll for [worktree].
   Future<void> forceRefresh(WorktreeState worktree) async {
@@ -503,6 +554,10 @@ class WorktreeWatcherService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _project.removeListener(_syncWatchers);
+
+    // Cancel periodic fetch timer.
+    _fetchTimer?.cancel();
+    _fetchTimer = null;
 
     // Cancel common git dir watcher.
     _gitDirWatcherSubscription?.cancel();

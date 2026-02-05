@@ -126,11 +126,12 @@ void main() {
         async.flushMicrotasks();
 
         // The linked worktree's timer should be cancelled.
-        // We should see exactly one poll (primary), not two.
+        // We should see only primary polls, not linked. The primary
+        // gets polled twice at 2min: once from its periodic timer and
+        // once from the fetch timer's forceRefreshAll.
         final pollsSinceRemove =
             gitService.getStatusCalls - callsAfterRemove;
-        // Primary polls once at 2min.
-        expect(pollsSinceRemove, 1);
+        expect(pollsSinceRemove, 2);
 
         service.dispose();
       });
@@ -352,6 +353,235 @@ void main() {
         );
 
         service.dispose();
+      });
+    });
+  });
+
+  group('periodic fetch', () {
+    test('periodic fetch is not started when enablePeriodicPolling '
+        'is false', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+        final initialFetchCalls = gitService.fetchCalls.length;
+
+        // Advance past the fetch interval.
+        async.elapse(const Duration(minutes: 5));
+        async.flushMicrotasks();
+
+        // No fetch should have been triggered.
+        check(gitService.fetchCalls.length).equals(initialFetchCalls);
+
+        service.dispose();
+      });
+    });
+
+    test('periodic fetch fires at 2-minute intervals', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+        );
+        async.flushMicrotasks();
+        final initialFetchCalls = gitService.fetchCalls.length;
+
+        // Before 2 minutes: no fetch yet.
+        async.elapse(const Duration(seconds: 119));
+        async.flushMicrotasks();
+        check(gitService.fetchCalls.length).equals(initialFetchCalls);
+
+        // At 2 minutes: fetch fires.
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+        check(gitService.fetchCalls.length)
+            .equals(initialFetchCalls + 1);
+
+        // At 4 minutes: second fetch fires.
+        async.elapse(const Duration(minutes: 2));
+        async.flushMicrotasks();
+        check(gitService.fetchCalls.length)
+            .equals(initialFetchCalls + 2);
+
+        service.dispose();
+      });
+    });
+
+    test('fetchOrigin calls gitService.fetch with repo root path',
+        () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+        final initialFetchCalls = gitService.fetchCalls.length;
+
+        service.fetchOrigin();
+        async.flushMicrotasks();
+
+        check(gitService.fetchCalls.length)
+            .equals(initialFetchCalls + 1);
+        check(gitService.fetchCalls.last).equals(repoRoot);
+
+        service.dispose();
+      });
+    });
+
+    test('fetchOrigin triggers forceRefreshAll after fetch', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+        final initialStatusCalls = gitService.getStatusCalls;
+
+        service.fetchOrigin();
+        async.flushMicrotasks();
+
+        // forceRefreshAll polls all worktrees (1 primary).
+        check(gitService.getStatusCalls)
+            .isGreaterThan(initialStatusCalls);
+
+        service.dispose();
+      });
+    });
+
+    test('fetchOrigin refreshes all worktrees including linked', () {
+      fakeAsync((async) {
+        const linkedPath = '/fake/linked';
+        gitService.statuses[linkedPath] = const GitStatus();
+        final linked = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+          ),
+        );
+        project.addWorktree(linked);
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+        final initialStatusCalls = gitService.getStatusCalls;
+
+        service.fetchOrigin();
+        async.flushMicrotasks();
+
+        // Should poll both worktrees (primary + linked).
+        check(gitService.getStatusCalls)
+            .equals(initialStatusCalls + 2);
+
+        service.dispose();
+      });
+    });
+
+    test('fetch failure does not crash the service', () {
+      fakeAsync((async) {
+        gitService.fetchError = const GitException(
+          'Network timeout',
+          command: 'git fetch',
+        );
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+        final initialStatusCalls = gitService.getStatusCalls;
+
+        // Should not throw.
+        service.fetchOrigin();
+        async.flushMicrotasks();
+
+        // Fetch was attempted.
+        check(gitService.fetchCalls).isNotEmpty();
+
+        // forceRefreshAll still runs after a failed fetch.
+        check(gitService.getStatusCalls)
+            .isGreaterThan(initialStatusCalls);
+
+        service.dispose();
+      });
+    });
+
+    test('fetch timer is cancelled on dispose', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+        );
+        async.flushMicrotasks();
+        final fetchCallsAtDispose = gitService.fetchCalls.length;
+
+        service.dispose();
+
+        // Advance past the fetch interval.
+        async.elapse(const Duration(minutes: 5));
+        async.flushMicrotasks();
+
+        // No fetch should fire after dispose.
+        check(gitService.fetchCalls.length)
+            .equals(fetchCallsAtDispose);
+      });
+    });
+
+    test('fetchOrigin sets lastFetchTime', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        check(service.lastFetchTime).isNull();
+
+        service.fetchOrigin();
+        async.flushMicrotasks();
+
+        check(service.lastFetchTime).isNotNull();
+
+        service.dispose();
+      });
+    });
+
+    test('fetchOrigin after dispose is a no-op', () {
+      fakeAsync((async) {
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+        final fetchCallsBeforeDispose = gitService.fetchCalls.length;
+
+        service.dispose();
+
+        service.fetchOrigin();
+        async.flushMicrotasks();
+
+        check(gitService.fetchCalls.length)
+            .equals(fetchCallsBeforeDispose);
       });
     });
   });
