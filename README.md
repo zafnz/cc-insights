@@ -1,4 +1,4 @@
-# CC Insights - Insights into Claude Code
+# CC Insights - Insights into Claude & Codex
 
 Yet another Claude & Codex coordinator desktop GUI application.
 
@@ -86,10 +86,10 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 🌳 Create git worktree | ✅ | |
 | ␡ Delete git worktree | ✅ | |
 | 📝 Commit all | ✅ | |
-| ⤵️ Rebase on main | ❌ | Not yet there |
-| 🔁 Merge main into branch | ❌ | Needs merge resolution |
-| 🧙 Merge resolution wizard | ❌ | |
-| ⚙️ Settings Screen | ❌ | |
+| ⤵️ Rebase on main | ✅ |  |
+| 🔁 Merge main into branch | ✅ |  |
+| 🧙 Merge resolution wizard | ✅ | |
+| ⚙️ Settings Screen | ✅ | |
 | 📁 File Manager | ✅ | Basic view only |
 | 🖥️ Session Resume | ✅ | Full automatic resume of chat session |
 | 👾 Claude Dart SDK | ✅ | Can talk direct to claude cli |
@@ -101,7 +101,6 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 📦 Auto containerisation | ❌ | |
 | 🤖 Z.ai GLM subscription | ❌ | Coming soon |
 | 🧠 Codex backend | ✅ | Basic support now there |
-| 🧠 Z.ai backend | ❌ | Coming soon |
 
 ## Proudly Self Hoisted
 
