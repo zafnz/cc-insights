@@ -803,10 +803,10 @@ class _BaseSection extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  InsightsOutlinedButton(
+                  _CompactButton(
                     key: InformationPanelKeys.changeBaseButton,
                     onPressed: onChangeBase,
-                    child: const Text('Change...'),
+                    label: 'Change...',
                   ),
                 ],
               );
@@ -837,10 +837,10 @@ class _BaseSection extends StatelessWidget {
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: InsightsOutlinedButton(
+                  child: _CompactButton(
                     key: InformationPanelKeys.changeBaseButton,
                     onPressed: onChangeBase,
-                    child: const Text('Change...'),
+                    label: 'Change...',
                   ),
                 ),
               ],
