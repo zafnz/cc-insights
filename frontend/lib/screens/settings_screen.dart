@@ -1,9 +1,14 @@
+import 'dart:async';
+
+import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/chat_model.dart';
 import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
+import '../services/backend_service.dart';
 import '../services/settings_service.dart';
 import '../state/theme_state.dart';
 import '../widgets/insights_widgets.dart';
@@ -230,6 +235,7 @@ class _SettingsContent extends StatelessWidget {
   void _handleSettingChanged(
     BuildContext context,
     SettingsService settings,
+    BackendService backendService,
     SettingDefinition definition,
     dynamic value,
   ) {
@@ -238,6 +244,23 @@ class _SettingsContent extends StatelessWidget {
       _showBypassWarning(context, settings, definition.key);
       return;
     }
+
+    if (definition.key == 'session.defaultBackend') {
+      final backendType = ChatModelCatalog.backendFromValue(value as String?);
+      unawaited(backendService.start(type: backendType));
+
+      unawaited(settings.setValue(definition.key, value));
+
+      final models = ChatModelCatalog.forBackend(backendType);
+      final currentModel = settings.getValue<String>('session.defaultModel');
+      final hasMatch = models.any((model) => model.id == currentModel);
+      if (!hasMatch && models.isNotEmpty) {
+        final fallback = ChatModelCatalog.defaultForBackend(backendType, null);
+        unawaited(settings.setValue('session.defaultModel', fallback.id));
+      }
+      return;
+    }
+
     settings.setValue(definition.key, value);
   }
 
@@ -292,6 +315,7 @@ class _SettingsContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final backendService = context.watch<BackendService>();
 
     // Custom renderer for tags category.
     if (category.id == 'tags') {
@@ -319,17 +343,11 @@ class _SettingsContent extends StatelessWidget {
         const SizedBox(height: 24),
         // Setting rows
         for (var i = 0; i < category.settings.length; i++) ...[
-          _SettingRow(
-            definition: category.settings[i],
-            value: settings.getValue(category.settings[i].key),
-            onChanged: (value) {
-              _handleSettingChanged(
-                context,
-                settings,
-                category.settings[i],
-                value,
-              );
-            },
+          _buildSettingRow(
+            context,
+            settings,
+            backendService,
+            category.settings[i],
           ),
           if (i < category.settings.length - 1)
             Divider(
@@ -339,6 +357,83 @@ class _SettingsContent extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  Widget _buildSettingRow(
+    BuildContext context,
+    SettingsService settings,
+    BackendService backendService,
+    SettingDefinition definition,
+  ) {
+    var effectiveDefinition = definition;
+    var value = settings.getValue(definition.key);
+    var isLoading = false;
+
+    if (definition.key == 'session.defaultModel') {
+      final backendValue = settings.getValue<String>('session.defaultBackend');
+      final backend = ChatModelCatalog.backendFromValue(backendValue);
+      isLoading = backend == BackendType.codex &&
+          backendService.isModelListLoadingFor(backend);
+      final options = ChatModelCatalog.forBackend(backend)
+          .map(
+            (model) => SettingOption(
+              value: model.id,
+              label: model.label,
+            ),
+          )
+          .toList();
+
+      final currentValue = value as String;
+      value = _ensureDropdownValue(currentValue, options);
+
+      final description = backendValue == 'codex'
+          ? 'The model to use for new Codex chat sessions. '
+              'Defaults to the server choice.'
+              '${isLoading ? ' Loading models...' : ''}'
+          : definition.description;
+
+      effectiveDefinition = SettingDefinition(
+        key: definition.key,
+        title: definition.title,
+        description: description,
+        type: definition.type,
+        defaultValue: definition.defaultValue,
+        options: options,
+        min: definition.min,
+        max: definition.max,
+        placeholder: definition.placeholder,
+      );
+    }
+
+    return _SettingRow(
+      definition: effectiveDefinition,
+      value: value,
+      isLoading: isLoading,
+      onChanged: (value) {
+        _handleSettingChanged(
+          context,
+          settings,
+          backendService,
+          definition,
+          value,
+        );
+      },
+    );
+  }
+
+  static String _ensureDropdownValue(
+    String value,
+    List<SettingOption> options,
+  ) {
+    for (final option in options) {
+      if (option.value == value) {
+        return value;
+      }
+    }
+    if (options.isEmpty) {
+      return value;
+    }
+    return options.first.value;
   }
 }
 
@@ -351,11 +446,13 @@ class _SettingRow extends StatelessWidget {
     required this.definition,
     required this.value,
     required this.onChanged,
+    this.isLoading = false,
   });
 
   final SettingDefinition definition;
   final dynamic value;
   final ValueChanged<dynamic> onChanged;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -421,7 +518,7 @@ class _SettingRow extends StatelessWidget {
   Widget _buildInput(BuildContext context) {
     return switch (definition.type) {
       SettingType.toggle => _buildToggle(context),
-      SettingType.dropdown => _buildDropdown(context),
+      SettingType.dropdown => _buildDropdown(context, isLoading),
       SettingType.number => InsightsNumberField(
           value: (value as num).toInt(),
           min: definition.min ?? 0,
@@ -451,11 +548,11 @@ class _SettingRow extends StatelessWidget {
     );
   }
 
-  Widget _buildDropdown(BuildContext context) {
+  Widget _buildDropdown(BuildContext context, bool isLoading) {
     final colorScheme = Theme.of(context).colorScheme;
     final options = definition.options ?? [];
 
-    return Container(
+    final dropdown = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
@@ -487,6 +584,24 @@ class _SettingRow extends StatelessWidget {
           },
         ),
       ),
+    );
+
+    if (!isLoading) return dropdown;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dropdown,
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: colorScheme.primary,
+          ),
+        ),
+      ],
     );
   }
 }

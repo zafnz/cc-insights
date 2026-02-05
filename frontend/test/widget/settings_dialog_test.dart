@@ -1,7 +1,9 @@
 import 'package:cc_insights_v2/models/setting_definition.dart';
 import 'package:cc_insights_v2/screens/settings_screen.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
+import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,17 +14,28 @@ import '../test_helpers.dart';
 void main() {
   group('SettingsScreen theme settings', () {
     late SettingsService settingsService;
+    late MockBackendService mockBackend;
 
     setUp(() {
       // Use a temp path so we never touch real config.
       settingsService = SettingsService(
         configPath: '/tmp/cc_test_settings.json',
       );
+      mockBackend = MockBackendService();
+    });
+
+    tearDown(() {
+      mockBackend.dispose();
     });
 
     Widget createTestApp() {
-      return ChangeNotifierProvider<SettingsService>.value(
-        value: settingsService,
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BackendService>.value(value: mockBackend),
+          ChangeNotifierProvider<SettingsService>.value(
+            value: settingsService,
+          ),
+        ],
         child: const MaterialApp(
           home: Scaffold(body: SettingsScreen()),
         ),

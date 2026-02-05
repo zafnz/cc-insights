@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:cc_insights_v2/screens/settings_screen.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
+import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,7 @@ import '../test_helpers.dart';
 void main() {
   late Directory tempDir;
   late SettingsService settingsService;
+  late MockBackendService mockBackend;
 
   setUp(() {
     RuntimeConfig.resetForTesting();
@@ -20,18 +23,23 @@ void main() {
     settingsService = SettingsService(
       configPath: '${tempDir.path}/config.json',
     );
+    mockBackend = MockBackendService();
   });
 
   tearDown(() {
     settingsService.dispose();
+    mockBackend.dispose();
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
     }
   });
 
   Widget createTestApp() {
-    return ChangeNotifierProvider<SettingsService>.value(
-      value: settingsService,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<BackendService>.value(value: mockBackend),
+        ChangeNotifierProvider<SettingsService>.value(value: settingsService),
+      ],
       child: const MaterialApp(
         home: Scaffold(body: SettingsScreen()),
       ),
