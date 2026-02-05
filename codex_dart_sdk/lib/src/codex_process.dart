@@ -141,7 +141,6 @@ class CodexProcess {
             direction: LogDirection.stderr,
             text: line,
           ));
-          SdkLogger.instance.logStderr(line);
         });
   }
 

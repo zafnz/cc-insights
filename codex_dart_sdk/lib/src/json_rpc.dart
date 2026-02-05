@@ -58,7 +58,6 @@ class JsonRpcClient {
   final void Function(String) _output;
   final StreamSubscription<String> _inputSub;
 
-  final _logger = SdkLogger.instance;
   File? _edgeLogFile;
   String? _edgeLogPath;
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
@@ -125,7 +124,6 @@ class JsonRpcClient {
 
   void _send(Map<String, dynamic> message) {
     if (_disposed) return;
-    _logger.logOutgoing(message);
     final json = jsonEncode(message)
         .replaceAll('\u2028', r'\u2028')
         .replaceAll('\u2029', r'\u2029');
@@ -147,12 +145,17 @@ class JsonRpcClient {
     try {
       json = jsonDecode(line) as Map<String, dynamic>;
     } catch (_) {
-      _logger.warning('Failed to parse JSON-RPC line', data: {'line': line});
       _logEdge('sdk-stdout', {'raw': line});
+      _protocolLogEntries.add(LogEntry(
+        level: LogLevel.warning,
+        message: 'Failed to parse JSON-RPC line',
+        timestamp: DateTime.now(),
+        direction: LogDirection.stdout,
+        text: line,
+      ));
       return;
     }
 
-    _logger.logIncoming(json);
     _logEdge('sdk-stdout', json);
     _protocolLogEntries.add(LogEntry(
       level: LogLevel.debug,

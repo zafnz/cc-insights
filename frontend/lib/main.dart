@@ -186,8 +186,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The git info for the directory being validated.
   DirectoryGitInfo? _pendingValidationInfo;
 
-  /// Subscription to forward SdkLogger entries to LogService.
-  StreamSubscription<sdk.LogEntry>? _sdkLogSubscription;
 
   @override
   void initState() {
@@ -220,8 +218,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Enable SDK debug logging to file
     _initializeSdkLogging();
 
-    // Forward SDK logs to the central LogService
-    _sdkLogSubscription = sdk.SdkLogger.instance.logs.listen(_forwardSdkLog);
+    // Note: SDK logs are now forwarded by BackendService via backend.logEntries
 
     // Create or use injected BackendService
     if (widget.backendService != null) {
@@ -365,50 +362,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     return path;
   }
 
-  /// Forwards an SDK log entry to the central LogService.
-  void _forwardSdkLog(sdk.LogEntry entry) {
-    // Map SDK log level to app log level
-    final level = switch (entry.level) {
-      sdk.LogLevel.debug => LogLevel.debug,
-      sdk.LogLevel.info => LogLevel.info,
-      sdk.LogLevel.warning => LogLevel.warn,
-      sdk.LogLevel.error => LogLevel.error,
-    };
-
-    // Determine the type based on direction
-    final type = switch (entry.direction) {
-      sdk.LogDirection.stdin => 'send',
-      sdk.LogDirection.stdout => 'recv',
-      sdk.LogDirection.stderr => 'stderr',
-      sdk.LogDirection.internal => 'internal',
-      null => 'message',
-    };
-
-    // Build the message payload
-    final message = <String, dynamic>{};
-    if (entry.data != null) {
-      message.addAll(entry.data!);
-    } else if (entry.text != null) {
-      message['text'] = entry.text;
-    } else {
-      message['text'] = entry.message;
-    }
-
-    // Add direction if present
-    if (entry.direction != null) {
-      message['direction'] = entry.direction!.name;
-    }
-
-    LogService.instance.log(
-      service: 'ClaudeSDK',
-      level: level,
-      type: type,
-      message: message,
-      // TODO: Add worktree when we can associate sessions with worktrees
-    );
-  }
-
-
   /// Initialize application logging with settings from RuntimeConfig.
   void _initializeLogging() {
     final config = RuntimeConfig.instance;
@@ -517,7 +470,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _sdkLogSubscription?.cancel();
     _themeState?.removeListener(_onThemeChanged);
     _settingsService?.removeListener(_syncThemeFromSettings);
     RuntimeConfig.instance.removeListener(_onRuntimeConfigChanged);
