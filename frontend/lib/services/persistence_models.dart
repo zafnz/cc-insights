@@ -81,6 +81,11 @@ class ChatMeta {
   /// Backend type identifier (e.g., "direct", "codex", "nodejs").
   final String backendType;
 
+  /// Whether this chat has started at least once.
+  ///
+  /// Used to lock the backend selector after the first session starts.
+  final bool hasStarted;
+
   /// The permission mode API name (e.g., "default", "acceptEdits").
   final String permissionMode;
 
@@ -105,6 +110,7 @@ class ChatMeta {
   const ChatMeta({
     required this.model,
     required this.backendType,
+    required this.hasStarted,
     required this.permissionMode,
     required this.createdAt,
     required this.lastActiveAt,
@@ -118,11 +124,13 @@ class ChatMeta {
     String model = 'opus',
     String permissionMode = 'default',
     String backendType = 'direct',
+    bool hasStarted = false,
   }) {
     final now = DateTime.now();
     return ChatMeta(
       model: model,
       backendType: backendType,
+      hasStarted: hasStarted,
       permissionMode: permissionMode,
       createdAt: now,
       lastActiveAt: now,
@@ -136,6 +144,7 @@ class ChatMeta {
   ChatMeta copyWith({
     String? model,
     String? backendType,
+    bool? hasStarted,
     String? permissionMode,
     DateTime? createdAt,
     DateTime? lastActiveAt,
@@ -146,6 +155,7 @@ class ChatMeta {
     return ChatMeta(
       model: model ?? this.model,
       backendType: backendType ?? this.backendType,
+      hasStarted: hasStarted ?? this.hasStarted,
       permissionMode: permissionMode ?? this.permissionMode,
       createdAt: createdAt ?? this.createdAt,
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
@@ -160,6 +170,7 @@ class ChatMeta {
     return {
       'model': model,
       'backendType': backendType,
+      'hasStarted': hasStarted,
       'permissionMode': permissionMode,
       'createdAt': createdAt.toIso8601String(),
       'lastActiveAt': lastActiveAt.toIso8601String(),
@@ -193,6 +204,7 @@ class ChatMeta {
     return ChatMeta(
       model: json['model'] as String? ?? 'opus',
       backendType: json['backendType'] as String? ?? 'direct',
+      hasStarted: json['hasStarted'] as bool? ?? false,
       permissionMode: json['permissionMode'] as String? ?? 'default',
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -233,6 +245,7 @@ class ChatMeta {
     return other is ChatMeta &&
         other.model == model &&
         other.backendType == backendType &&
+        other.hasStarted == hasStarted &&
         other.permissionMode == permissionMode &&
         other.createdAt == createdAt &&
         other.lastActiveAt == lastActiveAt &&
@@ -246,6 +259,7 @@ class ChatMeta {
     return Object.hash(
       model,
       backendType,
+      hasStarted,
       permissionMode,
       createdAt,
       lastActiveAt,
@@ -258,7 +272,7 @@ class ChatMeta {
   @override
   String toString() {
     return 'ChatMeta(model: $model, backendType: $backendType, '
-        'permissionMode: $permissionMode, '
+        'hasStarted: $hasStarted, permissionMode: $permissionMode, '
         'createdAt: $createdAt, lastActiveAt: $lastActiveAt)';
   }
 }

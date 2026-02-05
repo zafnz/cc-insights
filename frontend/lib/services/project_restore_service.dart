@@ -211,6 +211,7 @@ class ProjectRestoreService {
     // Load the chat meta to restore model, permission, context, and usage
     final meta = await _persistence.loadChatMeta(projectId, chatRef.chatId);
     _applyMetaToChat(chatState, meta);
+    chatState.setHasStartedFromRestore(meta.hasStarted);
     chatState.restoreFromMeta(
       meta.context,
       meta.usage,

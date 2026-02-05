@@ -716,6 +716,7 @@ class _ConversationHeader extends StatelessWidget {
           final width = constraints.maxWidth;
           final showContext = width >= 500;
           final showTokens = width >= 350;
+          final isBackendLocked = chat.hasStarted;
 
           return Row(
             children: [
@@ -731,6 +732,7 @@ class _ConversationHeader extends StatelessWidget {
                         value: _agentLabel(chat.model.backend),
                         items: _agentItems,
                         tooltip: 'Agent',
+                        isEnabled: !isBackendLocked,
                         onChanged: (value) {
                           unawaited(
                             _handleAgentChange(context, chat, value),
@@ -867,6 +869,14 @@ class _ConversationHeader extends StatelessWidget {
       _showBackendSwitchError(
         context,
         'End the active session before switching agents.',
+      );
+      return;
+    }
+
+    if (chat.hasStarted) {
+      _showBackendSwitchError(
+        context,
+        'Backend is locked once a chat has started.',
       );
       return;
     }
@@ -1066,6 +1076,7 @@ class _CompactDropdown extends StatefulWidget {
     required this.onChanged,
     this.isLoading = false,
     this.tooltip,
+    this.isEnabled = true,
   });
 
   final String value;
@@ -1073,6 +1084,7 @@ class _CompactDropdown extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final bool isLoading;
   final String? tooltip;
+  final bool isEnabled;
 
   @override
   State<_CompactDropdown> createState() => _CompactDropdownState();
@@ -1084,10 +1096,18 @@ class _CompactDropdownState extends State<_CompactDropdown> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isEnabled = widget.isEnabled;
+    final isHovered = isEnabled && _isHovered;
+    final textColor =
+        isEnabled ? colorScheme.onSurface : colorScheme.onSurfaceVariant;
+    final iconColor = isEnabled
+        ? colorScheme.onSurface.withOpacity(0.7)
+        : colorScheme.onSurfaceVariant.withOpacity(0.7);
 
     return PopupMenuButton<String>(
       initialValue: widget.value,
-      onSelected: widget.onChanged,
+      enabled: isEnabled,
+      onSelected: isEnabled ? widget.onChanged : null,
       tooltip: widget.tooltip ?? '',
       offset: const Offset(0, 28),
       shape: RoundedRectangleBorder(
@@ -1104,7 +1124,9 @@ class _CompactDropdownState extends State<_CompactDropdown> {
           value: item,
           height: 32,
           child: MouseRegion(
-            cursor: SystemMouseCursors.click,
+            cursor: isEnabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
             child: Text(
               item,
               style: TextStyle(
@@ -1117,15 +1139,20 @@ class _CompactDropdownState extends State<_CompactDropdown> {
         );
       }).toList(),
       child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
+        cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: isEnabled
+            ? (_) => setState(() => _isHovered = true)
+            : null,
+        onExit: isEnabled ? (_) => setState(() => _isHovered = false) : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: _isHovered
-                ? colorScheme.primary.withOpacity(0.1)
-                : colorScheme.surfaceContainerHigh,
+            color: isEnabled
+                ? (isHovered
+                    ? colorScheme.primary.withOpacity(0.1)
+                    : colorScheme.surfaceContainerHigh)
+                : colorScheme.surfaceContainerHigh.withOpacity(0.6),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
@@ -1135,7 +1162,7 @@ class _CompactDropdownState extends State<_CompactDropdown> {
                 widget.value,
                 style: TextStyle(
                   fontSize: 11,
-                  color: colorScheme.onSurface,
+                  color: textColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1156,7 +1183,7 @@ class _CompactDropdownState extends State<_CompactDropdown> {
               Icon(
                 Icons.arrow_drop_down,
                 size: 16,
-                color: colorScheme.onSurface.withOpacity(0.7),
+                color: iconColor,
               ),
             ],
           ),
