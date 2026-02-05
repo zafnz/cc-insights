@@ -223,49 +223,111 @@ Those logs go to `~/claude_mitm.log` and are parsable with `jq`.
 ## Project Structure
 
 ```
-claude-project/
-├── claude_dart_sdk/               # Dart SDK for Flutter
+cc-insights/
+├── claude_dart_sdk/                  # Dart SDK for Claude CLI
 │   ├── lib/
-│   │   ├── claude_sdk.dart     # Main export
-│   │   ├── src/
-│   │   │   ├── cli_process.dart    # CLI subprocess management
-│   │   │   ├── cli_session.dart    # Direct CLI session
-│   │   │   ├── cli_backend.dart    # Direct CLI backend
-│   │   │   ├── backend_factory.dart # Backend type selection
-│   │   │   ├── backend_interface.dart # Abstract backend interface
-│   │   │   ├── protocol.dart       # Protocol implementation
-│   │   │   └── types/              # Type definitions
-│   │   │       ├── sdk_messages.dart
-│   │   │       ├── control_messages.dart
-│   │   │       ├── callbacks.dart
-│   │   │       ├── content_blocks.dart
-│   │   │       ├── session_options.dart
-│   │   │       └── usage.dart
+│   │   ├── claude_sdk.dart           # Main export
+│   │   └── src/
+│   │       ├── cli_process.dart      # CLI subprocess management
+│   │       ├── cli_session.dart      # CLI session implementation
+│   │       ├── cli_backend.dart      # CLI backend implementation
+│   │       ├── backend_factory.dart  # Backend type selection
+│   │       ├── backend_interface.dart # Abstract backend interface
+│   │       ├── protocol.dart         # Protocol (stdin/stdout JSON)
+│   │       ├── sdk_logger.dart       # SDK logging
+│   │       └── types/                # Type definitions
+│   │           ├── sdk_messages.dart
+│   │           ├── control_messages.dart
+│   │           ├── callbacks.dart
+│   │           ├── content_blocks.dart
+│   │           ├── session_options.dart
+│   │           └── usage.dart
+│   ├── docs/                         # SDK documentation
 │   └── pubspec.yaml
 │
-├── frontend/               # Flutter desktop UI
+├── frontend/                         # Flutter desktop app
 │   ├── lib/
 │   │   ├── main.dart
-│   │   ├── models/
-│   │   │   └── session.dart
-│   │   ├── providers/
-│   │   │   └── session_provider.dart
-│   │   ├── services/
-│   │   │   └── backend_service.dart  # Uses BackendFactory
-│   │   ├── screens/
-│   │   │   └── home_screen.dart
-│   │   └── widgets/
-│   │       ├── session_list.dart
-│   │       ├── agent_tree.dart
-│   │       ├── output_panel.dart
-│   │       ├── input_panel.dart
-│   │       ├── log_viewer.dart
-│   │       └── message_input.dart
+│   │   ├── config/
+│   │   │   └── fonts.dart            # Font configuration
+│   │   ├── models/                   # Data models
+│   │   │   ├── project.dart          # Project model
+│   │   │   ├── worktree.dart         # Worktree model
+│   │   │   ├── chat.dart             # Chat model
+│   │   │   ├── conversation.dart     # Conversation model
+│   │   │   ├── agent.dart            # Agent model
+│   │   │   ├── output_entry.dart     # Output entry types
+│   │   │   ├── cost_tracking.dart    # Cost tracking
+│   │   │   └── context_tracker.dart  # Context usage tracking
+│   │   ├── state/                    # State management
+│   │   │   ├── selection_state.dart  # Selection state
+│   │   │   ├── file_manager_state.dart
+│   │   │   └── theme_state.dart
+│   │   ├── services/                 # Business logic
+│   │   │   ├── backend_service.dart  # SDK integration
+│   │   │   ├── git_service.dart      # Git operations
+│   │   │   ├── worktree_service.dart # Worktree management
+│   │   │   ├── persistence_service.dart # Data persistence
+│   │   │   ├── settings_service.dart
+│   │   │   └── sdk_message_handler.dart
+│   │   ├── screens/                  # Full-screen views
+│   │   │   ├── main_screen.dart      # Main application screen
+│   │   │   ├── welcome_screen.dart   # Welcome/project selection
+│   │   │   ├── settings_screen.dart
+│   │   │   └── file_manager_screen.dart
+│   │   ├── panels/                   # UI panels
+│   │   │   ├── worktree_panel.dart
+│   │   │   ├── chats_panel.dart
+│   │   │   ├── agents_panel.dart
+│   │   │   ├── conversation_panel.dart
+│   │   │   ├── content_panel.dart
+│   │   │   ├── actions_panel.dart
+│   │   │   ├── file_tree_panel.dart
+│   │   │   ├── file_viewer_panel.dart
+│   │   │   └── combined_panels.dart  # Merged panel variants
+│   │   ├── widgets/                  # Reusable widgets
+│   │   │   ├── message_input.dart    # Chat input
+│   │   │   ├── tool_card.dart        # Tool use display
+│   │   │   ├── diff_view.dart        # Diff visualization
+│   │   │   ├── permission_dialog.dart
+│   │   │   ├── cost_indicator.dart
+│   │   │   ├── context_indicator.dart
+│   │   │   ├── markdown_renderer.dart
+│   │   │   ├── output_entries/       # Output entry widgets
+│   │   │   └── file_viewers/         # File viewer widgets
+│   │   └── testing/                  # Test utilities
+│   │       ├── mock_backend.dart
+│   │       ├── mock_data.dart
+│   │       └── message_log_player.dart
+│   ├── test/                         # Tests
+│   │   ├── test_helpers.dart         # Shared test helpers
+│   │   ├── widget/                   # Widget tests
+│   │   ├── models/                   # Model tests
+│   │   ├── services/                 # Service tests
+│   │   └── integration/              # Integration tests
 │   └── pubspec.yaml
 │
-└── docs/
-    ├── dart-sdk/           # Dart SDK implementation docs
-    └── sdk/                # Claude CLI reference
+├── examples/                         # Example JSONL message logs
+│   ├── can-use-tool.jsonl
+│   ├── simple-subagent.jsonl
+│   └── ...
+│
+├── tools/                            # Development utilities
+│   ├── claude-mitm.py                # MITM proxy for debugging
+│   └── anonymize_uuids.py
+│
+├── docs/
+│   ├── anthropic-agent-cli-sdk/      # Claude SDK reference
+│   ├── dart-sdk/                     # Dart SDK implementation docs
+│   ├── architecture/                 # Architecture documentation
+│   ├── features/                     # Feature documentation
+│   └── insights-protocol/            # Unified protocol docs
+│
+├── CLAUDE.md                         # Claude agent instructions
+├── AGENTS.md                         # Agent definitions
+├── TESTING.md                        # Testing guidelines
+├── FLUTTER.md                        # Flutter standards
+└── README.md
 ```
 
 ## Protocol

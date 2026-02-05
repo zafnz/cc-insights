@@ -66,66 +66,106 @@ Project: CC-Insights
 ## Directory Structure
 
 ```
-claude-project/
-├── claude_dart_sdk/
-│   └── lib/
-│       ├── claude_sdk.dart     # Main export
-│       └── src/
-│           ├── cli_process.dart    # Claude CLI subprocess management
-│           ├── cli_session.dart    # Direct CLI session implementation
-│           ├── cli_backend.dart    # Direct CLI backend implementation
-│           ├── backend_factory.dart # Backend factory for type selection
-│           ├── backend_interface.dart # Abstract backend interface
-│           ├── backend.dart        # Node.js backend (implements AgentBackend)
-│           ├── session.dart        # Node.js session (used by BackendFactory)
-│           ├── protocol.dart       # Protocol implementation (stdin/stdout)
-│           └── types/              # Type definitions
-│               ├── sdk_messages.dart
-│               ├── control_messages.dart  # CLI control protocol types
-│               └── ...
-├── frontend/
-│   └── lib/
-│       ├── main.dart
+cc-insights/
+├── claude_dart_sdk/                  # Dart SDK for Claude CLI
+│   ├── lib/
+│   │   ├── claude_sdk.dart           # Main export
+│   │   └── src/
+│   │       ├── cli_process.dart      # CLI subprocess management
+│   │       ├── cli_session.dart      # CLI session implementation
+│   │       ├── cli_backend.dart      # CLI backend implementation
+│   │       ├── backend_factory.dart  # Backend type selection
+│   │       ├── backend_interface.dart # Abstract backend interface
+│   │       ├── protocol.dart         # Protocol (stdin/stdout JSON)
+│   │       ├── sdk_logger.dart       # SDK logging
+│   │       └── types/                # Type definitions
+│   │           ├── sdk_messages.dart
+│   │           ├── control_messages.dart
+│   │           ├── callbacks.dart
+│   │           ├── content_blocks.dart
+│   │           ├── session_options.dart
+│   │           └── usage.dart
+│   └── docs/                         # SDK-specific documentation
+│
+├── frontend/                         # Flutter desktop app
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── config/
+│   │   │   └── fonts.dart            # Font configuration
+│   │   ├── models/                   # Data models
+│   │   │   ├── project.dart
+│   │   │   ├── worktree.dart
+│   │   │   ├── chat.dart
+│   │   │   ├── conversation.dart
+│   │   │   ├── agent.dart
+│   │   │   ├── output_entry.dart
+│   │   │   ├── cost_tracking.dart
+│   │   │   └── context_tracker.dart
+│   │   ├── state/                    # State management
+│   │   │   ├── selection_state.dart
+│   │   │   ├── file_manager_state.dart
+│   │   │   └── theme_state.dart
+│   │   ├── services/                 # Business logic
+│   │   │   ├── backend_service.dart  # SDK integration
+│   │   │   ├── git_service.dart
+│   │   │   ├── worktree_service.dart
+│   │   │   ├── persistence_service.dart
+│   │   │   ├── settings_service.dart
+│   │   │   └── sdk_message_handler.dart
+│   │   ├── screens/                  # Full-screen views
+│   │   │   ├── main_screen.dart
+│   │   │   ├── welcome_screen.dart
+│   │   │   ├── settings_screen.dart
+│   │   │   └── file_manager_screen.dart
+│   │   ├── panels/                   # UI panels
+│   │   │   ├── worktree_panel.dart
+│   │   │   ├── chats_panel.dart
+│   │   │   ├── agents_panel.dart
+│   │   │   ├── conversation_panel.dart
+│   │   │   ├── content_panel.dart
+│   │   │   ├── actions_panel.dart
+│   │   │   ├── file_tree_panel.dart
+│   │   │   ├── file_viewer_panel.dart
+│   │   │   └── combined_panels.dart
+│   │   ├── widgets/                  # Reusable widgets
+│   │   │   ├── message_input.dart
+│   │   │   ├── tool_card.dart
+│   │   │   ├── diff_view.dart
+│   │   │   ├── permission_dialog.dart
+│   │   │   ├── cost_indicator.dart
+│   │   │   ├── context_indicator.dart
+│   │   │   ├── markdown_renderer.dart
+│   │   │   ├── output_entries/       # Output entry widgets
+│   │   │   └── file_viewers/         # File viewer widgets
+│   │   └── testing/                  # Test utilities (mocks, helpers)
+│   └── test/                         # Tests
+│       ├── test_helpers.dart         # Shared test helpers
+│       ├── widget/
 │       ├── models/
-│       │   ├── project.dart
-│       │   ├── worktree.dart
-│       │   ├── chat.dart
-│       │   ├── conversation.dart
-│       │   ├── agent.dart
-│       │   └── output_entry.dart
-│       ├── state/
-│       │   └── selection_state.dart
 │       ├── services/
-│       │   ├── backend_service.dart  # Uses BackendFactory
-│       │   ├── git_service.dart
-│       │   └── persistence_service.dart
-│       ├── panels/
-│       │   ├── panel_manager.dart
-│       │   ├── worktree_panel.dart
-│       │   ├── chat_panel.dart
-│       │   ├── conversation_panel.dart
-│       │   ├── conversation_viewer_panel.dart
-│       │   ├── files_panel.dart
-│       │   ├── file_viewer_panel.dart
-│       │   └── git_status_panel.dart
-│       └── widgets/
-│           ├── display/        # Preserved from V1
-│           │   ├── tool_card.dart
-│           │   ├── output_panel.dart
-│           │   └── diff_view.dart
-│           └── input/
-│               └── message_input.dart
-└── docs/
-    ├── architecture/          # V2 architecture & implementation plan
-    ├── dart-sdk/              # Dart SDK implementation docs
-    └── sdk/                   # Claude Agent SDK reference
+│       └── integration/
+│
+├── examples/                         # Example JSONL message logs
+├── tools/                            # Development utilities
+│
+├── docs/
+│   ├── anthropic-agent-cli-sdk/      # Claude SDK reference
+│   ├── dart-sdk/                     # Dart SDK implementation docs
+│   ├── architecture/                 # Architecture documentation
+│   ├── features/                     # Feature documentation
+│   └── insights-protocol/            # Unified protocol docs
+│
+├── CLAUDE.md                         # Claude agent instructions
+├── AGENTS.md                         # Agent definitions
+├── TESTING.md                        # Testing guidelines
+└── FLUTTER.md                        # Flutter/Dart standards
 ```
 
 ---
 
 ## SDK Documentation Reference
 
-Quick reference to SDK documentation in `docs/sdk/`:
+Quick reference to SDK documentation in `docs/anthropic-agent-cli-sdk/`:
 
 - **typescript.md** - Complete TypeScript SDK API reference
 - **streaming.md** - Server-sent events streaming, extended thinking, web search
