@@ -5,5 +5,6 @@
   "user-actions": {
     "Test": "cd frontend && flutter test",
     "Run": "./run.sh"
-  }
+  },
+  "default-base": "main"
 }
