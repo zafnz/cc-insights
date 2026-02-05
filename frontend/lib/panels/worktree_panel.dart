@@ -622,6 +622,23 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       if (!data.isPrimary) ...[
         const PopupMenuDivider(height: 8),
         styledMenuItem(
+          value: 'hide',
+          child: Row(
+            children: [
+              Icon(
+                Icons.visibility_off_outlined,
+                size: 16,
+                color: colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Hide Worktree',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ],
+          ),
+        ),
+        styledMenuItem(
           value: 'delete',
           child: Row(
             children: [
@@ -651,6 +668,8 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       case 'tags':
         // Open the tags submenu to the right of the click position.
         _showTagsSubmenu(context, position, availableTags);
+      case 'hide':
+        await _handleHide(context);
       case 'delete':
         await _handleDelete(context);
       default:
@@ -734,6 +753,22 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           context.read<SettingsService>().availableTags;
       _showTagsSubmenu(context, position, updatedTags);
     }
+  }
+
+  Future<void> _handleHide(BuildContext context) async {
+    final project = context.read<ProjectState>();
+    final persistenceService = context.read<PersistenceService>();
+
+    // Hide from projects.json (files stay on disk)
+    await persistenceService.hideWorktreeFromIndex(
+      projectRoot: project.data.repoRoot,
+      worktreePath: worktree.data.worktreeRoot,
+    );
+
+    if (!context.mounted) return;
+
+    // Remove the worktree from the project state
+    project.removeLinkedWorktree(worktree);
   }
 
   Future<void> _handleDelete(BuildContext context) async {

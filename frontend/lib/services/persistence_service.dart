@@ -680,6 +680,68 @@ class PersistenceService {
     }
   }
 
+  /// Hides a worktree by removing it from the projects.json index.
+  ///
+  /// This removes the worktree entry from projects.json but leaves all files
+  /// on disk intact (both the worktree directory and any associated chat files).
+  /// The worktree can be re-added later by discovering it via git worktree list.
+  ///
+  /// This is a fire-and-forget operation - errors are logged but not thrown.
+  Future<void> hideWorktreeFromIndex({
+    required String projectRoot,
+    required String worktreePath,
+  }) async {
+    try {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
+
+      if (project == null) {
+        developer.log(
+          'Project not found for worktree hide: $projectRoot',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for hide: $worktreePath',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      // Remove the worktree from the map
+      final updatedWorktrees = Map<String, WorktreeInfo>.from(project.worktrees)
+        ..remove(worktreePath);
+
+      // Rebuild the index without this worktree
+      final updatedProject = project.copyWith(worktrees: updatedWorktrees);
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {
+          ...projectsIndex.projects,
+          projectRoot: updatedProject,
+        },
+      );
+
+      await saveProjectsIndex(updatedIndex);
+
+      developer.log(
+        'Hidden worktree $worktreePath from projects.json (files preserved)',
+        name: 'PersistenceService',
+      );
+    } catch (e) {
+      developer.log(
+        'Failed to hide worktree $worktreePath: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+    }
+  }
+
   /// Removes a worktree from the projects.json index.
   ///
   /// This removes the worktree and all its associated chats from projects.json.
