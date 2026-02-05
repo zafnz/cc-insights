@@ -146,6 +146,22 @@ class ProjectConfigService {
     await saveConfig(projectRoot, updatedConfig);
   }
 
+  /// Updates the default base branch in the config.
+  ///
+  /// Pass null to clear the default base (revert to auto-detect).
+  /// Loads the existing config, updates the field, and saves.
+  Future<void> updateDefaultBase(
+    String projectRoot,
+    String? value,
+  ) async {
+    final config = await loadConfig(projectRoot);
+    final updatedConfig = config.copyWith(
+      defaultBase: value,
+      clearDefaultBase: value == null,
+    );
+    await saveConfig(projectRoot, updatedConfig);
+  }
+
   /// Checks if a config file exists for the given project.
   Future<bool> configExists(String projectRoot) async {
     return File(configPath(projectRoot)).exists();
