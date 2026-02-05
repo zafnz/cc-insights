@@ -616,9 +616,21 @@ class _WorktreeInfo extends StatelessWidget {
             ),
           ],
 
+          // D. Primary worktree upstream sync (Push/Pull only)
+          if (data.isPrimary && data.upstreamBranch != null) ...[
+            const SizedBox(height: 16),
+            _PrimaryUpstreamSection(
+              data: data,
+              canPush: _canPush,
+              canPullRebase: _canPullRebase,
+              onPush: () => _handlePush(context),
+              onPullRebase: () => _handlePullRebase(context),
+            ),
+          ],
+
           const SizedBox(height: 16),
 
-          // D/E. Actions or Conflict section
+          // E/F. Actions or Conflict section
           if (data.hasMergeConflict ||
               data.conflictOperation != null) ...[
             _ConflictInProgress(
@@ -935,6 +947,89 @@ class _UpstreamSection extends StatelessWidget {
             targetRef: data.upstreamBranch!,
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// Upstream section for primary worktree - shows upstream info and Push/Pull.
+class _PrimaryUpstreamSection extends StatelessWidget {
+  const _PrimaryUpstreamSection({
+    required this.data,
+    required this.canPush,
+    required this.canPullRebase,
+    required this.onPush,
+    required this.onPullRebase,
+  });
+
+  final WorktreeData data;
+  final bool canPush;
+  final bool canPullRebase;
+  final VoidCallback onPush;
+  final VoidCallback onPullRebase;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionLabel(label: 'Upstream'),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(
+              Icons.cloud,
+              size: 14,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                data.upstreamBranch!,
+                style: textTheme.bodySmall?.copyWith(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        _AheadBehindIndicator(
+          ahead: data.commitsAhead,
+          behind: data.commitsBehind,
+          targetRef: data.upstreamBranch!,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _CompactButton(
+                key: InformationPanelKeys.pushButton,
+                onPressed: canPush ? onPush : null,
+                label: 'Push',
+                icon: Icons.cloud_upload,
+                tooltip: canPush ? null : 'Nothing to push',
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _CompactButton(
+                key: InformationPanelKeys.pullRebaseButton,
+                onPressed: canPullRebase ? onPullRebase : null,
+                label: 'Pull / Rebase',
+                icon: Icons.cloud_download,
+                tooltip: canPullRebase
+                    ? null
+                    : 'Already up-to-date with upstream',
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
