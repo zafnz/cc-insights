@@ -940,13 +940,11 @@ class InlineStatusIndicators extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (hasExtra) _ExtraIndicators(data: data),
+          if (hasExtra) const SizedBox(width: 4),
           if (hasBase) _BaseBadge(data: data),
           if (hasBase) const SizedBox(width: 4),
           _SyncBadge(data: data),
-          if (hasExtra) ...[
-            const SizedBox(width: 4),
-            _ExtraIndicators(data: data),
-          ],
         ],
       ),
     );
