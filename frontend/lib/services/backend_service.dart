@@ -4,6 +4,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_model.dart';
+import 'log_service.dart' as app_log;
 
 /// Service for managing the Claude backend lifecycle.
 ///
@@ -34,6 +35,7 @@ class BackendService extends ChangeNotifier {
   final Map<BackendType, AgentBackend> _backends = {};
   final Map<BackendType, StreamSubscription<BackendError>>
       _errorSubscriptions = {};
+  final Map<BackendType, StreamSubscription<String>> _logSubscriptions = {};
   final Map<BackendType, String?> _errors = {};
   final Set<BackendType> _starting = {};
 
@@ -117,6 +119,16 @@ class BackendService extends ChangeNotifier {
       _errorSubscriptions[type] = backend.errors.listen((error) {
         _errors[type] = error.toString();
         notifyListeners();
+      });
+
+      // Forward backend logs to LogService
+      _logSubscriptions[type] = backend.logs.listen((line) {
+        app_log.LogService.instance.log(
+          service: type == BackendType.codex ? 'Codex' : 'ClaudeCLI',
+          level: app_log.LogLevel.debug,
+          type: 'stderr',
+          message: {'text': line, 'backend': type.name},
+        );
       });
 
       unawaited(_refreshModelsIfSupported(type, backend));
@@ -241,6 +253,10 @@ class BackendService extends ChangeNotifier {
       sub.cancel();
     }
     _errorSubscriptions.clear();
+    for (final sub in _logSubscriptions.values) {
+      sub.cancel();
+    }
+    _logSubscriptions.clear();
     for (final backend in _backends.values) {
       backend.dispose();
     }
