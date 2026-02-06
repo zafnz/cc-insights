@@ -1164,11 +1164,46 @@ class ChatState extends ChangeNotifier {
     // Track user response time
     _recordPermissionResponseTime(request.toolUseId);
 
+    // Sync local permission mode when the response includes a setMode directive
+    // or when ExitPlanMode is approved (implicitly exits plan mode to default).
+    _syncPermissionModeFromResponse(request.toolName, updatedPermissions);
+
     request.allow(
       updatedInput: updatedInput,
       updatedPermissions: updatedPermissions,
     );
     notifyListeners();
+  }
+
+  /// Syncs the local [_permissionMode] based on a permission response.
+  ///
+  /// Checks [updatedPermissions] for a `setMode` directive and updates
+  /// accordingly. If the approved tool is `ExitPlanMode` with no explicit
+  /// mode change, reverts to [PermissionMode.defaultMode] since plan mode
+  /// has ended.
+  void _syncPermissionModeFromResponse(
+    String? toolName,
+    List<dynamic>? updatedPermissions,
+  ) {
+    // Check for explicit setMode in updatedPermissions
+    if (updatedPermissions != null) {
+      for (final perm in updatedPermissions) {
+        if (perm is Map<String, dynamic> && perm['type'] == 'setMode') {
+          final mode = perm['mode'] as String?;
+          if (mode != null) {
+            _permissionMode = PermissionMode.fromApiName(mode);
+            _scheduleMetaSave();
+            return;
+          }
+        }
+      }
+    }
+
+    // ExitPlanMode approved without explicit setMode → revert to default
+    if (toolName == 'ExitPlanMode') {
+      _permissionMode = PermissionMode.defaultMode;
+      _scheduleMetaSave();
+    }
   }
 
   /// Responds to the current pending permission request with deny.
