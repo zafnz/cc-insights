@@ -46,11 +46,11 @@ class KeyboardFocusManager extends StatefulWidget {
   /// Typically used to interrupt the active chat session.
   final VoidCallback? onEscapePressed;
 
-  /// Called when Cmd+N (macOS) or Ctrl+N is pressed.
+  /// Called when Cmd+Shift+N (macOS) or Ctrl+Shift+N is pressed.
   /// Typically used to create a new chat session.
   final VoidCallback? onNewChatShortcut;
 
-  /// Called when Cmd+W (macOS) or Ctrl+W is pressed.
+  /// Called when Cmd+N (macOS) or Ctrl+N is pressed.
   /// Typically used to show the create worktree panel.
   final VoidCallback? onNewWorktreeShortcut;
 
@@ -388,16 +388,20 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
       return widget.onEscapePressed != null;
     }
 
-    // Cmd+N / Ctrl+N - new chat
-    if (key == LogicalKeyboardKey.keyN && isCmdOrCtrl) {
-      widget.onNewChatShortcut?.call();
-      return widget.onNewChatShortcut != null;
-    }
-
-    // Cmd+W / Ctrl+W - new worktree
-    if (key == LogicalKeyboardKey.keyW && isCmdOrCtrl) {
+    // Cmd+N / Ctrl+N - new worktree
+    if (key == LogicalKeyboardKey.keyN &&
+        isCmdOrCtrl &&
+        !HardwareKeyboard.instance.isShiftPressed) {
       widget.onNewWorktreeShortcut?.call();
       return widget.onNewWorktreeShortcut != null;
+    }
+
+    // Cmd+Shift+N / Ctrl+Shift+N - new chat
+    if (key == LogicalKeyboardKey.keyN &&
+        isCmdOrCtrl &&
+        HardwareKeyboard.instance.isShiftPressed) {
+      widget.onNewChatShortcut?.call();
+      return widget.onNewChatShortcut != null;
     }
 
     return false;

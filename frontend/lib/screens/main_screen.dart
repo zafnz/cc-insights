@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
+import '../services/menu_action_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/keyboard_focus_manager.dart';
@@ -60,9 +61,10 @@ class _MainScreenState extends State<MainScreen> {
     // Listen for native menu actions
     _windowChannel.setMethodCallHandler(_handleNativeMethodCall);
 
-    // Listen for backend errors after the first frame
+    // Listen for backend errors and menu actions after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupBackendErrorListener();
+      _setupMenuActionListener();
     });
   }
 
@@ -116,6 +118,79 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
       );
+    }
+  }
+
+  void _setupMenuActionListener() {
+    final menuService = context.read<MenuActionService>();
+    menuService.addListener(_onMenuAction);
+  }
+
+  void _onMenuAction() {
+    if (!mounted) return;
+    final menuService = context.read<MenuActionService>();
+    final action = menuService.lastAction;
+    if (action == null) return;
+
+    // Clear the action immediately to prevent re-processing
+    menuService.clearAction();
+
+    switch (action) {
+      // View actions
+      case MenuAction.showWorkspace:
+        _handleNavigationChange(0);
+        break;
+      case MenuAction.showFileManager:
+        _handleNavigationChange(1);
+        break;
+      case MenuAction.showSettings:
+        _handleNavigationChange(2);
+        break;
+      case MenuAction.showProjectSettings:
+        _handleNavigationChange(0);
+        context.read<SelectionState>().showProjectSettingsPanel();
+        break;
+
+      // Worktree actions
+      case MenuAction.newWorktree:
+        _handleNavigationChange(0);
+        context.read<SelectionState>().showCreateWorktreePanel();
+        break;
+      case MenuAction.newChat:
+        _handleNavigationChange(0);
+        _handleNewChatShortcut();
+        break;
+
+      // Actions submenu - not wired up yet, just log for now
+      case MenuAction.actionTest:
+        debugPrint('Menu: Actions > Test (not implemented)');
+        break;
+      case MenuAction.actionRun:
+        debugPrint('Menu: Actions > Run (not implemented)');
+        break;
+
+      // Git submenu - not wired up yet, just log for now
+      case MenuAction.gitStageCommit:
+        debugPrint('Menu: Git > Stage & Commit (not implemented)');
+        break;
+      case MenuAction.gitRebase:
+        debugPrint('Menu: Git > Rebase (not implemented)');
+        break;
+      case MenuAction.gitMerge:
+        debugPrint('Menu: Git > Merge (not implemented)');
+        break;
+      case MenuAction.gitMergeIntoMain:
+        debugPrint('Menu: Git > Merge into Main (not implemented)');
+        break;
+      case MenuAction.gitPush:
+        debugPrint('Menu: Git > Push (not implemented)');
+        break;
+      case MenuAction.gitPull:
+        debugPrint('Menu: Git > Pull (not implemented)');
+        break;
+      case MenuAction.gitCreatePR:
+        debugPrint('Menu: Git > Create PR (not implemented)');
+        break;
     }
   }
 
@@ -191,9 +266,10 @@ class _MainScreenState extends State<MainScreen> {
     _resumeKeyboardInterception?.call();
     // Remove native menu handler
     _windowChannel.setMethodCallHandler(null);
-    // Remove listener before dispose
+    // Remove listeners before dispose
     try {
       context.read<BackendService>().removeListener(_onBackendChanged);
+      context.read<MenuActionService>().removeListener(_onMenuAction);
     } catch (_) {
       // Context may not be valid during dispose
     }

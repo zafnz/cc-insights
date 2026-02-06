@@ -4,6 +4,7 @@ import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
+import 'package:cc_insights_v2/services/menu_action_service.dart';
 import 'package:cc_insights_v2/services/project_config_service.dart';
 import 'package:cc_insights_v2/services/script_execution_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
@@ -34,6 +35,7 @@ void main() {
     late FakeFileSystemService fakeFileSystem;
     late FileManagerState fileManagerState;
     late DialogObserver dialogObserver;
+    late MenuActionService menuActionService;
 
     final resources = TestResources();
 
@@ -64,6 +66,9 @@ void main() {
           ChangeNotifierProvider<SettingsService>.value(
             value: SettingsService(),
           ),
+          ChangeNotifierProvider<MenuActionService>.value(
+            value: menuActionService,
+          ),
         ],
         child: MaterialApp(
           home: const MainScreen(),
@@ -88,6 +93,7 @@ void main() {
         FileManagerState(project, fakeFileSystem, selection),
       );
       dialogObserver = DialogObserver();
+      menuActionService = MenuActionService();
       await mockBackend.start();
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(

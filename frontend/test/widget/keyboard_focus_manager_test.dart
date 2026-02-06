@@ -457,7 +457,7 @@ void main() {
         expect(escapeCalled, isTrue);
       });
 
-      testWidgets('Cmd+N fires onNewChatShortcut callback',
+      testWidgets('Cmd+Shift+N fires onNewChatShortcut callback',
           (tester) async {
         var newChatCalled = false;
 
@@ -476,16 +476,18 @@ void main() {
         await tester.tap(find.byKey(const Key('other_field')));
         await safePumpAndSettle(tester);
 
-        // Send Cmd+N
+        // Send Cmd+Shift+N
         await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
         await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
         await safePumpAndSettle(tester);
 
         expect(newChatCalled, isTrue);
       });
 
-      testWidgets('Cmd+W fires onNewWorktreeShortcut callback',
+      testWidgets('Cmd+N fires onNewWorktreeShortcut callback',
           (tester) async {
         var newWorktreeCalled = false;
 
@@ -504,9 +506,9 @@ void main() {
         await tester.tap(find.byKey(const Key('other_field')));
         await safePumpAndSettle(tester);
 
-        // Send Cmd+W
+        // Send Cmd+N
         await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
-        await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
         await safePumpAndSettle(tester);
 
