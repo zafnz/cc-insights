@@ -85,11 +85,8 @@ void main() {
     });
 
     testWidgets(
-        'auto-closes with success when no conflicts detected',
+        'auto-closes with success when no conflicts',
         (tester) async {
-      // No conflicts
-      gitService.wouldConflict[testWorktreePath] = false;
-
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
@@ -108,13 +105,16 @@ void main() {
     testWidgets(
         'shows conflict buttons when conflicts detected',
         (tester) async {
-      gitService.wouldConflict[testWorktreePath] = true;
+      gitService.mergeResults[testWorktreePath] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.merge,
+      );
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Wait for conflict check to complete
+      // Wait for conflict buttons to appear
       await pumpUntilFound(
         tester,
         find.byKey(ConflictResolutionDialogKeys.resolveWithClaudeButton),
@@ -132,10 +132,17 @@ void main() {
         find.byKey(ConflictResolutionDialogKeys.abortButton),
         findsOneWidget,
       );
+
+      // Merge was called once (the real operation that found conflicts)
+      expect(gitService.mergeCalls.length, 1);
     });
 
-    testWidgets('abort closes dialog', (tester) async {
-      gitService.wouldConflict[testWorktreePath] = true;
+    testWidgets('abort aborts the operation and closes dialog',
+        (tester) async {
+      gitService.mergeResults[testWorktreePath] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.merge,
+      );
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -150,25 +157,24 @@ void main() {
         find.byKey(ConflictResolutionDialogKeys.abortButton),
       );
 
-      // Wait for dialog to close (Navigator.pop needs frames)
+      // Wait for dialog to close
       await pumpUntilGone(
         tester,
         find.byKey(ConflictResolutionDialogKeys.dialog),
       );
 
-      // Dialog should be closed
       expect(
         find.byKey(ConflictResolutionDialogKeys.dialog),
         findsNothing,
       );
 
-      // No merge should have been called
-      expect(gitService.mergeCalls.length, 0);
+      // Merge was called once, then abort was called
+      expect(gitService.mergeCalls.length, 1);
+      expect(gitService.mergeAbortCalls.length, 1);
     });
 
-    testWidgets('resolve with Claude performs merge and closes',
+    testWidgets('resolve with Claude closes with resolveWithClaude',
         (tester) async {
-      gitService.wouldConflict[testWorktreePath] = true;
       gitService.mergeResults[testWorktreePath] = const MergeResult(
         hasConflicts: true,
         operation: MergeOperationType.merge,
@@ -194,13 +200,12 @@ void main() {
         find.byKey(ConflictResolutionDialogKeys.dialog),
       );
 
-      // Merge should have been called
+      // Merge was called once (conflicts already on disk)
       expect(gitService.mergeCalls.length, 1);
     });
 
-    testWidgets('resolve manually performs merge and closes',
+    testWidgets('resolve manually closes with resolveManually',
         (tester) async {
-      gitService.wouldConflict[testWorktreePath] = true;
       gitService.mergeResults[testWorktreePath] = const MergeResult(
         hasConflicts: true,
         operation: MergeOperationType.merge,
@@ -226,7 +231,7 @@ void main() {
         find.byKey(ConflictResolutionDialogKeys.dialog),
       );
 
-      // Merge should have been called
+      // Merge was called once (conflicts already on disk)
       expect(gitService.mergeCalls.length, 1);
     });
 
@@ -250,14 +255,11 @@ void main() {
 
       expect(find.textContaining('uncommitted'), findsOneWidget);
 
-      // No conflict check should have been called
-      // (wouldMergeConflict not called)
+      // No merge should have been called
       expect(gitService.mergeCalls.length, 0);
     });
 
     testWidgets('rebase operation calls rebase', (tester) async {
-      gitService.wouldConflict[testWorktreePath] = false;
-
       await tester.pumpWidget(
         createTestWidget(operation: MergeOperationType.rebase),
       );
@@ -275,9 +277,43 @@ void main() {
       expect(gitService.mergeCalls.length, 0);
     });
 
+    testWidgets('rebase abort calls rebaseAbort', (tester) async {
+      gitService.rebaseResults[testWorktreePath] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.rebase,
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(operation: MergeOperationType.rebase),
+      );
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      await pumpUntilFound(
+        tester,
+        find.byKey(ConflictResolutionDialogKeys.abortButton),
+      );
+
+      await tester.tap(
+        find.byKey(ConflictResolutionDialogKeys.abortButton),
+      );
+
+      await pumpUntilGone(
+        tester,
+        find.byKey(ConflictResolutionDialogKeys.dialog),
+      );
+
+      expect(gitService.rebaseCalls.length, 1);
+      expect(gitService.rebaseAbortCalls.length, 1);
+      expect(gitService.mergeAbortCalls.length, 0);
+    });
+
     testWidgets('shows log entries during processing',
         (tester) async {
-      gitService.wouldConflict[testWorktreePath] = true;
+      gitService.mergeResults[testWorktreePath] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.merge,
+      );
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -300,10 +336,8 @@ void main() {
       expect(find.textContaining('Conflicts'), findsOneWidget);
     });
 
-    testWidgets('fetchFirst fetches before checking working tree',
+    testWidgets('fetchFirst fetches before performing operation',
         (tester) async {
-      gitService.wouldConflict[testWorktreePath] = false;
-
       await tester.pumpWidget(
         createTestWidget(fetchFirst: true),
       );
@@ -325,7 +359,10 @@ void main() {
     });
 
     testWidgets('fetchFirst shows fetch log entry', (tester) async {
-      gitService.wouldConflict[testWorktreePath] = true;
+      gitService.mergeResults[testWorktreePath] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.merge,
+      );
 
       await tester.pumpWidget(
         createTestWidget(fetchFirst: true),
@@ -369,8 +406,6 @@ void main() {
 
     testWidgets('without fetchFirst does not call fetch',
         (tester) async {
-      gitService.wouldConflict[testWorktreePath] = false;
-
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();

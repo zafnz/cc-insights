@@ -78,9 +78,6 @@ enum _ActionState {
   /// Conflicts detected, waiting for user choice.
   hasConflicts,
 
-  /// Performing the operation (after user chose to proceed).
-  executing,
-
   /// Operation complete.
   complete,
 
@@ -248,53 +245,8 @@ class _ConflictResolutionDialogState
       return;
     }
 
-    // Check for conflicts
-    await _checkForConflicts();
-  }
-
-  Future<void> _checkForConflicts() async {
-    _addLog(
-      'Checking for conflicts with ${widget.mainBranch}...',
-      LogEntryStatus.running,
-    );
-
-    try {
-      final willConflict =
-          widget.operation == MergeOperationType.rebase
-              ? await widget.gitService.wouldRebaseConflict(
-                  widget.worktreePath, widget.mainBranch)
-              : await widget.gitService.wouldMergeConflict(
-                  widget.worktreePath, widget.mainBranch);
-
-      if (!mounted) return;
-
-      if (willConflict) {
-        _updateLastLog(
-          LogEntryStatus.warning,
-          message: 'Conflicts detected',
-        );
-        setState(() {
-          _actionState = _ActionState.hasConflicts;
-        });
-      } else {
-        _updateLastLog(
-          LogEntryStatus.success,
-          message: 'No conflicts detected',
-        );
-        // Perform the operation directly
-        await _performOperation();
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _updateLastLog(
-        LogEntryStatus.error,
-        message: 'Failed to check for conflicts',
-        detail: e.toString(),
-      );
-      setState(() {
-        _actionState = _ActionState.failed;
-      });
-    }
+    // Perform the operation directly
+    await _performOperation();
   }
 
   Future<void> _performOperation() async {
@@ -331,9 +283,8 @@ class _ConflictResolutionDialogState
       if (result.hasConflicts) {
         _updateLastLog(
           LogEntryStatus.warning,
-          message: '$_operationLabel produced conflicts',
+          message: 'Conflicts detected',
         );
-        // This shouldn't happen since we checked, but handle it
         setState(() {
           _actionState = _ActionState.hasConflicts;
         });
@@ -368,115 +319,36 @@ class _ConflictResolutionDialogState
     }
   }
 
-  Future<void> _handleResolveWithClaude() async {
-    setState(() {
-      _actionState = _ActionState.executing;
-    });
-
+  Future<void> _handleAbort() async {
     _addLog(
-      '${_operationLabel}ing onto ${widget.mainBranch} '
-      '(with conflicts)...',
+      'Aborting $_operationVerb...',
       LogEntryStatus.running,
     );
 
     try {
-      final result = widget.operation == MergeOperationType.merge
-          ? await widget.gitService
-              .merge(widget.worktreePath, widget.mainBranch)
-          : await widget.gitService
-              .rebase(widget.worktreePath, widget.mainBranch);
+      if (widget.operation == MergeOperationType.rebase) {
+        await widget.gitService.rebaseAbort(widget.worktreePath);
+      } else {
+        await widget.gitService.mergeAbort(widget.worktreePath);
+      }
 
       if (!mounted) return;
 
-      if (result.error != null) {
-        _updateLastLog(
-          LogEntryStatus.error,
-          message: '$_operationLabel failed',
-          detail: result.error,
-        );
-        setState(() {
-          _actionState = _ActionState.failed;
-        });
-        return;
-      }
-
       _updateLastLog(
         LogEntryStatus.success,
-        message: 'Conflicts ready for Claude to resolve',
+        message: '$_operationLabel aborted',
       );
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context)
-              .pop(ConflictResolutionResult.resolveWithClaude);
-        }
-      });
     } catch (e) {
       if (!mounted) return;
       _updateLastLog(
         LogEntryStatus.error,
-        message: '$_operationLabel failed',
+        message: 'Abort failed',
         detail: e.toString(),
       );
-      setState(() {
-        _actionState = _ActionState.failed;
-      });
     }
-  }
 
-  Future<void> _handleResolveManually() async {
-    setState(() {
-      _actionState = _ActionState.executing;
-    });
-
-    _addLog(
-      '${_operationLabel}ing onto ${widget.mainBranch} '
-      '(with conflicts)...',
-      LogEntryStatus.running,
-    );
-
-    try {
-      final result = widget.operation == MergeOperationType.merge
-          ? await widget.gitService
-              .merge(widget.worktreePath, widget.mainBranch)
-          : await widget.gitService
-              .rebase(widget.worktreePath, widget.mainBranch);
-
-      if (!mounted) return;
-
-      if (result.error != null) {
-        _updateLastLog(
-          LogEntryStatus.error,
-          message: '$_operationLabel failed',
-          detail: result.error,
-        );
-        setState(() {
-          _actionState = _ActionState.failed;
-        });
-        return;
-      }
-
-      _updateLastLog(
-        LogEntryStatus.success,
-        message: 'Conflicts ready for manual resolution',
-      );
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context)
-              .pop(ConflictResolutionResult.resolveManually);
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      _updateLastLog(
-        LogEntryStatus.error,
-        message: '$_operationLabel failed',
-        detail: e.toString(),
-      );
-      setState(() {
-        _actionState = _ActionState.failed;
-      });
+    if (mounted) {
+      Navigator.of(context).pop(ConflictResolutionResult.aborted);
     }
   }
 
@@ -564,7 +436,8 @@ class _ConflictResolutionDialogState
                 label: 'Claude',
                 icon: Icons.auto_fix_high,
                 onPressed: aiEnabled
-                    ? _handleResolveWithClaude
+                    ? () => Navigator.of(context).pop(
+                        ConflictResolutionResult.resolveWithClaude)
                     : null,
                 colorScheme: colorScheme,
                 isPrimary: true,
@@ -578,7 +451,8 @@ class _ConflictResolutionDialogState
                   .resolveManuallyButton,
               label: 'Manually',
               icon: Icons.edit,
-              onPressed: _handleResolveManually,
+              onPressed: () => Navigator.of(context)
+                  .pop(ConflictResolutionResult.resolveManually),
               colorScheme: colorScheme,
             ),
           ),
@@ -586,8 +460,7 @@ class _ConflictResolutionDialogState
           Flexible(
             child: OutlinedButton(
               key: ConflictResolutionDialogKeys.abortButton,
-              onPressed: () => Navigator.of(context)
-                  .pop(ConflictResolutionResult.aborted),
+              onPressed: _handleAbort,
               style: OutlinedButton.styleFrom(
                 foregroundColor: colorScheme.onPrimaryContainer,
                 side: BorderSide(
@@ -602,7 +475,6 @@ class _ConflictResolutionDialogState
 
       case _ActionState.checking:
       case _ActionState.performing:
-      case _ActionState.executing:
       case _ActionState.complete:
       case _ActionState.failed:
         buttons.add(
@@ -642,8 +514,7 @@ class _ConflictResolutionDialogState
 
     // Cancel button (not shown when conflicts or complete)
     if (_actionState != _ActionState.hasConflicts &&
-        _actionState != _ActionState.complete &&
-        _actionState != _ActionState.executing) {
+        _actionState != _ActionState.complete) {
       buttons.addAll([
         const Spacer(),
         TextButton(

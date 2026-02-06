@@ -339,14 +339,6 @@ abstract class GitService {
   /// Returns true if the dry-run detected conflicts.
   Future<bool> wouldMergeConflict(String path, String targetBranch);
 
-  /// Checks if rebasing onto [targetBranch] would produce conflicts,
-  /// without actually performing the rebase.
-  ///
-  /// Attempts `git rebase targetBranch` then immediately aborts via
-  /// `git rebase --abort` to restore the original state.
-  /// Returns true if the dry-run detected conflicts.
-  Future<bool> wouldRebaseConflict(String path, String targetBranch);
-
   /// Merges [targetBranch] into the current branch.
   ///
   /// Returns a [MergeResult] indicating success or conflicts.
@@ -941,74 +933,6 @@ class RealGitService implements GitService {
         return true;
       }
       rethrow;
-    }
-  }
-
-  @override
-  Future<bool> wouldRebaseConflict(
-    String path,
-    String targetBranch,
-  ) async {
-    // Save current branch and HEAD so we can restore exactly.
-    final originalBranch =
-        (await _runGit(['rev-parse', '--abbrev-ref', 'HEAD'],
-                workingDirectory: path))
-            .trim();
-    final originalHead =
-        (await _runGit(['rev-parse', 'HEAD'], workingDirectory: path))
-            .trim();
-
-    try {
-      // Detach HEAD so the rebase doesn't move the branch ref.
-      await _runGit(
-        ['checkout', '--detach', 'HEAD'],
-        workingDirectory: path,
-      );
-
-      final result = await Process.run(
-        'git',
-        ['rebase', targetBranch],
-        workingDirectory: path,
-      ).timeout(_mergeTimeout);
-
-      final hasConflict = result.exitCode != 0 &&
-          ((result.stderr as String).contains('CONFLICT') ||
-              (result.stderr as String).contains('could not apply'));
-
-      if (result.exitCode != 0) {
-        // Abort the paused rebase
-        try {
-          await _runGit(['rebase', '--abort'], workingDirectory: path);
-        } catch (_) {}
-
-        if (!hasConflict) {
-          final stderr = result.stderr as String;
-          throw GitException(
-            stderr.isNotEmpty ? stderr : 'Rebase failed',
-            command: 'rebase',
-            exitCode: result.exitCode,
-          );
-        }
-      }
-
-      return hasConflict;
-    } on TimeoutException {
-      try {
-        await _runGit(['rebase', '--abort'], workingDirectory: path);
-      } catch (_) {}
-      rethrow;
-    } finally {
-      // Always restore the original branch and HEAD position.
-      try {
-        await _runGit(
-          ['checkout', originalBranch],
-          workingDirectory: path,
-        );
-        await _runGit(
-          ['reset', '--hard', originalHead],
-          workingDirectory: path,
-        );
-      } catch (_) {}
     }
   }
 
