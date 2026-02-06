@@ -364,7 +364,7 @@ class AppMenuBar extends StatelessWidget {
             PlatformMenuItemGroup(
               members: [
                 PlatformMenuItem(
-                  label: 'Workspace',
+                  label: 'Main Screen',
                   shortcut: const SingleActivator(
                     LogicalKeyboardKey.digit1,
                     meta: true,
@@ -372,7 +372,7 @@ class AppMenuBar extends StatelessWidget {
                   onSelected: hasProject ? callbacks.onShowWorkspace : null,
                 ),
                 PlatformMenuItem(
-                  label: 'Files',
+                  label: 'File Manager',
                   shortcut: const SingleActivator(
                     LogicalKeyboardKey.digit2,
                     meta: true,
@@ -408,7 +408,7 @@ class AppMenuBar extends StatelessWidget {
           label: 'Help',
           menus: [
             PlatformMenuItem(
-              label: 'GitHub',
+              label: 'CC Insights GitHub',
               onSelected: () => _openUrl('https://github.com/zafnz/cc-insights/'),
             ),
             PlatformMenuItem(
