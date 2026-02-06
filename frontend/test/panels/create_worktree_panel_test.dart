@@ -102,6 +102,7 @@ class TestGitService implements GitService {
     required String worktreePath,
     required String branch,
     required bool newBranch,
+    String? base,
   }) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
     if (createWorktreeError != null) throw createWorktreeError!;

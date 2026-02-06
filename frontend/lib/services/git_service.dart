@@ -202,6 +202,7 @@ abstract class GitService {
     required String worktreePath,
     required String branch,
     required bool newBranch,
+    String? base,
   });
 
   /// Gets the upstream branch for the current branch.
@@ -621,10 +622,14 @@ class RealGitService implements GitService {
     required String worktreePath,
     required String branch,
     required bool newBranch,
+    String? base,
   }) async {
     final args = ['worktree', 'add'];
     if (newBranch) {
       args.addAll(['-b', branch, worktreePath]);
+      if (base != null) {
+        args.add(base);
+      }
     } else {
       args.addAll([worktreePath, branch]);
     }

@@ -163,6 +163,7 @@ class FakeGitService implements GitService {
     required String worktreePath,
     required String branch,
     required bool newBranch,
+    String? base,
   }) async {
     await _maybeDelay();
     _maybeThrow();

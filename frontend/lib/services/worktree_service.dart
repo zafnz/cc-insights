@@ -106,6 +106,7 @@ class WorktreeService {
     required ProjectState project,
     required String branch,
     required String worktreeRoot,
+    String? base,
   }) async {
     final repoRoot = project.data.repoRoot;
 
@@ -188,6 +189,7 @@ class WorktreeService {
         worktreePath: worktreePath,
         branch: sanitizedBranch,
         newBranch: !branchExists,
+        base: base,
       );
     } on GitException catch (e) {
       throw WorktreeCreationException(
@@ -217,13 +219,14 @@ class WorktreeService {
     // 9. Get git status for the new worktree
     final status = await _gitService.getStatus(worktreePath);
 
-    // 10. Capture the current project default base for this worktree.
-    // New worktrees inherit the project default at creation time, so changing
-    // the project default later won't affect existing worktrees.
-    String? base;
-    final defaultBase = config.defaultBase;
-    if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
-      base = defaultBase;
+    // 10. Determine the base for this worktree.
+    // Use the explicitly provided base, falling back to the project default.
+    var effectiveBase = base;
+    if (effectiveBase == null) {
+      final defaultBase = config.defaultBase;
+      if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
+        effectiveBase = defaultBase;
+      }
     }
 
     // 11. Create WorktreeData and WorktreeState
@@ -237,10 +240,10 @@ class WorktreeService {
       commitsBehind: status.behind,
       hasMergeConflict: status.hasConflicts,
     );
-    final worktreeState = WorktreeState(worktreeData, base: base);
+    final worktreeState = WorktreeState(worktreeData, base: effectiveBase);
 
     // 12. Persist to projects.json
-    await _persistWorktree(project, worktreeState, base: base);
+    await _persistWorktree(project, worktreeState, base: effectiveBase);
 
     // 13. Return WorktreeState
     return worktreeState;

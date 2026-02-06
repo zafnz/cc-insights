@@ -181,6 +181,7 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
         project: project,
         branch: branch,
         worktreeRoot: worktreeRoot,
+        base: _branchFrom,
       );
 
       // Add worktree to project state

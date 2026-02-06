@@ -789,18 +789,21 @@ class _TrackingFakeGitService extends FakeGitService {
     required String worktreePath,
     required String branch,
     required bool newBranch,
+    String? base,
   }) async {
     createWorktreeCalls.add(_CreateWorktreeCall(
       repoRoot: repoRoot,
       worktreePath: worktreePath,
       branch: branch,
       newBranch: newBranch,
+      base: base,
     ));
     await super.createWorktree(
       repoRoot: repoRoot,
       worktreePath: worktreePath,
       branch: branch,
       newBranch: newBranch,
+      base: base,
     );
   }
 }
@@ -810,12 +813,14 @@ class _CreateWorktreeCall {
   final String worktreePath;
   final String branch;
   final bool newBranch;
+  final String? base;
 
   _CreateWorktreeCall({
     required this.repoRoot,
     required this.worktreePath,
     required this.branch,
     required this.newBranch,
+    this.base,
   });
 }
 
@@ -829,6 +834,7 @@ class _FailingGitService extends FakeGitService {
     required String worktreePath,
     required String branch,
     required bool newBranch,
+    String? base,
   }) async {
     if (createWorktreeError != null) {
       throw createWorktreeError!;
@@ -838,6 +844,7 @@ class _FailingGitService extends FakeGitService {
       worktreePath: worktreePath,
       branch: branch,
       newBranch: newBranch,
+      base: base,
     );
   }
 }
