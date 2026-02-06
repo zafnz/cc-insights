@@ -68,6 +68,19 @@ class WorktreeCreationException implements Exception {
   String toString() => message;
 }
 
+/// Exception thrown when the user tries to create a worktree with a branch
+/// name that already exists in git but is not currently checked out in any
+/// worktree. This signals the UI to offer a recovery prompt.
+class WorktreeBranchExistsException extends WorktreeCreationException {
+  /// The sanitized branch name that already exists.
+  final String branchName;
+
+  WorktreeBranchExistsException(this.branchName)
+      : super(
+          'A branch named "$branchName" already exists.',
+        );
+}
+
 /// Service for creating and managing git worktrees.
 ///
 /// Encapsulates validation, creation, and persistence logic for worktrees.
@@ -154,6 +167,11 @@ class WorktreeService {
           'Choose a different branch name',
         ],
       );
+    }
+
+    // 3b. If branch exists but is not a worktree, signal for recovery prompt
+    if (branchExists) {
+      throw WorktreeBranchExistsException(sanitizedBranch);
     }
 
     // 4. Construct the full worktree path
@@ -262,6 +280,116 @@ class WorktreeService {
 
     // 14. Return WorktreeState
     LogService.instance.info('Worktree', 'Workspace created: branch=$sanitizedBranch path=$worktreePath');
+    return worktreeState;
+  }
+
+  /// Recovers a worktree from an existing branch.
+  ///
+  /// This is called after the user confirms they want to recover a branch
+  /// that already exists in git. It creates a worktree using the existing
+  /// branch, skipping the branch-exists check that [createWorktree] performs.
+  ///
+  /// The [branch] should already be sanitized (as returned by
+  /// [WorktreeBranchExistsException.branchName]).
+  Future<WorktreeState> recoverWorktree({
+    required ProjectState project,
+    required String branch,
+    required String worktreeRoot,
+  }) async {
+    final repoRoot = project.data.repoRoot;
+
+    LogService.instance.notice('Worktree', 'Recovering workspace: branch=$branch root=$worktreeRoot');
+
+    // 1. Construct the full worktree path
+    final worktreePath = path.join(worktreeRoot, 'cci', branch);
+
+    // 2. Ensure parent directory exists
+    final parentDir = Directory(path.dirname(worktreePath));
+    if (!await parentDir.exists()) {
+      await parentDir.create(recursive: true);
+    }
+
+    // 3. Run pre-create hook if configured
+    final config = await _configService.loadConfig(repoRoot);
+    final preCreateHook = config.getHook('worktree-pre-create');
+    if (preCreateHook != null && preCreateHook.isNotEmpty) {
+      LogService.instance.notice('Worktree', 'Running hook: worktree-pre-create');
+      final exitCode = await _runHook(
+        hookName: 'worktree-pre-create',
+        command: preCreateHook,
+        workingDirectory: repoRoot,
+      );
+      if (exitCode != 0) {
+        throw WorktreeCreationException(
+          'Pre-create hook failed with exit code $exitCode',
+          suggestions: [
+            'Check the hook script for errors',
+            'Review the terminal output for details',
+          ],
+        );
+      }
+    }
+
+    // 4. Create the git worktree using the existing branch
+    try {
+      await _gitService.createWorktree(
+        repoRoot: repoRoot,
+        worktreePath: worktreePath,
+        branch: branch,
+        newBranch: false, // Branch already exists
+      );
+    } on GitException catch (e) {
+      throw WorktreeCreationException(
+        'Failed to create worktree: ${e.message}',
+        suggestions: _suggestionsForGitError(e),
+      );
+    }
+
+    // 5. Run post-create hook if configured
+    final postCreateHook = config.getHook('worktree-post-create');
+    if (postCreateHook != null && postCreateHook.isNotEmpty) {
+      LogService.instance.notice('Worktree', 'Running hook: worktree-post-create');
+      final exitCode = await _runHook(
+        hookName: 'worktree-post-create',
+        command: postCreateHook,
+        workingDirectory: worktreePath,
+      );
+      if (exitCode != 0) {
+        developer.log(
+          'Post-create hook failed with exit code $exitCode, continuing anyway',
+          name: 'WorktreeService',
+        );
+      }
+    }
+
+    // 6. Get git status for the new worktree
+    final status = await _gitService.getStatus(worktreePath);
+
+    // 7. Determine the base for this worktree.
+    String? effectiveBase;
+    final defaultBase = config.defaultBase;
+    if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
+      effectiveBase = defaultBase;
+    }
+
+    // 8. Create WorktreeData and WorktreeState
+    final worktreeData = WorktreeData(
+      worktreeRoot: worktreePath,
+      isPrimary: false,
+      branch: branch,
+      uncommittedFiles: status.uncommittedFiles,
+      stagedFiles: status.staged,
+      commitsAhead: status.ahead,
+      commitsBehind: status.behind,
+      hasMergeConflict: status.hasConflicts,
+    );
+    final worktreeState = WorktreeState(worktreeData, base: effectiveBase);
+
+    // 9. Persist to projects.json
+    await _persistWorktree(project, worktreeState, base: effectiveBase);
+
+    // 10. Return WorktreeState
+    LogService.instance.info('Worktree', 'Workspace recovered: branch=$branch path=$worktreePath');
     return worktreeState;
   }
 

@@ -675,6 +675,135 @@ void main() {
       });
     });
 
+    group('branch recovery prompt', () {
+      testWidgets('shows recovery card when branch already exists',
+          (tester) async {
+        // Set up a branch that exists but is NOT a worktree
+        testGitService.branchLists['/test/project'] = [
+          'main',
+          'existing-feature',
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Enter the existing branch name
+        final branchField = find.byType(TextField).first;
+        await tester.enterText(branchField, 'existing-feature');
+        await tester.pump();
+
+        // Enter a valid path outside the project
+        final rootField = find.byType(TextField).last;
+        await tester.enterText(rootField, '/outside/path');
+        await tester.pump();
+
+        // Tap Create button
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
+        await tester.runAsync(() async {
+          await Future.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pump();
+
+        // Should show recovery prompt
+        expect(
+          find.byKey(CreateWorktreePanelKeys.recoverCard),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('already exists'),
+          findsOneWidget,
+        );
+        expect(find.text('Yes, Recover'), findsOneWidget);
+        expect(find.text('No'), findsOneWidget);
+        LogService.instance.clearBuffer();
+      });
+
+      testWidgets('No button dismisses recovery card and returns to form',
+          (tester) async {
+        // Set a larger surface size to fit the recovery card
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        // Set up a branch that exists but is NOT a worktree
+        testGitService.branchLists['/test/project'] = [
+          'main',
+          'existing-feature',
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Enter the existing branch name and trigger creation
+        final branchField = find.byType(TextField).first;
+        await tester.enterText(branchField, 'existing-feature');
+        final rootField = find.byType(TextField).last;
+        await tester.enterText(rootField, '/outside/path');
+        await tester.pump();
+
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
+        await tester.runAsync(() async {
+          await Future.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pump();
+
+        // Verify recovery card is showing
+        expect(
+          find.byKey(CreateWorktreePanelKeys.recoverCard),
+          findsOneWidget,
+        );
+
+        // Tap No
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.recoverNoButton));
+        await tester.pump();
+
+        // Recovery card should be gone
+        expect(
+          find.byKey(CreateWorktreePanelKeys.recoverCard),
+          findsNothing,
+        );
+
+        // Create button should be visible again
+        expect(
+          find.byKey(CreateWorktreePanelKeys.createButton),
+          findsOneWidget,
+        );
+        LogService.instance.clearBuffer();
+      });
+
+      testWidgets('hides action bar when recovery prompt is showing',
+          (tester) async {
+        // Set up a branch that exists but is NOT a worktree
+        testGitService.branchLists['/test/project'] = [
+          'main',
+          'existing-feature',
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Enter the existing branch name and trigger creation
+        final branchField = find.byType(TextField).first;
+        await tester.enterText(branchField, 'existing-feature');
+        final rootField = find.byType(TextField).last;
+        await tester.enterText(rootField, '/outside/path');
+        await tester.pump();
+
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
+        await tester.runAsync(() async {
+          await Future.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pump();
+
+        // Action buttons should be hidden
+        expect(
+          find.byKey(CreateWorktreePanelKeys.createButton),
+          findsNothing,
+        );
+        expect(
+          find.byKey(CreateWorktreePanelKeys.cancelButton),
+          findsNothing,
+        );
+        LogService.instance.clearBuffer();
+      });
+    });
+
     group('help card expansion', () {
       testWidgets('expands to show full explanation when tapped',
           (tester) async {

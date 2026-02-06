@@ -5,8 +5,10 @@ import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
 import '../models/project.dart';
+import '../models/worktree.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
+import '../services/project_restore_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 
@@ -20,6 +22,9 @@ class CreateWorktreePanelKeys {
   static const cancelButton = Key('create_worktree_cancel_button');
   static const branchFromDropdown = Key('create_worktree_branch_from_dropdown');
   static const folderPickerButton = Key('create_worktree_folder_picker');
+  static const recoverYesButton = Key('create_worktree_recover_yes');
+  static const recoverNoButton = Key('create_worktree_recover_no');
+  static const recoverCard = Key('create_worktree_recover_card');
 }
 
 /// Panel for creating a new git worktree.
@@ -54,6 +59,9 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   List<String>? _errorSuggestions;
   List<String> _availableBranches = [];
   List<String> _existingWorktreeBranches = [];
+
+  /// When non-null, shows a recovery prompt for this branch name.
+  String? _recoverBranchName;
 
   // Branch from selection
   BranchFromOption _branchFromOption = BranchFromOption.main;
@@ -195,6 +203,14 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
         // Return to conversation panel
         selection.showConversationPanel();
       }
+    } on WorktreeBranchExistsException catch (e) {
+      if (mounted) {
+        setState(() {
+          _recoverBranchName = e.branchName;
+          _errorMessage = null;
+          _errorSuggestions = null;
+        });
+      }
     } on WorktreeCreationException catch (e) {
       if (mounted) {
         setState(() {
@@ -216,6 +232,112 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
           _isCreating = false;
         });
       }
+    }
+  }
+
+  void _handleRecoverNo() {
+    setState(() {
+      _recoverBranchName = null;
+    });
+  }
+
+  Future<void> _handleRecoverYes() async {
+    final branch = _recoverBranchName;
+    if (branch == null) return;
+
+    final worktreeRoot = _rootController.text.trim();
+
+    setState(() {
+      _isCreating = true;
+      _recoverBranchName = null;
+      _errorMessage = null;
+      _errorSuggestions = null;
+    });
+
+    try {
+      final project = context.read<ProjectState>();
+      final gitService = context.read<GitService>();
+      final worktreeService = WorktreeService(gitService: gitService);
+
+      // Create the worktree using the existing branch
+      final worktreeState = await worktreeService.recoverWorktree(
+        project: project,
+        branch: branch,
+        worktreeRoot: worktreeRoot,
+      );
+
+      // Add worktree to project state
+      project.addWorktree(worktreeState);
+
+      // Recover archived chats that belonged to this branch
+      await _recoverArchivedChats(
+        project: project,
+        worktreeState: worktreeState,
+        branch: branch,
+      );
+
+      // Select the new worktree
+      if (mounted) {
+        final selection = context.read<SelectionState>();
+        selection.selectWorktree(worktreeState);
+        selection.showConversationPanel();
+      }
+    } on WorktreeCreationException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.message;
+          _errorSuggestions =
+              e.suggestions.isNotEmpty ? e.suggestions : null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'An unexpected error occurred: $e';
+          _errorSuggestions = null;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+        });
+      }
+    }
+  }
+
+  /// Recovers archived chats whose original worktree path matches the branch.
+  ///
+  /// Looks for archived chats whose [originalWorktreePath] ends with
+  /// `/cci/{branch}` and restores them to the new worktree.
+  Future<void> _recoverArchivedChats({
+    required ProjectState project,
+    required WorktreeState worktreeState,
+    required String branch,
+  }) async {
+    final projectRoot = project.data.repoRoot;
+    final projectId = PersistenceService.generateProjectId(projectRoot);
+    final persistenceService = PersistenceService();
+    final restoreService = ProjectRestoreService(persistence: persistenceService);
+
+    final archivedChats = await persistenceService.getArchivedChats(
+      projectRoot: projectRoot,
+    );
+
+    // Match archived chats whose original worktree path ends with /cci/{branch}
+    final suffix = '/cci/$branch';
+    final matchingChats = archivedChats
+        .where((chat) => chat.originalWorktreePath.endsWith(suffix))
+        .toList();
+
+    for (final archivedRef in matchingChats) {
+      final chatState = await restoreService.restoreArchivedChat(
+        archivedRef,
+        worktreeState.data.worktreeRoot,
+        projectId,
+        projectRoot,
+      );
+      worktreeState.addChat(chatState);
     }
   }
 
@@ -388,6 +510,17 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                   ),
                 ),
 
+                // Recovery prompt when branch already exists
+                if (_recoverBranchName != null) ...[
+                  const SizedBox(height: 20),
+                  _RecoverBranchCard(
+                    branchName: _recoverBranchName!,
+                    isCreating: _isCreating,
+                    onYes: _handleRecoverYes,
+                    onNo: _handleRecoverNo,
+                  ),
+                ],
+
                 // Error card if error
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 20),
@@ -399,12 +532,13 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
 
                 const SizedBox(height: 32),
 
-                // Action buttons
-                _ActionBar(
-                  isCreating: _isCreating,
-                  onCancel: _handleCancel,
-                  onCreate: _handleCreate,
-                ),
+                // Action buttons (hidden when recovery prompt is showing)
+                if (_recoverBranchName == null)
+                  _ActionBar(
+                    isCreating: _isCreating,
+                    onCancel: _handleCancel,
+                    onCreate: _handleCreate,
+                  ),
 
                 const SizedBox(height: 32),
                 // Help text explaining what a worktree is
@@ -825,6 +959,115 @@ class _ErrorCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Card prompting the user to recover an existing branch into a worktree.
+class _RecoverBranchCard extends StatelessWidget {
+  const _RecoverBranchCard({
+    required this.branchName,
+    required this.isCreating,
+    required this.onYes,
+    required this.onNo,
+  });
+
+  final String branchName;
+  final bool isCreating;
+  final VoidCallback onYes;
+  final VoidCallback onNo;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      key: CreateWorktreePanelKeys.recoverCard,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.tertiary.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.help_outline,
+                size: 18,
+                color: colorScheme.tertiary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'A branch named "$branchName" already exists. '
+                  'Do you want to recover that branch into a worktree?',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              OutlinedButton(
+                key: CreateWorktreePanelKeys.recoverNoButton,
+                onPressed: isCreating ? null : onNo,
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  side: BorderSide(color: colorScheme.outline),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'No',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton(
+                key: CreateWorktreePanelKeys.recoverYesButton,
+                onPressed: isCreating ? null : onYes,
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: isCreating
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onPrimary,
+                        ),
+                      )
+                    : Text(
+                        'Yes, Recover',
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ],
+          ),
         ],
       ),
     );

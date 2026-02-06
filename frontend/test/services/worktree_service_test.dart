@@ -308,7 +308,8 @@ void main() {
         check(trackingGitService.createWorktreeCalls.first.newBranch).isTrue();
       });
 
-      test('creates without -b flag when branch exists but is not a worktree',
+      test(
+          'throws WorktreeBranchExistsException when branch exists but is not a worktree',
           () async {
         // Arrange
         final trackingGitService = _TrackingFakeGitService();
@@ -326,16 +327,71 @@ void main() {
         final project = _createProject(repoRoot);
         await _setupPersistence(persistenceService, repoRoot, project);
 
-        // Act
-        await trackingService.createWorktree(
-          project: project,
-          branch: 'existing-branch',
-          worktreeRoot: worktreeRoot,
+        // Act & Assert - should throw for user confirmation, not silently proceed
+        await check(
+          trackingService.createWorktree(
+            project: project,
+            branch: 'existing-branch',
+            worktreeRoot: worktreeRoot,
+          ),
+        ).throws<WorktreeBranchExistsException>();
+      });
+
+      test(
+          'throws WorktreeBranchExistsException when branch exists but is not a worktree',
+          () async {
+        // Arrange
+        final trackingGitService = _TrackingFakeGitService();
+        trackingGitService.setupSimpleRepo(repoRoot);
+        trackingGitService.existingBranches.add('existing-branch');
+
+        final trackingService = WorktreeService(
+          gitService: trackingGitService,
+          persistenceService: persistenceService,
         );
 
-        // Assert - check that createWorktree was called with newBranch: false
-        check(trackingGitService.createWorktreeCalls).isNotEmpty();
-        check(trackingGitService.createWorktreeCalls.first.newBranch).isFalse();
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act & Assert
+        await check(
+          trackingService.createWorktree(
+            project: project,
+            branch: 'existing-branch',
+            worktreeRoot: worktreeRoot,
+          ),
+        ).throws<WorktreeBranchExistsException>();
+      });
+
+      test(
+          'WorktreeBranchExistsException contains sanitized branch name',
+          () async {
+        // Arrange
+        final trackingGitService = _TrackingFakeGitService();
+        trackingGitService.setupSimpleRepo(repoRoot);
+        trackingGitService.existingBranches.add('existing-branch');
+
+        final trackingService = WorktreeService(
+          gitService: trackingGitService,
+          persistenceService: persistenceService,
+        );
+
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        try {
+          await trackingService.createWorktree(
+            project: project,
+            branch: 'existing-branch',
+            worktreeRoot: worktreeRoot,
+          );
+          fail('Expected WorktreeBranchExistsException');
+        } on WorktreeBranchExistsException catch (e) {
+          // Assert
+          check(e.branchName).equals('existing-branch');
+          check(e.message).contains('already exists');
+        }
       });
 
       test('throws when branch already exists as a worktree', () async {
@@ -637,6 +693,94 @@ void main() {
         check(result.data.branch).equals('feature/nested/branch');
         check(result.data.worktreeRoot)
             .equals('$worktreeRoot/cci/feature/nested/branch');
+      });
+    });
+
+    group('recoverWorktree', () {
+      test('creates worktree from existing branch without checking existence',
+          () async {
+        // Arrange
+        final trackingGitService = _TrackingFakeGitService();
+        trackingGitService.setupSimpleRepo(repoRoot);
+        trackingGitService.existingBranches.add('recover-me');
+        trackingGitService.statuses['$worktreeRoot/cci/recover-me'] =
+            const GitStatus();
+
+        final trackingService = WorktreeService(
+          gitService: trackingGitService,
+          persistenceService: persistenceService,
+        );
+
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        final result = await trackingService.recoverWorktree(
+          project: project,
+          branch: 'recover-me',
+          worktreeRoot: worktreeRoot,
+        );
+
+        // Assert
+        check(result.data.branch).equals('recover-me');
+        check(result.data.worktreeRoot).equals('$worktreeRoot/cci/recover-me');
+        check(result.data.isPrimary).isFalse();
+        // Should call git with newBranch: false
+        check(trackingGitService.createWorktreeCalls).isNotEmpty();
+        check(trackingGitService.createWorktreeCalls.first.newBranch).isFalse();
+      });
+
+      test('persists recovered worktree to projects.json', () async {
+        // Arrange
+        gitService.setupSimpleRepo(repoRoot);
+        gitService.statuses['$worktreeRoot/cci/recover-me'] = const GitStatus();
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        await worktreeService.recoverWorktree(
+          project: project,
+          branch: 'recover-me',
+          worktreeRoot: worktreeRoot,
+        );
+
+        // Assert
+        final index = await persistenceService.loadProjectsIndex();
+        final projectInfo = index.projects[repoRoot];
+        check(projectInfo).isNotNull();
+        check(projectInfo!.worktrees['$worktreeRoot/cci/recover-me']).isNotNull();
+        final worktreeInfo =
+            projectInfo.worktrees['$worktreeRoot/cci/recover-me']!;
+        check(worktreeInfo.isLinked).isTrue();
+        check(worktreeInfo.name).equals('recover-me');
+      });
+
+      test('returns WorktreeState with correct git status', () async {
+        // Arrange
+        gitService.setupSimpleRepo(repoRoot);
+        gitService.statuses['$worktreeRoot/cci/recover-me'] = const GitStatus(
+          staged: 2,
+          changedEntries: 5,
+          ahead: 1,
+          behind: 3,
+          hasConflicts: true,
+        );
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        final result = await worktreeService.recoverWorktree(
+          project: project,
+          branch: 'recover-me',
+          worktreeRoot: worktreeRoot,
+        );
+
+        // Assert
+        check(result.data.stagedFiles).equals(2);
+        check(result.data.uncommittedFiles).equals(5);
+        check(result.data.commitsAhead).equals(1);
+        check(result.data.commitsBehind).equals(3);
+        check(result.data.hasMergeConflict).isTrue();
       });
     });
 
