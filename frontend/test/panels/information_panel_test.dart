@@ -28,7 +28,7 @@ void main() {
   Widget buildTestWidget({
     required WorktreeData worktreeData,
     WorktreeState? worktreeState,
-    String? baseOverride,
+    String? base,
   }) {
     final primaryWorktreeData = const WorktreeData(
       worktreeRoot: primaryPath,
@@ -40,7 +40,7 @@ void main() {
     final wt = worktreeState ??
         WorktreeState(
           worktreeData,
-          baseOverride: baseOverride,
+          base: base,
         );
 
     final project = ProjectState(

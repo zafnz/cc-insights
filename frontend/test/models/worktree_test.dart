@@ -460,85 +460,85 @@ void main() {
       });
     });
 
-    group('baseOverride', () {
+    group('base', () {
       test('defaults to null', () {
         // Arrange & Act
         final state = WorktreeState(createTestData());
 
         // Assert
-        check(state.baseOverride).isNull();
+        check(state.base).isNull();
       });
 
       test('initializes from constructor', () {
         // Arrange & Act
         final state = WorktreeState(
           createTestData(),
-          baseOverride: 'develop',
+          base: 'develop',
         );
 
         // Assert
-        check(state.baseOverride).equals('develop');
+        check(state.base).equals('develop');
       });
 
-      test('setBaseOverride updates value and notifies listeners', () {
+      test('setBase updates value and notifies listeners', () {
         // Arrange
         final state = WorktreeState(createTestData());
         var notified = false;
         state.addListener(() => notified = true);
 
         // Act
-        state.setBaseOverride('develop');
+        state.setBase('develop');
 
         // Assert
-        check(state.baseOverride).equals('develop');
+        check(state.base).equals('develop');
         check(notified).isTrue();
       });
 
-      test('setBaseOverride with same value does not notify listeners', () {
+      test('setBase with same value does not notify listeners', () {
         // Arrange
         final state = WorktreeState(
           createTestData(),
-          baseOverride: 'develop',
+          base: 'develop',
         );
         var notified = false;
         state.addListener(() => notified = true);
 
         // Act
-        state.setBaseOverride('develop');
+        state.setBase('develop');
 
         // Assert
-        check(state.baseOverride).equals('develop');
+        check(state.base).equals('develop');
         check(notified).isFalse();
       });
 
-      test('setBaseOverride to null clears override and notifies', () {
+      test('setBase to null clears and notifies', () {
         // Arrange
         final state = WorktreeState(
           createTestData(),
-          baseOverride: 'develop',
+          base: 'develop',
         );
         var notified = false;
         state.addListener(() => notified = true);
 
         // Act
-        state.setBaseOverride(null);
+        state.setBase(null);
 
         // Assert
-        check(state.baseOverride).isNull();
+        check(state.base).isNull();
         check(notified).isTrue();
       });
 
-      test('setBaseOverride null to null does not notify', () {
+      test('setBase null to null does not notify', () {
         // Arrange
         final state = WorktreeState(createTestData());
         var notified = false;
         state.addListener(() => notified = true);
 
         // Act
-        state.setBaseOverride(null);
+        state.setBase(null);
 
         // Assert
-        check(state.baseOverride).isNull();
+        check(state.base).isNull();
         check(notified).isFalse();
       });
     });

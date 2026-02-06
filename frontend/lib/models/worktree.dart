@@ -199,11 +199,11 @@ class WorktreeState extends ChangeNotifier {
   /// Tag names assigned to this worktree.
   List<String> _tags;
 
-  /// Per-worktree base branch override.
+  /// Per-worktree base branch for merge comparisons.
   ///
-  /// When set, overrides the project-level `defaultBase` for merge
-  /// comparisons. Null means "use the project default".
-  String? _baseOverride;
+  /// When set, used for merge/diff operations. Null means "use the project
+  /// default". New worktrees inherit the project's defaultBase at creation.
+  String? _base;
 
   /// Draft text typed in the welcome screen before any chat is created.
   ///
@@ -235,16 +235,15 @@ class WorktreeState extends ChangeNotifier {
   ///
   /// [chats] defaults to an empty list if not provided.
   /// [tags] defaults to an empty list if not provided.
-  /// [baseOverride] is the per-worktree base branch override (null = use
-  /// project default).
+  /// [base] is the per-worktree base branch (null = use project default).
   WorktreeState(
     this._data, {
     List<ChatState>? chats,
     List<String>? tags,
-    String? baseOverride,
+    String? base,
   }) : _chats = chats ?? [],
        _tags = tags ?? [],
-       _baseOverride = baseOverride,
+       _base = base,
        _selectedChat = null;
 
   /// The immutable data for this worktree.
@@ -308,16 +307,16 @@ class WorktreeState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The per-worktree base branch override, or null to use project default.
-  String? get baseOverride => _baseOverride;
+  /// The per-worktree base branch, or null to use project default.
+  String? get base => _base;
 
-  /// Sets the per-worktree base branch override.
+  /// Sets the per-worktree base branch.
   ///
-  /// Pass null to clear the override and revert to the project default.
+  /// Pass null to clear and revert to the project default.
   /// Does not notify listeners if the value hasn't changed.
-  void setBaseOverride(String? value) {
-    if (_baseOverride == value) return;
-    _baseOverride = value;
+  void setBase(String? value) {
+    if (_base == value) return;
+    _base = value;
     notifyListeners();
   }
 

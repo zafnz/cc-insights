@@ -38,7 +38,7 @@ void main() {
         // Arrange
         final projectRoot = tempDir.path;
         final service = ProjectRestoreService(
-          _TestPersistenceService(tempDir.path),
+          persistence: _TestPersistenceService(tempDir.path),
         );
 
         // Act
@@ -86,7 +86,7 @@ void main() {
         );
         await persistence.saveProjectsIndex(projectsIndex);
 
-        final service = ProjectRestoreService(persistence);
+        final service = ProjectRestoreService(persistence: persistence);
 
         // Act
         final (project, isNew) = await service.restoreOrCreateProject(
@@ -133,7 +133,7 @@ void main() {
         );
         await persistence.saveProjectsIndex(projectsIndex);
 
-        final service = ProjectRestoreService(persistence);
+        final service = ProjectRestoreService(persistence: persistence);
 
         // Act
         final (project, isNew) = await service.restoreOrCreateProject(
@@ -191,7 +191,7 @@ void main() {
           ),
         );
 
-        final service = ProjectRestoreService(persistence);
+        final service = ProjectRestoreService(persistence: persistence);
 
         // Act
         final (project, _) = await service.restoreOrCreateProject(projectRoot);
@@ -233,7 +233,7 @@ void main() {
           await persistence.appendChatEntry(projectId, chat.data.id, entry);
         }
 
-        final service = ProjectRestoreService(persistence);
+        final service = ProjectRestoreService(persistence: persistence);
 
         // Act
         final count = await service.loadChatHistory(chat, projectId);
@@ -261,7 +261,7 @@ void main() {
         );
         await chat.initPersistence(projectId);
 
-        final service = ProjectRestoreService(persistence);
+        final service = ProjectRestoreService(persistence: persistence);
 
         // Act
         final count = await service.loadChatHistory(chat, projectId);
@@ -298,7 +298,7 @@ void main() {
           worktreeRoot: projectRoot,
         );
 
-        final service = ProjectRestoreService(persistence);
+        final service = ProjectRestoreService(persistence: persistence);
 
         // Act
         await service.addChatToWorktree(projectRoot, projectRoot, chat);

@@ -229,7 +229,7 @@ class WorktreeWatcherService extends ChangeNotifier {
       final upstream = await _gitService.getUpstream(path);
 
       // Resolve the base ref using the override chain:
-      // 1. Per-worktree baseOverride
+      // 1. Per-worktree base
       // 2. Project config defaultBase
       // 3. Auto-detect (remote main if upstream, else local main)
       final resolved = await _resolveBaseRef(worktree, upstream);
@@ -295,7 +295,7 @@ class WorktreeWatcherService extends ChangeNotifier {
   /// Resolves the base ref for comparing a worktree's branch.
   ///
   /// Resolution chain (first non-null/non-auto wins):
-  /// 1. Per-worktree [WorktreeState.baseOverride]
+  /// 1. Per-worktree [WorktreeState.base]
   /// 2. Project config [ProjectConfig.defaultBase]
   /// 3. Auto-detect: remote main (if upstream exists) or local main
   ///
@@ -313,12 +313,12 @@ class WorktreeWatcherService extends ChangeNotifier {
   ) async {
     final repoRoot = _project.data.repoRoot;
 
-    // 1. Per-worktree override takes highest priority.
-    final override = worktree.baseOverride;
-    if (override != null && override.isNotEmpty) {
+    // 1. Per-worktree base takes highest priority.
+    final base = worktree.base;
+    if (base != null && base.isNotEmpty) {
       return (
-        baseRef: override,
-        isRemoteBase: _isRemoteRef(override),
+        baseRef: base,
+        isRemoteBase: _isRemoteRef(base),
       );
     }
 

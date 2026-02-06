@@ -220,10 +220,10 @@ class WorktreeService {
     // 10. Capture the current project default base for this worktree.
     // New worktrees inherit the project default at creation time, so changing
     // the project default later won't affect existing worktrees.
-    String? baseOverride;
+    String? base;
     final defaultBase = config.defaultBase;
     if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
-      baseOverride = defaultBase;
+      base = defaultBase;
     }
 
     // 11. Create WorktreeData and WorktreeState
@@ -237,10 +237,10 @@ class WorktreeService {
       commitsBehind: status.behind,
       hasMergeConflict: status.hasConflicts,
     );
-    final worktreeState = WorktreeState(worktreeData, baseOverride: baseOverride);
+    final worktreeState = WorktreeState(worktreeData, base: base);
 
     // 12. Persist to projects.json
-    await _persistWorktree(project, worktreeState, baseOverride: baseOverride);
+    await _persistWorktree(project, worktreeState, base: base);
 
     // 13. Return WorktreeState
     return worktreeState;
@@ -355,13 +355,13 @@ class WorktreeService {
 
   /// Persists a new worktree to projects.json.
   ///
-  /// The [baseOverride] captures the project's default base at creation time,
+  /// The [base] captures the project's default base at creation time,
   /// ensuring the worktree's base doesn't change when the project default
   /// changes later.
   Future<void> _persistWorktree(
     ProjectState project,
     WorktreeState worktree, {
-    String? baseOverride,
+    String? base,
   }) async {
     final index = await _persistenceService.loadProjectsIndex();
     final projectInfo = index.projects[project.data.repoRoot];
@@ -379,7 +379,7 @@ class WorktreeService {
     updatedWorktrees[worktree.data.worktreeRoot] = persistence.WorktreeInfo
         .linked(
       name: worktree.data.branch,
-      baseOverride: baseOverride,
+      base: base,
     );
 
     final updatedProjectInfo = projectInfo.copyWith(

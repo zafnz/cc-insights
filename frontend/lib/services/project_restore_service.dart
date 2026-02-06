@@ -10,6 +10,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import 'persistence_models.dart';
 import 'persistence_service.dart';
+import 'project_config_service.dart';
 
 /// Service for restoring projects, worktrees, and chats from persistence.
 ///
@@ -25,12 +26,16 @@ import 'persistence_service.dart';
 /// 4. History is loaded lazily when a chat is selected
 class ProjectRestoreService {
   final PersistenceService _persistence;
+  final ProjectConfigService _configService;
 
-  /// Creates a [ProjectRestoreService] with the given persistence service.
+  /// Creates a [ProjectRestoreService] with the given services.
   ///
-  /// If no persistence service is provided, a default instance is created.
-  ProjectRestoreService([PersistenceService? persistence])
-      : _persistence = persistence ?? PersistenceService();
+  /// If no services are provided, default instances are created.
+  ProjectRestoreService({
+    PersistenceService? persistence,
+    ProjectConfigService? configService,
+  })  : _persistence = persistence ?? PersistenceService(),
+        _configService = configService ?? ProjectConfigService();
 
   /// Restores or creates a project for the given root path.
   ///
@@ -92,12 +97,27 @@ class ProjectRestoreService {
   /// - Persisted name and ID
   /// - Primary worktree with persisted chats
   /// - Linked worktrees with persisted chats
+  ///
+  /// Worktrees without a base will inherit the project's defaultBase.
   Future<ProjectState> _restoreProject(
     String projectRoot,
     ProjectInfo projectInfo, {
     required bool autoValidate,
     required bool watchFilesystem,
   }) async {
+    // Load project config to get defaultBase for worktrees without a base.
+    String? defaultBase;
+    try {
+      final config = await _configService.loadConfig(projectRoot);
+      if (config.defaultBase != null &&
+          config.defaultBase!.isNotEmpty &&
+          config.defaultBase != 'auto') {
+        defaultBase = config.defaultBase;
+      }
+    } catch (_) {
+      // Config load failed; worktrees will use auto-detect.
+    }
+
     // Find the primary worktree and linked worktrees
     WorktreeState? primaryWorktree;
     final linkedWorktrees = <WorktreeState>[];
@@ -111,6 +131,7 @@ class ProjectRestoreService {
         worktreeInfo,
         projectInfo.id,
         projectRoot,
+        defaultBase: defaultBase,
       );
 
       if (worktreeInfo.isPrimary) {
@@ -132,6 +153,7 @@ class ProjectRestoreService {
           isPrimary: true,
           branch: 'main', // TODO: Get actual branch from git
         ),
+        base: defaultBase,
       );
     }
 
@@ -149,12 +171,16 @@ class ProjectRestoreService {
   /// Creates WorktreeState with:
   /// - Worktree path and type (primary/linked)
   /// - Chats with IDs and names (without loading history)
+  ///
+  /// If the worktree has no base set and [defaultBase] is provided,
+  /// the worktree will inherit that base.
   Future<WorktreeState> _restoreWorktree(
     String worktreePath,
     WorktreeInfo worktreeInfo,
     String projectId,
-    String projectRoot,
-  ) async {
+    String projectRoot, {
+    String? defaultBase,
+  }) async {
     final chats = <ChatState>[];
 
     for (final chatRef in worktreeInfo.chats) {
@@ -167,6 +193,9 @@ class ProjectRestoreService {
       chats.add(chatState);
     }
 
+    // Use the worktree's persisted base, or fall back to the project default.
+    final base = worktreeInfo.base ?? defaultBase;
+
     return WorktreeState(
       WorktreeData(
         worktreeRoot: worktreePath,
@@ -175,7 +204,7 @@ class ProjectRestoreService {
       ),
       chats: chats,
       tags: worktreeInfo.tags,
-      baseOverride: worktreeInfo.baseOverride,
+      base: base,
     );
   }
 

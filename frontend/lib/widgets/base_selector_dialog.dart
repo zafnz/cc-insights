@@ -26,26 +26,26 @@ class BaseSelectorDialogKeys {
   static const applyButton = Key('base_selector_apply');
 }
 
-/// Shows a dialog to select a base ref override for a worktree.
+/// Shows a dialog to select a base ref for a worktree.
 ///
-/// [currentBaseOverride] is the current per-worktree override value,
+/// [currentBase] is the current per-worktree base value,
 /// or null if using the default (main).
 ///
-/// Returns the new base override value: a ref string like "main" or
+/// Returns the new base value: a ref string like "main" or
 /// "origin/main", or null if cancelled.
 Future<String?> showBaseSelectorDialog(
   BuildContext context, {
-  String? currentBaseOverride,
+  String? currentBase,
 }) async {
   return showDialog<String?>(
     context: context,
     builder: (context) => BaseSelectorDialog(
-      currentBaseOverride: currentBaseOverride,
+      currentBase: currentBase,
     ),
   );
 }
 
-/// Dialog for selecting a base ref override for a worktree.
+/// Dialog for selecting a base ref for a worktree.
 ///
 /// Presents radio options for common base refs plus a custom text field.
 /// The dialog returns a ref string, [_projectDefaultSentinel] for
@@ -53,11 +53,11 @@ Future<String?> showBaseSelectorDialog(
 class BaseSelectorDialog extends StatefulWidget {
   const BaseSelectorDialog({
     super.key,
-    this.currentBaseOverride,
+    this.currentBase,
   });
 
-  /// The current per-worktree base override, or null if using project default.
-  final String? currentBaseOverride;
+  /// The current per-worktree base, or null if using project default.
+  final String? currentBase;
 
   @override
   State<BaseSelectorDialog> createState() => _BaseSelectorDialogState();
@@ -73,7 +73,7 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
   @override
   void initState() {
     super.initState();
-    final current = widget.currentBaseOverride;
+    final current = widget.currentBase;
     if (current == null || current == 'main') {
       _selected = _BaseOption.main;
       _customController = TextEditingController();

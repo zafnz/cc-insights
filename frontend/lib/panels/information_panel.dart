@@ -365,10 +365,10 @@ class _WorktreeInfo extends StatelessWidget {
   }
 
   Future<void> _handleChangeBase(BuildContext context) async {
-    final previousValue = worktree.baseOverride;
+    final previousValue = worktree.base;
     final result = await showBaseSelectorDialog(
       context,
-      currentBaseOverride: previousValue,
+      currentBase: previousValue,
     );
 
     if (!context.mounted) return;
@@ -379,15 +379,15 @@ class _WorktreeInfo extends StatelessWidget {
     // Only apply if the result differs from the previous value.
     if (result == previousValue) return;
 
-    worktree.setBaseOverride(result);
+    worktree.setBase(result);
 
     try {
       final project = context.read<ProjectState>();
       final persistence = context.read<PersistenceService>();
-      persistence.updateWorktreeBaseOverride(
+      persistence.updateWorktreeBase(
         projectRoot: project.data.repoRoot,
         worktreePath: worktreeRoot,
-        baseOverride: result,
+        base: result,
       );
     } catch (_) {
       // PersistenceService may not be available in tests

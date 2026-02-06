@@ -603,9 +603,9 @@ void main() {
       project.addWorktree(featureWorktree);
     });
 
-    test('uses worktree baseOverride when set', () {
+    test('uses worktree base when set', () {
       fakeAsync((async) {
-        featureWorktree.setBaseOverride('develop');
+        featureWorktree.setBase('develop');
 
         final service = WorktreeWatcherService(
           gitService: gitService,
@@ -628,9 +628,9 @@ void main() {
       });
     });
 
-    test('worktree baseOverride with remote ref sets isRemoteBase', () {
+    test('worktree base with remote ref sets isRemoteBase', () {
       fakeAsync((async) {
-        featureWorktree.setBaseOverride('origin/develop');
+        featureWorktree.setBase('origin/develop');
 
         final service = WorktreeWatcherService(
           gitService: gitService,
@@ -653,10 +653,10 @@ void main() {
       });
     });
 
-    test('worktree baseOverride with remotes/ prefix sets isRemoteBase',
+    test('worktree base with remotes/ prefix sets isRemoteBase',
         () {
       fakeAsync((async) {
-        featureWorktree.setBaseOverride('remotes/origin/main');
+        featureWorktree.setBase('remotes/origin/main');
 
         final service = WorktreeWatcherService(
           gitService: gitService,
@@ -763,10 +763,10 @@ void main() {
       });
     });
 
-    test('worktree override takes priority over project defaultBase',
+    test('worktree base takes priority over project defaultBase',
         () {
       fakeAsync((async) {
-        featureWorktree.setBaseOverride('release/1.0');
+        featureWorktree.setBase('release/1.0');
         configService.configs[repoRoot] = const ProjectConfig(
           defaultBase: 'develop',
         );
@@ -903,7 +903,7 @@ void main() {
 
     test('poll updates worktree data with resolved base ref', () {
       fakeAsync((async) {
-        featureWorktree.setBaseOverride('origin/develop');
+        featureWorktree.setBase('origin/develop');
 
         gitService.branchComparisons[
             '/fake/linked:feature:origin/develop'] = (

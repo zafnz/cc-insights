@@ -10,7 +10,7 @@ void main() {
   /// is tapped. Returns after the dialog is open.
   Future<void> pumpDialog(
     WidgetTester tester, {
-    String? currentBaseOverride,
+    String? currentBase,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -22,7 +22,7 @@ void main() {
                   await showDialog<String?>(
                     context: context,
                     builder: (_) => BaseSelectorDialog(
-                      currentBaseOverride: currentBaseOverride,
+                      currentBase: currentBase,
                     ),
                   );
                 },
@@ -60,7 +60,7 @@ void main() {
     });
 
     testWidgets('pre-selects "main" when value is null', (tester) async {
-      await pumpDialog(tester, currentBaseOverride: null);
+      await pumpDialog(tester, currentBase: null);
 
       // The main radio should be selected.
       final radio = tester.widget<RadioListTile<dynamic>>(
@@ -71,7 +71,7 @@ void main() {
 
     testWidgets('pre-selects "main" when current value is main',
         (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'main');
+      await pumpDialog(tester, currentBase: 'main');
 
       final radio = tester.widget<RadioListTile<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.mainOption),
@@ -81,7 +81,7 @@ void main() {
 
     testWidgets('pre-selects "origin/main" when current value is origin/main',
         (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'origin/main');
+      await pumpDialog(tester, currentBase: 'origin/main');
 
       final radio = tester.widget<RadioListTile<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.originMainOption),
@@ -91,7 +91,7 @@ void main() {
 
     testWidgets('pre-selects "Custom" with text for non-standard value',
         (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'develop');
+      await pumpDialog(tester, currentBase: 'develop');
 
       // Custom radio should be selected.
       final radio = tester.widget<Radio<dynamic>>(
@@ -118,7 +118,7 @@ void main() {
                   onPressed: () async {
                     result = await showBaseSelectorDialog(
                       context,
-                      currentBaseOverride: 'origin/main',
+                      currentBase: 'origin/main',
                     );
                   },
                   child: const Text('Open'),
@@ -155,7 +155,7 @@ void main() {
                   onPressed: () async {
                     result = await showBaseSelectorDialog(
                       context,
-                      currentBaseOverride: 'main',
+                      currentBase: 'main',
                     );
                   },
                   child: const Text('Open'),
@@ -179,7 +179,7 @@ void main() {
     });
 
     testWidgets('tapping custom field selects custom option', (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'main');
+      await pumpDialog(tester, currentBase: 'main');
 
       // Verify main is selected initially.
       var mainRadio = tester.widget<RadioListTile<dynamic>>(
@@ -200,7 +200,7 @@ void main() {
 
     testWidgets('Apply is disabled when Custom is selected but field is empty',
         (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'main');
+      await pumpDialog(tester, currentBase: 'main');
 
       // Tap the custom text field to select custom option.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
@@ -221,7 +221,7 @@ void main() {
     });
 
     testWidgets('Apply is enabled when Custom has text', (tester) async {
-      await pumpDialog(tester, currentBaseOverride: 'main');
+      await pumpDialog(tester, currentBase: 'main');
 
       // Tap the custom text field.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
@@ -253,7 +253,7 @@ void main() {
                   onPressed: () async {
                     result = await showBaseSelectorDialog(
                       context,
-                      currentBaseOverride: 'main',
+                      currentBase: 'main',
                     );
                   },
                   child: const Text('Open'),
@@ -296,7 +296,7 @@ void main() {
                   onPressed: () async {
                     result = await showBaseSelectorDialog(
                       context,
-                      currentBaseOverride: 'main',
+                      currentBase: 'main',
                     );
                   },
                   child: const Text('Open'),
@@ -336,7 +336,7 @@ void main() {
                   onPressed: () async {
                     result = await showBaseSelectorDialog(
                       context,
-                      currentBaseOverride: 'main',
+                      currentBase: 'main',
                     );
                   },
                   child: const Text('Open'),

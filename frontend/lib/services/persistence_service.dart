@@ -680,17 +680,16 @@ class PersistenceService {
     }
   }
 
-  /// Updates the base branch override for a worktree in projects.json.
+  /// Updates the base branch for a worktree in projects.json.
   ///
-  /// Pass null for [baseOverride] to clear the override and revert to the
-  /// project default.
+  /// Pass null for [base] to clear and revert to the project default.
   ///
   /// This method is designed to be called fire-and-forget - errors are logged
   /// but not thrown to avoid blocking UI operations.
-  Future<void> updateWorktreeBaseOverride({
+  Future<void> updateWorktreeBase({
     required String projectRoot,
     required String worktreePath,
-    required String? baseOverride,
+    required String? base,
   }) async {
     try {
       final projectsIndex = await loadProjectsIndex();
@@ -698,7 +697,7 @@ class PersistenceService {
 
       if (project == null) {
         developer.log(
-          'Project not found for base override update: $projectRoot',
+          'Project not found for base update: $projectRoot',
           name: 'PersistenceService',
           level: 900,
         );
@@ -708,16 +707,16 @@ class PersistenceService {
       final worktree = project.worktrees[worktreePath];
       if (worktree == null) {
         developer.log(
-          'Worktree not found for base override update: $worktreePath',
+          'Worktree not found for base update: $worktreePath',
           name: 'PersistenceService',
           level: 900,
         );
         return;
       }
 
-      final updatedWorktree = baseOverride != null
-          ? worktree.copyWith(baseOverride: baseOverride)
-          : worktree.copyWith(clearBaseOverride: true);
+      final updatedWorktree = base != null
+          ? worktree.copyWith(base: base)
+          : worktree.copyWith(clearBase: true);
       final updatedProject = project.copyWith(
         worktrees: {
           ...project.worktrees,
@@ -734,13 +733,13 @@ class PersistenceService {
       await saveProjectsIndex(updatedIndex);
 
       developer.log(
-        'Updated base override for worktree $worktreePath: '
-        '${baseOverride ?? 'cleared'}',
+        'Updated base for worktree $worktreePath: '
+        '${base ?? 'cleared'}',
         name: 'PersistenceService',
       );
     } catch (e) {
       developer.log(
-        'Failed to update base override for worktree $worktreePath: $e',
+        'Failed to update base for worktree $worktreePath: $e',
         name: 'PersistenceService',
         error: e,
       );
