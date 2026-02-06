@@ -2,6 +2,7 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/log_service.dart';
@@ -22,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../fakes/fake_git_service.dart';
 import '../test_helpers.dart';
 
@@ -37,6 +39,7 @@ void main() {
     late FileManagerState fileManagerState;
     late DialogObserver dialogObserver;
     late MenuActionService menuActionService;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     final resources = TestResources();
 
@@ -71,6 +74,9 @@ void main() {
           ChangeNotifierProvider<MenuActionService>.value(
             value: menuActionService,
           ),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: fakeCliAvailability,
+          ),
         ],
         child: MaterialApp(
           home: const MainScreen(),
@@ -96,6 +102,7 @@ void main() {
       );
       dialogObserver = DialogObserver();
       menuActionService = MenuActionService();
+      fakeCliAvailability = FakeCliAvailabilityService();
       await mockBackend.start();
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(

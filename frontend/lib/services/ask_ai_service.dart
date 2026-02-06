@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
+import 'runtime_config.dart';
+
 /// Cumulative usage statistics for the AskAI service.
 ///
 /// Extends [ChangeNotifier] so UI can reactively display stats.
@@ -107,21 +109,33 @@ class AskAiUsageStats extends ChangeNotifier {
 class AskAiService {
   /// Creates an AskAiService.
   ///
-  /// [claudePath] is the path to the claude CLI executable. If not provided,
-  /// it defaults to 'claude' (assuming it's in PATH).
-  AskAiService({String? claudePath})
-      : _claude = ClaudeSingleRequest(
-          claudePath: claudePath,
-          onLog: (message, {isError = false}) {
-            developer.log(
-              message,
-              name: 'AskAiService',
-              level: isError ? 900 : 800,
-            );
-          },
-        );
+  /// [claudePath] is an explicit override for the claude CLI executable.
+  /// If not provided, the path is resolved from [RuntimeConfig.claudeCliPath]
+  /// at request time, falling back to the default PATH lookup.
+  AskAiService({String? claudePath}) : _explicitPath = claudePath;
 
-  final ClaudeSingleRequest _claude;
+  final String? _explicitPath;
+
+  /// Returns the effective claude CLI path, resolving from settings.
+  String? get _effectiveClaudePath {
+    if (_explicitPath != null) return _explicitPath;
+    final configPath = RuntimeConfig.instance.claudeCliPath;
+    return configPath.isEmpty ? null : configPath;
+  }
+
+  /// Creates a [ClaudeSingleRequest] with the current effective path.
+  ClaudeSingleRequest _createRequest() {
+    return ClaudeSingleRequest(
+      claudePath: _effectiveClaudePath,
+      onLog: (message, {isError = false}) {
+        developer.log(
+          message,
+          name: 'AskAiService',
+          level: isError ? 900 : 800,
+        );
+      },
+    );
+  }
 
   /// Cumulative usage statistics across all queries.
   final AskAiUsageStats usageStats = AskAiUsageStats();
@@ -144,7 +158,8 @@ class AskAiService {
     int? maxTurns,
     int timeoutSeconds = 60,
   }) async {
-    final result = await _claude.request(
+    final claude = _createRequest();
+    final result = await claude.request(
       prompt: prompt,
       workingDirectory: workingDirectory,
       options: SingleRequestOptions(

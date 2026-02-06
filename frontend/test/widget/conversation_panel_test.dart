@@ -6,6 +6,7 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
@@ -17,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../test_helpers.dart';
 
 // =============================================================================
@@ -315,11 +317,13 @@ void main() {
     late ProjectState project;
     late SelectionState selectionState;
     late FakeBackendService fakeBackend;
+    late FakeCliAvailabilityService fakeCliAvailability;
     late FakeSdkMessageHandler fakeMessageHandler;
     late ChatState testChat;
 
     setUp(() {
       fakeBackend = FakeBackendService();
+      fakeCliAvailability = FakeCliAvailabilityService();
       fakeMessageHandler = FakeSdkMessageHandler();
 
       // Create a chat for testing (NOT tracked separately - owned by worktree)
@@ -368,6 +372,9 @@ void main() {
             ChangeNotifierProvider.value(value: project),
             ChangeNotifierProvider.value(value: selectionState),
             ChangeNotifierProvider<BackendService>.value(value: fakeBackend),
+            ChangeNotifierProvider<CliAvailabilityService>.value(
+              value: fakeCliAvailability,
+            ),
             Provider<SdkMessageHandler>.value(value: fakeMessageHandler),
             ChangeNotifierProvider(create: (_) => ThemeState()),
           ],

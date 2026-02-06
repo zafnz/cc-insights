@@ -9,9 +9,11 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../test_helpers.dart';
 
 void main() {
@@ -20,6 +22,7 @@ void main() {
     late ProjectState project;
     late SelectionState selectionState;
     late BackendService backendService;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     /// Creates a chat with the specified number of entries.
     ChatState createChatWithEntries(String name, int entryCount) {
@@ -80,6 +83,7 @@ void main() {
 
       selectionState = resources.track(SelectionState(project));
       backendService = resources.track(BackendService());
+      fakeCliAvailability = FakeCliAvailabilityService();
     });
 
     tearDown(() async {
@@ -93,6 +97,9 @@ void main() {
             ChangeNotifierProvider.value(value: project),
             ChangeNotifierProvider.value(value: selectionState),
             ChangeNotifierProvider<BackendService>.value(value: backendService),
+            ChangeNotifierProvider<CliAvailabilityService>.value(
+              value: fakeCliAvailability,
+            ),
           ],
           child: const Scaffold(
             body: KeyboardFocusManager(

@@ -4,6 +4,7 @@ import 'package:cc_insights_v2/panels/chats_panel.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/project_restore_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -11,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../test_helpers.dart';
 
 void main() {
@@ -19,6 +21,7 @@ void main() {
     late SelectionState selection;
     late SettingsService settingsService;
     late BackendService backendService;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     /// Creates a project with just the primary worktree (no chats).
     ProjectState createEmptyProject() {
@@ -55,6 +58,9 @@ void main() {
           ChangeNotifierProvider<SettingsService>.value(
             value: settingsService,
           ),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: fakeCliAvailability,
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(body: child),
@@ -67,6 +73,7 @@ void main() {
       selection = SelectionState(project);
       settingsService = SettingsService(configPath: '/tmp/test_settings.json');
       backendService = BackendService();
+      fakeCliAvailability = FakeCliAvailabilityService();
     });
 
     tearDown(() {

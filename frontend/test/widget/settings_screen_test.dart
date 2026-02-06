@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cc_insights_v2/screens/settings_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
@@ -9,12 +10,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../test_helpers.dart';
 
 void main() {
   late Directory tempDir;
   late SettingsService settingsService;
   late MockBackendService mockBackend;
+  late FakeCliAvailabilityService fakeCliAvailability;
 
   setUp(() {
     RuntimeConfig.resetForTesting();
@@ -24,6 +27,7 @@ void main() {
       configPath: '${tempDir.path}/config.json',
     );
     mockBackend = MockBackendService();
+    fakeCliAvailability = FakeCliAvailabilityService();
   });
 
   tearDown(() {
@@ -39,6 +43,9 @@ void main() {
       providers: [
         ChangeNotifierProvider<BackendService>.value(value: mockBackend),
         ChangeNotifierProvider<SettingsService>.value(value: settingsService),
+        ChangeNotifierProvider<CliAvailabilityService>.value(
+          value: fakeCliAvailability,
+        ),
       ],
       child: const MaterialApp(
         home: Scaffold(body: SettingsScreen()),
@@ -84,8 +91,8 @@ void main() {
         await tester.tap(find.text('Session'));
         await safePumpAndSettle(tester);
 
-        // Now shows Session content
-        expect(find.text('Default Model'), findsOneWidget);
+        // Now shows Session content (Claude CLI Path is the first setting)
+        expect(find.text('Claude CLI Path'), findsOneWidget);
         // Appearance settings should be gone
         expect(find.text('Bash Tool Summary'), findsNothing);
       });
@@ -326,10 +333,19 @@ void main() {
       testWidgets('shows warning dialog when selecting Bypass',
           (tester) async {
         await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
 
         // Navigate to Session category
         await tester.tap(find.text('Session'));
+        await safePumpAndSettle(tester);
+
+        // Scroll to make Permission Mode dropdown visible
+        await tester.scrollUntilVisible(
+          find.text('Default Permission Mode'),
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
         await safePumpAndSettle(tester);
 
         // Find the permission mode dropdown (third dropdown in Session)
@@ -352,13 +368,24 @@ void main() {
         );
         expect(find.text('Cancel'), findsOneWidget);
         expect(find.text('Enable Bypass'), findsOneWidget);
+
+        await tester.binding.setSurfaceSize(null);
       });
 
       testWidgets('cancel does not change value', (tester) async {
         await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
 
         await tester.tap(find.text('Session'));
+        await safePumpAndSettle(tester);
+
+        // Scroll to make Permission Mode dropdown visible
+        await tester.scrollUntilVisible(
+          find.text('Default Permission Mode'),
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
         await safePumpAndSettle(tester);
 
         final dropdowns = find.byType(DropdownButton<String>);
@@ -380,13 +407,24 @@ void main() {
           ),
           'default',
         );
+
+        await tester.binding.setSurfaceSize(null);
       });
 
       testWidgets('confirm sets bypass value', (tester) async {
         await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
 
         await tester.tap(find.text('Session'));
+        await safePumpAndSettle(tester);
+
+        // Scroll to make Permission Mode dropdown visible
+        await tester.scrollUntilVisible(
+          find.text('Default Permission Mode'),
+          100,
+          scrollable: find.byType(Scrollable).last,
+        );
         await safePumpAndSettle(tester);
 
         final dropdowns = find.byType(DropdownButton<String>);
@@ -408,6 +446,8 @@ void main() {
           ),
           'bypassPermissions',
         );
+
+        await tester.binding.setSurfaceSize(null);
       });
     });
   });

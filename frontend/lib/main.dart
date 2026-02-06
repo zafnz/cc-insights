@@ -19,7 +19,9 @@ import 'screens/replay_demo_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'widgets/app_menu_bar.dart';
 import 'widgets/directory_validation_dialog.dart';
+import 'screens/cli_required_screen.dart';
 import 'services/ask_ai_service.dart';
+import 'services/cli_availability_service.dart';
 import 'services/log_service.dart';
 import 'services/backend_service.dart';
 import 'services/file_system_service.dart';
@@ -173,6 +175,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The settings service for application preferences.
   SettingsService? _settingsService;
 
+  /// CLI availability service for checking claude/codex existence.
+  CliAvailabilityService? _cliAvailability;
+
   /// The persistence service for storing project/chat data.
   PersistenceService? _persistenceService;
 
@@ -320,13 +325,27 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create the persistence service for storing project/chat data
     _persistenceService = PersistenceService();
 
+    // Create CLI availability service
+    _cliAvailability = CliAvailabilityService();
+
     // Create and load the settings service (fire-and-forget load)
     _settingsService = SettingsService();
-    _settingsService!.load().then((_) {
+    _settingsService!.load().then((_) async {
+      // Check CLI availability after settings load (custom paths may be set)
       if (!shouldUseMock && widget.backendService == null) {
-        _backend?.start(type: RuntimeConfig.instance.defaultBackend);
+        final config = RuntimeConfig.instance;
+        await _cliAvailability!.checkAll(
+          claudePath: config.claudeCliPath,
+          codexPath: config.codexCliPath,
+        );
+        config.codexAvailable = _cliAvailability!.codexAvailable;
+
+        if (_cliAvailability!.claudeAvailable) {
+          _backend?.start(type: config.defaultBackend);
+        }
       }
       _restoreWindowSize();
+      if (mounted) setState(() {});
     });
 
     // Create the AskAI service for one-shot AI queries
@@ -587,6 +606,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       return _buildAppContent(_project!);
     }
 
+    // After CLI check completes, show the required screen if claude is missing
+    if (_cliAvailability != null &&
+        _cliAvailability!.checked &&
+        !_cliAvailability!.claudeAvailable) {
+      return _buildCliRequiredContent();
+    }
+
     // Show validation dialog if we have pending validation
     if (_needsValidation && _pendingValidationInfo != null) {
       return _buildValidationContent();
@@ -656,6 +682,31 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       themeMode: _themeState?.themeMode ?? ThemeMode.system,
       home: WelcomeScreen(
         onProjectSelected: _onProjectSelected,
+      ),
+    );
+  }
+
+  /// Builds the CLI required screen (Claude CLI not found).
+  Widget _buildCliRequiredContent() {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
+      home: CliRequiredScreen(
+        cliAvailability: _cliAvailability!,
+        settingsService: _settingsService!,
+        onCliFound: () {
+          // Update codex availability
+          RuntimeConfig.instance.codexAvailable =
+              _cliAvailability!.codexAvailable;
+          // Start the backend now that claude is available
+          if (widget.backendService == null) {
+            _backend?.start(type: RuntimeConfig.instance.defaultBackend);
+          }
+          setState(() {});
+        },
       ),
     );
   }
@@ -868,6 +919,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       providers: [
         // Central logging service (singleton, rate-limited notifications)
         ChangeNotifierProvider<LogService>.value(value: LogService.instance),
+        // CLI availability service for checking claude/codex existence
+        ChangeNotifierProvider<CliAvailabilityService>.value(
+          value: _cliAvailability!,
+        ),
         // Backend service for spawning SDK sessions
         ChangeNotifierProvider<BackendService>.value(value: _backend!),
         // SDK message handler (stateless - shared across all chats)

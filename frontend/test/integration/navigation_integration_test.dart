@@ -3,6 +3,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/screens/file_manager_screen.dart';
 import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/log_service.dart';
@@ -20,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../fakes/fake_git_service.dart';
 import '../test_helpers.dart';
 
@@ -42,6 +44,7 @@ void main() {
     late ScriptExecutionService scriptService;
     late DialogObserver dialogObserver;
     late MenuActionService menuActionService;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     /// Creates a project with primary and linked worktrees for testing.
     ProjectState createProject() {
@@ -116,6 +119,9 @@ void main() {
           ChangeNotifierProvider<MenuActionService>.value(
             value: menuActionService,
           ),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: fakeCliAvailability,
+          ),
         ],
         child: const MaterialApp(
           home: MainScreen(),
@@ -143,6 +149,7 @@ void main() {
       );
       dialogObserver = DialogObserver();
       menuActionService = MenuActionService();
+      fakeCliAvailability = FakeCliAvailabilityService();
 
       // Set up fake file system
       fakeFileSystem.addDirectory('/Users/test/my-project');
@@ -477,6 +484,9 @@ void main() {
                 ),
                 ChangeNotifierProvider<MenuActionService>.value(
                   value: menuActionService,
+                ),
+                ChangeNotifierProvider<CliAvailabilityService>.value(
+                  value: fakeCliAvailability,
                 ),
               ],
               child: MaterialApp(

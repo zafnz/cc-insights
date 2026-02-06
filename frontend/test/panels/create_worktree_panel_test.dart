@@ -5,6 +5,7 @@ import 'package:cc_insights_v2/panels/content_panel.dart';
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -12,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../test_helpers.dart';
 
 /// Helper to pump a widget with async operations that need real I/O.
@@ -345,9 +347,11 @@ void main() {
     late ProjectState projectState;
     late SelectionState selectionState;
     late BackendService backendService;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     setUp(() {
       testGitService = TestGitService();
+      fakeCliAvailability = FakeCliAvailabilityService();
 
       // Set up a test repository with branches and worktrees
       testGitService.setupSimpleRepo('/test/project', branch: 'main');
@@ -399,6 +403,9 @@ void main() {
           ChangeNotifierProvider.value(value: projectState),
           ChangeNotifierProvider.value(value: selectionState),
           ChangeNotifierProvider<BackendService>.value(value: backendService),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: fakeCliAvailability,
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -757,9 +764,11 @@ void main() {
     late ProjectState projectState;
     late SelectionState selectionState;
     late BackendService backendService;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     setUp(() {
       testGitService = TestGitService();
+      fakeCliAvailability = FakeCliAvailabilityService();
       testGitService.setupSimpleRepo('/test/project', branch: 'main');
 
       final worktree = WorktreeState(
@@ -801,6 +810,9 @@ void main() {
           ChangeNotifierProvider.value(value: projectState),
           ChangeNotifierProvider.value(value: selectionState),
           ChangeNotifierProvider<BackendService>.value(value: backendService),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: fakeCliAvailability,
+          ),
         ],
         child: const MaterialApp(
           home: Scaffold(

@@ -4,6 +4,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_model.dart';
+import 'runtime_config.dart';
 
 /// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
 void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
@@ -119,11 +120,28 @@ class BackendService extends ChangeNotifier {
   ///
   /// After calling this method, check [isReady] to verify the backend started
   /// successfully, or [error] to see what went wrong.
+  /// Resolves the CLI executable path from RuntimeConfig for the given backend.
+  ///
+  /// Returns null if no custom path is configured, letting the SDK use its
+  /// default resolution (PATH lookup / environment variable).
+  String? _resolveExecutablePath(BackendType type) {
+    final config = RuntimeConfig.instance;
+    return switch (type) {
+      BackendType.directCli => config.claudeCliPath.isEmpty
+          ? null
+          : config.claudeCliPath,
+      BackendType.codex => config.codexCliPath.isEmpty
+          ? null
+          : config.codexCliPath,
+    };
+  }
+
   Future<void> start({
     BackendType type = BackendType.directCli,
     String? executablePath,
   }) async {
-    _t('BackendService', 'start() called, type=${type.name}, executablePath=${executablePath ?? 'default'}');
+    final effectivePath = executablePath ?? _resolveExecutablePath(type);
+    _t('BackendService', 'start() called, type=${type.name}, executablePath=${effectivePath ?? 'default'}');
     _backendType = type;
     final existing = _backends[type];
     if (existing != null) {
@@ -144,7 +162,7 @@ class BackendService extends ChangeNotifier {
 
     try {
       _t('BackendService', 'Creating backend for ${type.name}...');
-      final backend = await createBackend(type: type, executablePath: executablePath);
+      final backend = await createBackend(type: type, executablePath: effectivePath);
       _backends[type] = backend;
       _t('BackendService', 'Backend created for ${type.name}, capabilities: ${backend.capabilities}');
 
@@ -178,12 +196,13 @@ class BackendService extends ChangeNotifier {
     required BackendType type,
     String? executablePath,
   }) async {
+    final effectivePath = executablePath ?? _resolveExecutablePath(type);
     // Dispose backends that are not the target type.
     final toRemove = _backends.keys.where((k) => k != type).toList();
     for (final key in toRemove) {
       await _disposeBackend(key);
     }
-    await start(type: type, executablePath: executablePath);
+    await start(type: type, executablePath: effectivePath);
   }
 
   Future<void> _refreshModelsIfSupported(
@@ -237,8 +256,9 @@ class BackendService extends ChangeNotifier {
     List<ContentBlock>? content,
     String? executablePath,
   }) async {
+    final effectivePath = executablePath ?? _resolveExecutablePath(type);
     _t('BackendService', 'createSessionForBackend type=${type.name} cwd=$cwd');
-    await start(type: type, executablePath: executablePath);
+    await start(type: type, executablePath: effectivePath);
     final backend = _backends[type];
     if (backend == null) {
       _t('BackendService', 'ERROR: Backend ${type.name} not started after start() call');

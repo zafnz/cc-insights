@@ -1,6 +1,7 @@
 import 'package:cc_insights_v2/models/setting_definition.dart';
 import 'package:cc_insights_v2/screens/settings_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
@@ -9,12 +10,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_cli_availability_service.dart';
 import '../test_helpers.dart';
 
 void main() {
   group('SettingsScreen theme settings', () {
     late SettingsService settingsService;
     late MockBackendService mockBackend;
+    late FakeCliAvailabilityService fakeCliAvailability;
 
     setUp(() {
       // Use a temp path so we never touch real config.
@@ -22,6 +25,7 @@ void main() {
         configPath: '/tmp/cc_test_settings.json',
       );
       mockBackend = MockBackendService();
+      fakeCliAvailability = FakeCliAvailabilityService();
     });
 
     tearDown(() {
@@ -34,6 +38,9 @@ void main() {
           ChangeNotifierProvider<BackendService>.value(value: mockBackend),
           ChangeNotifierProvider<SettingsService>.value(
             value: settingsService,
+          ),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: fakeCliAvailability,
           ),
         ],
         child: const MaterialApp(

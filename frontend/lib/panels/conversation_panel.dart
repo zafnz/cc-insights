@@ -14,6 +14,7 @@ import '../models/output_entry.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/backend_service.dart';
+import '../services/cli_availability_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
 import '../services/sdk_message_handler.dart';
@@ -793,14 +794,24 @@ class _ConversationHeader extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _CompactDropdown(
-                        value: _agentLabel(chat.model.backend),
-                        items: _agentItems,
-                        tooltip: 'Agent',
-                        isEnabled: !isBackendLocked,
-                        onChanged: (value) {
-                          unawaited(
-                            _handleAgentChange(context, chat, value),
+                      Builder(
+                        builder: (context) {
+                          final cliAvailability =
+                              context.watch<CliAvailabilityService>();
+                          final agentItems = cliAvailability.codexAvailable
+                              ? const ['Claude', 'Codex']
+                              : const ['Claude'];
+                          return _CompactDropdown(
+                            value: _agentLabel(chat.model.backend),
+                            items: agentItems,
+                            tooltip: 'Agent',
+                            isEnabled: !isBackendLocked &&
+                                agentItems.length > 1,
+                            onChanged: (value) {
+                              unawaited(
+                                _handleAgentChange(context, chat, value),
+                              );
+                            },
                           );
                         },
                       ),
@@ -885,8 +896,6 @@ class _ConversationHeader extends StatelessWidget {
       ),
     );
   }
-
-  static const List<String> _agentItems = ['Claude', 'Codex'];
 
   /// Labels for reasoning effort dropdown.
   /// 'Default' means null (use model's default).
@@ -1615,12 +1624,22 @@ class _WelcomeHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _CompactDropdown(
-                    value: _agentLabel(model.backend),
-                    items: _agentItems,
-                    tooltip: 'Agent',
-                    onChanged: (value) {
-                      onAgentChanged(_backendFromAgent(value));
+                  Builder(
+                    builder: (context) {
+                      final cliAvailability =
+                          context.watch<CliAvailabilityService>();
+                      final agentItems = cliAvailability.codexAvailable
+                          ? const ['Claude', 'Codex']
+                          : const ['Claude'];
+                      return _CompactDropdown(
+                        value: _agentLabel(model.backend),
+                        items: agentItems,
+                        tooltip: 'Agent',
+                        isEnabled: agentItems.length > 1,
+                        onChanged: (value) {
+                          onAgentChanged(_backendFromAgent(value));
+                        },
+                      );
                     },
                   ),
                   const SizedBox(width: 8),
@@ -1681,8 +1700,6 @@ class _WelcomeHeader extends StatelessWidget {
       ),
     );
   }
-
-  static const List<String> _agentItems = ['Claude', 'Codex'];
 
   static const List<String> _reasoningEffortItems = [
     'Default',

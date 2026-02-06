@@ -121,6 +121,15 @@ class RuntimeConfig extends ChangeNotifier {
   /// Which markdown rendering backend to use.
   MarkdownBackend _markdownBackend = MarkdownBackend.flutterMarkdownPlus;
 
+  /// Custom path to the Claude CLI executable (empty = use PATH lookup).
+  String _claudeCliPath = '';
+
+  /// Custom path to the Codex CLI executable (empty = use PATH lookup).
+  String _codexCliPath = '';
+
+  /// Whether the Codex CLI is available on this system.
+  bool _codexAvailable = true;
+
   /// The working directory for this session.
   String get workingDirectory => _workingDirectory;
 
@@ -413,6 +422,40 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Custom path to the Claude CLI executable.
+  ///
+  /// Empty string means use default PATH lookup.
+  String get claudeCliPath => _claudeCliPath;
+
+  set claudeCliPath(String value) {
+    if (_claudeCliPath != value) {
+      _claudeCliPath = value;
+      notifyListeners();
+    }
+  }
+
+  /// Custom path to the Codex CLI executable.
+  ///
+  /// Empty string means use default PATH lookup.
+  String get codexCliPath => _codexCliPath;
+
+  set codexCliPath(String value) {
+    if (_codexCliPath != value) {
+      _codexCliPath = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether the Codex CLI is available on this system.
+  bool get codexAvailable => _codexAvailable;
+
+  set codexAvailable(bool value) {
+    if (_codexAvailable != value) {
+      _codexAvailable = value;
+      notifyListeners();
+    }
+  }
+
   /// Updates the working directory.
   ///
   /// This is called when the user selects a project from the welcome screen.
@@ -456,5 +499,8 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._loggingFilePath = '~/ccinsights.app.jsonl';
     _instance._loggingMinimumLevel = 'debug';
     _instance._markdownBackend = MarkdownBackend.flutterMarkdownPlus;
+    _instance._claudeCliPath = '';
+    _instance._codexCliPath = '';
+    _instance._codexAvailable = true;
   }
 }

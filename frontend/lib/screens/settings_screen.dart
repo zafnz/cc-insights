@@ -1,14 +1,18 @@
 import 'dart:async';
 
 import 'package:claude_sdk/claude_sdk.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../models/chat_model.dart';
 import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
 import '../services/backend_service.dart';
+import '../services/cli_availability_service.dart';
+import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
 import '../state/theme_state.dart';
 import '../widgets/insights_widgets.dart';
@@ -261,6 +265,29 @@ class _SettingsContent extends StatelessWidget {
       return;
     }
 
+    if (definition.key == 'session.claudeCliPath' ||
+        definition.key == 'session.codexCliPath') {
+      unawaited(settings.setValue(definition.key, value));
+      // Re-validate CLI availability with new paths
+      final cliAvailability = context.read<CliAvailabilityService>();
+      unawaited(
+        cliAvailability
+            .checkAll(
+              claudePath: definition.key == 'session.claudeCliPath'
+                  ? value as String
+                  : RuntimeConfig.instance.claudeCliPath,
+              codexPath: definition.key == 'session.codexCliPath'
+                  ? value as String
+                  : RuntimeConfig.instance.codexCliPath,
+            )
+            .then((_) {
+          RuntimeConfig.instance.codexAvailable =
+              cliAvailability.codexAvailable;
+        }),
+      );
+      return;
+    }
+
     settings.setValue(definition.key, value);
   }
 
@@ -368,6 +395,44 @@ class _SettingsContent extends StatelessWidget {
     var effectiveDefinition = definition;
     var value = settings.getValue(definition.key);
     var isLoading = false;
+
+    // Filter Default Backend options when codex is unavailable
+    if (definition.key == 'session.defaultBackend') {
+      final cliAvailability = context.watch<CliAvailabilityService>();
+      if (!cliAvailability.codexAvailable) {
+        effectiveDefinition = SettingDefinition(
+          key: definition.key,
+          title: definition.title,
+          description:
+              '${definition.description} (Codex CLI not found)',
+          type: definition.type,
+          defaultValue: definition.defaultValue,
+          options: const [
+            SettingOption(value: 'direct', label: 'Claude'),
+          ],
+        );
+        // Force value to 'direct' if codex was previously selected
+        if (value == 'codex') value = 'direct';
+      }
+    }
+
+    // CLI path settings get a file picker button
+    if (definition.key == 'session.claudeCliPath' ||
+        definition.key == 'session.codexCliPath') {
+      return _CliPathSettingRow(
+        definition: definition,
+        value: value as String,
+        onChanged: (value) {
+          _handleSettingChanged(
+            context,
+            settings,
+            backendService,
+            definition,
+            value,
+          );
+        },
+      );
+    }
 
     if (definition.key == 'session.defaultModel') {
       final backendValue = settings.getValue<String>('session.defaultBackend');
@@ -663,6 +728,144 @@ class _TextSettingInputState extends State<_TextSettingInput> {
         monospace: true,
         onSubmitted: _submit,
         onTapOutside: (_) => _submit(_controller.text),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// CLI path setting row (text input + file picker button)
+// ---------------------------------------------------------------------
+
+class _CliPathSettingRow extends StatefulWidget {
+  const _CliPathSettingRow({
+    required this.definition,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final SettingDefinition definition;
+  final String value;
+  final ValueChanged<dynamic> onChanged;
+
+  @override
+  State<_CliPathSettingRow> createState() => _CliPathSettingRowState();
+}
+
+class _CliPathSettingRowState extends State<_CliPathSettingRow> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_CliPathSettingRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value &&
+        _controller.text != widget.value) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit(String text) {
+    widget.onChanged(text);
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Select CLI executable',
+      type: FileType.any,
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      final path = result.files.first.path;
+      if (path != null) {
+        _controller.text = path;
+        _submit(path);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final mono = GoogleFonts.jetBrainsMono(fontSize: 13);
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 700),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left: title + description
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.definition.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                InsightsDescriptionText(widget.definition.description),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          // Right: text input + file picker icon
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 240,
+                child: TextField(
+                  controller: _controller,
+                  style: mono,
+                  decoration: InputDecoration(
+                    hintText: widget.definition.placeholder,
+                    hintStyle: mono.copyWith(
+                      color: colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.5),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onSubmitted: _submit,
+                  onTapOutside: (_) => _submit(_controller.text),
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.folder_open, size: 18),
+                tooltip: 'Browse...',
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: _pickFile,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

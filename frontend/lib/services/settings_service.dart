@@ -206,6 +206,26 @@ class SettingsService extends ChangeNotifier {
     icon: Icons.chat_outlined,
     settings: [
       SettingDefinition(
+        key: 'session.claudeCliPath',
+        title: 'Claude CLI Path',
+        description:
+            'Path to the Claude CLI executable. Leave empty to '
+            'find it automatically via PATH.',
+        type: SettingType.text,
+        defaultValue: '',
+        placeholder: '/usr/local/bin/claude',
+      ),
+      SettingDefinition(
+        key: 'session.codexCliPath',
+        title: 'Codex CLI Path',
+        description:
+            'Path to the Codex CLI executable. Leave empty to '
+            'find it automatically via PATH.',
+        type: SettingType.text,
+        defaultValue: '',
+        placeholder: '/usr/local/bin/codex',
+      ),
+      SettingDefinition(
         key: 'session.defaultBackend',
         title: 'Default Backend',
         description:
@@ -558,6 +578,10 @@ class SettingsService extends ChangeNotifier {
         config.aiChatLabelModel = value as String;
       case 'behavior.desktopNotifications':
         config.desktopNotifications = value as bool;
+      case 'session.claudeCliPath':
+        config.claudeCliPath = value as String;
+      case 'session.codexCliPath':
+        config.codexCliPath = value as String;
       case 'session.defaultModel':
         config.defaultModel = value as String;
       case 'session.defaultBackend':
