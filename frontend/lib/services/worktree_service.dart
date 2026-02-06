@@ -182,7 +182,17 @@ class WorktreeService {
       }
     }
 
-    // 7. Create the git worktree
+    // 7. If base is a remote ref (e.g. origin/main), fetch the remote first
+    if (base != null && base.contains('/')) {
+      final remote = base.split('/').first;
+      try {
+        await _gitService.fetchRemote(repoRoot, remote);
+      } on GitException {
+        // Fetch failure is non-fatal — the base ref may still be available locally
+      }
+    }
+
+    // 8. Create the git worktree
     try {
       await _gitService.createWorktree(
         repoRoot: repoRoot,
@@ -198,7 +208,7 @@ class WorktreeService {
       );
     }
 
-    // 8. Run post-create hook if configured
+    // 9. Run post-create hook if configured
     final postCreateHook = config.getHook('worktree-post-create');
     if (postCreateHook != null && postCreateHook.isNotEmpty) {
       // Run in the new worktree directory
@@ -216,10 +226,10 @@ class WorktreeService {
       }
     }
 
-    // 9. Get git status for the new worktree
+    // 10. Get git status for the new worktree
     final status = await _gitService.getStatus(worktreePath);
 
-    // 10. Determine the base for this worktree.
+    // 11. Determine the base for this worktree.
     // Use the explicitly provided base, falling back to the project default.
     var effectiveBase = base;
     if (effectiveBase == null) {
@@ -229,7 +239,7 @@ class WorktreeService {
       }
     }
 
-    // 11. Create WorktreeData and WorktreeState
+    // 12. Create WorktreeData and WorktreeState
     final worktreeData = WorktreeData(
       worktreeRoot: worktreePath,
       isPrimary: false,
@@ -242,10 +252,10 @@ class WorktreeService {
     );
     final worktreeState = WorktreeState(worktreeData, base: effectiveBase);
 
-    // 12. Persist to projects.json
+    // 13. Persist to projects.json
     await _persistWorktree(project, worktreeState, base: effectiveBase);
 
-    // 13. Return WorktreeState
+    // 14. Return WorktreeState
     return worktreeState;
   }
 

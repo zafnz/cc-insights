@@ -282,6 +282,11 @@ abstract class GitService {
   /// Throws [GitException] on failure.
   Future<void> fetch(String path);
 
+  /// Fetches updates from a specific remote.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> fetchRemote(String path, String remote);
+
   /// Checks if a branch has been merged into the target branch.
   ///
   /// Uses `git merge-base --is-ancestor` to determine if [branch] is an
@@ -791,6 +796,11 @@ class RealGitService implements GitService {
   @override
   Future<void> fetch(String path) async {
     await _runGit(['fetch'], workingDirectory: path);
+  }
+
+  @override
+  Future<void> fetchRemote(String path, String remote) async {
+    await _runGit(['fetch', remote], workingDirectory: path);
   }
 
   @override

@@ -314,6 +314,16 @@ class FakeGitService implements GitService {
     }
   }
 
+  /// Tracks calls to [fetchRemote].
+  final List<(String path, String remote)> fetchRemoteCalls = [];
+
+  @override
+  Future<void> fetchRemote(String path, String remote) async {
+    fetchRemoteCalls.add((path, remote));
+    await _maybeDelay();
+    _maybeThrow();
+  }
+
   /// Map of (path, branch, targetBranch) -> isMerged for [isBranchMerged].
   final Map<String, bool> branchMerged = {};
 

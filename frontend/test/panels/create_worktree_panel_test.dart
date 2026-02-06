@@ -178,6 +178,11 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<void> fetchRemote(String path, String remote) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
   Future<bool> isBranchMerged(
     String path,
     String branch,
