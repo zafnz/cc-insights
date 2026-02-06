@@ -576,8 +576,11 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   // -- Enable/disable logic --
-  // Rebase, merge, and pull buttons are always enabled because we can't
-  // reliably know if the remote has changed since our last fetch.
+  // Rebase, merge, and pull buttons are always enabled when working with
+  // a remote base because we can't reliably know if the remote has changed
+  // since our last fetch. For local bases we can check commitsBehindMain.
+  bool get _canUpdateFromBase =>
+      data.isRemoteBase || data.commitsBehindMain > 0;
 
   bool get _canMergeIntoMain =>
       data.commitsAheadOfMain > 0 &&
@@ -680,6 +683,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                 _ActionsSection(
                   data: data,
                   baseRef: baseRef,
+                  canUpdateFromBase: _canUpdateFromBase,
                   canMergeIntoMain: _canMergeIntoMain,
                   canPush: _canPush,
                   canCreatePr: _canCreatePr,
@@ -1176,6 +1180,7 @@ class _ActionsSection extends StatelessWidget {
   const _ActionsSection({
     required this.data,
     required this.baseRef,
+    required this.canUpdateFromBase,
     required this.canMergeIntoMain,
     required this.canPush,
     required this.canCreatePr,
@@ -1190,6 +1195,7 @@ class _ActionsSection extends StatelessWidget {
 
   final WorktreeData data;
   final String baseRef;
+  final bool canUpdateFromBase;
   final bool canMergeIntoMain;
   final bool canPush;
   final bool canCreatePr;
@@ -1233,18 +1239,20 @@ class _ActionsSection extends StatelessWidget {
             Expanded(
               child: _CompactButton(
                 key: InformationPanelKeys.rebaseOntoBaseButton,
-                onPressed: onRebaseOntoBase,
+                onPressed: canUpdateFromBase ? onRebaseOntoBase : null,
                 label: 'Rebase',
                 icon: Icons.low_priority,
+                tooltip: canUpdateFromBase ? null : 'Already up to date',
               ),
             ),
             const SizedBox(width: 6),
             Expanded(
               child: _CompactButton(
                 key: InformationPanelKeys.mergeBaseButton,
-                onPressed: onMergeBase,
+                onPressed: canUpdateFromBase ? onMergeBase : null,
                 label: 'Merge',
                 icon: Icons.merge,
+                tooltip: canUpdateFromBase ? null : 'Already up to date',
               ),
             ),
           ],

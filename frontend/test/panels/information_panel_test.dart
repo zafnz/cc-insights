@@ -627,7 +627,7 @@ void main() {
 
   group('Rebase/Merge enable/disable', () {
     testWidgets(
-      'rebase and merge always enabled even when not behind main',
+      'disabled for local base when not behind main',
       (tester) async {
         await tester.pumpWidget(buildTestWidget(
           worktreeData: const WorktreeData(
@@ -636,6 +636,80 @@ void main() {
             branch: 'feature',
             baseRef: 'main',
             isRemoteBase: false,
+            commitsBehindMain: 0,
+          ),
+        ));
+        await safePumpAndSettle(tester);
+
+        final rebaseButton =
+            find.byKey(InformationPanelKeys.rebaseOntoBaseButton);
+        final rebaseInkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: rebaseButton,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(rebaseInkWell.onTap).isNull();
+
+        final mergeButton =
+            find.byKey(InformationPanelKeys.mergeBaseButton);
+        final mergeInkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: mergeButton,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(mergeInkWell.onTap).isNull();
+      },
+    );
+
+    testWidgets(
+      'enabled for local base when behind main',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(
+          worktreeData: const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+            baseRef: 'main',
+            isRemoteBase: false,
+            commitsBehindMain: 3,
+          ),
+        ));
+        await safePumpAndSettle(tester);
+
+        final rebaseButton =
+            find.byKey(InformationPanelKeys.rebaseOntoBaseButton);
+        final rebaseInkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: rebaseButton,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(rebaseInkWell.onTap).isNotNull();
+
+        final mergeButton =
+            find.byKey(InformationPanelKeys.mergeBaseButton);
+        final mergeInkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: mergeButton,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(mergeInkWell.onTap).isNotNull();
+      },
+    );
+
+    testWidgets(
+      'always enabled for remote base even when not behind main',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(
+          worktreeData: const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+            baseRef: 'origin/main',
+            isRemoteBase: true,
             commitsBehindMain: 0,
           ),
         ));
