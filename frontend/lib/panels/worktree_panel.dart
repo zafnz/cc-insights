@@ -835,8 +835,8 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  width: 0.5,
+                  color: colorScheme.surfaceContainerHighest,
+                  width: 1,
                 ),
               ),
             ),
