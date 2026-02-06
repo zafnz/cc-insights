@@ -64,6 +64,9 @@ class _MainScreenState extends State<MainScreen> {
     // Enable drag-and-drop (editMode is a setter, not constructor param)
     _controller.editMode = true;
 
+    // Listen for structural changes to save layout
+    _controller.addListener(_onLayoutChanged);
+
     // Listen for native menu actions
     _windowChannel.setMethodCallHandler(_handleNativeMethodCall);
 
@@ -274,6 +277,7 @@ class _MainScreenState extends State<MainScreen> {
     // Remove native menu handler
     _windowChannel.setMethodCallHandler(null);
     // Remove listeners before dispose
+    _controller.removeListener(_onLayoutChanged);
     try {
       context.read<BackendService>().removeListener(_onBackendChanged);
       context.read<MenuActionService>().removeListener(_onMenuAction);
@@ -284,29 +288,28 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  /// Schedules a debounced save of the current panel layout flex values.
+  /// Called when the layout controller notifies of changes.
+  void _onLayoutChanged() {
+    _debounceSaveLayout();
+  }
+
+  /// Schedules a debounced save of the current panel layout tree.
   void _debounceSaveLayout() {
     _layoutSaveDebounce?.cancel();
     _layoutSaveDebounce = Timer(const Duration(seconds: 5), () {
-      _saveLayoutFlex();
+      _saveLayoutTree();
     });
   }
 
-  /// Saves the current panel flex values immediately.
-  void _saveLayoutFlex() {
-    final settings = context.read<SettingsService>();
-    final flexMap = _extractFlexValues(_controller.rootNode);
-    settings.saveLayoutFlex(flexMap);
-  }
-
-  /// Recursively extracts node ID → flex value from the tree.
-  Map<String, double> _extractFlexValues(SplitNode node) {
-    final map = <String, double>{};
-    map[node.id] = node.flex;
-    for (final child in node.children) {
-      map.addAll(_extractFlexValues(child));
+  /// Saves the current panel layout tree immediately.
+  void _saveLayoutTree() {
+    try {
+      final settings = context.read<SettingsService>();
+      final treeJson = _controller.rootNode.toJson();
+      settings.saveLayoutTree(treeJson);
+    } catch (_) {
+      // Provider not available (e.g. during dispose)
     }
-    return map;
   }
 
   /// Handle replace interception - merge panels instead of replacing.
@@ -360,7 +363,6 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
-    _debounceSaveLayout();
   }
 
   /// Merge chats panel into worktrees panel.
@@ -406,7 +408,6 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
-    _debounceSaveLayout();
   }
 
   /// Separate agents back out from the chats panel.
@@ -445,7 +446,6 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
-    _debounceSaveLayout();
   }
 
   /// Separate chats back out from the worktrees panel.
@@ -496,51 +496,96 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
-    _debounceSaveLayout();
+  }
+
+  /// Resolves a panel ID to its widget builder.
+  ///
+  /// Returns null if the ID is not recognized, which causes
+  /// [SplitNode.fromJson] to fail and fall back to the default layout.
+  Widget Function(BuildContext)? _resolveWidgetBuilder(String id) {
+    switch (id) {
+      case 'worktrees':
+        return (context) => const WorktreePanel();
+      case 'information':
+        return (context) => const InformationPanel();
+      case 'actions':
+        return (context) => const ActionsPanel();
+      case 'content':
+        return (context) => const ContentPanel();
+      case 'terminal':
+        return (context) => const TerminalOutputPanel();
+      case 'chats':
+        return (context) => const ChatsPanel();
+      case 'agents':
+        return (context) => const AgentsPanel();
+      case 'chats_agents':
+        _agentsMergedIntoChats = true;
+        return (context) =>
+            ChatsAgentsPanel(onSeparateAgents: _separateAgentsFromChats);
+      case 'worktrees_chats':
+        _chatsMergedIntoWorktrees = true;
+        return (context) =>
+            WorktreesChatsPanel(onSeparateChats: _separateChatsFromWorktrees);
+      case 'worktrees_chats_agents':
+        _chatsMergedIntoWorktrees = true;
+        _agentsMergedIntoChats = true;
+        return (context) => WorktreesChatsAgentsPanel(
+              onSeparateChats: _separateChatsFromWorktrees,
+            );
+      default:
+        return null;
+    }
   }
 
   /// Build the initial panel layout tree.
   ///
-  /// If saved flex values exist in settings, they are applied to
-  /// restore the previous panel proportions.
+  /// If a saved layout tree exists in settings, it is restored.
+  /// Otherwise, the default layout is used.
   SplitNode _buildInitialLayout() {
-    Map<String, double>? saved;
+    Map<String, dynamic>? savedTree;
     try {
-      saved = context.read<SettingsService>().savedLayoutFlex;
+      savedTree = context.read<SettingsService>().savedLayoutTree;
     } catch (_) {
       // Provider not available (e.g. in tests without SettingsService)
     }
 
-    double flex(String id, double defaultFlex) =>
-        saved?[id] ?? defaultFlex;
+    // Try to restore from saved tree
+    if (savedTree != null) {
+      final restored = SplitNode.fromJson(savedTree, _resolveWidgetBuilder);
+      if (restored != null) {
+        return restored;
+      }
+    }
 
+    // Fall back to default layout
+    return _buildDefaultLayout();
+  }
+
+  /// Builds the default panel layout tree.
+  SplitNode _buildDefaultLayout() {
     return SplitNode.branch(
       id: 'root',
       axis: SplitAxis.horizontal,
-      flex: flex('root', 1.0),
       children: [
         // Left sidebar: Worktrees + Information + Actions stacked
         SplitNode.branch(
           id: 'left_sidebar',
           axis: SplitAxis.vertical,
-          flex: flex('left_sidebar', 1.0),
           children: [
             // Worktrees panel (top)
             SplitNode.leaf(
               id: 'worktrees',
-              flex: flex('worktrees', 1.0),
               widgetBuilder: (context) => const WorktreePanel(),
             ),
             // Information panel
             SplitNode.leaf(
               id: 'information',
-              flex: flex('information', 1.0),
               widgetBuilder: (context) => const InformationPanel(),
             ),
             // Actions panel (bottom)
             SplitNode.leaf(
               id: 'actions',
-              flex: flex('actions', 0.5),
+              flex: 0.5,
               widgetBuilder: (context) => const ActionsPanel(),
             ),
           ],
@@ -549,18 +594,17 @@ class _MainScreenState extends State<MainScreen> {
         SplitNode.branch(
           id: 'content_area',
           axis: SplitAxis.vertical,
-          flex: flex('content_area', 3.0),
+          flex: 3.0,
           children: [
             // Main content area
             SplitNode.leaf(
               id: 'content',
-              flex: flex('content', 3.0),
+              flex: 3.0,
               widgetBuilder: (context) => const ContentPanel(),
             ),
             // Terminal output panel (for script output)
             SplitNode.leaf(
               id: 'terminal',
-              flex: flex('terminal', 1.0),
               widgetBuilder: (context) => const TerminalOutputPanel(),
             ),
           ],
@@ -569,18 +613,15 @@ class _MainScreenState extends State<MainScreen> {
         SplitNode.branch(
           id: 'right_sidebar',
           axis: SplitAxis.vertical,
-          flex: flex('right_sidebar', 1.0),
           children: [
             // Chats panel (top)
             SplitNode.leaf(
               id: 'chats',
-              flex: flex('chats', 1.0),
               widgetBuilder: (context) => const ChatsPanel(),
             ),
             // Agents panel (bottom)
             SplitNode.leaf(
               id: 'agents',
-              flex: flex('agents', 1.0),
               widgetBuilder: (context) => const AgentsPanel(),
             ),
           ],
