@@ -312,7 +312,7 @@ $commitList''';
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = '$e';
+        _error = '$e'; // TODO: clean up error display
         _isCreating = false;
       });
     }
