@@ -364,6 +364,7 @@ class _FilterBar extends StatelessWidget {
 
   String _levelLabel(LogLevel level) {
     return switch (level) {
+      LogLevel.trace => 'Trace',
       LogLevel.debug => 'Debug',
       LogLevel.info => 'Info',
       LogLevel.notice => 'Notice',
@@ -502,7 +503,7 @@ class _LogEntryRowState extends State<_LogEntryRow> {
               // Message
               Expanded(
                 child: Text(
-                  entry.message,
+                  '${entry.message}\n',
                   style: monoStyle,
                   maxLines: _expanded ? null : 1,
                   overflow: _expanded ? null : TextOverflow.ellipsis,
@@ -565,6 +566,7 @@ class _LevelBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, label) = switch (level) {
+      LogLevel.trace => (Colors.grey.shade600, 'TRC'),
       LogLevel.debug => (Colors.grey, 'DBG'),
       LogLevel.info => (Colors.blue, 'INF'),
       LogLevel.notice => (Colors.cyan, 'NTC'),

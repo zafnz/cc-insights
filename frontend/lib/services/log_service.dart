@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 /// Log level for application messages.
 enum LogLevel {
+  trace,
   debug,
   info,
   notice,
@@ -215,6 +216,11 @@ class LogService extends ChangeNotifier {
 
     // Rate-limited UI notification
     _markDirty();
+  }
+
+  /// Logs a trace message.
+  void trace(String source, String message, {Map<String, dynamic>? meta}) {
+    log(source: source, level: LogLevel.trace, message: message, meta: meta);
   }
 
   /// Logs a debug message.

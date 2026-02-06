@@ -299,7 +299,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _sdkLogSubscription = sdk.SdkLogger.instance.logs.listen((entry) {
       if (entry.text != null && entry.direction == sdk.LogDirection.internal) {
         // Trace entry: tag is in `text`, message is the log line
-        LogService.instance.debug('CCI:${entry.text}', entry.message);
+        LogService.instance.trace('CCI:${entry.text}', entry.message);
       }
     });
 
@@ -436,6 +436,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Parses a log level string to LogLevel enum.
   LogLevel _parseLogLevel(String level) {
     return switch (level) {
+      'trace' => LogLevel.trace,
       'debug' => LogLevel.debug,
       'info' => LogLevel.info,
       'notice' => LogLevel.notice,
