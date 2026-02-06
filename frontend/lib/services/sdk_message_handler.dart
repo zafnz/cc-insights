@@ -138,13 +138,19 @@ class SdkMessageHandler {
         break;
 
       case 'status':
-        // Status update (e.g., compacting in progress)
+        // Status update (e.g., compacting in progress, permission mode change)
         final status = msg['status'] as String?;
         if (status == 'compacting') {
           chat.setCompacting(true);
         } else {
           // status: null means compacting finished
           chat.setCompacting(false);
+        }
+
+        // Sync permission mode when the CLI reports it (e.g., entering plan mode)
+        final permMode = msg['permissionMode'] as String?;
+        if (permMode != null) {
+          chat.setPermissionMode(PermissionMode.fromApiName(permMode));
         }
 
       case 'compact_boundary':
