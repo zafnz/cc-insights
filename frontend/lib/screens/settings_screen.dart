@@ -419,8 +419,23 @@ class _SettingsContent extends StatelessWidget {
     // CLI path settings get a file picker button
     if (definition.key == 'session.claudeCliPath' ||
         definition.key == 'session.codexCliPath') {
+      var cliDefinition = definition;
+      if (definition.key == 'session.codexCliPath') {
+        final cliAvailability = context.watch<CliAvailabilityService>();
+        if (!cliAvailability.codexAvailable) {
+          cliDefinition = SettingDefinition(
+            key: definition.key,
+            title: definition.title,
+            description: definition.description,
+            type: definition.type,
+            defaultValue: definition.defaultValue,
+            placeholder: definition.placeholder,
+            errorText: 'Codex CLI could not be found.',
+          );
+        }
+      }
       return _CliPathSettingRow(
-        definition: definition,
+        definition: cliDefinition,
         value: value as String,
         onChanged: (value) {
           _handleSettingChanged(
@@ -569,6 +584,16 @@ class _SettingRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 InsightsDescriptionText(definition.description),
+                if (definition.errorText != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    definition.errorText!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -820,6 +845,16 @@ class _CliPathSettingRowState extends State<_CliPathSettingRow> {
                 ),
                 const SizedBox(height: 6),
                 InsightsDescriptionText(widget.definition.description),
+                if (widget.definition.errorText != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.definition.errorText!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

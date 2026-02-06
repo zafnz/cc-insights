@@ -49,19 +49,39 @@ class CliAvailabilityService extends ChangeNotifier {
   Future<bool> _checkExecutable(String name, String customPath) async {
     // 1. If a custom path is configured, check that file directly.
     if (customPath.isNotEmpty) {
-      return _verifyExecutable(customPath);
+      final found = await _verifyExecutable(customPath);
+      developer.log(
+        '$name CLI ${found ? 'found' : 'not found'} at custom path: $customPath',
+        name: 'CliAvailabilityService',
+      );
+      return found;
     }
 
     // 2. For claude, check the CLAUDE_CODE_PATH environment variable.
     if (name == 'claude') {
       final envPath = Platform.environment['CLAUDE_CODE_PATH'];
       if (envPath != null && envPath.isNotEmpty) {
-        if (await _verifyExecutable(envPath)) return true;
+        if (await _verifyExecutable(envPath)) {
+          developer.log(
+            '$name CLI found via CLAUDE_CODE_PATH: $envPath',
+            name: 'CliAvailabilityService',
+          );
+          return true;
+        }
+        developer.log(
+          '$name CLI not found at CLAUDE_CODE_PATH: $envPath',
+          name: 'CliAvailabilityService',
+        );
       }
     }
 
     // 3. Fall back to `which` to search PATH.
-    return _whichExists(name);
+    final found = await _whichExists(name);
+    developer.log(
+      '$name CLI ${found ? 'found' : 'not found'} via PATH lookup',
+      name: 'CliAvailabilityService',
+    );
+    return found;
   }
 
   /// Runs `which <name>` and returns true if it exits with code 0.

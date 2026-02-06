@@ -66,6 +66,9 @@ class SettingDefinition {
   /// For text: placeholder text shown when empty.
   final String? placeholder;
 
+  /// Optional error text displayed below the description in red.
+  final String? errorText;
+
   const SettingDefinition({
     required this.key,
     required this.title,
@@ -76,6 +79,7 @@ class SettingDefinition {
     this.min,
     this.max,
     this.placeholder,
+    this.errorText,
   });
 }
 
