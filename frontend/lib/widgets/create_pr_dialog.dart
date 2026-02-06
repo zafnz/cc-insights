@@ -16,7 +16,7 @@ class CreatePrDialogKeys {
   static const bodyField = Key('create_pr_body_field');
   static const customTab = Key('create_pr_custom_tab');
   static const changelogTab = Key('create_pr_changelog_tab');
-  static const generatedTab = Key('create_pr_generated_tab');
+  static const previewTab = Key('create_pr_preview_tab');
   static const aiButton = Key('create_pr_ai_button');
   static const createButton = Key('create_pr_create_button');
   static const draftButton = Key('create_pr_draft_button');
@@ -302,6 +302,12 @@ $commitList''';
         ),
       );
 
+      // Open the PR in the system browser
+      final uri = Uri.tryParse(prUrl);
+      if (uri != null) {
+        launchUrl(uri);
+      }
+
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -468,13 +474,13 @@ $commitList''';
                 ),
               ),
               Tab(
-                key: CreatePrDialogKeys.generatedTab,
+                key: CreatePrDialogKeys.previewTab,
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.auto_awesome, size: 16),
+                    Icon(Icons.preview, size: 16),
                     SizedBox(width: 4),
-                    Text('Generated'),
+                    Text('Preview'),
                   ],
                 ),
               ),

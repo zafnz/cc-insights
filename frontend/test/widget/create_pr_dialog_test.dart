@@ -91,7 +91,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(CreatePrDialogKeys.generatedTab),
+        find.byKey(CreatePrDialogKeys.previewTab),
         findsOneWidget,
       );
     });
@@ -318,7 +318,7 @@ void main() {
       expect(find.text('No commits found'), findsOneWidget);
     });
 
-    testWidgets('generated tab shows AI description', (tester) async {
+    testWidgets('preview tab shows AI description', (tester) async {
       askAiService.nextResult = const SingleRequestResult(
         result: '===BEGIN===\n## Summary\nAdds new feature\n===END===',
         isError: false,
@@ -333,8 +333,8 @@ void main() {
       // Wait for commits to load and AI generation to complete
       await safePumpAndSettle(tester);
 
-      // Switch to generated tab
-      await tester.tap(find.byKey(CreatePrDialogKeys.generatedTab));
+      // Switch to preview tab
+      await tester.tap(find.byKey(CreatePrDialogKeys.previewTab));
       await safePumpAndSettle(tester);
 
       expect(find.textContaining('Adds new feature'), findsOneWidget);
