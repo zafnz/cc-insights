@@ -811,6 +811,7 @@ class _ConversationHeader extends StatelessWidget {
                 CostIndicator(
                   usage: chat.cumulativeUsage,
                   modelUsage: chat.modelUsage,
+                  timingStats: chat.timingStats,
                 ),
               ],
             ],

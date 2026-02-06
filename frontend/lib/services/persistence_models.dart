@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/output_entry.dart';
+import '../models/timing_stats.dart';
 
 /// Context window state information.
 ///
@@ -106,6 +107,12 @@ class ChatMeta {
   /// Provides detailed usage statistics for each model used (e.g., Opus, Haiku).
   final List<ModelUsageInfo> modelUsage;
 
+  /// Timing statistics for this chat.
+  ///
+  /// Tracks how long Claude has spent working and how long the user took
+  /// to respond to prompts.
+  final TimingStats timing;
+
   /// Creates a [ChatMeta] instance.
   const ChatMeta({
     required this.model,
@@ -117,6 +124,7 @@ class ChatMeta {
     required this.context,
     required this.usage,
     this.modelUsage = const [],
+    this.timing = const TimingStats.zero(),
   });
 
   /// Creates a [ChatMeta] with default values for a new chat.
@@ -137,6 +145,7 @@ class ChatMeta {
       context: const ContextInfo.empty(),
       usage: const UsageInfo.zero(),
       modelUsage: const [],
+      timing: const TimingStats.zero(),
     );
   }
 
@@ -151,6 +160,7 @@ class ChatMeta {
     ContextInfo? context,
     UsageInfo? usage,
     List<ModelUsageInfo>? modelUsage,
+    TimingStats? timing,
   }) {
     return ChatMeta(
       model: model ?? this.model,
@@ -162,6 +172,7 @@ class ChatMeta {
       context: context ?? this.context,
       usage: usage ?? this.usage,
       modelUsage: modelUsage ?? this.modelUsage,
+      timing: timing ?? this.timing,
     );
   }
 
@@ -193,6 +204,7 @@ class ChatMeta {
                 'contextWindow': m.contextWindow,
               })
           .toList(),
+      'timing': timing.toJson(),
     };
   }
 
@@ -200,6 +212,7 @@ class ChatMeta {
   factory ChatMeta.fromJson(Map<String, dynamic> json) {
     final usageJson = json['usage'] as Map<String, dynamic>? ?? {};
     final modelUsageJson = json['modelUsage'] as List<dynamic>? ?? [];
+    final timingJson = json['timing'] as Map<String, dynamic>?;
 
     return ChatMeta(
       model: json['model'] as String? ?? 'opus',
@@ -236,6 +249,9 @@ class ChatMeta {
             );
           })
           .toList(),
+      timing: timingJson != null
+          ? TimingStats.fromJson(timingJson)
+          : const TimingStats.zero(),
     );
   }
 
@@ -251,7 +267,8 @@ class ChatMeta {
         other.lastActiveAt == lastActiveAt &&
         other.context == context &&
         other.usage == usage &&
-        listEquals(other.modelUsage, modelUsage);
+        listEquals(other.modelUsage, modelUsage) &&
+        other.timing == timing;
   }
 
   @override
@@ -266,6 +283,7 @@ class ChatMeta {
       context,
       usage,
       Object.hashAll(modelUsage),
+      timing,
     );
   }
 

@@ -15,6 +15,7 @@ import 'chat_model.dart';
 import 'context_tracker.dart';
 import 'conversation.dart';
 import 'output_entry.dart';
+import 'timing_stats.dart';
 
 /// Permission modes for tool execution.
 enum PermissionMode {
@@ -315,6 +316,15 @@ class ChatState extends ChangeNotifier {
   /// Per-model usage breakdown for this chat.
   List<ModelUsageInfo> _modelUsage = [];
 
+  /// Timing statistics for this chat (Claude working time, user response time).
+  TimingStats _timingStats = const TimingStats.zero();
+
+  /// Timestamps for when each permission request was received.
+  ///
+  /// Keyed by the permission request's toolUseId. When a permission is
+  /// allowed or denied, the elapsed time is added to [_timingStats].
+  final Map<String, DateTime> _permissionRequestTimes = {};
+
   /// Base usage from previous sessions (for resume support).
   ///
   /// When a chat resumes from a previous session, we need to add the
@@ -401,6 +411,12 @@ class ChatState extends ChangeNotifier {
 
   /// Per-model usage breakdown from the last result message.
   List<ModelUsageInfo> get modelUsage => List.unmodifiable(_modelUsage);
+
+  /// Timing statistics for this chat.
+  ///
+  /// Tracks how long Claude has spent working and how long the user took
+  /// to respond to prompts.
+  TimingStats get timingStats => _timingStats;
 
   /// The immutable chat data.
   ChatData get data => _data;
@@ -1003,9 +1019,17 @@ class ChatState extends ChangeNotifier {
   /// arrive concurrently, they are all queued and displayed to the user
   /// one at a time.
   ///
-  /// Also sends a desktop notification to alert the user.
+  /// Also sends a desktop notification to alert the user and records the
+  /// timestamp for tracking user response time.
   void addPendingPermission(sdk.PermissionRequest request) {
     _pendingPermissions.add(request);
+
+    // Record when this permission request was received for timing tracking
+    final toolUseId = request.toolUseId;
+    if (toolUseId != null) {
+      _permissionRequestTimes[toolUseId] = DateTime.now();
+    }
+
     notifyListeners();
 
     // Send desktop notification with navigation context
@@ -1033,9 +1057,17 @@ class ChatState extends ChangeNotifier {
   ///
   /// Called by [SdkMessageHandler] when starting/stopping work.
   /// When [working] is true, records the current time as [_workingStartTime].
-  /// When [working] is false, clears [_workingStartTime].
+  /// When [working] is false, calculates elapsed time and adds it to
+  /// [_timingStats], then clears [_workingStartTime].
   void setWorking(bool working) {
     if (_isWorking != working) {
+      // When transitioning from working to not working, record the elapsed time
+      if (!working && _workingStartTime != null) {
+        final elapsed = DateTime.now().difference(_workingStartTime!);
+        _timingStats = _timingStats.addClaudeWorkingTime(elapsed);
+        _scheduleMetaSave();
+      }
+
       _isWorking = working;
       _workingStartTime = working ? DateTime.now() : null;
       notifyListeners();
@@ -1060,6 +1092,7 @@ class ChatState extends ChangeNotifier {
   /// If [updatedPermissions] is provided, it will update the permission rules.
   ///
   /// After allowing, the next request in the queue (if any) becomes current.
+  /// The user response time is recorded in [_timingStats].
   void allowPermission({
     Map<String, dynamic>? updatedInput,
     List<dynamic>? updatedPermissions,
@@ -1067,6 +1100,10 @@ class ChatState extends ChangeNotifier {
     if (_pendingPermissions.isEmpty) return;
 
     final request = _pendingPermissions.removeAt(0);
+
+    // Track user response time
+    _recordPermissionResponseTime(request.toolUseId);
+
     request.allow(
       updatedInput: updatedInput,
       updatedPermissions: updatedPermissions,
@@ -1080,10 +1117,15 @@ class ChatState extends ChangeNotifier {
   /// If [interrupt] is true, the session will be interrupted.
   ///
   /// After denying, the next request in the queue (if any) becomes current.
+  /// The user response time is recorded in [_timingStats].
   void denyPermission(String message, {bool interrupt = false}) {
     if (_pendingPermissions.isEmpty) return;
 
     final request = _pendingPermissions.removeAt(0);
+
+    // Track user response time
+    _recordPermissionResponseTime(request.toolUseId);
+
     request.deny(message, interrupt: interrupt);
     notifyListeners();
   }
@@ -1096,11 +1138,33 @@ class ChatState extends ChangeNotifier {
   ///
   /// This is safe for parallel tool calls because we match by toolUseId,
   /// so only the specific tool's permission is cleared, not others.
+  ///
+  /// Note: This does NOT record user response time since the permission
+  /// was timed out, not responded to by the user.
   void removePendingPermissionByToolUseId(String toolUseId) {
     final before = _pendingPermissions.length;
     _pendingPermissions.removeWhere((req) => req.toolUseId == toolUseId);
+
+    // Clean up the timing map (no response time recorded for timeouts)
+    _permissionRequestTimes.remove(toolUseId);
+
     if (_pendingPermissions.length != before) {
       notifyListeners();
+    }
+  }
+
+  /// Records the user response time for a permission request.
+  ///
+  /// Looks up when the permission request was received and calculates
+  /// the elapsed time. Adds it to [_timingStats] and removes the entry
+  /// from [_permissionRequestTimes].
+  void _recordPermissionResponseTime(String? toolUseId) {
+    if (toolUseId == null) return;
+    final startTime = _permissionRequestTimes.remove(toolUseId);
+    if (startTime != null) {
+      final elapsed = DateTime.now().difference(startTime);
+      _timingStats = _timingStats.addUserResponseTime(elapsed);
+      _scheduleMetaSave();
     }
   }
 
@@ -1382,6 +1446,7 @@ class ChatState extends ChangeNotifier {
     ContextInfo context,
     UsageInfo usage, {
     List<ModelUsageInfo> modelUsage = const [],
+    TimingStats timing = const TimingStats.zero(),
   }) {
     _contextTracker.updateFromUsage({
       'input_tokens': context.currentTokens,
@@ -1397,6 +1462,9 @@ class ChatState extends ChangeNotifier {
     _baseUsage = usage;
     _modelUsage = List.from(modelUsage);
     _baseModelUsage = List.from(modelUsage);
+
+    // Restore timing statistics
+    _timingStats = timing;
 
     // Don't notify - this is called during initialization
   }
@@ -1490,6 +1558,7 @@ class ChatState extends ChangeNotifier {
         ),
         usage: _cumulativeUsage,
         modelUsage: _modelUsage,
+        timing: _timingStats,
       );
       await persistenceService.saveChatMeta(_projectId!, _data.id, meta);
     } catch (e) {

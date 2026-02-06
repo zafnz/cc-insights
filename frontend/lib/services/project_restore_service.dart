@@ -246,6 +246,7 @@ class ProjectRestoreService {
       meta.context,
       meta.usage,
       modelUsage: meta.modelUsage,
+      timing: meta.timing,
     );
 
     // Restore the last session ID for session resume
@@ -499,6 +500,7 @@ class ProjectRestoreService {
         worktreeName: worktreeName,
         chatName: chat.data.name,
         modelUsage: chat.modelUsage,
+        timing: chat.timingStats,
       );
 
       // Append to tracking.jsonl

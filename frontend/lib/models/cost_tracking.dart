@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'output_entry.dart';
+import 'timing_stats.dart';
 
 /// Cost tracking entry for persistent storage.
 ///
@@ -29,12 +30,19 @@ class CostTrackingEntry {
   /// because worktrees and chats can be recreated with the same names.
   final List<ModelUsageInfo> modelUsage;
 
+  /// Timing statistics for the chat.
+  ///
+  /// Tracks how long Claude spent working and how long the user took to
+  /// respond to prompts.
+  final TimingStats timing;
+
   /// Creates a [CostTrackingEntry] instance.
   const CostTrackingEntry({
     required this.worktree,
     required this.chatName,
     required this.timestamp,
     required this.modelUsage,
+    this.timing = const TimingStats.zero(),
   });
 
   /// Creates a tracking entry from a chat's final state.
@@ -42,17 +50,20 @@ class CostTrackingEntry {
   /// The [worktreeName] is typically the branch name or directory name.
   /// The [chatName] is the user-visible chat name.
   /// The [modelUsage] is the chat's cumulative per-model usage.
+  /// The [timing] is the chat's accumulated timing statistics.
   /// The timestamp is set to the current time.
   factory CostTrackingEntry.fromChat({
     required String worktreeName,
     required String chatName,
     required List<ModelUsageInfo> modelUsage,
+    TimingStats timing = const TimingStats.zero(),
   }) {
     return CostTrackingEntry(
       worktree: worktreeName,
       chatName: chatName,
       timestamp: DateTime.now().toUtc().toIso8601String(),
       modelUsage: modelUsage,
+      timing: timing,
     );
   }
 
@@ -73,12 +84,14 @@ class CostTrackingEntry {
                 'contextWindow': m.contextWindow,
               })
           .toList(),
+      'timing': timing.toJson(),
     };
   }
 
   /// Deserializes a tracking entry from a JSON map.
   factory CostTrackingEntry.fromJson(Map<String, dynamic> json) {
     final modelUsageJson = json['modelUsage'] as List<dynamic>? ?? [];
+    final timingJson = json['timing'] as Map<String, dynamic>?;
 
     return CostTrackingEntry(
       worktree: json['worktree'] as String? ?? '',
@@ -98,6 +111,9 @@ class CostTrackingEntry {
             );
           })
           .toList(),
+      timing: timingJson != null
+          ? TimingStats.fromJson(timingJson)
+          : const TimingStats.zero(),
     );
   }
 
@@ -113,7 +129,8 @@ class CostTrackingEntry {
         other.worktree == worktree &&
         other.chatName == chatName &&
         other.timestamp == timestamp &&
-        listEquals(other.modelUsage, modelUsage);
+        listEquals(other.modelUsage, modelUsage) &&
+        other.timing == timing;
   }
 
   @override
@@ -122,6 +139,7 @@ class CostTrackingEntry {
         chatName,
         timestamp,
         Object.hashAll(modelUsage),
+        timing,
       );
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/output_entry.dart';
+import '../models/timing_stats.dart';
 
 /// Displays cumulative token usage and cost with a detailed tooltip.
 ///
@@ -17,11 +18,18 @@ class CostIndicator extends StatelessWidget {
   /// showing usage statistics for each model used in the conversation.
   final List<ModelUsageInfo> modelUsage;
 
+  /// Timing statistics for the tooltip.
+  ///
+  /// When provided and non-zero, the tooltip will include a section
+  /// showing how long Claude worked and how long the user took to respond.
+  final TimingStats? timingStats;
+
   /// Creates a [CostIndicator] widget.
   const CostIndicator({
     super.key,
     required this.usage,
     this.modelUsage = const [],
+    this.timingStats,
   });
 
   @override
@@ -104,6 +112,27 @@ class CostIndicator extends StatelessWidget {
           text: 'Cost: \$${_formatCost(model.costUsd)}\n',
         ));
       }
+    }
+
+    // Add timing statistics if available
+    final timing = timingStats;
+    if (timing != null &&
+        (timing.claudeWorkingMs > 0 || timing.userResponseMs > 0)) {
+      children.add(const TextSpan(text: '\n────────────────────\n'));
+      children.add(const TextSpan(
+        text: '\nTime\n',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ));
+      children.add(TextSpan(
+        text: 'Claude worked: '
+            '${TimingStats.formatDuration(timing.claudeWorkingDuration)}'
+            ' (${timing.claudeWorkCount}x)\n',
+      ));
+      children.add(TextSpan(
+        text: 'You responded: '
+            '${TimingStats.formatDuration(timing.userResponseDuration)}'
+            ' (${timing.userResponseCount}x)\n',
+      ));
     }
 
     return TextSpan(
