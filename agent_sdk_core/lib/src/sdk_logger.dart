@@ -207,9 +207,23 @@ class SdkLogger {
   /// Use this for high-volume diagnostic output (e.g. per-message logging)
   /// that should only appear when actively debugging.
   /// All lines are prefixed with `[CCI:<tag>]` for easy grep filtering.
+  ///
+  /// Also emits a [LogEntry] to the [logs] stream so the app log viewer
+  /// can display these messages.
   void trace(String tag, String message) {
     if (!_debugEnabled) return;
     print('[CCI:$tag] $message');
+
+    final entry = LogEntry(
+      level: LogLevel.debug,
+      message: message,
+      timestamp: DateTime.now(),
+      direction: LogDirection.internal,
+      text: tag,
+    );
+    if (!_logsController.isClosed) {
+      _logsController.add(entry);
+    }
   }
 
   /// Log a debug message.

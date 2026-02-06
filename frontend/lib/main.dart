@@ -205,6 +205,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The git info for the directory being validated.
   DirectoryGitInfo? _pendingValidationInfo;
 
+  /// Subscription forwarding SDK trace logs to LogService.
+  StreamSubscription<sdk.LogEntry>? _sdkLogSubscription;
+
   /// Debounce timer for saving window size after resize.
   Timer? _windowSizeDebounce;
 
@@ -285,7 +288,15 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Enable SDK debug logging to file
     _initializeSdkLogging();
 
-    // Note: SDK logs are now forwarded by BackendService via backend.logEntries
+    // Forward SDK trace/log entries into the app LogService so they appear
+    // in the log viewer. Only forward trace entries (tag stored in `text`)
+    // to avoid duplicating full message payloads.
+    _sdkLogSubscription = sdk.SdkLogger.instance.logs.listen((entry) {
+      if (entry.text != null && entry.direction == sdk.LogDirection.internal) {
+        // Trace entry: tag is in `text`, message is the log line
+        LogService.instance.debug('CCI:${entry.text}', entry.message);
+      }
+    });
 
     // Create or use injected BackendService
     if (widget.backendService != null) {
@@ -535,6 +546,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   @override
   void dispose() {
     _windowSizeDebounce?.cancel();
+    _sdkLogSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _menuActionService.removeListener(_onMenuServiceChanged);
     _themeState?.removeListener(_onThemeChanged);
