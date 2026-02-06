@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,6 +47,16 @@ Future<void> _scrollWorktreePanelTo(
   await safePumpAndSettle(tester);
 }
 
+/// Window size for integration tests (large enough for all panel elements).
+const _testWindowSize = Size(1000, 800);
+
+late IntegrationTestWidgetsFlutterBinding _binding;
+
+/// Sets up the test surface size. Must be called at the start of each test.
+Future<void> _setTestSurfaceSize() async {
+  await _binding.setSurfaceSize(_testWindowSize);
+}
+
 /// Integration tests for the worktree creation flow.
 ///
 /// These tests verify the UI flow for creating git worktrees:
@@ -59,7 +70,7 @@ Future<void> _scrollWorktreePanelTo(
 /// Run tests:
 ///   flutter test integration_test/worktree_creation_test.dart -d macos
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  _binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
 
@@ -93,7 +104,8 @@ void main() {
   group('Worktree Creation Navigation Flow', () {
     testWidgets('clicking New Worktree card shows CreateWorktreePanel',
         (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -127,7 +139,8 @@ void main() {
 
     testWidgets('CreateWorktreePanel shows correct UI elements',
         (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -147,14 +160,14 @@ void main() {
       // Verify the help card is visible (collapsed by default)
       expect(find.text('What is a Git Worktree?'), findsOneWidget);
 
-      // Verify Branch Name label is visible
-      expect(find.text('Branch Name'), findsOneWidget);
+      // Verify Branch name label is visible
+      expect(find.text('Branch name'), findsOneWidget);
 
-      // Verify Worktree Root Directory label is visible
-      expect(find.text('Worktree Root Directory'), findsOneWidget);
+      // Verify Worktree location label is visible
+      expect(find.text('Worktree location'), findsOneWidget);
 
       // Verify action buttons are present
-      // Cancel is a TextButton, Create Worktree is a FilledButton.icon
+      // Cancel is an OutlinedButton, Create Worktree is a FilledButton
       expect(find.text('Cancel'), findsOneWidget);
       // "Create Worktree" appears in both the panel header and the button
       expect(find.text('Create Worktree'), findsWidgets);
@@ -162,7 +175,8 @@ void main() {
     });
 
     testWidgets('help card expands when tapped', (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -186,6 +200,18 @@ void main() {
         findsNothing,
       );
 
+      // Scroll the help card into view (it's at the bottom of the form)
+      final createPanelScrollable = find.descendant(
+        of: find.byType(CreateWorktreePanel),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.text('What is a Git Worktree?'),
+        200,
+        scrollable: createPanelScrollable.first,
+      );
+      await safePumpAndSettle(tester);
+
       // Tap on the help card header to expand
       await tester.tap(find.text('What is a Git Worktree?'));
       await safePumpAndSettle(tester);
@@ -206,7 +232,8 @@ void main() {
     });
 
     testWidgets('Cancel button returns to conversation view', (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -226,7 +253,7 @@ void main() {
       expect(find.byType(CreateWorktreePanel), findsOneWidget);
 
       // Tap Cancel button (use specific finder)
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
       await safePumpAndSettle(tester);
 
       // Verify we're back to the conversation view
@@ -239,7 +266,8 @@ void main() {
 
   group('Worktree Creation Form Validation', () {
     testWidgets('empty branch name shows validation error', (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -253,7 +281,7 @@ void main() {
       // Wait for the Branch Name label to appear which indicates loading done
       await pumpUntilFound(
         tester,
-        find.text('Branch Name'),
+        find.text('Branch name'),
         timeout: const Duration(seconds: 5),
         debugLabel: 'waiting for Branch Name label',
       );
@@ -274,7 +302,8 @@ void main() {
     });
 
     testWidgets('empty root directory shows validation error', (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -286,7 +315,7 @@ void main() {
       // Wait for loading to complete - wait for Branch Name label
       await pumpUntilFound(
         tester,
-        find.text('Branch Name'),
+        find.text('Branch name'),
         timeout: const Duration(seconds: 5),
         debugLabel: 'waiting for Branch Name label',
       );
@@ -303,8 +332,8 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Clear the root directory field (find the second TextField)
-      // The root field is the one with the folder icon
-      final rootTextField = find.widgetWithIcon(TextField, Icons.folder_outlined);
+      // The root field is identified by its key
+      final rootTextField = find.byKey(CreateWorktreePanelKeys.rootField);
       expect(rootTextField, findsOneWidget);
 
       // Clear the root field by entering empty text
@@ -322,7 +351,8 @@ void main() {
     });
 
     testWidgets('form has text fields for branch and root', (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -334,24 +364,24 @@ void main() {
       // Wait for loading to complete - wait for Branch Name label
       await pumpUntilFound(
         tester,
-        find.text('Branch Name'),
+        find.text('Branch name'),
         timeout: const Duration(seconds: 5),
         debugLabel: 'waiting for Branch Name label',
       );
 
       // Verify the root directory label exists
-      expect(find.text('Worktree Root Directory'), findsOneWidget);
+      expect(find.text('Worktree location'), findsOneWidget);
 
       // Verify text fields exist - at least one for branch, one for root
       final textFields = find.byType(TextField);
       expect(textFields, findsWidgets);
 
-      // Find the root directory field (has folder icon)
-      final rootTextField = find.widgetWithIcon(TextField, Icons.folder_outlined);
+      // Find the root directory field (by key)
+      final rootTextField = find.byKey(CreateWorktreePanelKeys.rootField);
       expect(rootTextField, findsOneWidget);
 
-      // Find the branch field (has call_split icon)
-      final branchTextField = find.widgetWithIcon(TextField, Icons.call_split);
+      // Find the branch field (by key)
+      final branchTextField = find.byKey(CreateWorktreePanelKeys.branchField);
       expect(branchTextField, findsOneWidget);
     });
   });
@@ -359,7 +389,8 @@ void main() {
   group('Worktree Creation Content Panel Integration', () {
     testWidgets('ContentPanel switches between conversation and create modes',
         (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -397,7 +428,8 @@ void main() {
 
     testWidgets('worktree panel remains visible during create flow',
         (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -433,7 +465,8 @@ void main() {
 
   group('Worktree Creation Error Display', () {
     testWidgets('error card displays error message with icon', (tester) async {
-      // Launch the app
+      // Set test surface size and launch the app
+      await _setTestSurfaceSize();
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -445,7 +478,7 @@ void main() {
       // Wait for loading to complete - wait for Branch Name label
       await pumpUntilFound(
         tester,
-        find.text('Branch Name'),
+        find.text('Branch name'),
         timeout: const Duration(seconds: 5),
         debugLabel: 'waiting for Branch Name label',
       );
