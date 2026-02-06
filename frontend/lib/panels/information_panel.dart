@@ -116,7 +116,7 @@ class _NoWorktreeSelected extends StatelessWidget {
   }
 }
 
-class _WorktreeInfo extends StatelessWidget {
+class _WorktreeInfo extends StatefulWidget {
   const _WorktreeInfo({
     required this.worktree,
     required this.onStatusChanged,
@@ -125,8 +125,27 @@ class _WorktreeInfo extends StatelessWidget {
   final WorktreeState worktree;
   final VoidCallback onStatusChanged;
 
+  @override
+  State<_WorktreeInfo> createState() => _WorktreeInfoState();
+}
+
+class _WorktreeInfoState extends State<_WorktreeInfo> {
+  bool _loading = false;
+
+  WorktreeState get worktree => widget.worktree;
+  VoidCallback get onStatusChanged => widget.onStatusChanged;
   WorktreeData get data => worktree.data;
   String get worktreeRoot => data.worktreeRoot;
+
+  /// Runs [action] while showing a loading overlay on the panel.
+  Future<void> _withLoading(Future<void> Function() action) async {
+    setState(() => _loading = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   Future<void> _showCommitDialog(BuildContext context) async {
     final gitService = context.read<GitService>();
@@ -553,105 +572,143 @@ class _WorktreeInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseRef = data.baseRef ?? 'main';
 
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // A. Working Tree section (status counts, no label)
-          _StatusCounts(data: data),
-          const SizedBox(height: 8),
-          _CompactButton(
-            key: InformationPanelKeys.commitButton,
-            onPressed: data.uncommittedFiles > 0 ||
-                    data.stagedFiles > 0
-                ? () => _showCommitDialog(context)
-                : null,
-            label: 'Stage and commit all',
-            icon: Icons.check_circle_outline,
-            tooltip: data.uncommittedFiles == 0 &&
-                    data.stagedFiles == 0
-                ? 'No uncommitted files'
-                : null,
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // A. Working Tree section (status counts, no label)
+              _StatusCounts(data: data),
+              const SizedBox(height: 8),
+              _CompactButton(
+                key: InformationPanelKeys.commitButton,
+                onPressed: data.uncommittedFiles > 0 ||
+                        data.stagedFiles > 0
+                    ? () => _showCommitDialog(context)
+                    : null,
+                label: 'Stage and commit all',
+                icon: Icons.check_circle_outline,
+                tooltip: data.uncommittedFiles == 0 &&
+                        data.stagedFiles == 0
+                    ? 'No uncommitted files'
+                    : null,
+              ),
+
+              // B. Base section (non-primary only)
+              if (!data.isPrimary) ...[
+                const SizedBox(height: 16),
+                _BaseSection(
+                  key: InformationPanelKeys.baseSection,
+                  data: data,
+                  baseRef: baseRef,
+                  onChangeBase: () => _handleChangeBase(context),
+                ),
+              ],
+
+              // C. Upstream section (non-primary only)
+              if (!data.isPrimary) ...[
+                const SizedBox(height: 16),
+                _UpstreamSection(
+                  key: InformationPanelKeys.upstreamSection,
+                  data: data,
+                ),
+              ],
+
+              // D. Primary worktree upstream sync (Push/Pull only)
+              if (data.isPrimary && data.upstreamBranch != null) ...[
+                const SizedBox(height: 16),
+                _PrimaryUpstreamSection(
+                  data: data,
+                  canPush: _canPush,
+                  canPullRebase: _canPullRebase,
+                  onPush: () => _withLoading(
+                    () => _handlePush(context),
+                  ),
+                  onPullRebase: () => _withLoading(
+                    () => _handlePullRebase(context),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
+
+              // E/F. Actions or Conflict section
+              if (data.hasMergeConflict ||
+                  data.conflictOperation != null) ...[
+                _ConflictInProgress(
+                  data: data,
+                  onAbort: () => _withLoading(
+                    () => _handleAbortConflict(context),
+                  ),
+                  onAskClaude: () => _withLoading(
+                    () => _handleAskClaudeConflict(context),
+                  ),
+                  onContinue: () => _withLoading(
+                    () => _handleContinueConflict(context),
+                  ),
+                ),
+              ] else if (!data.isPrimary) ...[
+                _ActionsSection(
+                  data: data,
+                  baseRef: baseRef,
+                  canUpdateFromBase: _canUpdateFromBase,
+                  canMergeIntoMain: _canMergeIntoMain,
+                  canPush: _canPush,
+                  canPullRebase: _canPullRebase,
+                  canCreatePr: _canCreatePr,
+                  onRebaseOntoBase: () => _withLoading(
+                    () => _handleUpdateFromBase(
+                      context,
+                      MergeOperationType.rebase,
+                    ),
+                  ),
+                  onMergeBase: () => _withLoading(
+                    () => _handleUpdateFromBase(
+                      context,
+                      MergeOperationType.merge,
+                    ),
+                  ),
+                  onMergeIntoMain: () => _withLoading(
+                    () => _handleMergeIntoMain(context),
+                  ),
+                  onPush: () => _withLoading(
+                    () => _handlePush(
+                      context,
+                      setUpstream:
+                          data.upstreamBranch == null,
+                    ),
+                  ),
+                  onPullRebase: () => _withLoading(
+                    () => _handlePullRebase(context),
+                  ),
+                  onCreatePr: () => _withLoading(
+                    () => _handleCreatePr(context),
+                  ),
+                ),
+              ],
+            ],
           ),
-
-          // B. Base section (non-primary only)
-          if (!data.isPrimary) ...[
-            const SizedBox(height: 16),
-            _BaseSection(
-              key: InformationPanelKeys.baseSection,
-              data: data,
-              baseRef: baseRef,
-              onChangeBase: () => _handleChangeBase(context),
-            ),
-          ],
-
-          // C. Upstream section (non-primary only)
-          if (!data.isPrimary) ...[
-            const SizedBox(height: 16),
-            _UpstreamSection(
-              key: InformationPanelKeys.upstreamSection,
-              data: data,
-            ),
-          ],
-
-          // D. Primary worktree upstream sync (Push/Pull only)
-          if (data.isPrimary && data.upstreamBranch != null) ...[
-            const SizedBox(height: 16),
-            _PrimaryUpstreamSection(
-              data: data,
-              canPush: _canPush,
-              canPullRebase: _canPullRebase,
-              onPush: () => _handlePush(context),
-              onPullRebase: () => _handlePullRebase(context),
-            ),
-          ],
-
-          const SizedBox(height: 16),
-
-          // E/F. Actions or Conflict section
-          if (data.hasMergeConflict ||
-              data.conflictOperation != null) ...[
-            _ConflictInProgress(
-              data: data,
-              onAbort: () => _handleAbortConflict(context),
-              onAskClaude: () =>
-                  _handleAskClaudeConflict(context),
-              onContinue: () =>
-                  _handleContinueConflict(context),
-            ),
-          ] else if (!data.isPrimary) ...[
-            _ActionsSection(
-              data: data,
-              baseRef: baseRef,
-              canUpdateFromBase: _canUpdateFromBase,
-              canMergeIntoMain: _canMergeIntoMain,
-              canPush: _canPush,
-              canPullRebase: _canPullRebase,
-              canCreatePr: _canCreatePr,
-              onRebaseOntoBase: () => _handleUpdateFromBase(
-                context,
-                MergeOperationType.rebase,
+        ),
+        if (_loading)
+          Positioned.fill(
+            child: ColoredBox(
+              color: Theme.of(context)
+                  .colorScheme
+                  .surface
+                  .withValues(alpha: 0.6),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
-              onMergeBase: () => _handleUpdateFromBase(
-                context,
-                MergeOperationType.merge,
-              ),
-              onMergeIntoMain: () =>
-                  _handleMergeIntoMain(context),
-              onPush: () => _handlePush(
-                context,
-                setUpstream:
-                    data.upstreamBranch == null,
-              ),
-              onPullRebase: () =>
-                  _handlePullRebase(context),
-              onCreatePr: () => _handleCreatePr(context),
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
