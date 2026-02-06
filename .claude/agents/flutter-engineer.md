@@ -1,7 +1,7 @@
 ---
 name: flutter-engineer
 description: "Use this agent when the user asks for Flutter/Dart code to be written, modified, refactored, or debugged, including widget creation, state management, service implementation, or any feature development in a Flutter project. This agent reads project-specific guidelines before starting work and writes tests for all code changes.\\n\\nExamples:\\n\\n- User: \"Add a settings panel that lets users toggle dark mode\"\\n  Assistant: \"I'll use the flutter-engineer agent to implement the settings panel with dark mode toggle and write tests for it.\"\\n  <launches flutter-engineer agent via Task tool>\\n\\n- User: \"Fix the bug where the list doesn't refresh after adding an item\"\\n  Assistant: \"Let me use the flutter-engineer agent to diagnose and fix this refresh bug.\"\\n  <launches flutter-engineer agent via Task tool>\\n\\n- User: \"Create a new model class for user preferences with JSON serialization\"\\n  Assistant: \"I'll use the flutter-engineer agent to create the model class with proper serialization and unit tests.\"\\n  <launches flutter-engineer agent via Task tool>\\n\\n- User: \"Refactor the chat panel to use composition instead of inheritance\"\\n  Assistant: \"Let me use the flutter-engineer agent to refactor the chat panel following best practices.\"\\n  <launches flutter-engineer agent via Task tool>\\n\\n- After writing a significant piece of Flutter code:\\n  Assistant: \"Now let me use the flutter-engineer agent to ensure this implementation follows project conventions and has proper test coverage.\"\\n  <launches flutter-engineer agent via Task tool>"
-model: opus
+model: sonnet
 color: green
 memory: project
 ---
