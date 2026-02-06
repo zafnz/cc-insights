@@ -75,6 +75,10 @@ void main(List<String> args) async {
   // Override debugPrint to also log to LogService while preserving stdout output
   debugPrint = _loggingDebugPrint;
 
+  // Disable Google Fonts runtime HTTP fetching. JetBrains Mono is bundled
+  // in assets/fonts/ so no network request is needed.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   // Catch unhandled async exceptions (streams, futures, isolates) and route
   // them through LogService so they appear in the log viewer and can trigger
   // a UI snackbar.

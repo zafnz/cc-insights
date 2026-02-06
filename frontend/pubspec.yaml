@@ -99,3 +99,21 @@ flutter:
   assets:
     - assets/appicon.png
     - assets/title.png
+
+  fonts:
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/JetBrainsMono-Italic.ttf
+          style: italic
+        - asset: assets/fonts/JetBrainsMono-BoldItalic.ttf
+          weight: 700
+          style: italic
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-Light.ttf
+          weight: 300
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
+          weight: 600

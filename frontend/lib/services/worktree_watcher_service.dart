@@ -226,6 +226,7 @@ class WorktreeWatcherService extends ChangeNotifier {
       final path = worktree.data.worktreeRoot;
 
       final status = await _gitService.getStatus(path);
+
       final upstream = await _gitService.getUpstream(path);
 
       // Resolve the base ref using the override chain:
@@ -265,8 +266,6 @@ class WorktreeWatcherService extends ChangeNotifier {
       if (_disposed) return;
       if (!_watchers.containsKey(path)) return;
 
-
-
       worktree.updateData(worktree.data.copyWith(
         uncommittedFiles: status.uncommittedFiles,
         stagedFiles: status.staged,
@@ -283,7 +282,7 @@ class WorktreeWatcherService extends ChangeNotifier {
         baseRef: baseRef,
         clearBaseRef: baseRef == null,
       ));
-    } catch (_) {
+    } catch (e) {
       // Git poll failed — will retry on next interval.
     }
   }
@@ -403,9 +402,7 @@ class WorktreeWatcherService extends ChangeNotifier {
         // Linked worktree: .git is a file. Use git to find common dir.
         commonGitDir = await _getGitCommonDir(_project.data.repoRoot);
       }
-    } catch (_) {
-      // Failed to determine git dir type.
-    }
+    } catch (_) {}
 
     if (_disposed) return;
     if (commonGitDir == null) return;
@@ -420,9 +417,7 @@ class WorktreeWatcherService extends ChangeNotifier {
             (_) => _onGitDirChanged(),
             onError: (_) {},
           );
-    } catch (_) {
-      // Failed to start watcher (e.g., in tests or bare repos).
-    }
+    } catch (_) {}
   }
 
   /// Gets the common .git directory path using git rev-parse.

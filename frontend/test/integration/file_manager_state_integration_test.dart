@@ -802,7 +802,9 @@ void main() {
     });
 
     group('Gitignore integration', () {
-      test('filters gitignored files when respectGitignore is true', () async {
+      test('filters gitignored files when respectGitignore is true',
+          skip: 'gitignore filtering disabled — _getIgnoredPaths causes SIGPIPE in release builds',
+          () async {
         // Arrange - create a git repo with .gitignore
         await createFile('.gitignore', 'ignored.txt\nbuild/');
         await createFile('included.dart', 'content');

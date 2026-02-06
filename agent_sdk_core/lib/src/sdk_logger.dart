@@ -212,7 +212,8 @@ class SdkLogger {
   /// can display these messages.
   void trace(String tag, String message) {
     if (!_debugEnabled) return;
-    print('[CCI:$tag] $message');
+    // Write to file log only — avoid print() which writes to stdout.
+    _queueWrite('[CCI:$tag] $message');
 
     final entry = LogEntry(
       level: LogLevel.debug,

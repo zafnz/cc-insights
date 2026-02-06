@@ -1172,6 +1172,8 @@ class RealGitService implements GitService {
 
   @override
   Future<DirectoryGitInfo> analyzeDirectory(String path) async {
+    const log = 'GitAnalyze';
+    LogService.instance.info(log, 'Analyzing directory: $path');
     try {
       // Run git rev-parse with multiple queries in one call
       // This gives us: git-dir, git-common-dir, toplevel, and prefix
@@ -1198,6 +1200,14 @@ class RealGitService implements GitService {
       final toplevel = lines.length > 2 ? lines[2].trim() : '';
       final prefix = lines.length > 3 ? lines[3].trim() : '';
 
+      LogService.instance.debug(log, 'git rev-parse output', meta: {
+        'git-dir': gitDir,
+        'git-common-dir': gitCommonDir,
+        'toplevel': toplevel,
+        'prefix': prefix,
+        'line_count': lines.length,
+      });
+
       // Determine if this is a linked worktree by checking if git-dir contains /worktrees/
       // For primary worktree: git-dir is ".git" or "/path/to/.git"
       // For linked worktree: git-dir is "/path/to/.git/worktrees/name"
@@ -1220,7 +1230,7 @@ class RealGitService implements GitService {
         }
       }
 
-      return DirectoryGitInfo(
+      final result = DirectoryGitInfo(
         analyzedPath: path,
         isInGitRepo: true,
         worktreeRoot: toplevel,
@@ -1229,8 +1239,25 @@ class RealGitService implements GitService {
         isAtWorktreeRoot: prefix.isEmpty,
         prefix: prefix,
       );
-    } on GitException {
+
+      LogService.instance.info(log, 'Directory analysis complete', meta: {
+        'isInGitRepo': true,
+        'isLinkedWorktree': isLinked,
+        'isAtWorktreeRoot': prefix.isEmpty,
+        'isPrimaryWorktreeRoot': result.isPrimaryWorktreeRoot,
+        'worktreeRoot': toplevel,
+        'repoRoot': repoRoot,
+      });
+
+      return result;
+    } on GitException catch (e) {
       // Not a git repository
+      LogService.instance.warn(log, 'Not a git repository: $path', meta: {
+        'error': e.message,
+        'command': e.command,
+        'exitCode': e.exitCode,
+        'stderr': e.stderr,
+      });
       return DirectoryGitInfo(
         analyzedPath: path,
         isInGitRepo: false,

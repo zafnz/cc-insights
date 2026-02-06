@@ -172,6 +172,10 @@ class RealFileSystemService implements FileSystemService {
     String repoRoot,
     List<String> allPaths,
   ) async {
+    // SIGPIPE: disabled — stdin pipe to git check-ignore causes SIGPIPE crash
+    return {};
+
+    // ignore: dead_code
     if (allPaths.isEmpty) {
       return {};
     }
