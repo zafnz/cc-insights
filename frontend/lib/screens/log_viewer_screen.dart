@@ -159,13 +159,15 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
                         style: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
                     )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      itemCount: _filteredEntries.length,
-                      itemExtent: null,
-                      itemBuilder: (context, index) {
-                        return _LogEntryRow(entry: _filteredEntries[index]);
-                      },
+                  : SelectionArea(
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        itemCount: _filteredEntries.length,
+                        itemExtent: null,
+                        itemBuilder: (context, index) {
+                          return _LogEntryRow(entry: _filteredEntries[index]);
+                        },
+                      ),
                     ),
               // Jump to bottom FAB
               if (!_isAtBottom && _filteredEntries.isNotEmpty)
@@ -451,95 +453,95 @@ class _LogEntryRowState extends State<_LogEntryRow> {
       color: colorScheme.onSurface,
     );
 
-    return InkWell(
-      onTap: hasMeta ? () => setState(() => _expanded = !_expanded) : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.15),
-            ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.15),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Timestamp
-                Text(
-                  _formatTimestamp(entry.timestamp),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Timestamp
+              Text(
+                _formatTimestamp(entry.timestamp),
+                style: monoStyle.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Level badge
+              _LevelBadge(level: entry.level),
+              const SizedBox(width: 8),
+              // Source
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  entry.source,
                   style: monoStyle.copyWith(
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    fontSize: 10,
+                    color: colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Level badge
-                _LevelBadge(level: entry.level),
-                const SizedBox(width: 8),
-                // Source
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    entry.source,
-                    style: monoStyle.copyWith(
-                      fontSize: 10,
-                      color: colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 8),
+              // Message
+              Expanded(
+                child: Text(
+                  entry.message,
+                  style: monoStyle,
+                  maxLines: _expanded ? null : 1,
+                  overflow: _expanded ? null : TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 8),
-                // Message
-                Expanded(
-                  child: Text(
-                    entry.message,
-                    style: monoStyle,
-                    maxLines: _expanded ? null : 1,
-                    overflow: _expanded ? null : TextOverflow.ellipsis,
-                  ),
-                ),
-                // Meta indicator
-                if (hasMeta)
-                  Icon(
+              ),
+              // Meta indicator
+              if (hasMeta)
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     size: 14,
                     color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                   ),
-              ],
-            ),
-            // Expanded meta
-            if (_expanded && hasMeta)
-              Padding(
-                padding: const EdgeInsets.only(left: 80, top: 2, bottom: 2),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color:
-                        colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: SelectableText(
-                    const JsonEncoder.withIndent('  ').convert(entry.meta),
-                    style: monoStyle.copyWith(
-                      fontSize: 10,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                ),
+            ],
+          ),
+          // Expanded meta
+          if (_expanded && hasMeta)
+            Padding(
+              padding: const EdgeInsets.only(left: 80, top: 2, bottom: 2),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color:
+                      colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  const JsonEncoder.withIndent('  ').convert(entry.meta),
+                  style: monoStyle.copyWith(
+                    fontSize: 10,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
