@@ -279,9 +279,25 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   Future<void> _handlePullRebase(BuildContext context) async {
+    // On the primary worktree with a local base, warn that rebase rewrites
+    // history and can desync linked worktrees.
+    final project = context.read<ProjectState>();
+    if (data.isPrimary &&
+        !data.isRemoteBase &&
+        project.linkedWorktrees.isNotEmpty) {
+      final choice = await showDialog<_PullRebaseChoice>(
+        context: context,
+        builder: (context) => const _PullRebaseWarningDialog(),
+      );
+      if (choice == null || !context.mounted) return;
+      if (choice == _PullRebaseChoice.merge) {
+        return _handlePullMerge(context);
+      }
+      // choice == rebase → fall through to normal rebase flow
+    }
+
     LogService.instance.info('InfoPanel', 'Pull rebase: ${data.branch}');
     final gitService = context.read<GitService>();
-    final project = context.read<ProjectState>();
 
     final upstream = data.upstreamBranch;
     if (upstream == null) return;
@@ -1082,12 +1098,15 @@ class _PrimaryUpstreamSection extends StatelessWidget {
           targetRef: data.upstreamBranch!,
         ),
         const SizedBox(height: 8),
-        _CompactButton(
-          key: InformationPanelKeys.pushButton,
-          onPressed: canPush ? onPush : null,
-          label: 'Push',
-          icon: Icons.cloud_upload,
-          tooltip: canPush ? null : 'Nothing to push',
+        SizedBox(
+          width: double.infinity,
+          child: _CompactButton(
+            key: InformationPanelKeys.pushButton,
+            onPressed: canPush ? onPush : null,
+            label: 'Push',
+            icon: Icons.cloud_upload,
+            tooltip: canPush ? null : 'Nothing to push',
+          ),
         ),
         const SizedBox(height: 6),
         Row(
@@ -1316,12 +1335,15 @@ class _ActionsSection extends StatelessWidget {
           const SizedBox(height: 6),
 
           // Push full width
-          _CompactButton(
-            key: InformationPanelKeys.pushButton,
-            onPressed: canPush ? onPush : null,
-            label: 'Push',
-            icon: Icons.cloud_upload,
-            tooltip: canPush ? null : 'Nothing to push',
+          SizedBox(
+            width: double.infinity,
+            child: _CompactButton(
+              key: InformationPanelKeys.pushButton,
+              onPressed: canPush ? onPush : null,
+              label: 'Push',
+              icon: Icons.cloud_upload,
+              tooltip: canPush ? null : 'Nothing to push',
+            ),
           ),
           const SizedBox(height: 6),
 
@@ -1569,5 +1591,47 @@ class _CompactButton extends StatelessWidget {
     }
 
     return button;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pull rebase warning dialog (primary worktree with local base)
+// ---------------------------------------------------------------------------
+
+enum _PullRebaseChoice { rebase, merge }
+
+class _PullRebaseWarningDialog extends StatelessWidget {
+  const _PullRebaseWarningDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AlertDialog(
+      title: const Text('Pull with rebase?'),
+      content: const Text(
+        'A git pull rebase rewrites the commit history. This is fine, '
+        'but any worktrees basing off local main will suddenly report '
+        'they are very out-of-sync. That can be solved by doing a rebase '
+        'on each worktree.\n\n'
+        'You may find doing a pull / merge is a better option and will '
+        'avoid that.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_PullRebaseChoice.rebase),
+          child: Text(
+            'Git pull (rebase)',
+            style: TextStyle(color: colorScheme.error),
+          ),
+        ),
+        FilledButton(
+          onPressed: () =>
+              Navigator.of(context).pop(_PullRebaseChoice.merge),
+          child: const Text('Git pull (merge)'),
+        ),
+      ],
+    );
   }
 }
