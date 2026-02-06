@@ -36,7 +36,7 @@ void main() {
         executablePath: '/usr/bin/claude',
         model: 'sonnet',
         permissionMode: PermissionMode.acceptEdits,
-        settingSources: [SettingSource.defaults, SettingSource.projectSettings],
+        settingSources: [SettingSource.user, SettingSource.project],
         maxTurns: 10,
         maxBudgetUsd: 5.0,
         resume: 'session-123',
@@ -107,9 +107,9 @@ void main() {
       final config = CliProcessConfig(
         cwd: '/test',
         settingSources: [
-          SettingSource.defaults,
-          SettingSource.globalSettings,
-          SettingSource.projectSettings,
+          SettingSource.user,
+          SettingSource.project,
+          SettingSource.local,
         ],
       );
 
@@ -121,7 +121,7 @@ void main() {
       final sourcesIndex = args.indexOf('--setting-sources');
       expect(
         args[sourcesIndex + 1],
-        equals('defaults,globalSettings,projectSettings'),
+        equals('user,project,local'),
       );
     });
 
@@ -205,7 +205,7 @@ void main() {
         cwd: '/test',
         model: 'opus',
         permissionMode: PermissionMode.bypassPermissions,
-        settingSources: [SettingSource.defaults],
+        settingSources: [SettingSource.user],
         maxTurns: 5,
         maxBudgetUsd: 10.0,
         resume: 'sess-abc',
@@ -226,7 +226,7 @@ void main() {
         '--permission-mode',
         'bypassPermissions',
         '--setting-sources',
-        'defaults',
+        'user',
         '--max-turns',
         '5',
         '--max-budget-usd',
@@ -240,12 +240,22 @@ void main() {
 
   group('SettingSource', () {
     test('has correct string values', () {
-      expect(SettingSource.defaults.value, equals('defaults'));
-      expect(SettingSource.globalSettings.value, equals('globalSettings'));
-      expect(SettingSource.projectSettings.value, equals('projectSettings'));
-      expect(SettingSource.managedSettings.value, equals('managedSettings'));
-      expect(SettingSource.directorySettings.value, equals('directorySettings'));
-      expect(SettingSource.enterpriseSettings.value, equals('enterpriseSettings'));
+      expect(SettingSource.user.value, equals('user'));
+      expect(SettingSource.project.value, equals('project'));
+      expect(SettingSource.local.value, equals('local'));
+    });
+
+    test('fromString parses valid values', () {
+      expect(SettingSource.fromString('user'), equals(SettingSource.user));
+      expect(SettingSource.fromString('project'), equals(SettingSource.project));
+      expect(SettingSource.fromString('local'), equals(SettingSource.local));
+    });
+
+    test('fromString throws on unknown value', () {
+      expect(
+        () => SettingSource.fromString('invalid'),
+        throwsArgumentError,
+      );
     });
   });
 

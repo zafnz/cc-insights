@@ -23,6 +23,7 @@ void main() {
       const options = SessionOptions(
         model: 'sonnet',
         permissionMode: PermissionMode.acceptEdits,
+        settingSources: ['user', 'project', 'local'],
         maxTurns: 10,
         maxBudgetUsd: 5.0,
         resume: 'sess-123',
@@ -99,12 +100,12 @@ void main() {
       expect(result.warnings, contains(contains('sandbox')));
     });
 
-    test('warns about settingSources', () {
+    test('does not warn about settingSources (supported by CLI)', () {
       const options = SessionOptions(settingSources: ['project']);
 
       final result = options.validateForCli();
 
-      expect(result.warnings, contains(contains('settingSources')));
+      expect(result.warnings, isNot(contains(contains('settingSources'))));
     });
 
     test('warns about outputFormat', () {
@@ -217,12 +218,11 @@ void main() {
           'PreToolUse': [const HookConfig()]
         },
         agents: {'sub': {}},
-        settingSources: const ['project'],
       );
 
       final result = options.validateForCli();
 
-      expect(result.warnings.length, greaterThanOrEqualTo(5));
+      expect(result.warnings.length, greaterThanOrEqualTo(4));
     });
   });
 

@@ -123,6 +123,9 @@ class ClaudeCliBackend implements AgentBackend {
                 cwd: cwd,
                 model: options?.model,
                 permissionMode: options?.permissionMode,
+                settingSources: options?.settingSources
+                    ?.map(SettingSource.fromString)
+                    .toList(),
                 maxTurns: options?.maxTurns,
                 maxBudgetUsd: options?.maxBudgetUsd,
                 resume: options?.resume,

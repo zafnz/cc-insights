@@ -9,16 +9,31 @@ import 'types/session_options.dart';
 void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
 
 /// Setting sources for the CLI.
+///
+/// Controls which filesystem-based configuration sources the CLI loads.
+/// See https://docs.anthropic.com/en/docs/agent-sdk
 enum SettingSource {
-  defaults('defaults'),
-  globalSettings('globalSettings'),
-  projectSettings('projectSettings'),
-  managedSettings('managedSettings'),
-  directorySettings('directorySettings'),
-  enterpriseSettings('enterpriseSettings');
+  /// Global user settings (~/.claude/settings.json).
+  user('user'),
+
+  /// Shared project settings (.claude/settings.json).
+  project('project'),
+
+  /// Local project settings (.claude/settings.local.json).
+  local('local');
 
   const SettingSource(this.value);
   final String value;
+
+  /// Parses a [SettingSource] from its API string value.
+  ///
+  /// Throws [ArgumentError] if the value doesn't match any source.
+  static SettingSource fromString(String value) {
+    for (final source in values) {
+      if (source.value == value) return source;
+    }
+    throw ArgumentError.value(value, 'value', 'Unknown setting source');
+  }
 }
 
 /// Configuration for spawning the claude-cli process.

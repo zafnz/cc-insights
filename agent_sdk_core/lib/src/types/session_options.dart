@@ -186,7 +186,7 @@ class SessionOptions {
   /// reasoningEffort, allowDangerouslySkipPermissions, permissionPromptToolName,
   /// tools, plugins, strictMcpConfig, resumeSessionAt, allowedTools,
   /// disallowedTools, maxThinkingTokens, enableFileCheckpointing,
-  /// additionalDirectories, agents, hooks, sandbox, settingSources, betas,
+  /// additionalDirectories, agents, hooks, sandbox, betas,
   /// outputFormat, fallbackModel.
   OptionsValidationResult validateForCli() {
     final warnings = <String>[];
@@ -235,9 +235,7 @@ class SessionOptions {
     if (sandbox != null) {
       warnings.add('sandbox is ignored by CLI backend');
     }
-    if (settingSources != null) {
-      warnings.add('settingSources is ignored by CLI backend');
-    }
+    // settingSources IS supported by CLI backend (via --setting-sources flag)
     if (betas != null) {
       warnings.add('betas is ignored by CLI backend');
     }
