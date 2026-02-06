@@ -1,21 +1,20 @@
 # CC Insights - Insights into Claude & Codex
 
-Yet another Claude & Codex coordinator desktop GUI application.
+Yet another Claude coordinator desktop GUI application. (Codex is still in very early stages)
 
 ## What's different this time?
 <img align=right width="600" height="404" alt="claude v0 0 15" src="https://github.com/user-attachments/assets/4f604410-a6b5-46c9-8fcb-cb30a17ee3a0" />
 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
 - Designed specifically for **Vibe coding** - your almost exclusive focus is on the AI agents and what they are doing.
-- **With Claude**
-  - With Claude **FULL** context tracking, cost tracking, token reporting. You get to see way more!
-  - See exactly what **subagents** are doing (each agent gets its own window, or you can have them integrated)
+- **FULL** context tracking, cost tracking, token reporting. You get to see way more!
+- See exactly what **subagents** are doing (each agent gets its own window, or you can have them integrated)
 - Works with your **existing Claude/Codex subscriptions** - uses the authorised methods to communicate with no hacks or workarounds.
 - This program does not require a subscription or an account beyond what Claude/Codex requires.
 
 ## Claude & Codex
 
-This application now supports both Claude and Codex backends, but Claude is the first class citizen, Codex is still new. 
+This application primarily works with Claude, but has Codex support in early stages right now.
 
 ## More features
 
