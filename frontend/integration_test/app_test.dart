@@ -209,7 +209,7 @@ void main() {
 
       // Wait for mock reply
       await tester.runAsync(() async {
-        await Future.delayed(const Duration(milliseconds: 300));
+        await Future.delayed(const Duration(seconds: 1));
       });
       await tester.pump();
       await safePumpAndSettle(tester);

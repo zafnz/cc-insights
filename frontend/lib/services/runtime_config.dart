@@ -97,6 +97,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to archive chats instead of deleting them on close.
   bool _archiveChats = false;
 
+  /// Whether to delete the local branch when deleting a worktree.
+  bool _deleteBranchWithWorktree = true;
+
   /// Default Claude model for new chats.
   String _defaultModel = 'opus';
 
@@ -345,6 +348,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether to delete the local branch when deleting a worktree.
+  bool get deleteBranchWithWorktree => _deleteBranchWithWorktree;
+
+  set deleteBranchWithWorktree(bool value) {
+    if (_deleteBranchWithWorktree != value) {
+      _deleteBranchWithWorktree = value;
+      notifyListeners();
+    }
+  }
+
   /// Default Claude model for new chats.
   String get defaultModel => _defaultModel;
 
@@ -504,6 +517,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._aiChatLabelModel = 'haiku';
     _instance._desktopNotifications = true;
     _instance._archiveChats = false;
+    _instance._deleteBranchWithWorktree = true;
     _instance._defaultModel = 'opus';
     _instance._defaultBackend = BackendType.directCli;
     _instance._defaultPermissionMode = 'default';

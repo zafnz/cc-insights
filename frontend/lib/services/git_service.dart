@@ -310,6 +310,18 @@ abstract class GitService {
     bool force = false,
   });
 
+  /// Deletes a local branch.
+  ///
+  /// Uses `git branch -d` for safe delete (only works if merged) or
+  /// `git branch -D` for force delete.
+  ///
+  /// Throws [GitException] on failure.
+  Future<void> deleteBranch({
+    required String repoRoot,
+    required String branchName,
+    bool force = false,
+  });
+
   /// Gets commits on [branch] that aren't on [targetBranch] by patch-id.
   ///
   /// Uses `git cherry -v targetBranch branch` to find commits whose changes
@@ -836,6 +848,16 @@ class RealGitService implements GitService {
       args.add('--force');
     }
     args.add(worktreePath);
+    await _runGit(args, workingDirectory: repoRoot);
+  }
+
+  @override
+  Future<void> deleteBranch({
+    required String repoRoot,
+    required String branchName,
+    bool force = false,
+  }) async {
+    final args = ['branch', force ? '-D' : '-d', branchName];
     await _runGit(args, workingDirectory: repoRoot);
   }
 

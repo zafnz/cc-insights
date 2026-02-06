@@ -205,6 +205,15 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<void> deleteBranch({
+    required String repoRoot,
+    required String branchName,
+    bool force = false,
+  }) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
   Future<List<String>> getUnmergedCommits(
     String path,
     String branch,

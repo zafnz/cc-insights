@@ -22,6 +22,7 @@ class DeleteWorktreeDialogKeys {
   static const discardButton = Key('delete_worktree_discard');
   static const commitButton = Key('delete_worktree_commit');
   static const forceDeleteButton = Key('delete_worktree_force_delete');
+  static const deleteBranchCheckbox = Key('delete_worktree_delete_branch');
 }
 
 /// Result of the delete worktree operation.
@@ -52,6 +53,7 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
   required PersistenceService persistenceService,
   required AskAiService askAiService,
   required FileSystemService fileSystemService,
+  bool deleteBranch = true,
   ProjectConfigService? configService,
   ScriptExecutionService? scriptService,
 }) async {
@@ -68,6 +70,7 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
       persistenceService: persistenceService,
       askAiService: askAiService,
       fileSystemService: fileSystemService,
+      deleteBranch: deleteBranch,
       configService: configService,
       scriptService: scriptService,
     ),
@@ -164,6 +167,7 @@ class DeleteWorktreeDialog extends StatefulWidget {
     required this.persistenceService,
     required this.askAiService,
     required this.fileSystemService,
+    this.deleteBranch = true,
     this.configService,
     this.scriptService,
   });
@@ -177,6 +181,7 @@ class DeleteWorktreeDialog extends StatefulWidget {
   final PersistenceService persistenceService;
   final AskAiService askAiService;
   final FileSystemService fileSystemService;
+  final bool deleteBranch;
   final ProjectConfigService? configService;
   final ScriptExecutionService? scriptService;
 
@@ -189,10 +194,12 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
   final ScrollController _scrollController = ScrollController();
   _ActionState _actionState = _ActionState.checking;
   int _uncommittedCount = 0;
+  late bool _deleteBranch;
 
   @override
   void initState() {
     super.initState();
+    _deleteBranch = widget.deleteBranch;
     _startWorkflow();
   }
 
@@ -483,13 +490,23 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
       if (!mounted) return;
 
       if (upstream == null) {
-        _updateLastLog(
-          LogEntryStatus.error,
-          message: 'No upstream branch found. You will lose work.',
-        );
-        setState(() {
-          _actionState = _ActionState.hasUnmergedCommits;
-        });
+        if (_deleteBranch) {
+          _updateLastLog(
+            LogEntryStatus.error,
+            message: 'No upstream branch found. You will lose work.',
+          );
+          setState(() {
+            _actionState = _ActionState.hasUnmergedCommits;
+          });
+        } else {
+          _updateLastLog(
+            LogEntryStatus.warning,
+            message: 'No upstream branch found. Branch will be kept locally.',
+          );
+          setState(() {
+            _actionState = _ActionState.upstreamWarning;
+          });
+        }
         return;
       }
 
@@ -515,29 +532,53 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           _actionState = _ActionState.upstreamWarning;
         });
       } else {
-        // Upstream is behind: error state, require force delete
+        // Upstream is behind
         final behindCount = comparison?.ahead ?? 0;
+        if (_deleteBranch) {
+          _updateLastLog(
+            LogEntryStatus.error,
+            message: 'Changes are not on ${widget.base} and $upstream is '
+                '$behindCount '
+                '${behindCount == 1 ? 'commit' : 'commits'} behind. '
+                'You will lose work.',
+          );
+          setState(() {
+            _actionState = _ActionState.hasUnmergedCommits;
+          });
+        } else {
+          _updateLastLog(
+            LogEntryStatus.warning,
+            message: 'Changes are not on ${widget.base} and $upstream is '
+                '$behindCount '
+                '${behindCount == 1 ? 'commit' : 'commits'} behind. '
+                'Branch will be kept locally.',
+          );
+          setState(() {
+            _actionState = _ActionState.upstreamWarning;
+          });
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (_deleteBranch) {
         _updateLastLog(
           LogEntryStatus.error,
-          message: 'Changes are not on ${widget.base} and $upstream is '
-              '$behindCount '
-              '${behindCount == 1 ? 'commit' : 'commits'} behind. '
-              'You will lose work.',
+          message: 'Could not check upstream status',
+          detail: e.toString(),
         );
         setState(() {
           _actionState = _ActionState.hasUnmergedCommits;
         });
+      } else {
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: 'Could not check upstream status',
+          detail: e.toString(),
+        );
+        setState(() {
+          _actionState = _ActionState.upstreamWarning;
+        });
       }
-    } catch (e) {
-      if (!mounted) return;
-      _updateLastLog(
-        LogEntryStatus.error,
-        message: 'Could not check upstream status',
-        detail: e.toString(),
-      );
-      setState(() {
-        _actionState = _ActionState.hasUnmergedCommits;
-      });
     }
   }
 
@@ -596,6 +637,11 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         );
       }
 
+      // Delete branch if requested
+      if (_deleteBranch) {
+        await _deleteBranchStep(force: force);
+      }
+
       // Run post-remove hook if configured
       await _runPostRemoveHook();
 
@@ -637,6 +683,36 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
           _actionState = _ActionState.failed;
         });
       }
+    }
+  }
+
+  /// Deletes the local branch after worktree removal.
+  ///
+  /// Failures are logged as warnings since the worktree is already gone.
+  Future<void> _deleteBranchStep({required bool force}) async {
+    _addLog('Deleting branch ${widget.branch}...', LogEntryStatus.running);
+
+    try {
+      await widget.gitService.deleteBranch(
+        repoRoot: widget.repoRoot,
+        branchName: widget.branch,
+        force: force,
+      );
+
+      if (!mounted) return;
+
+      _updateLastLog(
+        LogEntryStatus.success,
+        message: 'Branch ${widget.branch} deleted',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Could not delete branch ${widget.branch}',
+        detail: e is GitException ? (e.stderr ?? e.message) : e.toString(),
+      );
     }
   }
 
@@ -814,10 +890,108 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
             ],
           ),
           const SizedBox(height: 8),
+          _buildDeleteBranchCheckbox(colorScheme),
+          const SizedBox(height: 8),
           _buildActionButtons(colorScheme),
         ],
       ),
     );
+  }
+
+  Widget _buildDeleteBranchCheckbox(ColorScheme colorScheme) {
+    final isProcessing = _actionState == _ActionState.deleting ||
+        _actionState == _ActionState.complete;
+
+    return Row(
+      key: DeleteWorktreeDialogKeys.deleteBranchCheckbox,
+      children: [
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: _deleteBranch,
+            onChanged: isProcessing
+                ? null
+                : (value) {
+                    setState(() {
+                      _deleteBranch = value ?? false;
+                    });
+                    // Re-run safety checks if we've already completed them
+                    if (_actionState == _ActionState.readyToDelete ||
+                        _actionState == _ActionState.upstreamWarning ||
+                        _actionState == _ActionState.hasUnmergedCommits) {
+                      // Remove the upstream check log entries and re-run
+                      _rerunSafetyChecks();
+                    }
+                  },
+            side: BorderSide(
+              color: colorScheme.onErrorContainer.withValues(alpha: 0.7),
+            ),
+            checkColor: colorScheme.onErrorContainer,
+            fillColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return colorScheme.onErrorContainer.withValues(alpha: 0.2);
+              }
+              return Colors.transparent;
+            }),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Delete branch too',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onErrorContainer,
+                ),
+              ),
+              Text(
+                _deleteBranch
+                    ? 'Work not merged will be lost'
+                    : 'Work can be recovered by creating a worktree '
+                        'with the same branch',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.onErrorContainer.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Re-runs safety checks from the upstream check onward when the
+  /// delete-branch checkbox is toggled after checks have completed.
+  void _rerunSafetyChecks() {
+    // Remove log entries from the upstream check onward
+    final upstreamIdx = _log.indexWhere(
+      (e) => e.message.contains('upstream'),
+    );
+    if (upstreamIdx >= 0) {
+      setState(() {
+        _log.removeRange(upstreamIdx, _log.length);
+        // Also remove the "Ready to remove worktree" entry if present
+      });
+    }
+
+    // Remove "Ready to remove worktree" if it's the last entry
+    if (_log.isNotEmpty && _log.last.message.contains('Ready to remove')) {
+      setState(() {
+        _log.removeLast();
+      });
+    }
+
+    setState(() {
+      _actionState = _ActionState.processing;
+    });
+
+    _checkUpstream();
   }
 
   Widget _buildActionButtons(ColorScheme colorScheme) {

@@ -806,6 +806,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       );
     }
 
+    final deleteBranch =
+        settings.getValue<bool>('behavior.deleteBranchWithWorktree');
+
     final result = await showDeleteWorktreeDialog(
       context: context,
       worktreePath: worktree.data.worktreeRoot,
@@ -817,6 +820,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       persistenceService: persistenceService,
       askAiService: askAiService,
       fileSystemService: fileSystemService,
+      deleteBranch: deleteBranch,
       configService: ProjectConfigService(),
       scriptService: scriptService,
     );

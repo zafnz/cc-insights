@@ -205,6 +205,15 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: false,
       ),
+      SettingDefinition(
+        key: 'behavior.deleteBranchWithWorktree',
+        title: 'Delete Branch With Worktree',
+        description:
+            'When deleting a worktree, also delete the local git branch. '
+            'The branch can no longer be recovered locally once deleted.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
     ],
   );
 
@@ -589,6 +598,8 @@ class SettingsService extends ChangeNotifier {
         config.desktopNotifications = value as bool;
       case 'behavior.archiveChats':
         config.archiveChats = value as bool;
+      case 'behavior.deleteBranchWithWorktree':
+        config.deleteBranchWithWorktree = value as bool;
       case 'session.claudeCliPath':
         config.claudeCliPath = value as String;
       case 'session.codexCliPath':

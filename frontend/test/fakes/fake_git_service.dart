@@ -376,6 +376,31 @@ class FakeGitService implements GitService {
     }
   }
 
+  /// Tracks calls to [deleteBranch] with (repoRoot, branchName, force).
+  final List<({String repoRoot, String branchName, bool force})>
+      deleteBranchCalls = [];
+
+  /// If set, [deleteBranch] will throw this exception.
+  GitException? deleteBranchError;
+
+  @override
+  Future<void> deleteBranch({
+    required String repoRoot,
+    required String branchName,
+    bool force = false,
+  }) async {
+    deleteBranchCalls.add((
+      repoRoot: repoRoot,
+      branchName: branchName,
+      force: force,
+    ));
+    await _maybeDelay();
+    _maybeThrow();
+    if (deleteBranchError != null) {
+      throw deleteBranchError!;
+    }
+  }
+
   /// Map of (path, branch, targetBranch) -> unmerged commits for [getUnmergedCommits].
   final Map<String, List<String>> unmergedCommits = {};
 
