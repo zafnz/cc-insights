@@ -542,20 +542,34 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Use mock data if explicitly requested or in test environment
     final shouldUseMock = useMockData || _shouldUseMockData();
 
+    // Determine if we have a project (for menu item enable/disable state)
+    final hasProject = shouldUseMock || _project != null;
+
+    // Single AppMenuBar at the root to avoid PlatformMenuBar lock conflicts
+    // when transitioning between states (loading -> loaded)
+    return AppMenuBar(
+      callbacks: _createMenuCallbacks(),
+      hasProject: hasProject,
+      child: _buildContent(shouldUseMock),
+    );
+  }
+
+  /// Builds the appropriate content based on current state.
+  Widget _buildContent(bool shouldUseMock) {
     if (shouldUseMock) {
       // Synchronous path for mock data
       _project = _mockProject!;
-      return _buildApp(_project!);
+      return _buildAppContent(_project!);
     }
 
     // Show validation dialog if we have pending validation
     if (_needsValidation && _pendingValidationInfo != null) {
-      return _buildValidationScreen();
+      return _buildValidationContent();
     }
 
     // Show welcome screen if not launched from CLI and no project selected
     if (!_projectSelected) {
-      return _buildWelcomeApp();
+      return _buildWelcomeContent();
     }
 
     // Async path for restoring from persistence
@@ -563,18 +577,18 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       future: _projectFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingScreen();
+          return _buildLoadingContent();
         }
 
         if (snapshot.hasError) {
           debugPrint('Error restoring project: ${snapshot.error}');
           // Fall back to creating a new project synchronously
           _project = _createFallbackProject();
-          return _buildApp(_project!);
+          return _buildAppContent(_project!);
         }
 
         _project = snapshot.data ?? _createFallbackProject();
-        return _buildApp(_project!);
+        return _buildAppContent(_project!);
       },
     );
   }
@@ -607,39 +621,31 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     });
   }
 
-  /// Builds the welcome screen app (before a project is selected).
-  Widget _buildWelcomeApp() {
-    return AppMenuBar(
-      callbacks: _createMenuCallbacks(),
-      hasProject: false,
-      child: MaterialApp(
-        title: 'CC Insights',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: _themeState?.themeMode ?? ThemeMode.system,
-        home: WelcomeScreen(
-          onProjectSelected: _onProjectSelected,
-        ),
+  /// Builds the welcome screen content (before a project is selected).
+  Widget _buildWelcomeContent() {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
+      home: WelcomeScreen(
+        onProjectSelected: _onProjectSelected,
       ),
     );
   }
 
-  /// Builds the validation screen that shows the directory validation message.
-  Widget _buildValidationScreen() {
-    return AppMenuBar(
-      callbacks: _createMenuCallbacks(),
-      hasProject: false,
-      child: MaterialApp(
-        title: 'CC Insights',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: _themeState?.themeMode ?? ThemeMode.system,
-        home: DirectoryValidationScreen(
-          gitInfo: _pendingValidationInfo!,
-          onResult: _handleValidationResult,
-        ),
+  /// Builds the validation screen content that shows the directory validation message.
+  Widget _buildValidationContent() {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
+      home: DirectoryValidationScreen(
+        gitInfo: _pendingValidationInfo!,
+        onResult: _handleValidationResult,
       ),
     );
   }
@@ -799,125 +805,117 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     );
   }
 
-  /// Builds the loading screen shown while restoring project.
-  Widget _buildLoadingScreen() {
-    return AppMenuBar(
-      callbacks: _createMenuCallbacks(),
-      hasProject: false,
-      child: MaterialApp(
-        title: 'CC Insights',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: _themeState?.themeMode ?? ThemeMode.system,
-        home: const Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Loading project...'),
-              ],
-            ),
+  /// Builds the loading screen content shown while restoring project.
+  Widget _buildLoadingContent() {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
+      home: const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading project...'),
+            ],
           ),
         ),
       ),
     );
   }
 
-  /// Builds the main app with the given project.
-  Widget _buildApp(ProjectState project) {
-    return AppMenuBar(
-      callbacks: _createMenuCallbacks(),
-      hasProject: true,
-      child: MultiProvider(
-        providers: [
-          // Backend service for spawning SDK sessions
-          ChangeNotifierProvider<BackendService>.value(value: _backend!),
-          // SDK message handler (stateless - shared across all chats)
-          Provider<SdkMessageHandler>.value(value: _handler!),
-          // Project restore service for persistence operations
-          Provider<ProjectRestoreService>.value(value: _restoreService!),
-          // Git service for git operations (stateless)
-          Provider<GitService>.value(value: const RealGitService()),
-          // File system service for file tree and content (stateless)
-          Provider<FileSystemService>.value(value: const RealFileSystemService()),
-          // AskAI service for one-shot AI queries
-          Provider<AskAiService>.value(value: _askAiService!),
-          // Persistence service for storing project/chat data
-          Provider<PersistenceService>.value(
-              value: _persistenceService ?? PersistenceService()),
-          // Settings service for application preferences
-          ChangeNotifierProvider<SettingsService>.value(
-            value: _settingsService!,
+  /// Builds the main app content with the given project.
+  Widget _buildAppContent(ProjectState project) {
+    return MultiProvider(
+      providers: [
+        // Backend service for spawning SDK sessions
+        ChangeNotifierProvider<BackendService>.value(value: _backend!),
+        // SDK message handler (stateless - shared across all chats)
+        Provider<SdkMessageHandler>.value(value: _handler!),
+        // Project restore service for persistence operations
+        Provider<ProjectRestoreService>.value(value: _restoreService!),
+        // Git service for git operations (stateless)
+        Provider<GitService>.value(value: const RealGitService()),
+        // File system service for file tree and content (stateless)
+        Provider<FileSystemService>.value(value: const RealFileSystemService()),
+        // AskAI service for one-shot AI queries
+        Provider<AskAiService>.value(value: _askAiService!),
+        // Persistence service for storing project/chat data
+        Provider<PersistenceService>.value(
+            value: _persistenceService ?? PersistenceService()),
+        // Settings service for application preferences
+        ChangeNotifierProvider<SettingsService>.value(
+          value: _settingsService!,
+        ),
+        // Project state
+        ChangeNotifierProvider<ProjectState>.value(value: project),
+        // Selection state depends on project
+        ChangeNotifierProxyProvider<ProjectState, SelectionState>(
+          create: (context) => SelectionState(context.read<ProjectState>()),
+          update: (context, project, previous) =>
+              previous ?? SelectionState(project),
+        ),
+        // File manager state depends on project, file system service, and
+        // selection state (for synchronized worktree selection)
+        ChangeNotifierProxyProvider3<
+          ProjectState,
+          FileSystemService,
+          SelectionState,
+          FileManagerState
+        >(
+          create: (context) => FileManagerState(
+            context.read<ProjectState>(),
+            context.read<FileSystemService>(),
+            context.read<SelectionState>(),
           ),
-          // Project state
-          ChangeNotifierProvider<ProjectState>.value(value: project),
-          // Selection state depends on project
-          ChangeNotifierProxyProvider<ProjectState, SelectionState>(
-            create: (context) => SelectionState(context.read<ProjectState>()),
-            update: (context, project, previous) =>
-                previous ?? SelectionState(project),
+          update: (context, project, fileService, selectionState, previous) =>
+              previous ?? FileManagerState(project, fileService, selectionState),
+        ),
+        // Project config service for reading/writing .ccinsights/config.json
+        Provider<ProjectConfigService>(
+          create: (_) => ProjectConfigService(),
+        ),
+        // Worktree watcher service for monitoring git status changes.
+        // Self-contained: listens to ProjectState and watches all
+        // worktrees automatically. Eager (lazy: false) so it starts
+        // polling immediately, not when first read by a widget.
+        ChangeNotifierProvider<WorktreeWatcherService>(
+          lazy: false,
+          create: (context) => WorktreeWatcherService(
+            gitService: context.read<GitService>(),
+            project: context.read<ProjectState>(),
+            configService: context.read<ProjectConfigService>(),
           ),
-          // File manager state depends on project, file system service, and
-          // selection state (for synchronized worktree selection)
-          ChangeNotifierProxyProvider3<
-            ProjectState,
-            FileSystemService,
-            SelectionState,
-            FileManagerState
-          >(
-            create: (context) => FileManagerState(
-              context.read<ProjectState>(),
-              context.read<FileSystemService>(),
-              context.read<SelectionState>(),
-            ),
-            update: (context, project, fileService, selectionState, previous) =>
-                previous ?? FileManagerState(project, fileService, selectionState),
-          ),
-          // Project config service for reading/writing .ccinsights/config.json
-          Provider<ProjectConfigService>(
-            create: (_) => ProjectConfigService(),
-          ),
-          // Worktree watcher service for monitoring git status changes.
-          // Self-contained: listens to ProjectState and watches all
-          // worktrees automatically. Eager (lazy: false) so it starts
-          // polling immediately, not when first read by a widget.
-          ChangeNotifierProvider<WorktreeWatcherService>(
-            lazy: false,
-            create: (context) => WorktreeWatcherService(
-              gitService: context.read<GitService>(),
-              project: context.read<ProjectState>(),
-              configService: context.read<ProjectConfigService>(),
-            ),
-          ),
-          // Script execution service for running user actions
-          ChangeNotifierProvider<ScriptExecutionService>(
-            create: (_) => ScriptExecutionService(),
-          ),
-          // Theme state for dynamic theme switching
-          ChangeNotifierProvider<ThemeState>.value(
-            value: _themeState!,
-          ),
-          // Dialog observer for keyboard focus management
-          Provider<DialogObserver>.value(value: _dialogObserver),
-          // Menu action service for broadcasting menu actions to MainScreen
-          ChangeNotifierProvider<MenuActionService>.value(
-            value: _menuActionService,
-          ),
-        ],
-        child: _NotificationNavigationListener(
-          child: MaterialApp(
-            title: 'CC Insights',
-            debugShowCheckedModeBanner: false,
-            theme: _buildTheme(Brightness.light),
-            darkTheme: _buildTheme(Brightness.dark),
-            themeMode: _themeState?.themeMode ?? ThemeMode.system,
-            navigatorObservers: [_dialogObserver],
-            home: const MainScreen(),
-            routes: {'/replay': (context) => const ReplayDemoScreen()},
-          ),
+        ),
+        // Script execution service for running user actions
+        ChangeNotifierProvider<ScriptExecutionService>(
+          create: (_) => ScriptExecutionService(),
+        ),
+        // Theme state for dynamic theme switching
+        ChangeNotifierProvider<ThemeState>.value(
+          value: _themeState!,
+        ),
+        // Dialog observer for keyboard focus management
+        Provider<DialogObserver>.value(value: _dialogObserver),
+        // Menu action service for broadcasting menu actions to MainScreen
+        ChangeNotifierProvider<MenuActionService>.value(
+          value: _menuActionService,
+        ),
+      ],
+      child: _NotificationNavigationListener(
+        child: MaterialApp(
+          title: 'CC Insights',
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          themeMode: _themeState?.themeMode ?? ThemeMode.system,
+          navigatorObservers: [_dialogObserver],
+          home: const MainScreen(),
+          routes: {'/replay': (context) => const ReplayDemoScreen()},
         ),
       ),
     );
