@@ -611,7 +611,8 @@ class _MainScreenState extends State<MainScreen> {
                         EditableMultiSplitView(
                           controller: _controller,
                           config: EditableMultiSplitViewConfig(
-                            dividerThickness: 6.0,
+                            dividerThickness: 1.0,
+                            dividerHandleBuffer: 3.0,
                             paneConfig: DraggablePaneConfig(
                               dragFeedbackOpacity: 0.8,
                               dragFeedbackScale: 0.95,
