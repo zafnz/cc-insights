@@ -3,7 +3,7 @@
 Yet another Claude & Codex coordinator desktop GUI application.
 
 ## What's different this time?
-<img align=right width="500" height="458" alt="appscreen2" src="https://github.com/user-attachments/assets/72535e11-8ec8-4fe6-b261-91046a86bb34" />
+<img align=right width="600" height="404" alt="claude v0 0 15" src="https://github.com/user-attachments/assets/4f604410-a6b5-46c9-8fcb-cb30a17ee3a0" />
 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
 - Designed specifically for **Vibe coding** - your almost exclusive focus is on the AI agents and what they are doing.
@@ -51,7 +51,7 @@ This application now supports both Claude and Codex backends, but Claude is the 
 
 Open up the app, either from whatever menu you have (Start Menu/App menu/etc) or from a terminal as `cc-insights`. Select a git repo. You can immediately start chatting in the middle. When you're ready to work on a feature branch, click "New Worktree" on the top left and everything you develop in there will not interfere with your main branch until you are ready. You can also wire up the Run/Test action buttons by right-clicking on them so you can run your app from the worktree directly.
 
-When you are ready to merge your feature in you can use standard git tools, or the UI to commit all changes, rebase onto main, and then merge into main. Super easy, barely an inconvenience.
+When you are ready you can create a PR on origin/main, or work locally and merge your work into main. In all cases there is Claude who will help you through any merge conflicts you may encounter. 
 
 ## Installation
 
