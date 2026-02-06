@@ -8,6 +8,7 @@ import '../services/git_service.dart';
 import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
 import '../widgets/directory_validation_dialog.dart';
+import '../widgets/insights_widgets.dart';
 
 /// Callback when a project directory is selected.
 typedef OnProjectSelected = void Function(String projectPath);
@@ -127,11 +128,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     // Verify the project still exists
     final dir = Directory(projectPath);
     if (!dir.existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Project folder no longer exists: $projectPath'),
-          backgroundColor: Colors.orange,
-        ),
+      showErrorSnackBar(
+        context,
+        'Project folder no longer exists: $projectPath',
       );
       return;
     }

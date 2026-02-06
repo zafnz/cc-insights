@@ -20,6 +20,7 @@ import '../services/sdk_message_handler.dart';
 import '../state/selection_state.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/context_indicator.dart';
+import '../widgets/insights_widgets.dart';
 import '../widgets/cost_indicator.dart';
 import '../widgets/message_input.dart';
 import '../widgets/output_entries.dart';
@@ -896,9 +897,7 @@ class _ConversationHeader extends StatelessWidget {
   }
 
   void _showBackendSwitchError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showErrorSnackBar(context, message);
   }
 }
 
@@ -1258,9 +1257,7 @@ class WelcomeCard extends StatelessWidget {
           await backendService.start(type: backendType);
           final error = backendService.errorFor(backendType);
           if (error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(error)),
-            );
+            if (context.mounted) showErrorSnackBar(context, error);
             return;
           }
 

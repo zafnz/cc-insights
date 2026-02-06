@@ -12,6 +12,7 @@ import '../widgets/file_viewers/image_viewer.dart';
 import '../widgets/file_viewers/markdown_viewer.dart';
 import '../widgets/file_viewers/plaintext_viewer.dart';
 import '../widgets/file_viewers/source_code_viewer.dart';
+import '../widgets/insights_widgets.dart';
 import 'panel_wrapper.dart';
 
 /// File viewer panel - displays file contents based on type.
@@ -166,12 +167,7 @@ class _FileViewerPanelState extends State<FileViewerPanel> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to open file: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showErrorSnackBar(context, 'Failed to open file: $e');
       }
     }
   }

@@ -1,6 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Shows an error [SnackBar] that does not auto-dismiss.
+///
+/// The snackbar stays visible until the user taps "Dismiss".
+void showErrorSnackBar(BuildContext context, String message) {
+  final colorScheme = Theme.of(context).colorScheme;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        message,
+        maxLines: 5,
+        overflow: TextOverflow.ellipsis,
+      ),
+      backgroundColor: colorScheme.error,
+      duration: const Duration(days: 1),
+      action: SnackBarAction(
+        label: 'Dismiss',
+        textColor: colorScheme.onError,
+        onPressed: () {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        },
+      ),
+    ),
+  );
+}
+
 /// Standard [InputDecoration] used across CC-Insights.
 ///
 /// Provides the consistent filled, outlined style with 6px border

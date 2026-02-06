@@ -629,7 +629,11 @@ class RealGitService implements GitService {
     required bool newBranch,
     String? base,
   }) async {
-    final args = ['worktree', 'add'];
+    // Use -c branch.autoSetupMerge=simple to prevent git from automatically
+    // setting the upstream to the base ref (e.g. origin/main) when creating
+    // a new branch from a remote tracking branch. Without this, `git push`
+    // fails because the upstream name doesn't match the local branch name.
+    final args = ['-c', 'branch.autoSetupMerge=simple', 'worktree', 'add'];
     if (newBranch) {
       args.addAll(['-b', branch, worktreePath]);
       if (base != null) {
@@ -1304,7 +1308,19 @@ class RealGitService implements GitService {
       }
       args = ['push', '-u', 'origin', branch];
     } else {
-      args = ['push'];
+      // Check if the upstream branch name matches the local branch.
+      // If not (e.g. local branch "feat-x" tracking "origin/main" from
+      // worktree creation), plain `git push` fails. Fix by pushing with
+      // -u to set the correct upstream.
+      final branch = await getCurrentBranch(path);
+      final upstream = await getUpstream(path);
+      if (branch != null &&
+          upstream != null &&
+          !upstream.endsWith('/$branch')) {
+        args = ['push', '-u', 'origin', branch];
+      } else {
+        args = ['push'];
+      }
     }
 
     final command = 'git ${args.join(' ')}';

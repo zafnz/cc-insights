@@ -195,17 +195,13 @@ class _WorktreeInfo extends StatelessWidget {
           await gitService.getMainBranch(project.data.repoRoot);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to detect main branch: $e')),
-      );
+      showErrorSnackBar(context, 'Failed to detect main branch: $e');
       return;
     }
 
     if (mainBranch == null) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not detect main branch')),
-      );
+      showErrorSnackBar(context, 'Could not detect main branch');
       return;
     }
 
@@ -251,9 +247,7 @@ class _WorktreeInfo extends StatelessWidget {
       await gitService.push(worktreeRoot, setUpstream: setUpstream);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Push failed: $e')),
-      );
+      showErrorSnackBar(context, 'Push failed: $e');
       return;
     }
     onStatusChanged();
@@ -267,9 +261,7 @@ class _WorktreeInfo extends StatelessWidget {
       await gitService.fetch(worktreeRoot);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fetch failed: $e')),
-      );
+      showErrorSnackBar(context, 'Fetch failed: $e');
       return;
     }
 
@@ -315,14 +307,10 @@ class _WorktreeInfo extends StatelessWidget {
     final ghInstalled = await gitService.isGhInstalled();
     if (!ghInstalled) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'GitHub CLI (gh) is not installed. '
-            'Install it from https://cli.github.com',
-          ),
-          duration: Duration(seconds: 5),
-        ),
+      showErrorSnackBar(
+        context,
+        'GitHub CLI (gh) is not installed. '
+        'Install it from https://cli.github.com',
       );
       return;
     }
@@ -334,17 +322,13 @@ class _WorktreeInfo extends StatelessWidget {
           await gitService.getMainBranch(project.data.repoRoot);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to detect main branch: $e')),
-      );
+      showErrorSnackBar(context, 'Failed to detect main branch: $e');
       return;
     }
 
     if (mainBranch == null) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not detect main branch')),
-      );
+      showErrorSnackBar(context, 'Could not detect main branch');
       return;
     }
 
@@ -497,9 +481,7 @@ class _WorktreeInfo extends StatelessWidget {
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to abort: $e')),
-      );
+      showErrorSnackBar(context, 'Failed to abort: $e');
     }
     onStatusChanged();
   }
@@ -517,9 +499,7 @@ class _WorktreeInfo extends StatelessWidget {
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to continue: $e')),
-      );
+      showErrorSnackBar(context, 'Failed to continue: $e');
     }
     onStatusChanged();
   }

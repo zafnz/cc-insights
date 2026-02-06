@@ -9,6 +9,7 @@ import 'package:super_clipboard/super_clipboard.dart';
 
 import '../models/output_entry.dart';
 import '../services/image_utils.dart';
+import 'insights_widgets.dart';
 import 'keyboard_focus_manager.dart';
 
 /// Maximum number of images that can be attached to a single message.
@@ -323,13 +324,7 @@ class _MessageInputState extends State<MessageInput>
   /// Show an error message.
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    showErrorSnackBar(context, message);
   }
 
   @override

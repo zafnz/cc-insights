@@ -11,6 +11,7 @@ import '../services/menu_action_service.dart';
 import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/dialog_observer.dart';
+import '../widgets/insights_widgets.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
@@ -110,24 +111,7 @@ class _MainScreenState extends State<MainScreen> {
 
     // Show snackbar
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Backend error: $error',
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-          ),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          duration: const Duration(seconds: 10),
-          action: SnackBarAction(
-            label: 'Dismiss',
-            textColor: Theme.of(context).colorScheme.onError,
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            },
-          ),
-        ),
-      );
+      showErrorSnackBar(context, 'Backend error: $error');
     }
   }
 
