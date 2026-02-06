@@ -36,6 +36,7 @@ void main() {
         List<dynamic>? updatedPermissions,
       })? onAllow,
       void Function(String)? onDeny,
+      void Function(String planText)? onClearContextAndAcceptEdits,
     }) {
       return MaterialApp(
         home: Scaffold(
@@ -43,6 +44,7 @@ void main() {
             request: request,
             onAllow: onAllow ?? ({updatedInput, updatedPermissions}) {},
             onDeny: onDeny ?? (_) {},
+            onClearContextAndAcceptEdits: onClearContextAndAcceptEdits,
           ),
         ),
       );
@@ -303,7 +305,34 @@ void main() {
     });
 
     group('ExitPlanMode tool display', () {
-      testWidgets('shows plan content in scrollable box', (tester) async {
+      /// Helper to create an ExitPlanMode test widget with proper sizing.
+      /// ExitPlanMode uses Expanded which needs a parent with bounded height.
+      Widget createPlanTestApp({
+        required sdk.PermissionRequest request,
+        void Function({
+          Map<String, dynamic>? updatedInput,
+          List<dynamic>? updatedPermissions,
+        })? onAllow,
+        void Function(String)? onDeny,
+        void Function(String planText)? onClearContextAndAcceptEdits,
+      }) {
+        return MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 800,
+              height: 600,
+              child: PermissionDialog(
+                request: request,
+                onAllow: onAllow ?? ({updatedInput, updatedPermissions}) {},
+                onDeny: onDeny ?? (_) {},
+                onClearContextAndAcceptEdits: onClearContextAndAcceptEdits,
+              ),
+            ),
+          ),
+        );
+      }
+
+      testWidgets('shows plan header and markdown content', (tester) async {
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
           toolInput: {
@@ -311,173 +340,267 @@ void main() {
           },
         );
 
-        await tester.pumpWidget(createTestApp(request: request));
+        await tester.pumpWidget(createPlanTestApp(request: request));
         await safePumpAndSettle(tester);
 
-        // Verify plan header is displayed
+        // Verify plan header
         expect(find.text('Plan for Approval'), findsOneWidget);
-        // Verify plan content is displayed
+        // Verify description icon (not shield)
+        expect(find.byIcon(Icons.description_outlined), findsOneWidget);
+        // Verify plan content renders as markdown
         expect(find.textContaining('Implementation Plan'), findsOneWidget);
       });
 
-      testWidgets('shows expand button', (tester) async {
+      testWidgets('shows 3 approval buttons', (tester) async {
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
-          toolInput: {'plan': '# My Plan\nStep 1'},
+          toolInput: {'plan': '# Plan'},
         );
 
-        await tester.pumpWidget(createTestApp(request: request));
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onClearContextAndAcceptEdits: (_) {},
+        ));
         await safePumpAndSettle(tester);
 
-        // Verify expand icon is present
+        // Verify all 3 buttons are present
         expect(
-          find.byKey(PermissionDialogKeys.expandPlanButton),
+          find.byKey(PermissionDialogKeys.planClearContext),
           findsOneWidget,
         );
-        expect(find.byIcon(Icons.open_in_full), findsOneWidget);
+        expect(
+          find.byKey(PermissionDialogKeys.planApproveAcceptEdits),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(PermissionDialogKeys.planApproveManual),
+          findsOneWidget,
+        );
+        // Verify button labels
+        expect(find.text('Clear ctx + Accept edits'), findsOneWidget);
+        expect(find.text('Accept edits'), findsOneWidget);
+        expect(find.text('Approve'), findsOneWidget);
       });
 
-      testWidgets('expand button shows expanded markdown view', (tester) async {
+      testWidgets('hides clear context button when callback not provided',
+          (tester) async {
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
-          toolInput: {
-            'plan': '# My Plan\n\n- Item 1\n- Item 2\n- Item 3',
-          },
+          toolInput: {'plan': '# Plan'},
         );
 
-        // Need to wrap in Scaffold with Expanded to handle expanded view
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 800,
-              height: 600,
-              child: PermissionDialog(
-                request: request,
-                onAllow: ({updatedInput, updatedPermissions}) {},
-                onDeny: (_) {},
-              ),
-            ),
-          ),
-        ));
+        // No onClearContextAndAcceptEdits callback
+        await tester.pumpWidget(createPlanTestApp(request: request));
         await safePumpAndSettle(tester);
 
-        // Tap expand button
-        await tester.tap(find.byIcon(Icons.open_in_full));
-        await tester.pumpAndSettle();
-
-        // Verify collapse button is now visible (replaces expand)
-        expect(find.byIcon(Icons.close_fullscreen), findsOneWidget);
-        // Verify plan content is still visible
-        expect(find.textContaining('My Plan'), findsOneWidget);
-        // Allow/Deny buttons should still be present
-        expect(find.text('Allow'), findsOneWidget);
-        expect(find.text('Deny'), findsOneWidget);
+        // Clear context button should NOT be present
+        expect(
+          find.byKey(PermissionDialogKeys.planClearContext),
+          findsNothing,
+        );
+        // Other buttons should still be present
+        expect(
+          find.byKey(PermissionDialogKeys.planApproveAcceptEdits),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(PermissionDialogKeys.planApproveManual),
+          findsOneWidget,
+        );
       });
 
-      testWidgets('collapse button returns to compact view', (tester) async {
+      testWidgets('shows feedback text input', (tester) async {
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
-          toolInput: {'plan': '# Test Plan'},
+          toolInput: {'plan': '# Plan'},
         );
 
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 800,
-              height: 600,
-              child: PermissionDialog(
-                request: request,
-                onAllow: ({updatedInput, updatedPermissions}) {},
-                onDeny: (_) {},
-              ),
-            ),
-          ),
-        ));
+        await tester.pumpWidget(createPlanTestApp(request: request));
         await safePumpAndSettle(tester);
 
-        // Expand
-        await tester.tap(find.byIcon(Icons.open_in_full));
-        await tester.pumpAndSettle();
-
-        // Verify expanded state
-        expect(find.byIcon(Icons.close_fullscreen), findsOneWidget);
-
-        // Collapse
-        await tester.tap(find.byIcon(Icons.close_fullscreen));
-        await tester.pumpAndSettle();
-
-        // Verify compact state restored
-        expect(find.byIcon(Icons.open_in_full), findsOneWidget);
-        expect(find.text('Plan for Approval'), findsOneWidget);
+        // Verify feedback input exists
+        expect(
+          find.byKey(PermissionDialogKeys.planFeedbackInput),
+          findsOneWidget,
+        );
+        // Verify send button exists
+        expect(
+          find.byKey(PermissionDialogKeys.planFeedbackSend),
+          findsOneWidget,
+        );
+        // Verify hint text
+        expect(
+          find.text('Tell Claude what to change...'),
+          findsOneWidget,
+        );
       });
 
-      testWidgets('allow works from expanded view', (tester) async {
+      testWidgets('Approve button calls onAllow with no updatedPermissions',
+          (tester) async {
+        List<dynamic>? capturedPermissions;
         var allowCalled = false;
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
           toolInput: {'plan': '# Plan'},
         );
 
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 800,
-              height: 600,
-              child: PermissionDialog(
-                request: request,
-                onAllow: ({updatedInput, updatedPermissions}) {
-                  allowCalled = true;
-                },
-                onDeny: (_) {},
-              ),
-            ),
-          ),
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onAllow: ({updatedInput, updatedPermissions}) {
+            allowCalled = true;
+            capturedPermissions = updatedPermissions;
+          },
         ));
         await safePumpAndSettle(tester);
 
-        // Expand
-        await tester.tap(find.byIcon(Icons.open_in_full));
-        await tester.pumpAndSettle();
-
-        // Tap Allow
-        await tester.tap(find.text('Allow'));
+        // Tap Approve
+        await tester.tap(find.byKey(PermissionDialogKeys.planApproveManual));
         await tester.pump();
 
         check(allowCalled).isTrue();
+        check(capturedPermissions).isNull();
       });
 
-      testWidgets('deny works from expanded view', (tester) async {
+      testWidgets(
+          'Accept edits button calls onAllow with setMode updatedPermissions',
+          (tester) async {
+        List<dynamic>? capturedPermissions;
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# Plan'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onAllow: ({updatedInput, updatedPermissions}) {
+            capturedPermissions = updatedPermissions;
+          },
+        ));
+        await safePumpAndSettle(tester);
+
+        // Tap Accept edits
+        await tester
+            .tap(find.byKey(PermissionDialogKeys.planApproveAcceptEdits));
+        await tester.pump();
+
+        check(capturedPermissions).isNotNull();
+        check(capturedPermissions!).length.equals(1);
+        final perm = capturedPermissions!.first as Map<String, dynamic>;
+        check(perm['type'] as String).equals('setMode');
+        check(perm['mode'] as String).equals('acceptEdits');
+        check(perm['destination'] as String).equals('session');
+      });
+
+      testWidgets(
+          'Clear context button calls onClearContextAndAcceptEdits with plan text',
+          (tester) async {
+        String? capturedPlan;
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# My Great Plan\n\n1. Do stuff'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onClearContextAndAcceptEdits: (planText) {
+            capturedPlan = planText;
+          },
+        ));
+        await safePumpAndSettle(tester);
+
+        // Tap Clear ctx + Accept edits
+        await tester.tap(find.byKey(PermissionDialogKeys.planClearContext));
+        await tester.pump();
+
+        check(capturedPlan).isNotNull();
+        check(capturedPlan!).equals('# My Great Plan\n\n1. Do stuff');
+      });
+
+      testWidgets('feedback send button is disabled when text is empty',
+          (tester) async {
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# Plan'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        // Verify send button is disabled (onPressed is null)
+        final sendButton = tester.widget<IconButton>(
+          find.byKey(PermissionDialogKeys.planFeedbackSend),
+        );
+        check(sendButton.onPressed).isNull();
+      });
+
+      testWidgets('feedback send button calls onDeny with typed text',
+          (tester) async {
         String? denyMessage;
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
           toolInput: {'plan': '# Plan'},
         );
 
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 800,
-              height: 600,
-              child: PermissionDialog(
-                request: request,
-                onAllow: ({updatedInput, updatedPermissions}) {},
-                onDeny: (msg) => denyMessage = msg,
-              ),
-            ),
-          ),
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onDeny: (msg) => denyMessage = msg,
         ));
         await safePumpAndSettle(tester);
 
-        // Expand
-        await tester.tap(find.byIcon(Icons.open_in_full));
-        await tester.pumpAndSettle();
+        // Type feedback
+        await tester.enterText(
+          find.byKey(PermissionDialogKeys.planFeedbackInput),
+          'Please add error handling',
+        );
+        await tester.pump();
 
-        // Tap Deny
-        await tester.tap(find.text('Deny'));
+        // Tap send
+        await tester.tap(find.byKey(PermissionDialogKeys.planFeedbackSend));
         await tester.pump();
 
         check(denyMessage).isNotNull();
-        check(denyMessage!).contains('denied');
+        check(denyMessage!).equals('Please add error handling');
+      });
+
+      testWidgets('feedback text field submit calls onDeny',
+          (tester) async {
+        String? denyMessage;
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# Plan'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onDeny: (msg) => denyMessage = msg,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Type and submit via keyboard
+        await tester.enterText(
+          find.byKey(PermissionDialogKeys.planFeedbackInput),
+          'Change step 2',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pump();
+
+        check(denyMessage).isNotNull();
+        check(denyMessage!).equals('Change step 2');
+      });
+
+      testWidgets('does not show generic Allow/Deny buttons',
+          (tester) async {
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# Plan'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        // Generic Allow/Deny buttons should NOT be present
+        expect(find.text('Allow'), findsNothing);
+        expect(find.text('Deny'), findsNothing);
       });
 
       testWidgets('handles empty plan gracefully', (tester) async {
@@ -486,11 +609,31 @@ void main() {
           toolInput: {'plan': ''},
         );
 
-        await tester.pumpWidget(createTestApp(request: request));
+        await tester.pumpWidget(createPlanTestApp(request: request));
         await safePumpAndSettle(tester);
 
         // Should render without errors
         expect(find.text('Plan for Approval'), findsOneWidget);
+        // Buttons should still be present
+        expect(
+          find.byKey(PermissionDialogKeys.planApproveManual),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('does not show shield icon for ExitPlanMode',
+          (tester) async {
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# Plan'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        // Should show description icon, not shield
+        expect(find.byIcon(Icons.description_outlined), findsOneWidget);
+        expect(find.byIcon(Icons.shield_outlined), findsNothing);
       });
     });
 

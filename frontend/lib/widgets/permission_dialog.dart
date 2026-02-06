@@ -45,6 +45,23 @@ class PermissionDialogKeys {
 
   /// The expand button for viewing plan in full markdown.
   static const expandPlanButton = Key('permission_dialog_expand_plan');
+
+  /// The "Accept edits" button for ExitPlanMode (allow + setMode acceptEdits).
+  static const planApproveAcceptEdits =
+      Key('permission_dialog_plan_approve_accept');
+
+  /// The "Approve" button for ExitPlanMode (allow with manual approvals).
+  static const planApproveManual = Key('permission_dialog_plan_approve_manual');
+
+  /// The text input for plan feedback (deny with message).
+  static const planFeedbackInput = Key('permission_dialog_plan_feedback_input');
+
+  /// The send button for plan feedback.
+  static const planFeedbackSend = Key('permission_dialog_plan_feedback_send');
+
+  /// The "Clear context + Accept edits" button for ExitPlanMode.
+  static const planClearContext =
+      Key('permission_dialog_plan_clear_context');
 }
 
 // =============================================================================
@@ -126,6 +143,7 @@ class PermissionDialog extends StatefulWidget {
     required this.onAllow,
     required this.onDeny,
     this.projectDir,
+    this.onClearContextAndAcceptEdits,
   });
 
   /// The permission request from the SDK.
@@ -141,6 +159,10 @@ class PermissionDialog extends StatefulWidget {
   /// Called when the user denies the permission.
   /// The callback receives a denial message explaining why.
   final void Function(String message) onDeny;
+
+  /// Called when the user wants to clear context and restart with the plan.
+  /// Only used for ExitPlanMode. Provides the plan text for the new session.
+  final void Function(String planText)? onClearContextAndAcceptEdits;
 
   /// The project directory for resolving relative file paths.
   final String? projectDir;
@@ -160,12 +182,21 @@ class _PermissionDialogState extends State<PermissionDialog> {
   // Whether the plan view is expanded (for ExitPlanMode)
   bool _isPlanExpanded = false;
 
+  // Controller for the plan feedback text input (ExitPlanMode Option 4)
+  final TextEditingController _feedbackController = TextEditingController();
+
+  @override
+  void dispose() {
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final permission = widget.request;
 
-    // If ExitPlanMode is expanded, show the expanded plan view
-    if (_isPlanExpanded && permission.toolName == 'ExitPlanMode') {
+    // ExitPlanMode always shows the expanded plan view
+    if (permission.toolName == 'ExitPlanMode') {
       return _buildExpandedPlanView(context, permission);
     }
 
@@ -299,7 +330,11 @@ class _PermissionDialogState extends State<PermissionDialog> {
   /// Builds the expanded plan view for ExitPlanMode.
   ///
   /// This view takes over the conversation output area, showing the full
-  /// plan rendered as markdown with Allow/Deny buttons at the bottom.
+  /// plan rendered as markdown with 4-option approval footer:
+  /// - Text input for feedback (deny with message)
+  /// - "Clear context + Accept edits" button
+  /// - "Accept edits" button
+  /// - "Approve" button (manual approvals)
   Widget _buildExpandedPlanView(
     BuildContext context,
     sdk.PermissionRequest permission,
@@ -318,10 +353,11 @@ class _PermissionDialogState extends State<PermissionDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header with collapse button
+          // Header
           _buildExpandedPlanHeader(context),
           // Expanded markdown content - takes remaining space
           Expanded(
+            key: PermissionDialogKeys.planContent,
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
@@ -348,48 +384,168 @@ class _PermissionDialogState extends State<PermissionDialog> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          // Footer with Allow/Deny buttons
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
+          const SizedBox(height: 8),
+          // Footer: feedback input + approval buttons
+          _buildPlanApprovalFooter(context, plan),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the footer for ExitPlanMode with feedback input and approval
+  /// buttons.
+  Widget _buildPlanApprovalFooter(BuildContext context, String plan) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Feedback text input row
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: PermissionDialogKeys.planFeedbackInput,
+                  controller: _feedbackController,
+                  style: textStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Tell Claude what to change...',
+                    hintStyle: textStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (text) {
+                    if (text.trim().isNotEmpty) {
+                      widget.onDeny(text.trim());
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: _feedbackController,
+                builder: (context, _) {
+                  final hasText = _feedbackController.text.trim().isNotEmpty;
+                  return IconButton(
+                    key: PermissionDialogKeys.planFeedbackSend,
+                    onPressed: hasText
+                        ? () =>
+                            widget.onDeny(_feedbackController.text.trim())
+                        : null,
+                    icon: Icon(
+                      Icons.send,
+                      size: 20,
+                      color: hasText
+                          ? Colors.orange
+                          : colorScheme.onSurface.withValues(alpha: 0.3),
+                    ),
+                    tooltip: 'Send feedback (deny plan)',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Approval buttons row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Option 1: Clear context + Accept edits
+              if (widget.onClearContextAndAcceptEdits != null)
                 OutlinedButton(
-                  key: PermissionDialogKeys.denyButton,
-                  onPressed: _handleDeny,
+                  key: PermissionDialogKeys.planClearContext,
+                  onPressed: () =>
+                      widget.onClearContextAndAcceptEdits!(plan),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    foregroundColor: Colors.blue,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
                     visualDensity: VisualDensity.compact,
                   ),
-                  child: const Text('Deny'),
+                  child: const Text('Clear ctx + Accept edits'),
                 ),
+              if (widget.onClearContextAndAcceptEdits != null)
                 const SizedBox(width: 8),
-                FilledButton(
-                  key: PermissionDialogKeys.allowButton,
-                  onPressed: _handleAllow,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: const Text('Allow'),
+              // Option 2: Accept edits (allow + setMode)
+              OutlinedButton(
+                key: PermissionDialogKeys.planApproveAcceptEdits,
+                onPressed: () => _handleAllowWithAcceptEdits(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  visualDensity: VisualDensity.compact,
                 ),
-              ],
-            ),
+                child: const Text('Accept edits'),
+              ),
+              const SizedBox(width: 8),
+              // Option 3: Approve (manual approvals, no mode change)
+              FilledButton(
+                key: PermissionDialogKeys.planApproveManual,
+                onPressed: _handleAllow,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Approve'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  /// Builds the header for the expanded plan view with a collapse button.
+  /// Handles allow with acceptEdits mode change (ExitPlanMode Option 2).
+  void _handleAllowWithAcceptEdits() {
+    widget.onAllow(
+      updatedPermissions: [
+        {
+          'type': 'setMode',
+          'mode': 'acceptEdits',
+          'destination': 'session',
+        },
+      ],
+    );
+  }
+
+  /// Builds the header for the expanded plan view.
   Widget _buildExpandedPlanHeader(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -405,34 +561,19 @@ class _PermissionDialogState extends State<PermissionDialog> {
       child: Row(
         children: [
           Icon(
-            Icons.shield_outlined,
+            Icons.description_outlined,
             color: colorScheme.primary,
             size: 20,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Permission Required: ${widget.request.toolName}',
+              'Plan for Approval',
               style: textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface,
               ),
             ),
-          ),
-          // Collapse button
-          IconButton(
-            icon: const Icon(Icons.close_fullscreen, size: 18),
-            tooltip: 'Collapse plan view',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 32,
-              minHeight: 32,
-            ),
-            onPressed: () {
-              setState(() {
-                _isPlanExpanded = false;
-              });
-            },
           ),
         ],
       ),
@@ -486,8 +627,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
         return _buildWriteContent(toolInput);
       case 'Edit':
         return _buildEditContent(toolInput);
-      case 'ExitPlanMode':
-        return _buildExitPlanModeContent(toolInput);
+      // ExitPlanMode is handled by _buildExpandedPlanView (full-panel mode)
+      // and never reaches _buildToolContent.
       default:
         return _buildGenericContent(toolInput);
     }
@@ -603,63 +744,6 @@ class _PermissionDialogState extends State<PermissionDialog> {
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExitPlanModeContent(Map<String, dynamic> input) {
-    final plan = input['plan'] as String? ?? '';
-    final lineCount = '\n'.allMatches(plan).length + 1;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      key: PermissionDialogKeys.content,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header row with title and expand button
-        Row(
-          children: [
-            Icon(
-              Icons.description_outlined,
-              size: 16,
-              color: colorScheme.primary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Plan for Approval',
-              style: textStyle(
-                fontSize: PermissionFontSizes.description,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const Spacer(),
-            // Expand button
-            IconButton(
-              key: PermissionDialogKeys.expandPlanButton,
-              icon: const Icon(Icons.open_in_full, size: 16),
-              tooltip: 'View full plan as markdown',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 28,
-                minHeight: 28,
-              ),
-              onPressed: () {
-                setState(() {
-                  _isPlanExpanded = true;
-                });
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Scrollable plan content box
-        _ScrollableCodeBox(
-          key: PermissionDialogKeys.planContent,
-          content: plan,
-          lineCount: lineCount,
-          backgroundColor: colorScheme.surfaceContainerHighest,
-          maxHeight: 200,
         ),
       ],
     );

@@ -446,6 +446,10 @@ class _ConversationPanelState extends State<ConversationPanel>
             )
         : null;
 
+    // Check if ExitPlanMode should take over the full panel
+    final isExitPlanMode = shouldShowPermissionWidget &&
+        _cachedPermission?.toolName == 'ExitPlanMode';
+
     return Column(
       children: [
         // Conversation header - wrapped in ListenableBuilder to rebuild on chat changes
@@ -462,34 +466,41 @@ class _ConversationPanelState extends State<ConversationPanel>
             conversation: conversation,
             agent: agent,
           ),
-        // Output entries list
-        Expanded(
-          child: conversation.entries.isEmpty && !isWorking
-              ? _ConversationPlaceholder(
-                  message: isPrimary
-                      ? 'No messages yet. Start a conversation!'
-                      : 'No output from this subagent yet.',
-                )
-              : _buildEntryList(
-                  conversation,
-                  chat: chat,
-                  showWorkingIndicator: isPrimary && isWorking,
-                  isCompacting: isCompacting,
-                ),
-        ),
-        // Bottom area: either permission widget or message input
-        if (isPrimary)
-          shouldShowPermissionWidget
-              ? _buildPermissionWidget(chat!)
-              : MessageInput(
-                  key: ValueKey('input-${chat!.data.id}'),
-                  initialText: chat.draftText,
-                  onTextChanged: (text) => chat.draftText = text,
-                  onSubmit: (text, images) =>
-                      _handleSubmit(context, text, images),
-                  isWorking: isWorking,
-                  onInterrupt: isWorking ? () => _handleInterrupt(chat) : null,
-                ),
+
+        if (isExitPlanMode)
+          // ExitPlanMode: permission widget takes over the full panel
+          Expanded(child: _buildPlanPermissionWidget(chat!))
+        else ...[
+          // Normal: entries list + bottom widget
+          Expanded(
+            child: conversation.entries.isEmpty && !isWorking
+                ? _ConversationPlaceholder(
+                    message: isPrimary
+                        ? 'No messages yet. Start a conversation!'
+                        : 'No output from this subagent yet.',
+                  )
+                : _buildEntryList(
+                    conversation,
+                    chat: chat,
+                    showWorkingIndicator: isPrimary && isWorking,
+                    isCompacting: isCompacting,
+                  ),
+          ),
+          // Bottom area: either permission widget or message input
+          if (isPrimary)
+            shouldShowPermissionWidget
+                ? _buildPermissionWidget(chat!)
+                : MessageInput(
+                    key: ValueKey('input-${chat!.data.id}'),
+                    initialText: chat.draftText,
+                    onTextChanged: (text) => chat.draftText = text,
+                    onSubmit: (text, images) =>
+                        _handleSubmit(context, text, images),
+                    isWorking: isWorking,
+                    onInterrupt:
+                        isWorking ? () => _handleInterrupt(chat) : null,
+                  ),
+        ],
       ],
     );
   }
@@ -539,6 +550,91 @@ class _ConversationPanelState extends State<ConversationPanel>
       axisAlignment: 1.0, // Align to bottom (slide up from bottom)
       child: dialogWidget,
     );
+  }
+
+  /// Build the ExitPlanMode permission widget with full-panel layout.
+  ///
+  /// This gives the PermissionDialog the full panel space (via Expanded in
+  /// the parent Column) so the plan markdown can fill the available area.
+  Widget _buildPlanPermissionWidget(ChatState chat) {
+    final permission = _cachedPermission;
+    if (permission == null) return const SizedBox.shrink();
+
+    final selection = context.read<SelectionState>();
+    return PermissionDialog(
+      request: permission,
+      projectDir: selection.selectedChat?.data.worktreeRoot,
+      onAllow: ({
+        Map<String, dynamic>? updatedInput,
+        List<dynamic>? updatedPermissions,
+      }) {
+        chat.allowPermission(
+          updatedInput: updatedInput,
+          updatedPermissions: updatedPermissions,
+        );
+      },
+      onDeny: (message) => chat.denyPermission(message),
+      onClearContextAndAcceptEdits: (planText) {
+        _handleClearContextPlanApproval(chat, planText);
+      },
+    );
+  }
+
+  /// Handles Option 1: Clear context + Accept edits.
+  ///
+  /// 1. Allows the ExitPlanMode permission (so CLI gets a response)
+  /// 2. Resets the session (clears context)
+  /// 3. Switches to acceptEdits mode
+  /// 4. Starts a new session with the plan text as the prompt
+  Future<void> _handleClearContextPlanApproval(
+    ChatState chat,
+    String planText,
+  ) async {
+    // 1. Allow the ExitPlanMode permission first
+    chat.allowPermission(
+      updatedPermissions: [
+        {
+          'type': 'setMode',
+          'mode': 'acceptEdits',
+          'destination': 'session',
+        },
+      ],
+    );
+
+    // 2. Reset session (clears context, stops session)
+    await chat.resetSession();
+
+    // 3. Switch to acceptEdits mode for the new session
+    chat.setPermissionMode(PermissionMode.acceptEdits);
+
+    // 4. Start new session with plan as prompt
+    final backend = context.read<BackendService>();
+    final messageHandler = context.read<SdkMessageHandler>();
+
+    final prompt =
+        'The user has approved your plan and wants you to execute it '
+        'with a clear context. Here is the approved plan:\n\n'
+        '$planText\n\n'
+        'Begin implementation.';
+
+    chat.addEntry(UserInputEntry(
+      timestamp: DateTime.now(),
+      text: '[Plan approved - clear context + accept edits]',
+    ));
+
+    try {
+      await chat.startSession(
+        backend: backend,
+        messageHandler: messageHandler,
+        prompt: prompt,
+      );
+    } catch (e) {
+      chat.addEntry(TextOutputEntry(
+        timestamp: DateTime.now(),
+        text: 'Failed to start session: $e',
+        contentType: 'error',
+      ));
+    }
   }
 
   Widget _buildEntryList(
