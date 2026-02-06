@@ -20,6 +20,7 @@ void main() {
   const testWorktreePath = '/repo/worktrees/feature';
   const testRepoRoot = '/repo';
   const testBranch = 'feature-branch';
+  const testBase = 'main';
   const testProjectId = 'abc12345';
 
   setUp(() {
@@ -31,10 +32,9 @@ void main() {
 
     // Set up default clean worktree
     gitService.statuses[testWorktreePath] = const GitStatus();
-    gitService.mainBranches[testRepoRoot] = 'main';
   });
 
-  Widget createTestWidget() {
+  Widget createTestWidget({String base = testBase}) {
     return MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -45,6 +45,7 @@ void main() {
                 worktreePath: testWorktreePath,
                 repoRoot: testRepoRoot,
                 branch: testBranch,
+                base: base,
                 projectId: testProjectId,
                 gitService: gitService,
                 persistenceService: persistenceService,
@@ -81,7 +82,7 @@ void main() {
     });
 
     testWidgets('deletes clean worktree and shows log', (tester) async {
-      // Set up: clean worktree
+      // Set up: clean worktree, isBranchMerged defaults to true
       gitService.statuses[testWorktreePath] = const GitStatus();
 
       await tester.pumpWidget(createTestWidget());
@@ -136,13 +137,16 @@ void main() {
 
       // Should show warning about uncommitted files
       expect(find.textContaining('uncommitted'), findsOneWidget);
-      expect(find.byKey(DeleteWorktreeDialogKeys.discardButton), findsOneWidget);
-      expect(find.byKey(DeleteWorktreeDialogKeys.commitButton), findsOneWidget);
+      expect(
+          find.byKey(DeleteWorktreeDialogKeys.discardButton), findsOneWidget);
+      expect(
+          find.byKey(DeleteWorktreeDialogKeys.commitButton), findsOneWidget);
     });
 
     testWidgets('stashes changes when Discard is selected', (tester) async {
       // Set up: worktree with uncommitted changes
-      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1, changedEntries: 1);
+      gitService.statuses[testWorktreePath] =
+          const GitStatus(unstaged: 1, changedEntries: 1);
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -179,58 +183,6 @@ void main() {
       );
 
       expect(gitService.removeWorktreeCalls.length, 1);
-    });
-
-    testWidgets('shows commits ahead warning', (tester) async {
-      // Set up: clean worktree with commits ahead
-      gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.commitsAhead['$testWorktreePath:main'] = [
-        (sha: 'abc123', message: 'First commit'),
-        (sha: 'def456', message: 'Second commit'),
-      ];
-
-      await tester.pumpWidget(createTestWidget());
-      await tester.tap(find.text('Open Dialog'));
-      await tester.pump();
-
-      // Wait for delete button
-      await pumpUntilFound(
-        tester,
-        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
-      );
-
-      // Should show commits ahead in log
-      expect(find.textContaining('2 commits ahead'), findsOneWidget);
-    });
-
-    testWidgets('shows unmerged commits error and requires force delete',
-        (tester) async {
-      // Set up: clean worktree with commits that aren't on main
-      gitService.statuses[testWorktreePath] = const GitStatus();
-      gitService.commitsAhead['$testWorktreePath:main'] = [
-        (sha: 'abc123', message: 'First commit'),
-        (sha: 'def456', message: 'Second commit'),
-      ];
-      gitService.unmergedCommits['$testWorktreePath:$testBranch:main'] = [
-        'First commit',
-      ];
-
-      await tester.pumpWidget(createTestWidget());
-      await tester.tap(find.text('Open Dialog'));
-      await tester.pump();
-
-      // Wait for force delete button (unmerged commits requires force)
-      await pumpUntilFound(
-        tester,
-        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
-      );
-
-      // Should show error about unmerged commits
-      expect(find.textContaining('not yet on main'), findsOneWidget);
-
-      // Should show Abort button instead of Cancel
-      expect(find.text('Abort'), findsOneWidget);
-      expect(find.byKey(DeleteWorktreeDialogKeys.cancelButton), findsNothing);
     });
 
     testWidgets('prompts for force delete on git error', (tester) async {
@@ -316,7 +268,8 @@ void main() {
     testWidgets('cancels when Cancel is clicked on uncommitted prompt',
         (tester) async {
       // Set up: worktree with uncommitted changes
-      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1, changedEntries: 1);
+      gitService.statuses[testWorktreePath] =
+          const GitStatus(unstaged: 1, changedEntries: 1);
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -369,7 +322,8 @@ void main() {
 
     testWidgets('shows stash recovery note after stashing', (tester) async {
       // Set up: worktree with uncommitted changes
-      gitService.statuses[testWorktreePath] = const GitStatus(unstaged: 1, changedEntries: 1);
+      gitService.statuses[testWorktreePath] =
+          const GitStatus(unstaged: 1, changedEntries: 1);
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
@@ -393,6 +347,167 @@ void main() {
 
       // Should show stash recovery note (both in log and footer)
       expect(find.textContaining('git stash pop'), findsWidgets);
+    });
+  });
+
+  group('Safety check waterfall', () {
+    testWidgets('Check 1: branch is ancestor of base -> safe delete',
+        (tester) async {
+      // isBranchMerged returns true by default in FakeGitService
+      gitService.statuses[testWorktreePath] = const GitStatus();
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      expect(find.textContaining('All commits are on main'), findsOneWidget);
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Check 2: squash merge detected -> safe delete',
+        (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      // Check 1 fails: branch is NOT ancestor of base
+      gitService
+          .branchMerged['$testWorktreePath:$testBranch:$testBase'] = false;
+      // Check 2 passes: cherry returns empty (all squash merged)
+      // (default is empty in FakeGitService)
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      expect(find.textContaining('squash merged'), findsOneWidget);
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Check 3a: upstream up-to-date -> warning with delete button',
+        (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      // Check 1 fails
+      gitService
+          .branchMerged['$testWorktreePath:$testBranch:$testBase'] = false;
+      // Check 2 fails: unmerged commits exist
+      gitService.unmergedCommits['$testWorktreePath:$testBranch:$testBase'] = [
+        'Some commit',
+      ];
+      // Check 3: upstream exists and is up-to-date (ahead == 0)
+      gitService.upstreams[testWorktreePath] = 'origin/$testBranch';
+      gitService.branchComparisons[
+              '$testWorktreePath:$testBranch:origin/$testBranch'] =
+          (ahead: 0, behind: 0);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Should show Delete Worktree button (not force), with warning message
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      expect(find.textContaining('up-to-date'), findsOneWidget);
+      expect(find.textContaining('recoverable'), findsOneWidget);
+      expect(find.text('Abort'), findsOneWidget);
+      // Should be a regular delete button, not force
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+        findsNothing,
+      );
+    });
+
+    testWidgets('Check 3b: upstream behind -> force delete required',
+        (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      // Check 1 fails
+      gitService
+          .branchMerged['$testWorktreePath:$testBranch:$testBase'] = false;
+      // Check 2 fails
+      gitService.unmergedCommits['$testWorktreePath:$testBranch:$testBase'] = [
+        'Some commit',
+      ];
+      // Check 3: upstream exists but is behind
+      gitService.upstreams[testWorktreePath] = 'origin/$testBranch';
+      gitService.branchComparisons[
+              '$testWorktreePath:$testBranch:origin/$testBranch'] =
+          (ahead: 2, behind: 0);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+      );
+
+      expect(find.textContaining('lose work'), findsOneWidget);
+      expect(find.text('Abort'), findsOneWidget);
+    });
+
+    testWidgets('Check 3c: no upstream -> force delete required',
+        (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      // Check 1 fails
+      gitService
+          .branchMerged['$testWorktreePath:$testBranch:$testBase'] = false;
+      // Check 2 fails
+      gitService.unmergedCommits['$testWorktreePath:$testBranch:$testBase'] = [
+        'Some commit',
+        'Another commit',
+      ];
+      // No upstream (gitService.upstreams does not have testWorktreePath)
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+      );
+
+      expect(find.textContaining('No upstream'), findsOneWidget);
+      expect(find.textContaining('lose work'), findsOneWidget);
+      expect(find.text('Abort'), findsOneWidget);
+    });
+
+    testWidgets('works with remote base ref (origin/main)', (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      // isBranchMerged with origin/main as base
+      gitService
+          .branchMerged['$testWorktreePath:$testBranch:origin/main'] = true;
+
+      await tester.pumpWidget(createTestWidget(base: 'origin/main'));
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      expect(
+        find.textContaining('All commits are on origin/main'),
+        findsOneWidget,
+      );
     });
   });
 }

@@ -46,6 +46,7 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
   required String worktreePath,
   required String repoRoot,
   required String branch,
+  required String base,
   required String projectId,
   required GitService gitService,
   required PersistenceService persistenceService,
@@ -61,6 +62,7 @@ Future<DeleteWorktreeResult> showDeleteWorktreeDialog({
       worktreePath: worktreePath,
       repoRoot: repoRoot,
       branch: branch,
+      base: base,
       projectId: projectId,
       gitService: gitService,
       persistenceService: persistenceService,
@@ -127,6 +129,9 @@ enum _ActionState {
   /// Ready to delete worktree.
   readyToDelete,
 
+  /// Upstream is up-to-date but commits not merged into base.
+  upstreamWarning,
+
   /// Branch has unmerged commits - user must confirm force delete.
   hasUnmergedCommits,
 
@@ -153,6 +158,7 @@ class DeleteWorktreeDialog extends StatefulWidget {
     required this.worktreePath,
     required this.repoRoot,
     required this.branch,
+    required this.base,
     required this.projectId,
     required this.gitService,
     required this.persistenceService,
@@ -165,6 +171,7 @@ class DeleteWorktreeDialog extends StatefulWidget {
   final String worktreePath;
   final String repoRoot;
   final String branch;
+  final String base;
   final String projectId;
   final GitService gitService;
   final PersistenceService persistenceService;
@@ -181,9 +188,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
   final List<LogEntry> _log = [];
   final ScrollController _scrollController = ScrollController();
   _ActionState _actionState = _ActionState.checking;
-  String? _mainBranch;
   int _uncommittedCount = 0;
-  int _unmergedCommitsCount = 0;
 
   @override
   void initState() {
@@ -328,28 +333,8 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
 
     if (!mounted) return;
 
-    // Get main branch
-    await _detectMainBranch();
-
-    if (!mounted) return;
-
-    // Check commits ahead
-    await _checkCommitsAhead();
-
-    if (!mounted) return;
-
-    // Check if there are unmerged commits - if so, require force delete
-    if (_unmergedCommitsCount > 0) {
-      setState(() {
-        _actionState = _ActionState.hasUnmergedCommits;
-      });
-    } else {
-      // Ready to delete
-      _addLog('Ready to remove worktree', LogEntryStatus.success);
-      setState(() {
-        _actionState = _ActionState.readyToDelete;
-      });
-    }
+    // Run safety check waterfall
+    await _runSafetyChecks();
   }
 
   Future<void> _fetchOrigin() async {
@@ -371,115 +356,187 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     }
   }
 
-  Future<void> _detectMainBranch() async {
-    _addLog('Detecting main branch...', LogEntryStatus.running);
+  /// Runs the safety check waterfall:
+  /// 1. merge-base ancestor check
+  /// 2. squash merge (cherry) check
+  /// 3. upstream check
+  Future<void> _runSafetyChecks() async {
+    // Check 1: Is branch an ancestor of base?
+    final isMerged = await _checkBaseHasChanges();
+    if (!mounted) return;
+    if (isMerged) {
+      _addLog('Ready to remove worktree', LogEntryStatus.success);
+      setState(() {
+        _actionState = _ActionState.readyToDelete;
+      });
+      return;
+    }
+
+    // Check 2: Squash merge check
+    final isSquashMerged = await _checkSquashMerge();
+    if (!mounted) return;
+    if (isSquashMerged) {
+      _addLog('Ready to remove worktree', LogEntryStatus.success);
+      setState(() {
+        _actionState = _ActionState.readyToDelete;
+      });
+      return;
+    }
+
+    // Check 3: Upstream check
+    await _checkUpstream();
+  }
+
+  /// Check 1: merge-base --is-ancestor check.
+  /// Returns true if branch is fully merged into base.
+  Future<bool> _checkBaseHasChanges() async {
+    _addLog(
+      'Checking if ${widget.base} has all commits...',
+      LogEntryStatus.running,
+    );
 
     try {
-      _mainBranch = await widget.gitService.getMainBranch(widget.repoRoot);
+      final isMerged = await widget.gitService.isBranchMerged(
+        widget.worktreePath,
+        widget.branch,
+        widget.base,
+      );
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
-      if (_mainBranch != null) {
+      if (isMerged) {
         _updateLastLog(
           LogEntryStatus.success,
-          message: "Main branch is '$_mainBranch'",
+          message: 'All commits are on ${widget.base}',
         );
+        return true;
       } else {
         _updateLastLog(
-          LogEntryStatus.warning,
-          message: 'Could not detect main branch',
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _updateLastLog(
-        LogEntryStatus.warning,
-        message: 'Could not detect main branch',
-        detail: e.toString(),
-      );
-    }
-  }
-
-  Future<void> _checkCommitsAhead() async {
-    if (_mainBranch == null) return;
-
-    _addLog('Checking commits ahead of $_mainBranch...', LogEntryStatus.running);
-
-    try {
-      final commits = await widget.gitService.getCommitsAhead(
-        widget.worktreePath,
-        _mainBranch!,
-      );
-
-      if (!mounted) return;
-
-      if (commits.isEmpty) {
-        _updateLastLog(
           LogEntryStatus.success,
-          message: 'Branch has no new commits',
+          message: 'Branch has commits not on ${widget.base}',
         );
-        return;
+        return false;
       }
-
-      _updateLastLog(
-        LogEntryStatus.success,
-        message: 'Branch is ${commits.length} '
-            '${commits.length == 1 ? 'commit' : 'commits'} ahead of $_mainBranch',
-      );
-
-      // Check if commits are already on main (squash merged)
-      await _checkCommitsOnMain(commits.length);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       _updateLastLog(
         LogEntryStatus.warning,
-        message: 'Could not check commits',
+        message: 'Could not check merge status',
         detail: e.toString(),
       );
+      return false;
     }
   }
 
-  Future<void> _checkCommitsOnMain(int totalCommits) async {
-    _addLog('Checking if commits are already on $_mainBranch...', LogEntryStatus.running);
+  /// Check 2: git cherry squash merge check.
+  /// Returns true if all commits appear on base (likely squash merged).
+  Future<bool> _checkSquashMerge() async {
+    _addLog(
+      'Checking for squash-merged commits on ${widget.base}...',
+      LogEntryStatus.running,
+    );
 
     try {
       final unmerged = await widget.gitService.getUnmergedCommits(
         widget.worktreePath,
         widget.branch,
-        _mainBranch!,
+        widget.base,
       );
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       if (unmerged.isEmpty) {
         _updateLastLog(
           LogEntryStatus.success,
-          message: 'All commits appear to be on $_mainBranch',
+          message: 'Commits found on ${widget.base} (likely squash merged)',
         );
-        _unmergedCommitsCount = 0;
+        return true;
       } else {
-        // Any unmerged commits is an error - requires force delete
-        _unmergedCommitsCount = unmerged.length;
-        if (unmerged.length < totalCommits) {
-          _updateLastLog(
-            LogEntryStatus.error,
-            message: '${unmerged.length} of $totalCommits commits not yet on $_mainBranch',
-          );
-        } else {
-          _updateLastLog(
-            LogEntryStatus.error,
-            message: '${unmerged.length} ${unmerged.length == 1 ? 'commit' : 'commits'} not yet on $_mainBranch',
-          );
-        }
+        _updateLastLog(
+          LogEntryStatus.success,
+          message: '${unmerged.length} '
+              '${unmerged.length == 1 ? 'commit' : 'commits'} '
+              'not on ${widget.base}',
+        );
+        return false;
+      }
+    } catch (e) {
+      if (!mounted) return false;
+      _updateLastLog(
+        LogEntryStatus.warning,
+        message: 'Could not verify commits on ${widget.base}',
+        detail: e.toString(),
+      );
+      return false;
+    }
+  }
+
+  /// Check 3: upstream tracking branch check.
+  Future<void> _checkUpstream() async {
+    _addLog('Checking upstream tracking branch...', LogEntryStatus.running);
+
+    try {
+      final upstream = await widget.gitService.getUpstream(
+        widget.worktreePath,
+      );
+
+      if (!mounted) return;
+
+      if (upstream == null) {
+        _updateLastLog(
+          LogEntryStatus.error,
+          message: 'No upstream branch found. You will lose work.',
+        );
+        setState(() {
+          _actionState = _ActionState.hasUnmergedCommits;
+        });
+        return;
+      }
+
+      // Upstream exists - check how far behind it is
+      final comparison = await widget.gitService.getBranchComparison(
+        widget.worktreePath,
+        widget.branch,
+        upstream,
+      );
+
+      if (!mounted) return;
+
+      if (comparison != null && comparison.ahead == 0) {
+        // Upstream is up-to-date: warning state
+        _updateLastLog(
+          LogEntryStatus.warning,
+          message: 'Upstream $upstream is up-to-date but commits not '
+              'merged into ${widget.base}. If a PR exists, changes '
+              'are recoverable.',
+        );
+        setState(() {
+          _actionState = _ActionState.upstreamWarning;
+        });
+      } else {
+        // Upstream is behind: error state, require force delete
+        final behindCount = comparison?.ahead ?? 0;
+        _updateLastLog(
+          LogEntryStatus.error,
+          message: 'Changes are not on ${widget.base} and $upstream is '
+              '$behindCount '
+              '${behindCount == 1 ? 'commit' : 'commits'} behind. '
+              'You will lose work.',
+        );
+        setState(() {
+          _actionState = _ActionState.hasUnmergedCommits;
+        });
       }
     } catch (e) {
       if (!mounted) return;
       _updateLastLog(
-        LogEntryStatus.warning,
-        message: 'Could not verify commits on $_mainBranch',
+        LogEntryStatus.error,
+        message: 'Could not check upstream status',
         detail: e.toString(),
       );
-      _unmergedCommitsCount = 0; // Can't verify, allow normal delete
+      setState(() {
+        _actionState = _ActionState.hasUnmergedCommits;
+      });
     }
   }
 
@@ -799,6 +856,31 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         );
         break;
 
+      case _ActionState.upstreamWarning:
+        buttons.addAll([
+          _ActionButton(
+            key: DeleteWorktreeDialogKeys.deleteButton,
+            label: 'Delete Worktree',
+            icon: Icons.delete_forever,
+            onPressed: () => _handleDelete(),
+            colorScheme: colorScheme,
+            isPrimary: true,
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () =>
+                Navigator.of(context).pop(DeleteWorktreeResult.cancelled),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.onErrorContainer,
+              side: BorderSide(
+                color: colorScheme.onErrorContainer.withValues(alpha: 0.5),
+              ),
+            ),
+            child: const Text('Abort'),
+          ),
+        ]);
+        break;
+
       case _ActionState.hasUnmergedCommits:
         buttons.addAll([
           _ActionButton(
@@ -898,6 +980,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     // Always add cancel button (except when complete or when Abort is shown)
     if (_actionState != _ActionState.complete &&
         _actionState != _ActionState.hasUnmergedCommits &&
+        _actionState != _ActionState.upstreamWarning &&
         _actionState != _ActionState.needsForce &&
         _actionState != _ActionState.failed) {
       buttons.addAll([

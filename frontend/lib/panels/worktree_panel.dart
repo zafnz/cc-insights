@@ -811,6 +811,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       worktreePath: worktree.data.worktreeRoot,
       repoRoot: repoRoot,
       branch: worktree.data.branch,
+      base: worktree.data.baseRef ?? 'main',
       projectId: projectId,
       gitService: gitService,
       persistenceService: persistenceService,
