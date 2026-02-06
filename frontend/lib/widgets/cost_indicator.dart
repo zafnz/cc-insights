@@ -129,9 +129,17 @@ class CostIndicator extends StatelessWidget {
             ' (${timing.claudeWorkCount}x)\n',
       ));
       children.add(TextSpan(
-        text: 'You responded: '
+        text: 'Claude waited for you: '
             '${TimingStats.formatDuration(timing.userResponseDuration)}'
             ' (${timing.userResponseCount}x)\n',
+      ));
+      children.add(TextSpan(
+        text: '(includes wait time)',
+        style: TextStyle(
+          fontSize: 10,
+          color: Colors.grey[400],
+          fontStyle: FontStyle.italic,
+        ),
       ));
     }
 
