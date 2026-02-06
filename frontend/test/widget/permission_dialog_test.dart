@@ -306,7 +306,7 @@ void main() {
 
     group('ExitPlanMode tool display', () {
       /// Helper to create an ExitPlanMode test widget with proper sizing.
-      /// ExitPlanMode uses Expanded which needs a parent with bounded height.
+      /// ExitPlanMode uses LayoutBuilder which needs bounded constraints.
       Widget createPlanTestApp({
         required sdk.PermissionRequest request,
         void Function({
@@ -351,7 +351,7 @@ void main() {
         expect(find.textContaining('Implementation Plan'), findsOneWidget);
       });
 
-      testWidgets('shows 3 approval buttons', (tester) async {
+      testWidgets('shows approval and reject buttons', (tester) async {
         final request = createFakeRequest(
           toolName: 'ExitPlanMode',
           toolInput: {'plan': '# Plan'},
@@ -363,7 +363,7 @@ void main() {
         ));
         await safePumpAndSettle(tester);
 
-        // Verify all 3 buttons are present
+        // Verify all approval buttons are present
         expect(
           find.byKey(PermissionDialogKeys.planClearContext),
           findsOneWidget,
@@ -376,9 +376,15 @@ void main() {
           find.byKey(PermissionDialogKeys.planApproveManual),
           findsOneWidget,
         );
+        // Verify reject button is present
+        expect(
+          find.byKey(PermissionDialogKeys.planReject),
+          findsOneWidget,
+        );
         // Verify button labels
-        expect(find.text('Clear ctx + Accept edits'), findsOneWidget);
-        expect(find.text('Accept edits'), findsOneWidget);
+        expect(find.text('Reject'), findsOneWidget);
+        expect(find.text('New chat + auto-edit'), findsOneWidget);
+        expect(find.text('Auto-edit'), findsOneWidget);
         expect(find.text('Approve'), findsOneWidget);
       });
 
@@ -614,11 +620,53 @@ void main() {
 
         // Should render without errors
         expect(find.text('Plan for Approval'), findsOneWidget);
+        // Should show "No plan provided" message
+        expect(find.text('No plan provided.'), findsOneWidget);
         // Buttons should still be present
         expect(
           find.byKey(PermissionDialogKeys.planApproveManual),
           findsOneWidget,
         );
+      });
+
+      testWidgets('handles missing plan key gracefully', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        // Should render without errors
+        expect(find.text('Plan for Approval'), findsOneWidget);
+        expect(find.text('No plan provided.'), findsOneWidget);
+        // Buttons should still be present
+        expect(
+          find.byKey(PermissionDialogKeys.planApproveManual),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('Reject button calls onDeny', (tester) async {
+        String? denyMessage;
+        final request = createFakeRequest(
+          toolName: 'ExitPlanMode',
+          toolInput: {'plan': '# Plan'},
+        );
+
+        await tester.pumpWidget(createPlanTestApp(
+          request: request,
+          onDeny: (msg) => denyMessage = msg,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Tap Reject
+        await tester.tap(find.byKey(PermissionDialogKeys.planReject));
+        await tester.pump();
+
+        check(denyMessage).isNotNull();
+        check(denyMessage!).contains('denied');
       });
 
       testWidgets('does not show shield icon for ExitPlanMode',

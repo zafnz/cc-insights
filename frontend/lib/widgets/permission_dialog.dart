@@ -43,8 +43,11 @@ class PermissionDialogKeys {
   /// The plan content box for ExitPlanMode tool.
   static const planContent = Key('permission_dialog_plan_content');
 
-  /// The expand button for viewing plan in full markdown.
+  /// The expand button for viewing plan in full markdown (unused, kept for reference).
   static const expandPlanButton = Key('permission_dialog_expand_plan');
+
+  /// The "Reject" button for ExitPlanMode (deny without feedback).
+  static const planReject = Key('permission_dialog_plan_reject');
 
   /// The "Accept edits" button for ExitPlanMode (allow + setMode acceptEdits).
   static const planApproveAcceptEdits =
@@ -327,68 +330,92 @@ class _PermissionDialogState extends State<PermissionDialog> {
     );
   }
 
-  /// Builds the expanded plan view for ExitPlanMode.
+  /// Builds the plan view for ExitPlanMode.
   ///
-  /// This view takes over the conversation output area, showing the full
-  /// plan rendered as markdown with 4-option approval footer:
-  /// - Text input for feedback (deny with message)
-  /// - "Clear context + Accept edits" button
-  /// - "Accept edits" button
-  /// - "Approve" button (manual approvals)
+  /// Shows the plan rendered as scrollable markdown with approval footer.
+  /// Uses max half the available height for the plan content area.
   Widget _buildExpandedPlanView(
     BuildContext context,
     sdk.PermissionRequest permission,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final plan = permission.toolInput['plan'] as String? ?? '';
+    final hasPlan = plan.trim().isNotEmpty;
 
     // Dark purple background for the permission dialog body
     const dialogBackground = Color(0xFF2D1F3D);
 
-    return Container(
-      key: PermissionDialogKeys.dialog,
-      decoration: const BoxDecoration(
-        color: dialogBackground,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          _buildExpandedPlanHeader(context),
-          // Expanded markdown content - takes remaining space
-          Expanded(
-            key: PermissionDialogKeys.planContent,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: SelectionArea(
-                  child: MarkdownBody(
-                    data: plan,
-                    styleSheet: buildMarkdownStyleSheet(
-                      context,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Max plan content height is half the available space
+        final availableHeight = constraints.maxHeight;
+        final maxPlanHeight = availableHeight.isFinite
+            ? (availableHeight * 0.5).clamp(100.0, 500.0)
+            : 300.0;
+
+        return Container(
+          key: PermissionDialogKeys.dialog,
+          decoration: const BoxDecoration(
+            color: dialogBackground,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              _buildExpandedPlanHeader(context),
+              // Plan content with max height constraint
+              if (hasPlan)
+                ConstrainedBox(
+                  key: PermissionDialogKeys.planContent,
+                  constraints: BoxConstraints(maxHeight: maxPlanHeight),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: SelectionArea(
+                        child: MarkdownBody(
+                          data: plan,
+                          styleSheet: buildMarkdownStyleSheet(
+                            context,
+                            fontSize: 13,
+                          ),
+                          builders: buildMarkdownBuilders(
+                            projectDir: widget.projectDir,
+                          ),
+                          onTapLink: (text, href, title) {
+                            if (href != null) launchUrl(Uri.parse(href));
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  key: PermissionDialogKeys.planContent,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text(
+                    'No plan provided.',
+                    style: textStyle(
                       fontSize: 13,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      fontStyle: FontStyle.italic,
                     ),
-                    builders: buildMarkdownBuilders(
-                      projectDir: widget.projectDir,
-                    ),
-                    onTapLink: (text, href, title) {
-                      if (href != null) launchUrl(Uri.parse(href));
-                    },
                   ),
                 ),
-              ),
-            ),
+              const SizedBox(height: 8),
+              // Footer: feedback input + approval buttons
+              _buildPlanApprovalFooter(context, plan),
+            ],
           ),
-          const SizedBox(height: 8),
-          // Footer: feedback input + approval buttons
-          _buildPlanApprovalFooter(context, plan),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -482,10 +509,22 @@ class _PermissionDialogState extends State<PermissionDialog> {
           const SizedBox(height: 10),
           // Approval buttons row
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              // Reject button (deny without feedback)
+              OutlinedButton(
+                key: PermissionDialogKeys.planReject,
+                onPressed: _handleDeny,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Reject'),
+              ),
+              const Spacer(),
               // Option 1: Clear context + Accept edits
-              if (widget.onClearContextAndAcceptEdits != null)
+              if (widget.onClearContextAndAcceptEdits != null) ...[
                 OutlinedButton(
                   key: PermissionDialogKeys.planClearContext,
                   onPressed: () =>
@@ -493,13 +532,13 @@ class _PermissionDialogState extends State<PermissionDialog> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.blue,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                        horizontal: 10, vertical: 8),
                     visualDensity: VisualDensity.compact,
                   ),
-                  child: const Text('Clear ctx + Accept edits'),
+                  child: const Text('New chat + auto-edit'),
                 ),
-              if (widget.onClearContextAndAcceptEdits != null)
                 const SizedBox(width: 8),
+              ],
               // Option 2: Accept edits (allow + setMode)
               OutlinedButton(
                 key: PermissionDialogKeys.planApproveAcceptEdits,
@@ -507,10 +546,10 @@ class _PermissionDialogState extends State<PermissionDialog> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.blue,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                      horizontal: 10, vertical: 8),
                   visualDensity: VisualDensity.compact,
                 ),
-                child: const Text('Accept edits'),
+                child: const Text('Auto-edit'),
               ),
               const SizedBox(width: 8),
               // Option 3: Approve (manual approvals, no mode change)
@@ -520,7 +559,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.green,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
+                      horizontal: 14, vertical: 8),
                   visualDensity: VisualDensity.compact,
                 ),
                 child: const Text('Approve'),

@@ -446,10 +446,6 @@ class _ConversationPanelState extends State<ConversationPanel>
             )
         : null;
 
-    // Check if ExitPlanMode should take over the full panel
-    final isExitPlanMode = shouldShowPermissionWidget &&
-        _cachedPermission?.toolName == 'ExitPlanMode';
-
     return Column(
       children: [
         // Conversation header - wrapped in ListenableBuilder to rebuild on chat changes
@@ -466,41 +462,35 @@ class _ConversationPanelState extends State<ConversationPanel>
             conversation: conversation,
             agent: agent,
           ),
-
-        if (isExitPlanMode)
-          // ExitPlanMode: permission widget takes over the full panel
-          Expanded(child: _buildPlanPermissionWidget(chat!))
-        else ...[
-          // Normal: entries list + bottom widget
-          Expanded(
-            child: conversation.entries.isEmpty && !isWorking
-                ? _ConversationPlaceholder(
-                    message: isPrimary
-                        ? 'No messages yet. Start a conversation!'
-                        : 'No output from this subagent yet.',
-                  )
-                : _buildEntryList(
-                    conversation,
-                    chat: chat,
-                    showWorkingIndicator: isPrimary && isWorking,
-                    isCompacting: isCompacting,
-                  ),
-          ),
-          // Bottom area: either permission widget or message input
-          if (isPrimary)
-            shouldShowPermissionWidget
-                ? _buildPermissionWidget(chat!)
-                : MessageInput(
-                    key: ValueKey('input-${chat!.data.id}'),
-                    initialText: chat.draftText,
-                    onTextChanged: (text) => chat.draftText = text,
-                    onSubmit: (text, images) =>
-                        _handleSubmit(context, text, images),
-                    isWorking: isWorking,
-                    onInterrupt:
-                        isWorking ? () => _handleInterrupt(chat) : null,
-                  ),
-        ],
+        // Output entries list
+        Expanded(
+          child: conversation.entries.isEmpty && !isWorking
+              ? _ConversationPlaceholder(
+                  message: isPrimary
+                      ? 'No messages yet. Start a conversation!'
+                      : 'No output from this subagent yet.',
+                )
+              : _buildEntryList(
+                  conversation,
+                  chat: chat,
+                  showWorkingIndicator: isPrimary && isWorking,
+                  isCompacting: isCompacting,
+                ),
+        ),
+        // Bottom area: either permission widget or message input
+        if (isPrimary)
+          shouldShowPermissionWidget
+              ? _buildPermissionWidget(chat!)
+              : MessageInput(
+                  key: ValueKey('input-${chat!.data.id}'),
+                  initialText: chat.draftText,
+                  onTextChanged: (text) => chat.draftText = text,
+                  onSubmit: (text, images) =>
+                      _handleSubmit(context, text, images),
+                  isWorking: isWorking,
+                  onInterrupt:
+                      isWorking ? () => _handleInterrupt(chat) : null,
+                ),
       ],
     );
   }
@@ -515,6 +505,8 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     // Determine which widget to show based on tool name
     final isAskUserQuestion = permission.toolName == 'AskUserQuestion';
+
+    final isExitPlanMode = permission.toolName == 'ExitPlanMode';
 
     Widget dialogWidget;
     if (isAskUserQuestion) {
@@ -542,6 +534,9 @@ class _ConversationPanelState extends State<ConversationPanel>
           );
         },
         onDeny: (message) => chat.denyPermission(message),
+        onClearContextAndAcceptEdits: isExitPlanMode
+            ? (planText) => _handleClearContextPlanApproval(chat, planText)
+            : null,
       );
     }
 
@@ -549,34 +544,6 @@ class _ConversationPanelState extends State<ConversationPanel>
       sizeFactor: _permissionAnimation,
       axisAlignment: 1.0, // Align to bottom (slide up from bottom)
       child: dialogWidget,
-    );
-  }
-
-  /// Build the ExitPlanMode permission widget with full-panel layout.
-  ///
-  /// This gives the PermissionDialog the full panel space (via Expanded in
-  /// the parent Column) so the plan markdown can fill the available area.
-  Widget _buildPlanPermissionWidget(ChatState chat) {
-    final permission = _cachedPermission;
-    if (permission == null) return const SizedBox.shrink();
-
-    final selection = context.read<SelectionState>();
-    return PermissionDialog(
-      request: permission,
-      projectDir: selection.selectedChat?.data.worktreeRoot,
-      onAllow: ({
-        Map<String, dynamic>? updatedInput,
-        List<dynamic>? updatedPermissions,
-      }) {
-        chat.allowPermission(
-          updatedInput: updatedInput,
-          updatedPermissions: updatedPermissions,
-        );
-      },
-      onDeny: (message) => chat.denyPermission(message),
-      onClearContextAndAcceptEdits: (planText) {
-        _handleClearContextPlanApproval(chat, planText);
-      },
     );
   }
 
