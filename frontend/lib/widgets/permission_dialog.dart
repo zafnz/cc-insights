@@ -344,12 +344,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
 
     // Use the lowest surface container (matches chat/scaffold background)
     final dialogBackground = colorScheme.surfaceContainerLowest;
-    // Markdown box: surfaceContainerHighest darkened slightly
-    final markdownBackground = Color.lerp(
-      colorScheme.surfaceContainerHighest,
-      Colors.black,
-      0.15,
-    )!;
+    // Markdown box: surfaceContainer (mid-tone, darker than surfaceContainerLowest)
+    final markdownBackground = colorScheme.surfaceContainer;
 
     return LayoutBuilder(
       builder: (context, constraints) {
