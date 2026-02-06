@@ -521,6 +521,114 @@ void main() {
       });
     });
 
+    group('Write tool shows syntax-highlighted content without duplicate result', () {
+      testWidgets('does not show result text for successful write', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Write',
+          toolInput: {
+            'file_path': '/path/to/file.dart',
+            'content': 'void main() {}',
+          },
+          result: '{type: create, filePath: /path/to/file.dart, content: void main() {}}',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // For Write tools, result text is not shown (input view shows it all)
+        expect(find.text('Result:'), findsNothing);
+      });
+
+      testWidgets('still shows error text for failed write', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Write',
+          toolInput: {
+            'file_path': '/path/to/file.dart',
+            'content': 'void main() {}',
+          },
+          result: 'Permission denied',
+          isError: true,
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Error should still be shown
+        expect(find.text('Error:'), findsOneWidget);
+      });
+
+      testWidgets('shows file path in expanded view', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Write',
+          toolInput: {
+            'file_path': '/path/to/app.dart',
+            'content': 'void main() => runApp(App());',
+          },
+          result: 'written',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // File path should be displayed
+        expect(find.textContaining('/path/to/app.dart'), findsWidgets);
+      });
+
+      testWidgets('shows content for files with known extensions', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Write',
+          toolInput: {
+            'file_path': '/path/to/file.dart',
+            'content': 'class Foo {}',
+          },
+          result: 'written',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Content should be visible (syntax highlighted)
+        expect(find.textContaining('class Foo'), findsOneWidget);
+      });
+
+      testWidgets('shows content as plain text for unknown extensions', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'Write',
+          toolInput: {
+            'file_path': '/path/to/Makefile',
+            'content': 'all: build\nbuild:\n\techo done',
+          },
+          result: 'written',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Content should still be visible as plain text
+        expect(find.textContaining('all: build'), findsOneWidget);
+      });
+    });
+
     group('Shows error state correctly (red styling)', () {
       testWidgets('shows error icon when isError is true', (tester) async {
         final entry = createToolEntry(

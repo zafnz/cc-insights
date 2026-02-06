@@ -1,6 +1,9 @@
 import 'dart:convert' show base64Decode;
 import 'dart:io' show Platform;
 
+import 'package:code_highlight_view/code_highlight_view.dart';
+import 'package:code_highlight_view/themes/atom-one-dark.dart';
+import 'package:code_highlight_view/themes/atom-one-light.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +12,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/output_entry.dart';
+import '../services/file_type_detector.dart';
 import '../services/runtime_config.dart';
 import 'click_to_scroll_container.dart';
 import 'diff_view.dart';
@@ -385,8 +389,8 @@ class _ToolCardState extends State<ToolCard> {
     final isError = entry.isError;
     final monoFont = RuntimeConfig.instance.monoFontFamily;
 
-    // Don't show result text for Edit tools - the diff view shows everything
-    if (entry.toolName == 'Edit' && !isError) {
+    // Don't show result text for Edit/Write tools - the input view shows everything
+    if ((entry.toolName == 'Edit' || entry.toolName == 'Write') && !isError) {
       return const SizedBox.shrink();
     }
 
@@ -577,7 +581,7 @@ class _ReadInputWidget extends StatelessWidget {
   }
 }
 
-/// Renders Write tool input.
+/// Renders Write tool input with syntax highlighting.
 class _WriteInputWidget extends StatelessWidget {
   final Map<String, dynamic> input;
   final String? projectDir;
@@ -588,7 +592,10 @@ class _WriteInputWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final filePath = input['file_path'] as String? ?? '';
     final content = input['content'] as String? ?? '';
-    final monoFont = RuntimeConfig.instance.monoFontFamily;
+    final ext = FileTypeDetector.getFileExtension(filePath);
+    final language = ext != null
+        ? FileTypeDetector.getLanguageFromExtension(ext)
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,20 +607,48 @@ class _WriteInputWidget extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         ClickToScrollContainer(
-          maxHeight: 150,
-          padding: const EdgeInsets.all(8),
+          maxHeight: 300,
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(4),
-          child: SelectableText(
-            content.length > 500 ? '${content.substring(0, 500)}...' : content,
-            style: GoogleFonts.getFont(
-              monoFont,
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
+          child: language != null
+              ? _buildHighlightedCode(context, content, language)
+              : Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: SelectableText(
+                    content,
+                    style: GoogleFonts.getFont(
+                      RuntimeConfig.instance.monoFontFamily,
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
         ),
       ],
+    );
+  }
+
+  Widget _buildHighlightedCode(
+    BuildContext context,
+    String content,
+    String language,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseTheme = isDark ? atomOneDarkTheme : atomOneLightTheme;
+    final theme = Map<String, TextStyle>.from(baseTheme);
+    theme['root'] = const TextStyle(backgroundColor: Colors.transparent);
+
+    return CodeHighlightView(
+      content,
+      language: language,
+      theme: theme,
+      isSelectable: true,
+      padding: const EdgeInsets.all(8),
+      textStyle: const TextStyle(
+        fontFamily: 'JetBrains Mono',
+        fontSize: 11,
+        height: 1.4,
+      ),
     );
   }
 }
