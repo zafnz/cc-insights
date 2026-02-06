@@ -831,14 +831,23 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           onSecondaryTapUp: (details) {
             _showContextMenu(context, details.globalPosition);
           },
-          child: Material(
-            color: isSelected
-                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : Colors.transparent,
-            child: InkWell(
-              onTap: () => _handleTap(context),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: Material(
+              color: isSelected
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                  : Colors.transparent,
+              child: InkWell(
+                onTap: () => _handleTap(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -904,6 +913,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                 ),
               ),
             ),
+          ),
           ),
         );
       },
