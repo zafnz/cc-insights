@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:file_picker/file_picker.dart';
@@ -71,6 +72,14 @@ void main(List<String> args) async {
 
   // Override debugPrint to also log to LogService while preserving stdout output
   debugPrint = _loggingDebugPrint;
+
+  // Catch unhandled async exceptions (streams, futures, isolates) and route
+  // them through LogService so they appear in the log viewer and can trigger
+  // a UI snackbar.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    LogService.instance.logUnhandledException(error, stack);
+    return true; // handled — don't terminate the app
+  };
 
   // Initialize runtime config from command line arguments.
   // First positional arg is the working directory.

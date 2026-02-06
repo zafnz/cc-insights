@@ -85,6 +85,29 @@ class LogService extends ChangeNotifier {
   Set<String> get sources => Set.unmodifiable(_sources);
 
   // ---------------------------------------------------------------------------
+  // Unhandled error stream
+  // ---------------------------------------------------------------------------
+
+  final StreamController<LogEntry> _unhandledErrorController =
+      StreamController<LogEntry>.broadcast();
+
+  /// Stream of log entries from unhandled async exceptions.
+  ///
+  /// UI widgets can listen to this to show transient error notifications
+  /// (e.g. snackbars) without polling.
+  Stream<LogEntry> get unhandledErrors => _unhandledErrorController.stream;
+
+  /// Logs an unhandled async exception. Writes to the normal log and also
+  /// pushes to [unhandledErrors] so the UI can show a notification.
+  void logUnhandledException(Object error, StackTrace? stack) {
+    final message = error.toString();
+    final meta = stack != null ? {'stack': stack.toString()} : null;
+    log(source: 'Unhandled', level: LogLevel.error, message: message, meta: meta);
+    // Push the most recent entry to the stream
+    _unhandledErrorController.add(_entries.last);
+  }
+
+  // ---------------------------------------------------------------------------
   // Rate-limited notifications
   // ---------------------------------------------------------------------------
 
@@ -239,6 +262,7 @@ class LogService extends ChangeNotifier {
   void dispose() {
     _notifyTimer?.cancel();
     _notifyTimer = null;
+    _unhandledErrorController.close();
     disableFileLogging();
     super.dispose();
   }

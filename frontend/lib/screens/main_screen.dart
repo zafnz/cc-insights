@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cc_insights_v2/services/log_service.dart';
 import 'package:drag_split_layout/drag_split_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,6 +49,9 @@ class _MainScreenState extends State<MainScreen> {
   // Callback to resume keyboard interception when leaving settings
   VoidCallback? _resumeKeyboardInterception;
 
+  // Subscription for unhandled async error notifications
+  StreamSubscription<LogEntry>? _unhandledErrorSub;
+
   // Debounce timer for saving panel layout after divider drag
   Timer? _layoutSaveDebounce;
 
@@ -72,10 +76,12 @@ class _MainScreenState extends State<MainScreen> {
     // Listen for native menu actions
     _windowChannel.setMethodCallHandler(_handleNativeMethodCall);
 
-    // Listen for backend errors and menu actions after the first frame
+    // Listen for backend errors, menu actions, and unhandled exceptions
+    // after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupBackendErrorListener();
       _setupMenuActionListener();
+      _setupUnhandledErrorListener();
       _syncMergeStateToMenu();
     });
   }
@@ -114,6 +120,22 @@ class _MainScreenState extends State<MainScreen> {
     if (mounted) {
       showErrorSnackBar(context, 'Backend error: $error');
     }
+  }
+
+  void _setupUnhandledErrorListener() {
+    _unhandledErrorSub = LogService.instance.unhandledErrors.listen((entry) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'App error: ${entry.message}  (see Log Viewer)',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    });
   }
 
   void _setupMenuActionListener() {
@@ -270,6 +292,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void dispose() {
     _layoutSaveDebounce?.cancel();
+    _unhandledErrorSub?.cancel();
     // Resume keyboard interception if suspended
     _resumeKeyboardInterception?.call();
     // Remove native menu handler
