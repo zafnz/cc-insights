@@ -6,6 +6,7 @@ enum MenuAction {
   showWorkspace,
   showFileManager,
   showSettings,
+  showLogs,
   showProjectSettings,
 
   // Worktree actions

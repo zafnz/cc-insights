@@ -109,6 +109,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to enable debug SDK logging.
   bool _debugSdkLogging = false;
 
+  /// Path to the SDK trace log file.
+  String _traceLogPath = '~/ccinsights.trace.jsonl';
+
   /// Path to the application log file.
   String _loggingFilePath = '~/ccinsights.app.jsonl';
 
@@ -370,6 +373,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Path to the SDK trace log file.
+  String get traceLogPath => _traceLogPath;
+
+  set traceLogPath(String value) {
+    if (_traceLogPath != value) {
+      _traceLogPath = value;
+      notifyListeners();
+    }
+  }
+
   /// Path to the application log file.
   String get loggingFilePath => _loggingFilePath;
 
@@ -439,6 +452,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._defaultPermissionMode = 'default';
     _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;
+    _instance._traceLogPath = '~/ccinsights.trace.jsonl';
     _instance._loggingFilePath = '~/ccinsights.app.jsonl';
     _instance._loggingMinimumLevel = 'debug';
     _instance._markdownBackend = MarkdownBackend.flutterMarkdownPlus;

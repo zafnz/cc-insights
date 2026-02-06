@@ -35,6 +35,7 @@ class MenuCallbacks {
   final VoidCallback? onShowWorkspace;
   final VoidCallback? onShowFileManager;
   final VoidCallback? onShowSettings;
+  final VoidCallback? onShowLogs;
 
   // Panels
   final VoidCallback? onToggleMergeChatsAgents;
@@ -61,6 +62,7 @@ class MenuCallbacks {
     this.onShowWorkspace,
     this.onShowFileManager,
     this.onShowSettings,
+    this.onShowLogs,
     this.onToggleMergeChatsAgents,
     this.agentsMergedIntoChats = false,
   });
@@ -399,6 +401,14 @@ class AppMenuBar extends StatelessWidget {
                       hasProject ? callbacks.onToggleMergeChatsAgents : null,
                 ),
               ],
+            ),
+            PlatformMenuItem(
+              label: 'Logs',
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.digit4,
+                meta: true,
+              ),
+              onSelected: callbacks.onShowLogs,
             ),
           ],
         ),

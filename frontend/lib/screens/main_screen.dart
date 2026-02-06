@@ -16,6 +16,7 @@ import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
 import 'file_manager_screen.dart';
+import 'log_viewer_screen.dart';
 import 'settings_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
@@ -140,6 +141,9 @@ class _MainScreenState extends State<MainScreen> {
       case MenuAction.showSettings:
         _handleNavigationChange(2);
         break;
+      case MenuAction.showLogs:
+        _handleNavigationChange(3);
+        break;
       case MenuAction.showProjectSettings:
         _handleNavigationChange(0);
         context.read<SelectionState>().showProjectSettingsPanel();
@@ -223,7 +227,7 @@ class _MainScreenState extends State<MainScreen> {
   ///
   /// Settings screen has text fields that need direct keyboard input,
   /// so we suspend the global keyboard interception for it.
-  bool _needsKeyboardSuspension(int index) => index == 2;
+  bool _needsKeyboardSuspension(int index) => index == 2 || index == 3;
 
   /// Handles navigation destination changes (nav rail).
   ///
@@ -743,6 +747,8 @@ class _MainScreenState extends State<MainScreen> {
                         const FileManagerScreen(),
                         // Index 2: Settings screen
                         const SettingsScreen(),
+                        // Index 3: Log viewer screen
+                        const LogViewerScreen(),
                       ],
                     ),
                   ),

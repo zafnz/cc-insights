@@ -5,6 +5,7 @@ import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
+import 'package:cc_insights_v2/services/log_service.dart';
 import 'package:cc_insights_v2/services/menu_action_service.dart';
 import 'package:cc_insights_v2/services/project_config_service.dart';
 import 'package:cc_insights_v2/services/script_execution_service.dart';
@@ -79,6 +80,9 @@ void main() {
       return MultiProvider(
         providers: [
           Provider<DialogObserver>.value(value: dialogObserver),
+          ChangeNotifierProvider<LogService>.value(
+            value: LogService.instance,
+          ),
           ChangeNotifierProvider<BackendService>.value(
             value: mockBackend,
           ),
@@ -308,7 +312,7 @@ void main() {
           expect(stackFinder, findsOneWidget);
 
           final stack = tester.widget<IndexedStack>(stackFinder);
-          expect(stack.children.length, 3);
+          expect(stack.children.length, 4);
           expect(stack.index, 0); // Initially showing main screen
         },
       );
@@ -438,6 +442,9 @@ void main() {
             MultiProvider(
               providers: [
                 Provider<DialogObserver>.value(value: dialogObserver),
+                ChangeNotifierProvider<LogService>.value(
+                  value: LogService.instance,
+                ),
                 ChangeNotifierProvider<BackendService>.value(
                   value: mockBackend,
                 ),

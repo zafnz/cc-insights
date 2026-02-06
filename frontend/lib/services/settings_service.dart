@@ -318,11 +318,20 @@ class SettingsService extends ChangeNotifier {
         key: 'developer.debugSdkLogging',
         title: 'Debug SDK Logging',
         description:
-            'Enable verbose SDK logging to '
-            '`~/ccinsights.debug.jsonl`. Captures all messages '
-            'between the app and the Claude CLI.',
+            'Enable verbose SDK logging. Captures all messages '
+            'between the app and the Claude CLI to the trace log file.',
         type: SettingType.toggle,
         defaultValue: false,
+      ),
+      SettingDefinition(
+        key: 'developer.traceLogPath',
+        title: 'Trace Log Path',
+        description:
+            'Path for SDK trace logs when Debug SDK Logging is '
+            'enabled. Logs are written in JSONL format.',
+        type: SettingType.text,
+        defaultValue: '~/ccinsights.trace.jsonl',
+        placeholder: '~/ccinsights.trace.jsonl',
       ),
       SettingDefinition(
         key: 'developer.markdownBackend',
@@ -564,6 +573,8 @@ class SettingsService extends ChangeNotifier {
         config.showRawMessages = value as bool;
       case 'developer.debugSdkLogging':
         config.debugSdkLogging = value as bool;
+      case 'developer.traceLogPath':
+        config.traceLogPath = value as String;
       case 'developer.markdownBackend':
         config.markdownBackend = value == 'gpt_markdown'
             ? MarkdownBackend.gptMarkdown

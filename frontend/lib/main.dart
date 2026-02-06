@@ -58,7 +58,7 @@ void _loggingDebugPrint(String? message, {int? wrapWidth}) {
 
   // Also log to LogService if message is not null/empty
   if (message != null && message.isNotEmpty) {
-    LogService.instance.debug('Flutter', 'print', message);
+    LogService.instance.debug('Flutter', message);
   }
 }
 
@@ -365,11 +365,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void _onRuntimeConfigChanged() {
     // Handle SDK debug logging setting
     final shouldLog = RuntimeConfig.instance.debugSdkLogging;
-    final home = Platform.environment['HOME'] ?? '/tmp';
-    final logPath = '$home/ccinsights.debug.jsonl';
+    final logPath = _expandPath(RuntimeConfig.instance.traceLogPath);
 
     sdk.SdkLogger.instance.debugEnabled = shouldLog;
-    if (shouldLog) {
+    if (shouldLog && logPath.isNotEmpty) {
       sdk.SdkLogger.instance.enableFileLogging(logPath);
     } else {
       sdk.SdkLogger.instance.disableFileLogging();
@@ -434,7 +433,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       LogService.instance.enableFileLogging(logPath);
     }
 
-    LogService.instance.info('App', 'startup', 'CC Insights starting up');
+    LogService.instance.info('App', 'CC Insights starting up');
   }
 
   /// Validates the directory and determines if we need to show a prompt.
@@ -462,14 +461,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Initialize SDK debug logging to write all messages to a file.
   void _initializeSdkLogging() {
-    // Get home directory path
-    final home = Platform.environment['HOME'] ?? '/tmp';
-    final logPath = '$home/ccinsights.debug.jsonl';
+    final logPath = _expandPath(RuntimeConfig.instance.traceLogPath);
 
     // Enable debug mode and file logging based on RuntimeConfig
     final shouldLog = RuntimeConfig.instance.debugSdkLogging;
     sdk.SdkLogger.instance.debugEnabled = shouldLog;
-    if (shouldLog) {
+    if (shouldLog && logPath.isNotEmpty) {
       sdk.SdkLogger.instance.enableFileLogging(logPath);
     }
   }
@@ -809,6 +806,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           : null,
       onShowSettings: () =>
           _menuActionService.triggerAction(MenuAction.showSettings),
+      onShowLogs: () =>
+          _menuActionService.triggerAction(MenuAction.showLogs),
 
       // Panels
       onToggleMergeChatsAgents: _projectSelected
@@ -846,6 +845,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   Widget _buildAppContent(ProjectState project) {
     return MultiProvider(
       providers: [
+        // Central logging service (singleton, rate-limited notifications)
+        ChangeNotifierProvider<LogService>.value(value: LogService.instance),
         // Backend service for spawning SDK sessions
         ChangeNotifierProvider<BackendService>.value(value: _backend!),
         // SDK message handler (stateless - shared across all chats)

@@ -4,7 +4,6 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_model.dart';
-import 'log_service.dart' as app_log;
 
 /// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
 void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
@@ -38,7 +37,6 @@ class BackendService extends ChangeNotifier {
   final Map<BackendType, AgentBackend> _backends = {};
   final Map<BackendType, StreamSubscription<BackendError>>
       _errorSubscriptions = {};
-  final Map<BackendType, StreamSubscription<LogEntry>> _logSubscriptions = {};
   final Map<BackendType, String?> _errors = {};
   final Set<BackendType> _starting = {};
   final Set<BackendType> _modelListLoading = {};
@@ -157,47 +155,9 @@ class BackendService extends ChangeNotifier {
         notifyListeners();
       });
 
-      // Forward backend log entries to LogService
-      _logSubscriptions[type] = backend.logEntries.listen((entry) {
-        // Map SDK log level to app log level
-        final level = switch (entry.level) {
-          LogLevel.debug => app_log.LogLevel.debug,
-          LogLevel.info => app_log.LogLevel.info,
-          LogLevel.warning => app_log.LogLevel.warn,
-          LogLevel.error => app_log.LogLevel.error,
-        };
-
-        // Determine log type based on direction
-        final logType = switch (entry.direction) {
-          LogDirection.stdin => 'send',
-          LogDirection.stdout => 'recv',
-          LogDirection.stderr => 'stderr',
-          LogDirection.internal => 'internal',
-          null => 'message',
-        };
-
-        // Build the message payload with structured data
-        final message = <String, dynamic>{
-          'backend': type.name,
-        };
-        if (entry.direction != null) {
-          message['direction'] = entry.direction!.name;
-        }
-        if (entry.data != null) {
-          message['content'] = entry.data;
-        } else if (entry.text != null) {
-          message['text'] = entry.text;
-        } else {
-          message['text'] = entry.message;
-        }
-
-        app_log.LogService.instance.log(
-          service: type == BackendType.codex ? 'Codex' : 'ClaudeCLI',
-          level: level,
-          type: logType,
-          message: message,
-        );
-      });
+      // Backend log entries (SDK message traces) are NOT forwarded to
+      // LogService. They are high-volume chat/session data that belongs
+      // in the separate trace log (SdkLogger), not the application log.
 
       unawaited(_refreshModelsIfSupported(type, backend));
     } catch (e) {
@@ -336,7 +296,6 @@ class BackendService extends ChangeNotifier {
   /// Disposes a single backend and its associated subscriptions.
   Future<void> _disposeBackend(BackendType type) async {
     await _errorSubscriptions.remove(type)?.cancel();
-    await _logSubscriptions.remove(type)?.cancel();
     final backend = _backends.remove(type);
     await backend?.dispose();
     _errors.remove(type);
@@ -353,10 +312,6 @@ class BackendService extends ChangeNotifier {
       sub.cancel();
     }
     _errorSubscriptions.clear();
-    for (final sub in _logSubscriptions.values) {
-      sub.cancel();
-    }
-    _logSubscriptions.clear();
     for (final backend in _backends.values) {
       backend.dispose();
     }

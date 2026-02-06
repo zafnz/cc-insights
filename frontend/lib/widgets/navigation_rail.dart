@@ -92,13 +92,21 @@ class AppNavigationRail extends StatelessWidget {
             onTap: () => onPanelToggle('conversation'),
           ),
           const Spacer(),
-          // Bottom buttons: Settings
+          // Bottom buttons: Logs, Settings
           Divider(
             indent: 8,
             endIndent: 8,
             color: colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 8),
+          _NavRailButton(
+            icon: Icons.article_outlined,
+            selectedIcon: Icons.article,
+            tooltip: 'Logs',
+            isSelected: selectedIndex == 3,
+            onTap: () => onDestinationSelected(3),
+          ),
+          const SizedBox(height: 4),
           _NavRailButton(
             icon: Icons.settings_outlined,
             selectedIcon: Icons.settings,

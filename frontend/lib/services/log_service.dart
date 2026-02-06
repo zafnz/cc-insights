@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 /// Log level for application messages.
 enum LogLevel {
@@ -13,78 +16,109 @@ enum LogLevel {
   bool meetsThreshold(LogLevel threshold) => index >= threshold.index;
 }
 
-/// A structured log entry (used only for file output).
+/// A structured log entry.
 class LogEntry {
   const LogEntry({
     required this.timestamp,
-    required this.service,
     required this.level,
-    required this.type,
+    required this.source,
     required this.message,
-    this.worktree,
+    this.meta,
   });
 
   final DateTime timestamp;
-  final String service;
   final LogLevel level;
-  final String type;
-  final String? worktree;
-  final Map<String, dynamic> message;
+  final String source;
+  final String message;
+  final Map<String, dynamic>? meta;
 
   /// Converts to JSON for persistence.
   Map<String, dynamic> toJson() {
     return {
       'timestamp': timestamp.toIso8601String(),
-      'service': service,
       'level': level.name,
-      'type': type,
-      if (worktree != null) 'worktree': worktree,
+      'source': source,
       'message': message,
+      if (meta != null && meta!.isNotEmpty) 'meta': meta,
     };
   }
 
   /// Converts to a single-line JSON string for JSONL format.
   String toJsonLine() => jsonEncode(toJson());
-
-  /// Convenience getter for text messages.
-  String? get text => message['text'] as String?;
 }
 
 /// Central logging service for the application.
 ///
-/// Writes logs directly to disk if a file path is configured.
-/// No in-memory storage - this is a write-only service.
+/// Writes logs to disk (if configured) and maintains an in-memory ring buffer
+/// for the log viewer UI. Extends [ChangeNotifier] with rate-limited
+/// notifications (max 10/sec) to keep the UI performant.
 ///
 /// Usage:
 /// ```dart
-/// // Simple text logging
-/// LogService.instance.info('MyService', 'startup', 'Service started');
-///
-/// // Structured logging
-/// LogService.instance.log(
-///   service: 'ClaudeSDK',
-///   level: LogLevel.debug,
-///   type: 'message',
-///   worktree: 'feat-new-feature',
-///   message: {'direction': 'recv', 'content': {...}},
-/// );
+/// LogService.instance.info('MyService', 'Service started');
+/// LogService.instance.debug('Git', 'Fetching status', meta: {'worktree': 'main'});
 /// ```
-class LogService {
+class LogService extends ChangeNotifier {
   LogService._();
 
   static final LogService instance = LogService._();
 
+  // ---------------------------------------------------------------------------
+  // In-memory buffer
+  // ---------------------------------------------------------------------------
+
+  /// Maximum number of entries kept in memory.
+  static const int maxBufferSize = 10000;
+
+  final List<LogEntry> _entries = [];
+
+  /// All buffered log entries (unmodifiable view).
+  List<LogEntry> get entries => List.unmodifiable(_entries);
+
+  /// Number of entries in the buffer.
+  int get entryCount => _entries.length;
+
+  /// Unique source names seen so far.
+  final Set<String> _sources = {};
+
+  /// Set of all unique source names for filter dropdowns.
+  Set<String> get sources => Set.unmodifiable(_sources);
+
+  // ---------------------------------------------------------------------------
+  // Rate-limited notifications
+  // ---------------------------------------------------------------------------
+
+  Timer? _notifyTimer;
+  bool _dirty = false;
+
+  void _markDirty() {
+    _dirty = true;
+    _notifyTimer ??= Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) {
+        if (_dirty) {
+          _dirty = false;
+          notifyListeners();
+        } else {
+          _notifyTimer?.cancel();
+          _notifyTimer = null;
+        }
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // File logging state
+  // ---------------------------------------------------------------------------
+
   IOSink? _sink;
   String? _logFilePath;
 
-  // Filtering
+  /// The current minimum log level for file output.
   LogLevel _minimumLevel = LogLevel.debug;
 
-  /// The current minimum log level for file output.
   LogLevel get minimumLevel => _minimumLevel;
 
-  /// Sets the minimum log level for file output.
   set minimumLevel(LogLevel level) => _minimumLevel = level;
 
   /// The current log file path, or null if file logging is disabled.
@@ -131,101 +165,81 @@ class LogService {
 
   /// Logs a structured message.
   void log({
-    required String service,
+    required String source,
     required LogLevel level,
-    required String type,
-    required Map<String, dynamic> message,
-    String? worktree,
+    required String message,
+    Map<String, dynamic>? meta,
   }) {
-    // Skip if below threshold or no file configured
-    if (!level.meetsThreshold(_minimumLevel) || _sink == null) return;
-
     final entry = LogEntry(
       timestamp: DateTime.now(),
-      service: service,
       level: level,
-      type: type,
-      worktree: worktree,
+      source: source,
       message: message,
+      meta: meta,
     );
 
-    _sink!.writeln(entry.toJsonLine());
-  }
+    // Add to in-memory buffer (always, regardless of level)
+    _entries.add(entry);
+    if (_entries.length > maxBufferSize) {
+      _entries.removeAt(0);
+    }
+    _sources.add(source);
 
-  /// Convenience method for logging a simple text message.
-  void logText({
-    required String service,
-    required LogLevel level,
-    required String type,
-    required String text,
-    String? worktree,
-  }) {
-    log(
-      service: service,
-      level: level,
-      type: type,
-      worktree: worktree,
-      message: {'text': text},
-    );
+    // Write to disk if file logging is enabled and level meets threshold
+    if (level.meetsThreshold(_minimumLevel) && _sink != null) {
+      _sink!.writeln(entry.toJsonLine());
+    }
+
+    // Rate-limited UI notification
+    _markDirty();
   }
 
   /// Logs a debug message.
-  void debug(String service, String type, String text, {String? worktree}) {
-    logText(
-      service: service,
-      level: LogLevel.debug,
-      type: type,
-      text: text,
-      worktree: worktree,
-    );
+  void debug(String source, String message, {Map<String, dynamic>? meta}) {
+    log(source: source, level: LogLevel.debug, message: message, meta: meta);
   }
 
   /// Logs an info message.
-  void info(String service, String type, String text, {String? worktree}) {
-    logText(
-      service: service,
-      level: LogLevel.info,
-      type: type,
-      text: text,
-      worktree: worktree,
-    );
+  void info(String source, String message, {Map<String, dynamic>? meta}) {
+    log(source: source, level: LogLevel.info, message: message, meta: meta);
   }
 
   /// Logs a notice message.
-  void notice(String service, String type, String text, {String? worktree}) {
-    logText(
-      service: service,
-      level: LogLevel.notice,
-      type: type,
-      text: text,
-      worktree: worktree,
-    );
+  void notice(String source, String message, {Map<String, dynamic>? meta}) {
+    log(source: source, level: LogLevel.notice, message: message, meta: meta);
   }
 
   /// Logs a warning message.
-  void warn(String service, String type, String text, {String? worktree}) {
-    logText(
-      service: service,
-      level: LogLevel.warn,
-      type: type,
-      text: text,
-      worktree: worktree,
-    );
+  void warn(String source, String message, {Map<String, dynamic>? meta}) {
+    log(source: source, level: LogLevel.warn, message: message, meta: meta);
   }
 
   /// Logs an error message.
-  void error(String service, String type, String text, {String? worktree}) {
-    logText(
-      service: service,
-      level: LogLevel.error,
-      type: type,
-      text: text,
-      worktree: worktree,
-    );
+  void error(String source, String message, {Map<String, dynamic>? meta}) {
+    log(source: source, level: LogLevel.error, message: message, meta: meta);
   }
 
+  // ---------------------------------------------------------------------------
+  // Testing
+  // ---------------------------------------------------------------------------
+
+  /// Clears the in-memory buffer. For use in tests only.
+  @visibleForTesting
+  void clearBuffer() {
+    _entries.clear();
+    _sources.clear();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Disposal
+  // ---------------------------------------------------------------------------
+
   /// Disposes resources.
-  Future<void> dispose() async {
-    await disableFileLogging();
+  @override
+  void dispose() {
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    disableFileLogging();
+    super.dispose();
   }
 }
