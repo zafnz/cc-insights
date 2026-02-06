@@ -412,7 +412,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         return true;
       } else {
         _updateLastLog(
-          LogEntryStatus.success,
+          LogEntryStatus.warning,
           message: 'Branch has commits not on ${widget.base}',
         );
         return false;
@@ -448,12 +448,12 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
       if (unmerged.isEmpty) {
         _updateLastLog(
           LogEntryStatus.success,
-          message: 'Commits found on ${widget.base} (likely squash merged)',
+          message: 'All commits are accounted for on ${widget.base}',
         );
         return true;
       } else {
         _updateLastLog(
-          LogEntryStatus.success,
+          LogEntryStatus.warning,
           message: '${unmerged.length} '
               '${unmerged.length == 1 ? 'commit' : 'commits'} '
               'not on ${widget.base}',
@@ -506,9 +506,10 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
         // Upstream is up-to-date: warning state
         _updateLastLog(
           LogEntryStatus.warning,
-          message: 'Upstream $upstream is up-to-date but commits not '
-              'merged into ${widget.base}. If a PR exists, changes '
-              'are recoverable.',
+          message: 'Upstream $upstream is up-to-date but ${widget.branch} '
+              'commits are not merged into ${widget.base}. You can pull '
+              '$upstream and retrieve your work, so long as it\'s not '
+              'deleted.',
         );
         setState(() {
           _actionState = _ActionState.upstreamWarning;
@@ -802,7 +803,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Delete Worktree',
+                  'Delete ${widget.branch}',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

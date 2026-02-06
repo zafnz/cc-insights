@@ -68,7 +68,7 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(DeleteWorktreeDialogKeys.dialog), findsOneWidget);
-      expect(find.text('Delete Worktree'), findsOneWidget);
+      expect(find.text('Delete $testBranch'), findsOneWidget);
     });
 
     testWidgets('shows log list with entries', (tester) async {
@@ -390,7 +390,7 @@ void main() {
         find.byKey(DeleteWorktreeDialogKeys.deleteButton),
       );
 
-      expect(find.textContaining('squash merged'), findsOneWidget);
+      expect(find.textContaining('accounted for'), findsOneWidget);
       expect(
         find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
         findsNothing,
@@ -424,7 +424,7 @@ void main() {
       );
 
       expect(find.textContaining('up-to-date'), findsOneWidget);
-      expect(find.textContaining('recoverable'), findsOneWidget);
+      expect(find.textContaining('retrieve your work'), findsOneWidget);
       expect(find.text('Abort'), findsOneWidget);
       // Should be a regular delete button, not force
       expect(
