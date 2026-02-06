@@ -22,6 +22,7 @@ void main() {
   Widget createTestWidget({
     MergeOperationType operation = MergeOperationType.merge,
     ConflictResolutionResult? capturedResult,
+    bool fetchFirst = false,
   }) {
     ConflictResolutionResult? result;
     return MaterialApp(
@@ -38,6 +39,7 @@ void main() {
                     mainBranch: testMainBranch,
                     operation: operation,
                     gitService: gitService,
+                    fetchFirst: fetchFirst,
                   );
                 },
                 child: const Text('Open Dialog'),
@@ -296,6 +298,91 @@ void main() {
       // Should show completed log messages (clean + conflicts)
       expect(find.textContaining('clean'), findsOneWidget);
       expect(find.textContaining('Conflicts'), findsOneWidget);
+    });
+
+    testWidgets('fetchFirst fetches before checking working tree',
+        (tester) async {
+      gitService.wouldConflict[testWorktreePath] = false;
+
+      await tester.pumpWidget(
+        createTestWidget(fetchFirst: true),
+      );
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for dialog to process and auto-close
+      await pumpUntilGone(
+        tester,
+        find.byKey(ConflictResolutionDialogKeys.dialog),
+      );
+
+      // Fetch should have been called
+      expect(gitService.fetchCalls.length, 1);
+      expect(gitService.fetchCalls.first, testWorktreePath);
+
+      // Merge should still have been called
+      expect(gitService.mergeCalls.length, 1);
+    });
+
+    testWidgets('fetchFirst shows fetch log entry', (tester) async {
+      gitService.wouldConflict[testWorktreePath] = true;
+
+      await tester.pumpWidget(
+        createTestWidget(fetchFirst: true),
+      );
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for conflict buttons (workflow done)
+      await pumpUntilFound(
+        tester,
+        find.byKey(ConflictResolutionDialogKeys.resolveWithClaudeButton),
+      );
+
+      // Should show fetch log entry
+      expect(
+        find.textContaining('Fetched latest changes'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('fetchFirst failure stops workflow', (tester) async {
+      gitService.fetchError = const GitException('network error');
+
+      await tester.pumpWidget(
+        createTestWidget(fetchFirst: true),
+      );
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for the error message
+      await pumpUntilFound(
+        tester,
+        find.textContaining('Fetch failed'),
+      );
+
+      expect(find.textContaining('Fetch failed'), findsOneWidget);
+
+      // No merge should have been called
+      expect(gitService.mergeCalls.length, 0);
+    });
+
+    testWidgets('without fetchFirst does not call fetch',
+        (tester) async {
+      gitService.wouldConflict[testWorktreePath] = false;
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for dialog to process and auto-close
+      await pumpUntilGone(
+        tester,
+        find.byKey(ConflictResolutionDialogKeys.dialog),
+      );
+
+      // Fetch should NOT have been called
+      expect(gitService.fetchCalls.length, 0);
     });
   });
 }

@@ -38,6 +38,10 @@ enum ConflictResolutionResult {
 
 /// Shows the conflict resolution dialog for a merge or rebase operation.
 ///
+/// When [fetchFirst] is true, the dialog will run `git fetch` as its first
+/// step before checking the working tree. Use this for remote operations
+/// (pull-rebase, pull-merge) so the fetch progress is visible in the dialog.
+///
 /// Returns [ConflictResolutionResult] indicating what the user chose.
 Future<ConflictResolutionResult> showConflictResolutionDialog({
   required BuildContext context,
@@ -46,6 +50,7 @@ Future<ConflictResolutionResult> showConflictResolutionDialog({
   required String mainBranch,
   required MergeOperationType operation,
   required GitService gitService,
+  bool fetchFirst = false,
 }) async {
   final result = await showDialog<ConflictResolutionResult>(
     context: context,
@@ -56,6 +61,7 @@ Future<ConflictResolutionResult> showConflictResolutionDialog({
       mainBranch: mainBranch,
       operation: operation,
       gitService: gitService,
+      fetchFirst: fetchFirst,
     ),
   );
   return result ?? ConflictResolutionResult.aborted;
@@ -91,6 +97,7 @@ class ConflictResolutionDialog extends StatefulWidget {
     required this.mainBranch,
     required this.operation,
     required this.gitService,
+    this.fetchFirst = false,
   });
 
   final String worktreePath;
@@ -98,6 +105,7 @@ class ConflictResolutionDialog extends StatefulWidget {
   final String mainBranch;
   final MergeOperationType operation;
   final GitService gitService;
+  final bool fetchFirst;
 
   @override
   State<ConflictResolutionDialog> createState() =>
@@ -175,6 +183,30 @@ class _ConflictResolutionDialogState
   }
 
   Future<void> _startWorkflow() async {
+    // Fetch from remote first if this is a remote operation
+    if (widget.fetchFirst) {
+      _addLog('Fetching from remote...', LogEntryStatus.running);
+      try {
+        await widget.gitService.fetch(widget.worktreePath);
+        if (!mounted) return;
+        _updateLastLog(
+          LogEntryStatus.success,
+          message: 'Fetched latest changes',
+        );
+      } catch (e) {
+        if (!mounted) return;
+        _updateLastLog(
+          LogEntryStatus.error,
+          message: 'Fetch failed',
+          detail: e.toString(),
+        );
+        setState(() {
+          _actionState = _ActionState.failed;
+        });
+        return;
+      }
+    }
+
     // Check for uncommitted changes first
     _addLog('Checking working tree...', LogEntryStatus.running);
 

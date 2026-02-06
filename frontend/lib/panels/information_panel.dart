@@ -277,16 +277,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
-    try {
-      await gitService.fetch(worktreeRoot);
-    } catch (e) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, 'Fetch failed: $e');
-      return;
-    }
-
-    if (!context.mounted) return;
-
     final upstream = data.upstreamBranch;
     if (upstream == null) return;
 
@@ -297,6 +287,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       mainBranch: upstream,
       operation: MergeOperationType.rebase,
       gitService: gitService,
+      fetchFirst: true,
     );
 
     if (!context.mounted) return;
@@ -322,16 +313,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
-    try {
-      await gitService.fetch(worktreeRoot);
-    } catch (e) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, 'Fetch failed: $e');
-      return;
-    }
-
-    if (!context.mounted) return;
-
     final upstream = data.upstreamBranch;
     if (upstream == null) return;
 
@@ -342,6 +323,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       mainBranch: upstream,
       operation: MergeOperationType.merge,
       gitService: gitService,
+      fetchFirst: true,
     );
 
     if (!context.mounted) return;
