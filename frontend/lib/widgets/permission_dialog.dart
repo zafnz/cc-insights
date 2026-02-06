@@ -342,12 +342,17 @@ class _PermissionDialogState extends State<PermissionDialog> {
     final plan = permission.toolInput['plan'] as String? ?? '';
     final hasPlan = plan.trim().isNotEmpty;
 
-    // Dark purple background for the permission dialog body
-    const dialogBackground = Color(0xFF2D1F3D);
+    // Use the lowest surface container (matches chat/scaffold background)
+    final dialogBackground = colorScheme.surfaceContainerLowest;
+    // Markdown box: surfaceContainerHighest darkened slightly
+    final markdownBackground = Color.lerp(
+      colorScheme.surfaceContainerHighest,
+      Colors.black,
+      0.15,
+    )!;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Max plan content height is half the available space
         final availableHeight = constraints.maxHeight;
         final maxPlanHeight = availableHeight.isFinite
             ? (availableHeight * 0.5).clamp(100.0, 500.0)
@@ -355,28 +360,25 @@ class _PermissionDialogState extends State<PermissionDialog> {
 
         return Container(
           key: PermissionDialogKeys.dialog,
-          decoration: const BoxDecoration(
-            color: dialogBackground,
-          ),
+          decoration: BoxDecoration(color: dialogBackground),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
               _buildExpandedPlanHeader(context),
-              // Plan content with max height constraint
               if (hasPlan)
                 ConstrainedBox(
                   key: PermissionDialogKeys.planContent,
                   constraints: BoxConstraints(maxHeight: maxPlanHeight),
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
+                      color: markdownBackground,
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(14),
                       child: SelectionArea(
                         child: MarkdownBody(
                           data: plan,
@@ -399,7 +401,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                 Padding(
                   key: PermissionDialogKeys.planContent,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Text(
                     'No plan provided.',
                     style: textStyle(
@@ -409,8 +411,6 @@ class _PermissionDialogState extends State<PermissionDialog> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
-              // Footer: feedback input + approval buttons
               _buildPlanApprovalFooter(context, plan),
             ],
           ),
@@ -419,13 +419,13 @@ class _PermissionDialogState extends State<PermissionDialog> {
     );
   }
 
-  /// Builds the footer for ExitPlanMode with feedback input and approval
-  /// buttons.
+  /// Builds the footer for ExitPlanMode with feedback input row and
+  /// approval buttons row.
   Widget _buildPlanApprovalFooter(BuildContext context, String plan) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       ),
@@ -433,136 +433,125 @@ class _PermissionDialogState extends State<PermissionDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Feedback text input row
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  key: PermissionDialogKeys.planFeedbackInput,
-                  controller: _feedbackController,
-                  style: textStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Tell Claude what to change...',
-                    hintStyle: textStyle(
-                      fontSize: 13,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.3),
+          SizedBox(
+            height: 32,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: PermissionDialogKeys.planFeedbackInput,
+                    controller: _feedbackController,
+                    style: textStyle(fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'Tell Claude what to change...',
+                      hintStyle: textStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurface.withValues(alpha: 0.35),
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(
+                          color: colorScheme.outline.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(
+                          color: colorScheme.outline.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: colorScheme.primary),
                       ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(
-                        color: colorScheme.primary,
-                      ),
-                    ),
+                    onSubmitted: (text) {
+                      if (text.trim().isNotEmpty) {
+                        widget.onDeny(text.trim());
+                      }
+                    },
                   ),
-                  onSubmitted: (text) {
-                    if (text.trim().isNotEmpty) {
-                      widget.onDeny(text.trim());
-                    }
+                ),
+                const SizedBox(width: 4),
+                ListenableBuilder(
+                  listenable: _feedbackController,
+                  builder: (context, _) {
+                    final hasText =
+                        _feedbackController.text.trim().isNotEmpty;
+                    return IconButton(
+                      key: PermissionDialogKeys.planFeedbackSend,
+                      onPressed: hasText
+                          ? () =>
+                              widget.onDeny(_feedbackController.text.trim())
+                          : null,
+                      icon: Icon(
+                        Icons.send_rounded,
+                        size: 16,
+                        color: hasText
+                            ? Colors.orange.shade300
+                            : colorScheme.onSurface.withValues(alpha: 0.2),
+                      ),
+                      tooltip: 'Send feedback',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                    );
                   },
                 ),
-              ),
-              const SizedBox(width: 8),
-              ListenableBuilder(
-                listenable: _feedbackController,
-                builder: (context, _) {
-                  final hasText = _feedbackController.text.trim().isNotEmpty;
-                  return IconButton(
-                    key: PermissionDialogKeys.planFeedbackSend,
-                    onPressed: hasText
-                        ? () =>
-                            widget.onDeny(_feedbackController.text.trim())
-                        : null,
-                    icon: Icon(
-                      Icons.send,
-                      size: 20,
-                      color: hasText
-                          ? Colors.orange
-                          : colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    tooltip: 'Send feedback (deny plan)',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                  );
-                },
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          // Approval buttons row
+          const SizedBox(height: 6),
+          // Buttons row
           Row(
             children: [
-              // Reject button (deny without feedback)
-              OutlinedButton(
+              _PlanButton(
                 key: PermissionDialogKeys.planReject,
+                label: 'Reject',
+                icon: Icons.close,
+                color: Colors.red.shade300,
                 onPressed: _handleDeny,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: const Text('Reject'),
               ),
               const Spacer(),
-              // Option 1: Clear context + Accept edits
               if (widget.onClearContextAndAcceptEdits != null) ...[
-                OutlinedButton(
-                  key: PermissionDialogKeys.planClearContext,
-                  onPressed: () =>
-                      widget.onClearContextAndAcceptEdits!(plan),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
-                    visualDensity: VisualDensity.compact,
+                Flexible(
+                  child: _PlanButton(
+                    key: PermissionDialogKeys.planClearContext,
+                    label: 'Clear context, approve & allow edits',
+                    icon: Icons.restart_alt,
+                    color: Colors.blue.shade300,
+                    onPressed: () =>
+                        widget.onClearContextAndAcceptEdits!(plan),
+                    outlined: true,
                   ),
-                  child: const Text('New chat + auto-edit'),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
               ],
-              // Option 2: Accept edits (allow + setMode)
-              OutlinedButton(
-                key: PermissionDialogKeys.planApproveAcceptEdits,
-                onPressed: () => _handleAllowWithAcceptEdits(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 8),
-                  visualDensity: VisualDensity.compact,
+              Flexible(
+                child: _PlanButton(
+                  key: PermissionDialogKeys.planApproveAcceptEdits,
+                  label: 'Approve & allow edits',
+                  icon: Icons.edit_note,
+                  color: Colors.blue.shade300,
+                  onPressed: _handleAllowWithAcceptEdits,
+                  outlined: true,
                 ),
-                child: const Text('Auto-edit'),
               ),
-              const SizedBox(width: 8),
-              // Option 3: Approve (manual approvals, no mode change)
-              FilledButton(
+              const SizedBox(width: 6),
+              _PlanButton(
                 key: PermissionDialogKeys.planApproveManual,
+                label: 'Approve',
+                icon: Icons.check,
+                color: Colors.green,
                 onPressed: _handleAllow,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: const Text('Approve'),
+                filled: true,
               ),
             ],
           ),
@@ -584,34 +573,31 @@ class _PermissionDialogState extends State<PermissionDialog> {
     );
   }
 
-  /// Builds the header for the expanded plan view.
+  /// Builds the header for the plan view.
   Widget _buildExpandedPlanHeader(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    const headerPurple = Color(0xFF4A2066);
+    const headerPurple = Color(0xFF3D2456);
 
     return Container(
       key: PermissionDialogKeys.header,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: headerPurple,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(color: headerPurple),
       child: Row(
         children: [
           Icon(
             Icons.description_outlined,
             color: colorScheme.primary,
-            size: 20,
+            size: 18,
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Plan for Approval',
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
-              ),
+          Text(
+            'Plan for Approval',
+            style: textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -1195,6 +1181,88 @@ class _ScrollableCodeBoxState extends State<_ScrollableCodeBox> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// =============================================================================
+// Plan Approval Button
+// =============================================================================
+
+/// A compact icon+label button used in the plan approval footer.
+/// Supports outlined and filled variants with tooltips for longer labels.
+class _PlanButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+  final bool outlined;
+  final bool filled;
+
+  const _PlanButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+    this.outlined = false,
+    this.filled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 11.5),
+          ),
+        ),
+      ],
+    );
+
+    final buttonStyle = ButtonStyle(
+      padding: WidgetStatePropertyAll(
+        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      visualDensity: VisualDensity.compact,
+      minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
+    if (filled) {
+      return Tooltip(
+        message: label,
+        child: FilledButton(
+          onPressed: onPressed,
+          style: buttonStyle.copyWith(
+            backgroundColor: WidgetStatePropertyAll(color),
+            foregroundColor: const WidgetStatePropertyAll(Colors.white),
+          ),
+          child: content,
+        ),
+      );
+    }
+
+    return Tooltip(
+      message: label,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: buttonStyle.copyWith(
+          foregroundColor: WidgetStatePropertyAll(color),
+          side: outlined
+              ? WidgetStatePropertyAll(
+                  BorderSide(color: color.withValues(alpha: 0.4)))
+              : null,
+        ),
+        child: content,
+      ),
     );
   }
 }

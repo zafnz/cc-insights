@@ -383,8 +383,11 @@ void main() {
         );
         // Verify button labels
         expect(find.text('Reject'), findsOneWidget);
-        expect(find.text('New chat + auto-edit'), findsOneWidget);
-        expect(find.text('Auto-edit'), findsOneWidget);
+        expect(
+          find.text('Clear context, approve & allow edits'),
+          findsOneWidget,
+        );
+        expect(find.text('Approve & allow edits'), findsOneWidget);
         expect(find.text('Approve'), findsOneWidget);
       });
 
