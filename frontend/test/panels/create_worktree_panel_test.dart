@@ -406,8 +406,8 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: SizedBox(
-              width: 600,
-              height: 800,
+              width: 800,
+              height: 1000,
               child: child ?? const CreateWorktreePanel(),
             ),
           ),
@@ -433,14 +433,14 @@ void main() {
       testWidgets('shows branch name input field', (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        expect(find.text('Branch/worktree name:'), findsOneWidget);
+        expect(find.text('Branch name'), findsOneWidget);
         expect(find.byType(TextField), findsWidgets);
       });
 
       testWidgets('shows worktree root directory field', (tester) async {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        expect(find.text('Worktree base:'), findsOneWidget);
+        expect(find.text('Worktree location'), findsOneWidget);
         expect(find.byType(TextField), findsWidgets);
       });
 
@@ -460,7 +460,8 @@ void main() {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         expect(find.text('Cancel'), findsOneWidget);
-        expect(find.text('Create'), findsOneWidget);
+        // Finds 2: panel heading + button
+        expect(find.text('Create Worktree'), findsNWidgets(2));
       });
 
       testWidgets('path preview widget exists in the panel', (tester) async {
@@ -524,7 +525,7 @@ void main() {
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         // Tap Create button without entering branch name
-        await tester.tap(find.text('Create'));
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
         await tester.pump();
 
         // Should show error message about empty branch name
@@ -546,7 +547,7 @@ void main() {
         await tester.pump();
 
         // Tap Create button to start creation (no delay, just check state)
-        await tester.tap(find.text('Create'));
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
         // Pump once to start the async operation
         await tester.pump();
 
@@ -576,7 +577,7 @@ void main() {
         await tester.pump();
 
         // Tap Create button and wait for validation
-        await tester.tap(find.text('Create'));
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
         await tester.runAsync(() async {
           await Future.delayed(const Duration(milliseconds: 100));
         });
@@ -603,7 +604,7 @@ void main() {
         await tester.pump();
 
         // Tap Create button and wait for validation
-        await tester.tap(find.text('Create'));
+        await tester.tap(find.byKey(CreateWorktreePanelKeys.createButton));
         await tester.runAsync(() async {
           await Future.delayed(const Duration(milliseconds: 100));
         });
@@ -659,6 +660,10 @@ void main() {
     group('help card expansion', () {
       testWidgets('expands to show full explanation when tapped',
           (tester) async {
+        // Set a larger surface size to fit all content
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
         // Initially collapsed - should not show explanation text
@@ -667,7 +672,12 @@ void main() {
           findsNothing,
         );
 
-        // Tap the help card header to expand
+        // Drag to make help card visible, then tap
+        await tester.dragUntilVisible(
+          find.text('What is a Git Worktree?'),
+          find.byType(SingleChildScrollView),
+          const Offset(0, -100),
+        );
         await tester.tap(find.text('What is a Git Worktree?'));
         await tester.pump();
 
@@ -679,9 +689,18 @@ void main() {
       });
 
       testWidgets('shows use case bullet points when expanded', (tester) async {
+        // Set a larger surface size to fit all content
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        // Expand the help card
+        // Drag to make help card visible, then tap
+        await tester.dragUntilVisible(
+          find.text('What is a Git Worktree?'),
+          find.byType(SingleChildScrollView),
+          const Offset(0, -100),
+        );
         await tester.tap(find.text('What is a Git Worktree?'));
         await tester.pump();
 
@@ -701,7 +720,18 @@ void main() {
       });
 
       testWidgets('collapses when tapped again', (tester) async {
+        // Set a larger surface size to fit all content
+        await tester.binding.setSurfaceSize(const Size(800, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Drag to make help card visible
+        await tester.dragUntilVisible(
+          find.text('What is a Git Worktree?'),
+          find.byType(SingleChildScrollView),
+          const Offset(0, -100),
+        );
 
         // Expand
         await tester.tap(find.text('What is a Git Worktree?'));
@@ -778,8 +808,8 @@ void main() {
         child: const MaterialApp(
           home: Scaffold(
             body: SizedBox(
-              width: 600,
-              height: 800,
+              width: 800,
+              height: 1000,
               child: ContentPanel(),
             ),
           ),
@@ -812,10 +842,8 @@ void main() {
 
       await pumpWidgetWithRealAsync(tester, buildContentPanelWidget());
 
-      // Should show "Create Worktree" title from PanelWrapper
-      expect(find.text('Create Worktree'), findsOneWidget);
-      // Button now says "Create" (not "Create Worktree")
-      expect(find.text('Create'), findsOneWidget);
+      // Should show "Create Worktree" - panel wrapper title, heading, and button
+      expect(find.text('Create Worktree'), findsNWidgets(3));
       // Should show create worktree form elements
       expect(find.text('What is a Git Worktree?'), findsOneWidget);
     });
@@ -850,9 +878,8 @@ void main() {
       await pumpWidgetWithRealAsync(tester, buildContentPanelWidget());
 
       // Initially shows create worktree panel elements
-      // Panel title "Create Worktree" and button "Create"
-      expect(find.text('Create Worktree'), findsOneWidget);
-      expect(find.text('Create'), findsOneWidget);
+      // Panel wrapper title, heading, and button all say "Create Worktree"
+      expect(find.text('Create Worktree'), findsNWidgets(3));
       expect(find.text('What is a Git Worktree?'), findsOneWidget);
 
       // Switch back to conversation

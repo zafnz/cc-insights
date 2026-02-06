@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 
@@ -265,101 +266,161 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Branch/worktree name
-          Text(
-            'Branch/worktree name:',
-            style: textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _buildTextField(
-            controller: _branchController,
-            key: CreateWorktreePanelKeys.branchField,
-            autofocus: true,
-            onSubmitted: (_) => _handleCreate(),
-          ),
-          const SizedBox(height: 16),
-
-          // Branch from
-          _BranchFromField(
-            option: _branchFromOption,
-            selectedOtherBranch: _selectedOtherBranch,
-            sortedBranches: _sortedBranches,
-            onOptionChanged: (option) {
-              setState(() {
-                _branchFromOption = option;
-                if (option != BranchFromOption.other) {
-                  _selectedOtherBranch = null;
-                }
-              });
-            },
-            onOtherBranchSelected: (branch) {
-              setState(() {
-                _selectedOtherBranch = branch;
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Worktree base
-          Text(
-            'Worktree base:',
-            style: textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField(
-                  controller: _rootController,
-                  key: CreateWorktreePanelKeys.rootField,
+    return KeyboardListener(
+      focusNode: FocusNode(),
+      autofocus: true,
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          _handleCancel();
+        }
+      },
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Icon(
+                      Icons.account_tree_outlined,
+                      size: 28,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Create Worktree',
+                      style: textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              _CompactButton(
-                key: CreateWorktreePanelKeys.folderPickerButton,
-                label: 'F',
-                onPressed: _pickFolder,
-                tooltip: 'Browse for folder',
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
+                const SizedBox(height: 8),
+                Text(
+                  'Create a new worktree to work on a different branch without '
+                  'switching. Each worktree has its own working directory.',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 32),
 
-          // Action buttons
-          _ActionBar(
-            isCreating: _isCreating,
-            onCancel: _handleCancel,
-            onCreate: _handleCreate,
-          ),
+                // Branch/worktree name
+                _buildLabel('Branch name', textTheme),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _branchController,
+                  key: CreateWorktreePanelKeys.branchField,
+                  autofocus: true,
+                  hintText: 'e.g. feature/new-login, bugfix/header-alignment',
+                  onSubmitted: (_) => _handleCreate(),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'This will be both the branch name and the worktree folder name.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
 
-          // Error card if error
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 16),
-            _ErrorCard(
-              message: _errorMessage!,
-              suggestions: _errorSuggestions,
+                // Branch from
+                _BranchFromField(
+                  option: _branchFromOption,
+                  selectedOtherBranch: _selectedOtherBranch,
+                  sortedBranches: _sortedBranches,
+                  onOptionChanged: (option) {
+                    setState(() {
+                      _branchFromOption = option;
+                      if (option != BranchFromOption.other) {
+                        _selectedOtherBranch = null;
+                      }
+                    });
+                  },
+                  onOtherBranchSelected: (branch) {
+                    setState(() {
+                      _selectedOtherBranch = branch;
+                    });
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // Worktree base directory
+                _buildLabel('Worktree location', textTheme),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _rootController,
+                        key: CreateWorktreePanelKeys.rootField,
+                        hintText: 'Directory where worktrees are stored',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _IconButton(
+                      key: CreateWorktreePanelKeys.folderPickerButton,
+                      icon: Icons.folder_open_outlined,
+                      onPressed: _pickFolder,
+                      tooltip: 'Browse for folder',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'The new worktree will be created inside this directory.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+
+                // Error card if error
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 20),
+                  _ErrorCard(
+                    message: _errorMessage!,
+                    suggestions: _errorSuggestions,
+                  ),
+                ],
+
+                const SizedBox(height: 32),
+
+                // Action buttons
+                _ActionBar(
+                  isCreating: _isCreating,
+                  onCancel: _handleCancel,
+                  onCreate: _handleCreate,
+                ),
+
+                const SizedBox(height: 32),
+                // Help text explaining what a worktree is
+                const _WorktreeHelpCard(),
+              ],
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
 
-          const SizedBox(height: 24),
-          // Help text explaining what a worktree is
-          const _WorktreeHelpCard(),
-        ],
+  Widget _buildLabel(String text, TextTheme textTheme) {
+    return Text(
+      text,
+      style: textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -368,6 +429,7 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     required TextEditingController controller,
     Key? key,
     bool autofocus = false,
+    String? hintText,
     ValueChanged<String>? onSubmitted,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -376,7 +438,7 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: colorScheme.outline),
       ),
       child: TextField(
@@ -385,10 +447,15 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
         autofocus: autofocus,
         style: textTheme.bodyMedium,
         onSubmitted: onSubmitted,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           border: InputBorder.none,
+          hintText: hintText,
+          hintStyle: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          ),
         ),
       ),
     );
@@ -777,94 +844,124 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Row(
       children: [
-        _CompactButton(
+        // Cancel button - outlined style
+        OutlinedButton(
           key: CreateWorktreePanelKeys.cancelButton,
-          label: 'Cancel',
           onPressed: isCreating ? null : onCancel,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            side: BorderSide(color: colorScheme.outline),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.close,
+                size: 18,
+                color: isCreating
+                    ? colorScheme.onSurfaceVariant.withValues(alpha: 0.5)
+                    : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Cancel',
+                style: textTheme.labelLarge?.copyWith(
+                  color: isCreating
+                      ? colorScheme.onSurfaceVariant.withValues(alpha: 0.5)
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(width: 8),
-        Container(
-          width: 1,
-          height: 20,
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
-        const SizedBox(width: 8),
-        _CompactButton(
+        const SizedBox(width: 12),
+        // Create button - filled primary style
+        FilledButton(
           key: CreateWorktreePanelKeys.createButton,
-          label: isCreating ? 'Creating...' : 'Create',
           onPressed: isCreating ? null : onCreate,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            backgroundColor: colorScheme.primary,
+            disabledBackgroundColor: colorScheme.primary.withValues(alpha: 0.5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isCreating)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.onPrimary,
+                  ),
+                )
+              else
+                Icon(
+                  Icons.add,
+                  size: 18,
+                  color: colorScheme.onPrimary,
+                ),
+              const SizedBox(width: 8),
+              Text(
+                isCreating ? 'Creating...' : 'Create Worktree',
+                style: textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-/// Compact button styled for desktop UI - smaller padding and text.
-class _CompactButton extends StatelessWidget {
-  const _CompactButton({
+/// Icon button for folder picker.
+class _IconButton extends StatelessWidget {
+  const _IconButton({
     super.key,
-    required this.label,
+    required this.icon,
     required this.onPressed,
-    this.icon,
     this.tooltip,
   });
 
-  final String label;
+  final IconData icon;
   final VoidCallback? onPressed;
-  final IconData? icon;
   final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isEnabled = onPressed != null;
 
-    final contentColor = isEnabled
-        ? colorScheme.onSurface
-        : colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
-    final borderColor = isEnabled
-        ? colorScheme.outline
-        : colorScheme.outlineVariant.withValues(alpha: 0.3);
-
-    Widget button = Opacity(
-      opacity: isEnabled ? 1.0 : 0.6,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              border: Border.all(color: borderColor),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 12, color: contentColor),
-                  const SizedBox(width: 4),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    style: textTheme.labelSmall?.copyWith(
-                      color: contentColor,
-                    ),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+    Widget button = Material(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            border: Border.all(color: colorScheme.outline),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ),
