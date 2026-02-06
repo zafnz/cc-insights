@@ -241,6 +241,9 @@ void main() {
         find.byKey(CreatePrDialogKeys.dialog),
         findsOneWidget,
       );
+
+      // Let LogService timer settle
+      await safePumpAndSettle(tester);
     });
 
     testWidgets('shows error when createPullRequest fails',
@@ -269,6 +272,9 @@ void main() {
         find.textContaining('already exists'),
         findsOneWidget,
       );
+
+      // Let LogService timer settle
+      await safePumpAndSettle(tester);
     });
 
     testWidgets('Create PR button is disabled when title is empty',
@@ -396,6 +402,9 @@ void main() {
         find.byKey(CreatePrDialogKeys.errorMessage),
         findsNothing,
       );
+
+      // Let LogService timer settle
+      await safePumpAndSettle(tester);
     });
 
     testWidgets('AI generation uses haiku model', (tester) async {

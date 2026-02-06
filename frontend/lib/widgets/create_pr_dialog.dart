@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/fonts.dart';
 import '../services/ask_ai_service.dart';
 import '../services/git_service.dart';
+import '../services/log_service.dart';
 import '../widgets/markdown_style_helper.dart';
 
 /// Keys for testing CreatePrDialog widgets.
@@ -311,8 +312,15 @@ $commitList''';
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+      LogService.instance.error('CreatePrDialog', 'Failed to create PR: $e');
+      String displayError;
+      if (e is GitException && e.stderr != null && e.stderr!.isNotEmpty) {
+        displayError = e.stderr!.trim();
+      } else {
+        displayError = '$e';
+      }
       setState(() {
-        _error = '$e'; // TODO: clean up error display
+        _error = displayError;
         _isCreating = false;
       });
     }
