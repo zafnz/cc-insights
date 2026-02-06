@@ -367,6 +367,112 @@ class ChatReference {
   }
 }
 
+/// A reference to an archived chat stored in `projects.json`.
+///
+/// Contains the same fields as [ChatReference] plus archive-specific metadata
+/// (original worktree path and archive timestamp).
+/// All fields are immutable.
+@immutable
+class ArchivedChatReference {
+  /// User-visible name for this chat.
+  final String name;
+
+  /// Unique identifier for this chat, used for file naming.
+  final String chatId;
+
+  /// SDK session ID for session resume, null if never connected or ended.
+  final String? lastSessionId;
+
+  /// The worktree path where this chat originally lived.
+  final String originalWorktreePath;
+
+  /// When this chat was archived.
+  final DateTime archivedAt;
+
+  /// Creates an [ArchivedChatReference] instance.
+  const ArchivedChatReference({
+    required this.name,
+    required this.chatId,
+    this.lastSessionId,
+    required this.originalWorktreePath,
+    required this.archivedAt,
+  });
+
+  /// Creates from a [ChatReference] being archived.
+  factory ArchivedChatReference.fromChatReference(
+    ChatReference chatRef, {
+    required String worktreePath,
+  }) {
+    return ArchivedChatReference(
+      name: chatRef.name,
+      chatId: chatRef.chatId,
+      lastSessionId: chatRef.lastSessionId,
+      originalWorktreePath: worktreePath,
+      archivedAt: DateTime.now(),
+    );
+  }
+
+  /// Converts back to a [ChatReference] (for restoring).
+  ChatReference toChatReference() {
+    return ChatReference(
+      name: name,
+      chatId: chatId,
+      lastSessionId: lastSessionId,
+    );
+  }
+
+  /// Serializes this [ArchivedChatReference] to a JSON map.
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'chatId': chatId,
+      'lastSessionId': lastSessionId,
+      'originalWorktreePath': originalWorktreePath,
+      'archivedAt': archivedAt.toIso8601String(),
+    };
+  }
+
+  /// Deserializes an [ArchivedChatReference] from a JSON map.
+  factory ArchivedChatReference.fromJson(Map<String, dynamic> json) {
+    return ArchivedChatReference(
+      name: json['name'] as String? ?? 'Untitled Chat',
+      chatId: json['chatId'] as String,
+      lastSessionId: json['lastSessionId'] as String?,
+      originalWorktreePath: json['originalWorktreePath'] as String,
+      archivedAt: json['archivedAt'] != null
+          ? DateTime.parse(json['archivedAt'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ArchivedChatReference &&
+        other.name == name &&
+        other.chatId == chatId &&
+        other.lastSessionId == lastSessionId &&
+        other.originalWorktreePath == originalWorktreePath &&
+        other.archivedAt == archivedAt;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        name,
+        chatId,
+        lastSessionId,
+        originalWorktreePath,
+        archivedAt,
+      );
+
+  @override
+  String toString() {
+    return 'ArchivedChatReference(name: $name, chatId: $chatId, '
+        'originalWorktreePath: $originalWorktreePath, '
+        'archivedAt: $archivedAt)';
+  }
+}
+
 /// Information about a worktree stored in `projects.json`.
 ///
 /// Contains the worktree type, name, list of chats, assigned tags, and
@@ -520,12 +626,16 @@ class ProjectInfo {
   /// `/Users/dev/.my-app-wt`.
   final String? defaultWorktreeRoot;
 
+  /// Archived chats that have been closed but preserved for potential restore.
+  final List<ArchivedChatReference> archivedChats;
+
   /// Creates a [ProjectInfo] instance.
   const ProjectInfo({
     required this.id,
     required this.name,
     this.worktrees = const {},
     this.defaultWorktreeRoot,
+    this.archivedChats = const [],
   });
 
   /// Creates a copy with the given fields replaced.
@@ -534,12 +644,14 @@ class ProjectInfo {
     String? name,
     Map<String, WorktreeInfo>? worktrees,
     String? defaultWorktreeRoot,
+    List<ArchivedChatReference>? archivedChats,
   }) {
     return ProjectInfo(
       id: id ?? this.id,
       name: name ?? this.name,
       worktrees: worktrees ?? this.worktrees,
       defaultWorktreeRoot: defaultWorktreeRoot ?? this.defaultWorktreeRoot,
+      archivedChats: archivedChats ?? this.archivedChats,
     );
   }
 
@@ -551,12 +663,15 @@ class ProjectInfo {
       'worktrees': worktrees.map((k, v) => MapEntry(k, v.toJson())),
       if (defaultWorktreeRoot != null)
         'defaultWorktreeRoot': defaultWorktreeRoot,
+      if (archivedChats.isNotEmpty)
+        'archivedChats': archivedChats.map((c) => c.toJson()).toList(),
     };
   }
 
   /// Deserializes a [ProjectInfo] from a JSON map.
   factory ProjectInfo.fromJson(Map<String, dynamic> json) {
     final worktreesJson = json['worktrees'] as Map<String, dynamic>? ?? {};
+    final archivedJson = json['archivedChats'] as List<dynamic>? ?? [];
     return ProjectInfo(
       id: json['id'] as String,
       name: json['name'] as String? ?? 'Unnamed Project',
@@ -564,6 +679,10 @@ class ProjectInfo {
         (k, v) => MapEntry(k, WorktreeInfo.fromJson(v as Map<String, dynamic>)),
       ),
       defaultWorktreeRoot: json['defaultWorktreeRoot'] as String?,
+      archivedChats: archivedJson
+          .map((e) =>
+              ArchivedChatReference.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -574,7 +693,8 @@ class ProjectInfo {
         other.id == id &&
         other.name == name &&
         mapEquals(other.worktrees, worktrees) &&
-        other.defaultWorktreeRoot == defaultWorktreeRoot;
+        other.defaultWorktreeRoot == defaultWorktreeRoot &&
+        listEquals(other.archivedChats, archivedChats);
   }
 
   @override
@@ -583,11 +703,13 @@ class ProjectInfo {
         name,
         Object.hashAll(worktrees.entries),
         defaultWorktreeRoot,
+        Object.hashAll(archivedChats),
       );
 
   @override
   String toString() {
-    return 'ProjectInfo(id: $id, name: $name, worktrees: ${worktrees.length})';
+    return 'ProjectInfo(id: $id, name: $name, worktrees: ${worktrees.length}, '
+        'archivedChats: ${archivedChats.length})';
   }
 }
 

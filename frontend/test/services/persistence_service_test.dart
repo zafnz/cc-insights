@@ -652,6 +652,331 @@ void main() {
         check(loadedToolUse.isError).equals(false);
       });
     });
+
+    group('archiveChat', () {
+      test('moves chat from worktree to archived list', () async {
+        // Arrange
+        const projectRoot = '/test/project';
+        const worktreePath = '/test/project';
+        const chatId = 'chat-to-archive';
+        final projectId =
+            PersistenceService.generateProjectId(projectRoot);
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: projectId,
+              name: 'Test Project',
+              worktrees: {
+                worktreePath: const WorktreeInfo.primary(
+                  name: 'main',
+                  chats: [
+                    ChatReference(
+                      name: 'Archive Me',
+                      chatId: chatId,
+                      lastSessionId: 'session-1',
+                    ),
+                  ],
+                ),
+              },
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        await persistence.archiveChat(
+          projectRoot: projectRoot,
+          worktreePath: worktreePath,
+          chatId: chatId,
+        );
+
+        // Assert
+        final updatedIndex = await persistence.loadProjectsIndex();
+        final worktree =
+            updatedIndex.projects[projectRoot]!.worktrees[worktreePath]!;
+        check(worktree.chats).isEmpty();
+
+        final archived = updatedIndex.projects[projectRoot]!.archivedChats;
+        check(archived.length).equals(1);
+        check(archived[0].chatId).equals(chatId);
+        check(archived[0].name).equals('Archive Me');
+        check(archived[0].lastSessionId).equals('session-1');
+        check(archived[0].originalWorktreePath).equals(worktreePath);
+      });
+
+      test('preserves chat files on disk', () async {
+        // Arrange
+        const projectRoot = '/test/project';
+        const worktreePath = '/test/project';
+        const chatId = 'chat-with-files';
+        final projectId =
+            PersistenceService.generateProjectId(projectRoot);
+
+        await persistence.createChatFiles(projectId, chatId);
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: projectId,
+              name: 'Test Project',
+              worktrees: {
+                worktreePath: const WorktreeInfo.primary(
+                  name: 'main',
+                  chats: [
+                    ChatReference(name: 'Chat', chatId: chatId),
+                  ],
+                ),
+              },
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        await persistence.archiveChat(
+          projectRoot: projectRoot,
+          worktreePath: worktreePath,
+          chatId: chatId,
+        );
+
+        // Assert - files should still exist
+        final filesExist =
+            await persistence.chatFilesExist(projectId, chatId);
+        check(filesExist).isTrue();
+      });
+    });
+
+    group('restoreArchivedChat', () {
+      test('moves chat from archived list to target worktree', () async {
+        // Arrange
+        const projectRoot = '/test/project';
+        const targetWorktreePath = '/test/project/feature';
+        const chatId = 'chat-to-restore';
+        final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: PersistenceService.generateProjectId(projectRoot),
+              name: 'Test Project',
+              worktrees: {
+                targetWorktreePath: const WorktreeInfo.linked(
+                  name: 'feature',
+                ),
+              },
+              archivedChats: [
+                ArchivedChatReference(
+                  name: 'Restored Chat',
+                  chatId: chatId,
+                  lastSessionId: 'session-old',
+                  originalWorktreePath: '/test/project',
+                  archivedAt: archivedAt,
+                ),
+              ],
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        await persistence.restoreArchivedChat(
+          projectRoot: projectRoot,
+          targetWorktreePath: targetWorktreePath,
+          chatId: chatId,
+        );
+
+        // Assert
+        final updatedIndex = await persistence.loadProjectsIndex();
+        final project = updatedIndex.projects[projectRoot]!;
+
+        // Chat should be in the target worktree
+        final worktree = project.worktrees[targetWorktreePath]!;
+        check(worktree.chats.length).equals(1);
+        check(worktree.chats[0].chatId).equals(chatId);
+        check(worktree.chats[0].name).equals('Restored Chat');
+        check(worktree.chats[0].lastSessionId).equals('session-old');
+
+        // Chat should be removed from archived list
+        check(project.archivedChats).isEmpty();
+      });
+    });
+
+    group('archiveWorktreeChats', () {
+      test('archives all chats in a worktree', () async {
+        // Arrange
+        const projectRoot = '/test/project';
+        const worktreePath = '/test/project/feature';
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: PersistenceService.generateProjectId(projectRoot),
+              name: 'Test Project',
+              worktrees: {
+                worktreePath: const WorktreeInfo.linked(
+                  name: 'feature',
+                  chats: [
+                    ChatReference(name: 'Chat 1', chatId: 'chat-1'),
+                    ChatReference(
+                      name: 'Chat 2',
+                      chatId: 'chat-2',
+                      lastSessionId: 'session-2',
+                    ),
+                    ChatReference(name: 'Chat 3', chatId: 'chat-3'),
+                  ],
+                ),
+              },
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        await persistence.archiveWorktreeChats(
+          projectRoot: projectRoot,
+          worktreePath: worktreePath,
+        );
+
+        // Assert
+        final updatedIndex = await persistence.loadProjectsIndex();
+        final project = updatedIndex.projects[projectRoot]!;
+
+        // Worktree should have no chats
+        final worktree = project.worktrees[worktreePath]!;
+        check(worktree.chats).isEmpty();
+
+        // All chats should be in the archived list
+        check(project.archivedChats.length).equals(3);
+        check(project.archivedChats[0].chatId).equals('chat-1');
+        check(project.archivedChats[1].chatId).equals('chat-2');
+        check(project.archivedChats[1].lastSessionId).equals('session-2');
+        check(project.archivedChats[2].chatId).equals('chat-3');
+
+        // All should reference the original worktree path
+        for (final archived in project.archivedChats) {
+          check(archived.originalWorktreePath).equals(worktreePath);
+        }
+      });
+    });
+
+    group('deleteArchivedChat', () {
+      test('removes from archived list and deletes files', () async {
+        // Arrange
+        const projectRoot = '/test/project';
+        const chatId = 'chat-to-delete';
+        final projectId =
+            PersistenceService.generateProjectId(projectRoot);
+        final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+
+        // Create chat files on disk
+        await persistence.createChatFiles(projectId, chatId);
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: projectId,
+              name: 'Test Project',
+              archivedChats: [
+                ArchivedChatReference(
+                  name: 'Delete Me',
+                  chatId: chatId,
+                  originalWorktreePath: '/test/project',
+                  archivedAt: archivedAt,
+                ),
+              ],
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        await persistence.deleteArchivedChat(
+          projectRoot: projectRoot,
+          projectId: projectId,
+          chatId: chatId,
+        );
+
+        // Assert - removed from index
+        final updatedIndex = await persistence.loadProjectsIndex();
+        final project = updatedIndex.projects[projectRoot]!;
+        check(project.archivedChats).isEmpty();
+
+        // Assert - files deleted from disk
+        final filesExist =
+            await persistence.chatFilesExist(projectId, chatId);
+        check(filesExist).isFalse();
+      });
+    });
+
+    group('getArchivedChats', () {
+      test('returns archived chats for project', () async {
+        // Arrange
+        const projectRoot = '/test/project';
+        final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: PersistenceService.generateProjectId(projectRoot),
+              name: 'Test Project',
+              archivedChats: [
+                ArchivedChatReference(
+                  name: 'Archived 1',
+                  chatId: 'chat-a1',
+                  originalWorktreePath: '/test/project',
+                  archivedAt: archivedAt,
+                ),
+                ArchivedChatReference(
+                  name: 'Archived 2',
+                  chatId: 'chat-a2',
+                  originalWorktreePath: '/test/project/feature',
+                  archivedAt: archivedAt,
+                ),
+              ],
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        final result = await persistence.getArchivedChats(
+          projectRoot: projectRoot,
+        );
+
+        // Assert
+        check(result.length).equals(2);
+        check(result[0].chatId).equals('chat-a1');
+        check(result[1].chatId).equals('chat-a2');
+      });
+
+      test('returns empty list for project with no archived chats',
+          () async {
+        // Arrange
+        const projectRoot = '/test/project';
+
+        final projectsIndex = ProjectsIndex(
+          projects: {
+            projectRoot: ProjectInfo(
+              id: PersistenceService.generateProjectId(projectRoot),
+              name: 'Test Project',
+              worktrees: {
+                projectRoot: const WorktreeInfo.primary(name: 'main'),
+              },
+            ),
+          },
+        );
+        await persistence.saveProjectsIndex(projectsIndex);
+
+        // Act
+        final result = await persistence.getArchivedChats(
+          projectRoot: projectRoot,
+        );
+
+        // Assert
+        check(result).isEmpty();
+      });
+    });
   });
 }
 
@@ -779,6 +1104,23 @@ class _TestPersistenceService extends PersistenceService {
     return entries.where((e) => e is! ToolResultEntry).toList();
   }
 
+  @override
+  Future<void> deleteChat(String projectId, String chatId) async {
+    final jsonlPath = _chatJsonlPath(projectId, chatId);
+    final metaPath =
+        '${_chatsDir(projectId)}/$chatId.meta.json';
+
+    final jsonlFile = File(jsonlPath);
+    if (await jsonlFile.exists()) {
+      await jsonlFile.delete();
+    }
+
+    final metaFile = File(metaPath);
+    if (await metaFile.exists()) {
+      await metaFile.delete();
+    }
+  }
+
   /// Helper method to write entries to a JSONL file for testing.
   Future<void> writeJsonlEntries(
     String projectId,
@@ -796,5 +1138,27 @@ class _TestPersistenceService extends PersistenceService {
       buffer.writeln(jsonEncode(entry.toJson()));
     }
     await File(path).writeAsString(buffer.toString());
+  }
+
+  /// Helper to create empty chat files (jsonl + meta) on disk for testing.
+  Future<void> createChatFiles(String projectId, String chatId) async {
+    final dir = Directory(_chatsDir(projectId));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    await File(_chatJsonlPath(projectId, chatId)).writeAsString('');
+    await File(
+      '${_chatsDir(projectId)}/$chatId.meta.json',
+    ).writeAsString('{}');
+  }
+
+  /// Helper to check if chat files exist on disk.
+  Future<bool> chatFilesExist(String projectId, String chatId) async {
+    final jsonlExists =
+        await File(_chatJsonlPath(projectId, chatId)).exists();
+    final metaExists = await File(
+      '${_chatsDir(projectId)}/$chatId.meta.json',
+    ).exists();
+    return jsonlExists || metaExists;
   }
 }

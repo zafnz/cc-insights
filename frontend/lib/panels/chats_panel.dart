@@ -4,21 +4,59 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/chat.dart';
+import '../models/project.dart';
+import '../models/worktree.dart';
+import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
+import '../services/settings_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/archived_chats_dialog.dart';
 import '../widgets/editable_label.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
 /// Chats panel - shows the list of chats for the selected worktree.
 class ChatsPanel extends StatelessWidget {
   const ChatsPanel({super.key});
 
+  void _showArchivedChats(BuildContext context) {
+    final project = context.read<ProjectState>();
+    final selection = context.read<SelectionState>();
+    final persistenceService = context.read<PersistenceService>();
+    final restoreService = context.read<ProjectRestoreService>();
+    final projectId =
+        PersistenceService.generateProjectId(project.data.repoRoot);
+
+    showArchivedChatsDialog(
+      context: context,
+      projectRoot: project.data.repoRoot,
+      projectId: projectId,
+      persistenceService: persistenceService,
+      restoreService: restoreService,
+      project: project,
+      selectedWorktree: selection.selectedWorktree,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const PanelWrapper(
+    return PanelWrapper(
       title: 'Chats',
       icon: Icons.forum_outlined,
-      child: _ChatsListContent(),
+      contextMenuItems: [
+        styledMenuItem(
+          value: 'view_archived',
+          child: const Row(
+            children: [
+              Icon(Icons.archive_outlined, size: 16),
+              SizedBox(width: 8),
+              Text('View Archived Chats'),
+            ],
+          ),
+          onTap: () => _showArchivedChats(context),
+        ),
+      ],
+      child: const _ChatsListContent(),
     );
   }
 }
@@ -50,7 +88,46 @@ class _ChatsListContentState extends State<_ChatsListContent> {
     ChatState chat,
   ) async {
     final restoreService = context.read<ProjectRestoreService>();
-    await selection.closeChat(chat, restoreService);
+    final settings = context.read<SettingsService>();
+    final archive = settings.getValue<bool>('behavior.archiveChats');
+    await selection.closeChat(chat, restoreService, archive: archive);
+  }
+
+  void _showBodyContextMenu(BuildContext context, Offset position) {
+    showStyledMenu<String>(
+      context: context,
+      position: menuPositionFromOffset(position),
+      items: [
+        styledMenuItem(
+          value: 'view_archived',
+          child: const Row(
+            children: [
+              Icon(Icons.archive_outlined, size: 16),
+              SizedBox(width: 8),
+              Text('View Archived Chats'),
+            ],
+          ),
+          onTap: () {
+            final project = context.read<ProjectState>();
+            final selection = context.read<SelectionState>();
+            final persistenceService = context.read<PersistenceService>();
+            final restoreService = context.read<ProjectRestoreService>();
+            final projectId =
+                PersistenceService.generateProjectId(project.data.repoRoot);
+
+            showArchivedChatsDialog(
+              context: context,
+              projectRoot: project.data.repoRoot,
+              projectId: projectId,
+              persistenceService: persistenceService,
+              restoreService: restoreService,
+              project: project,
+              selectedWorktree: selection.selectedWorktree,
+            );
+          },
+        ),
+      ],
+    );
   }
 
   /// Ensures we have a GlobalKey for each chat.
@@ -125,15 +202,19 @@ class _ChatsListContentState extends State<_ChatsListContent> {
 
     // Show empty state with placeholder message AND New Chat card
     if (chats.isEmpty) {
-      return Column(
-        children: [
-          const Expanded(
-            child: _EmptyChatsPlaceholder(
-              message: 'No chats in this worktree',
+      return GestureDetector(
+        onSecondaryTapUp: (details) =>
+            _showBodyContextMenu(context, details.globalPosition),
+        child: Column(
+          children: [
+            const Expanded(
+              child: _EmptyChatsPlaceholder(
+                message: 'No chats in this worktree',
+              ),
             ),
-          ),
-          const NewChatCard(),
-        ],
+            const NewChatCard(),
+          ],
+        ),
       );
     }
 
@@ -144,36 +225,40 @@ class _ChatsListContentState extends State<_ChatsListContent> {
     // +1 for the ghost "New Chat" card
     final itemCount = chats.length + 1;
 
-    return Stack(
-      children: [
-        ListView.builder(
-          padding: EdgeInsets.zero,
-          itemCount: itemCount,
-          itemBuilder: (context, index) {
-            // Last item is the ghost card
-            if (index == chats.length) {
-              return const NewChatCard();
-            }
+    return GestureDetector(
+      onSecondaryTapUp: (details) =>
+          _showBodyContextMenu(context, details.globalPosition),
+      child: Stack(
+        children: [
+          ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: itemCount,
+            itemBuilder: (context, index) {
+              // Last item is the ghost card
+              if (index == chats.length) {
+                return const NewChatCard();
+              }
 
-            final chat = chats[index];
-            final isSelected = selection.selectedChat == chat;
-            return _ChatListItem(
-              key: _chatKeys[chat.data.id],
-              chat: chat,
-              isSelected: isSelected,
-              onTap: () => selection.selectChat(chat),
-              onClose: () => _closeChat(context, selection, chat),
-              onRename: (newName) => chat.rename(newName),
-            );
-          },
-        ),
-        // Animated bell overlay
-        if (_bellTargetChatId != null)
-          _AnimatedBellOverlay(
-            targetKey: _chatKeys[_bellTargetChatId],
-            onAnimationComplete: _onBellAnimationComplete,
+              final chat = chats[index];
+              final isSelected = selection.selectedChat == chat;
+              return _ChatListItem(
+                key: _chatKeys[chat.data.id],
+                chat: chat,
+                isSelected: isSelected,
+                onTap: () => selection.selectChat(chat),
+                onClose: () => _closeChat(context, selection, chat),
+                onRename: (newName) => chat.rename(newName),
+              );
+            },
           ),
-      ],
+          // Animated bell overlay
+          if (_bellTargetChatId != null)
+            _AnimatedBellOverlay(
+              targetKey: _chatKeys[_bellTargetChatId],
+              onAnimationComplete: _onBellAnimationComplete,
+            ),
+        ],
+      ),
     );
   }
 }

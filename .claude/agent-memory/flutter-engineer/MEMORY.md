@@ -130,6 +130,13 @@
   ```
 - FakeCliAvailabilityService defaults: `claudeAvailable=true`, `codexAvailable=true`, `checked=true`
 
+## Chat Archive Feature
+- `ArchivedChatReference` model in `persistence_models.dart`: extends ChatReference with `originalWorktreePath` and `archivedAt`
+- `ArchivedChatReference.fromChatReference()` factory, `toChatReference()` for round-trip
+- `ProjectInfo.archivedChats` field: defaults to empty list, only serialized when non-empty
+- Archive methods in `PersistenceService`: `archiveChat`, `restoreArchivedChat`, `archiveWorktreeChats`, `deleteArchivedChat`, `getArchivedChats`
+- `_TestPersistenceService` needs `deleteChat` override + `createChatFiles`/`chatFilesExist` helpers for archive tests
+
 ## Test Counts (as of 2026-02-06)
-- Unit/widget tests: ~2022 total
+- Unit/widget tests: ~2041 total (1 skipped)
 - Integration tests: 9 (require macOS desktop build)

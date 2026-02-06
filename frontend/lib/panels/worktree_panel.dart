@@ -758,6 +758,16 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   Future<void> _handleHide(BuildContext context) async {
     final project = context.read<ProjectState>();
     final persistenceService = context.read<PersistenceService>();
+    final settings = context.read<SettingsService>();
+    final archive = settings.getValue<bool>('behavior.archiveChats');
+
+    // Archive chats before hiding if the setting is enabled
+    if (archive) {
+      await persistenceService.archiveWorktreeChats(
+        projectRoot: project.data.repoRoot,
+        worktreePath: worktree.data.worktreeRoot,
+      );
+    }
 
     // Hide from projects.json (files stay on disk)
     await persistenceService.hideWorktreeFromIndex(
@@ -779,10 +789,22 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     final fileSystemService = context.read<FileSystemService>();
     final restoreService = context.read<ProjectRestoreService>();
     final scriptService = context.read<ScriptExecutionService>();
+    final settings = context.read<SettingsService>();
+    final archive = settings.getValue<bool>('behavior.archiveChats');
 
     // Save cost tracking for all chats in this worktree before deletion
     final projectId = PersistenceService.generateProjectId(repoRoot);
     await restoreService.saveWorktreeCostTracking(projectId, worktree);
+
+    // Archive chats before deletion if the setting is enabled.
+    // This moves chat references to the archived list so that
+    // removeWorktreeFromIndex() won't delete the chat files.
+    if (archive) {
+      await persistenceService.archiveWorktreeChats(
+        projectRoot: project.data.repoRoot,
+        worktreePath: worktree.data.worktreeRoot,
+      );
+    }
 
     final result = await showDeleteWorktreeDialog(
       context: context,

@@ -433,51 +433,66 @@ class ProjectRestoreService {
     );
   }
 
-  /// Closes a chat and removes all associated data.
+  /// Closes a chat, either archiving or deleting all associated data.
   ///
-  /// This performs the following cleanup:
+  /// When [archive] is false (default), this performs:
   /// 1. Stops any active SDK session
   /// 2. Saves cost tracking to the project's tracking.jsonl file
   /// 3. Deletes the chat files from disk (.chat.jsonl and .meta.json)
   /// 4. Removes the chat reference from projects.json
+  ///
+  /// When [archive] is true, this performs:
+  /// 1. Stops any active SDK session
+  /// 2. Saves cost tracking to the project's tracking.jsonl file
+  /// 3. Moves the chat reference to the project's archived chats list
+  ///    (files are preserved on disk for potential restore)
   ///
   /// Note: The caller is responsible for removing the chat from the
   /// WorktreeState (which also calls chat.dispose()).
   Future<void> closeChat(
     String projectRoot,
     String worktreePath,
-    ChatState chat,
-  ) async {
+    ChatState chat, {
+    bool archive = false,
+  }) async {
     final projectId = chat.projectId;
     final chatId = chat.data.id;
 
     developer.log(
-      'Closing chat: ${chat.data.name} ($chatId)',
+      '${archive ? "Archiving" : "Closing"} chat: ${chat.data.name} ($chatId)',
       name: 'ProjectRestoreService',
     );
 
     // Stop active session if any
     await chat.stopSession();
 
-    // Save cost tracking before deleting the chat
+    // Save cost tracking before deleting/archiving the chat
     if (projectId != null) {
       await _saveCostTracking(projectId, worktreePath, chat);
     }
 
-    // Delete disk files (existing method)
-    if (projectId != null) {
-      await _persistence.deleteChat(projectId, chatId);
+    if (archive) {
+      // Archive: keep files, move reference to archived list
+      await _persistence.archiveChat(
+        projectRoot: projectRoot,
+        worktreePath: worktreePath,
+        chatId: chatId,
+      );
+    } else {
+      // Delete: remove files and index entry
+      if (projectId != null) {
+        await _persistence.deleteChat(projectId, chatId);
+      }
+
+      await _persistence.removeChatFromIndex(
+        projectRoot: projectRoot,
+        worktreePath: worktreePath,
+        chatId: chatId,
+      );
     }
 
-    // Remove from projects.json index
-    await _persistence.removeChatFromIndex(
-      projectRoot: projectRoot,
-      worktreePath: worktreePath,
-      chatId: chatId,
-    );
-
     developer.log(
-      'Chat closed: ${chat.data.name}',
+      'Chat ${archive ? "archived" : "closed"}: ${chat.data.name}',
       name: 'ProjectRestoreService',
     );
   }
@@ -543,5 +558,29 @@ class ProjectRestoreService {
       'Cost tracking saved for all chats in worktree',
       name: 'ProjectRestoreService',
     );
+  }
+
+  /// Restores an archived chat to a worktree.
+  ///
+  /// This method:
+  /// 1. Moves the chat reference from the archived list to the target worktree
+  /// 2. Creates a [ChatState] from the persisted chat files
+  /// 3. Returns the [ChatState] for the caller to add to the [WorktreeState]
+  Future<ChatState> restoreArchivedChat(
+    ArchivedChatReference archivedRef,
+    String worktreePath,
+    String projectId,
+    String projectRoot,
+  ) async {
+    // Move from archived to worktree in persistence
+    await _persistence.restoreArchivedChat(
+      projectRoot: projectRoot,
+      targetWorktreePath: worktreePath,
+      chatId: archivedRef.chatId,
+    );
+
+    // Reuse existing _restoreChat to create runtime ChatState
+    final chatRef = archivedRef.toChatReference();
+    return _restoreChat(chatRef, worktreePath, projectId, projectRoot);
   }
 }

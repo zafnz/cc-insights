@@ -811,4 +811,217 @@ void main() {
       check(a == c).isFalse();
     });
   });
+
+  group('ArchivedChatReference', () {
+    test('creates with required fields', () {
+      final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+      final ref = ArchivedChatReference(
+        name: 'My Chat',
+        chatId: 'chat-abc',
+        originalWorktreePath: '/path/to/worktree',
+        archivedAt: archivedAt,
+      );
+
+      check(ref.name).equals('My Chat');
+      check(ref.chatId).equals('chat-abc');
+      check(ref.lastSessionId).isNull();
+      check(ref.originalWorktreePath).equals('/path/to/worktree');
+      check(ref.archivedAt).equals(archivedAt);
+    });
+
+    test('fromChatReference creates from ChatReference', () {
+      const chatRef = ChatReference(
+        name: 'Test Chat',
+        chatId: 'chat-123',
+        lastSessionId: 'session-xyz',
+      );
+
+      final archived = ArchivedChatReference.fromChatReference(
+        chatRef,
+        worktreePath: '/my/worktree',
+      );
+
+      check(archived.name).equals('Test Chat');
+      check(archived.chatId).equals('chat-123');
+      check(archived.lastSessionId).equals('session-xyz');
+      check(archived.originalWorktreePath).equals('/my/worktree');
+    });
+
+    test('toChatReference converts back', () {
+      final archived = ArchivedChatReference(
+        name: 'Archived Chat',
+        chatId: 'chat-456',
+        lastSessionId: 'session-abc',
+        originalWorktreePath: '/some/path',
+        archivedAt: DateTime.utc(2025, 6, 15),
+      );
+
+      final chatRef = archived.toChatReference();
+
+      check(chatRef.name).equals('Archived Chat');
+      check(chatRef.chatId).equals('chat-456');
+      check(chatRef.lastSessionId).equals('session-abc');
+    });
+
+    test('toJson produces correct structure', () {
+      final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+      final ref = ArchivedChatReference(
+        name: 'My Chat',
+        chatId: 'chat-abc',
+        lastSessionId: 'session-def',
+        originalWorktreePath: '/path/to/worktree',
+        archivedAt: archivedAt,
+      );
+
+      final json = ref.toJson();
+
+      check(json['name']).equals('My Chat');
+      check(json['chatId']).equals('chat-abc');
+      check(json['lastSessionId']).equals('session-def');
+      check(json['originalWorktreePath']).equals('/path/to/worktree');
+      check(json['archivedAt']).equals('2025-06-15T10:30:00.000Z');
+    });
+
+    test('fromJson restores correctly', () {
+      final json = {
+        'name': 'Restored Chat',
+        'chatId': 'chat-789',
+        'lastSessionId': 'session-123',
+        'originalWorktreePath': '/old/worktree',
+        'archivedAt': '2025-06-15T10:30:00.000Z',
+      };
+
+      final ref = ArchivedChatReference.fromJson(json);
+
+      check(ref.name).equals('Restored Chat');
+      check(ref.chatId).equals('chat-789');
+      check(ref.lastSessionId).equals('session-123');
+      check(ref.originalWorktreePath).equals('/old/worktree');
+      check(ref.archivedAt).equals(DateTime.utc(2025, 6, 15, 10, 30));
+    });
+
+    test('fromJson uses defaults for missing optional fields', () {
+      final json = {
+        'chatId': 'chat-789',
+        'originalWorktreePath': '/old/worktree',
+        'archivedAt': '2025-06-15T10:30:00.000Z',
+      };
+
+      final ref = ArchivedChatReference.fromJson(json);
+
+      check(ref.name).equals('Untitled Chat');
+      check(ref.lastSessionId).isNull();
+    });
+
+    test('round-trip preserves data', () {
+      final original = ArchivedChatReference(
+        name: 'Round Trip Chat',
+        chatId: 'chat-roundtrip',
+        lastSessionId: 'session-rt',
+        originalWorktreePath: '/project/feature',
+        archivedAt: DateTime.utc(2025, 6, 15, 10, 30),
+      );
+
+      final json = jsonEncode(original.toJson());
+      final restored = ArchivedChatReference.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+
+      check(restored).equals(original);
+    });
+
+    test('equality works correctly', () {
+      final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+      final a = ArchivedChatReference(
+        name: 'Chat',
+        chatId: 'chat-1',
+        originalWorktreePath: '/path',
+        archivedAt: archivedAt,
+      );
+      final b = ArchivedChatReference(
+        name: 'Chat',
+        chatId: 'chat-1',
+        originalWorktreePath: '/path',
+        archivedAt: archivedAt,
+      );
+      final c = ArchivedChatReference(
+        name: 'Chat',
+        chatId: 'chat-2',
+        originalWorktreePath: '/path',
+        archivedAt: archivedAt,
+      );
+
+      check(a == b).isTrue();
+      check(a.hashCode).equals(b.hashCode);
+      check(a == c).isFalse();
+    });
+  });
+
+  group('ProjectInfo (archivedChats)', () {
+    test('creates with archivedChats', () {
+      final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+      final project = ProjectInfo(
+        id: 'abc123',
+        name: 'My Project',
+        archivedChats: [
+          ArchivedChatReference(
+            name: 'Old Chat',
+            chatId: 'chat-old',
+            originalWorktreePath: '/path/to/wt',
+            archivedAt: archivedAt,
+          ),
+        ],
+      );
+
+      check(project.archivedChats.length).equals(1);
+      check(project.archivedChats[0].name).equals('Old Chat');
+      check(project.archivedChats[0].originalWorktreePath)
+          .equals('/path/to/wt');
+    });
+
+    test('archivedChats defaults to empty list', () {
+      const project = ProjectInfo(id: 'abc123', name: 'My Project');
+
+      check(project.archivedChats).isEmpty();
+    });
+
+    test('fromJson without archivedChats key returns empty list', () {
+      final json = {
+        'id': 'abc123',
+        'name': 'My Project',
+        'worktrees': <String, dynamic>{},
+      };
+
+      final project = ProjectInfo.fromJson(json);
+
+      check(project.archivedChats).isEmpty();
+    });
+
+    test('round-trip with archivedChats preserves data', () {
+      final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
+      final original = ProjectInfo(
+        id: 'roundtrip',
+        name: 'Round Trip Project',
+        worktrees: const {
+          '/primary': WorktreeInfo.primary(name: 'main'),
+        },
+        archivedChats: [
+          ArchivedChatReference(
+            name: 'Archived Chat',
+            chatId: 'chat-archived',
+            lastSessionId: 'session-old',
+            originalWorktreePath: '/old/worktree',
+            archivedAt: archivedAt,
+          ),
+        ],
+      );
+
+      final json = jsonEncode(original.toJson());
+      final restored = ProjectInfo.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+
+      check(restored).equals(original);
+    });
+  });
 }

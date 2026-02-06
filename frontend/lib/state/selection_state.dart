@@ -210,28 +210,36 @@ class SelectionState extends ChangeNotifier {
     selectFile(null);
   }
 
-  /// Closes a chat, removing it from persistence and the worktree.
+  /// Closes a chat, either archiving or deleting it from persistence.
   ///
-  /// This method:
+  /// When [archive] is false (default):
   /// 1. Stops any active SDK session
   /// 2. Deletes the chat files from disk
   /// 3. Removes the chat from projects.json
-  /// 4. Removes the chat from the worktree state
-  /// 5. Notifies listeners to update the UI
+  ///
+  /// When [archive] is true:
+  /// 1. Stops any active SDK session
+  /// 2. Moves the chat reference to the archived chats list
+  ///    (files are preserved on disk)
+  ///
+  /// In both cases, the chat is removed from the worktree state and
+  /// listeners are notified.
   ///
   /// Does nothing if the chat's worktree is not currently selected.
   Future<void> closeChat(
     ChatState chat,
-    ProjectRestoreService restoreService,
-  ) async {
+    ProjectRestoreService restoreService, {
+    bool archive = false,
+  }) async {
     final worktree = selectedWorktree;
     if (worktree == null) return;
 
-    // Perform the close operation (deletes files and updates projects.json)
+    // Perform the close operation (archives or deletes)
     await restoreService.closeChat(
       _project.data.repoRoot,
       worktree.data.worktreeRoot,
       chat,
+      archive: archive,
     );
 
     // Remove from the worktree state (this also calls dispose())

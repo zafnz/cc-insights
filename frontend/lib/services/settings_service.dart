@@ -196,6 +196,15 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: true,
       ),
+      SettingDefinition(
+        key: 'behavior.archiveChats',
+        title: 'Archive Chats',
+        description:
+            'Chats will be archived and can be restored by right '
+            'clicking the chats panel.',
+        type: SettingType.toggle,
+        defaultValue: false,
+      ),
     ],
   );
 
@@ -578,6 +587,8 @@ class SettingsService extends ChangeNotifier {
         config.aiChatLabelModel = value as String;
       case 'behavior.desktopNotifications':
         config.desktopNotifications = value as bool;
+      case 'behavior.archiveChats':
+        config.archiveChats = value as bool;
       case 'session.claudeCliPath':
         config.claudeCliPath = value as String;
       case 'session.codexCliPath':

@@ -94,6 +94,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether desktop notifications are enabled.
   bool _desktopNotifications = true;
 
+  /// Whether to archive chats instead of deleting them on close.
+  bool _archiveChats = false;
+
   /// Default Claude model for new chats.
   String _defaultModel = 'opus';
 
@@ -332,6 +335,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether to archive chats instead of deleting them on close.
+  bool get archiveChats => _archiveChats;
+
+  set archiveChats(bool value) {
+    if (_archiveChats != value) {
+      _archiveChats = value;
+      notifyListeners();
+    }
+  }
+
   /// Default Claude model for new chats.
   String get defaultModel => _defaultModel;
 
@@ -490,6 +503,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._aiAssistanceModel = 'opus';
     _instance._aiChatLabelModel = 'haiku';
     _instance._desktopNotifications = true;
+    _instance._archiveChats = false;
     _instance._defaultModel = 'opus';
     _instance._defaultBackend = BackendType.directCli;
     _instance._defaultPermissionMode = 'default';
