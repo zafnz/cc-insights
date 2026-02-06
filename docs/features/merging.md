@@ -5,15 +5,15 @@
 cd $REPO_ROOT && git merge --no-commit --no-ff $BRANCH 2>&1; MERGE_RESULT=$?; git merge --abort 2>/dev/null; exit $MERGE_RESULT
 ```
 
-### merge main into branch
-```chat
-You are on a work tree. 
+## Terms
+- **<base>**: What this branch was based off, often origin/main or local main. 
 
-Your task is to merge the worktree main into this branch (not origin). If there are any merge conflicts you are to stop and ask the user what to do. Offer the options of "Automatically resolve conficts", "Wait for user to resolve", "Abort merge".
+## Are my commits on base (remote or local)
+git fetch
+git merge-base --is-ancestor <branch> <base>
 
-If the user selects Automatically then you are to resolve the merge conflicts as best as you can, and if you are aware of any unit tests you can run, to run them.
+## With squash commits
 
-If you have issues merging, it is not clear what to do, or the unit tests fails, STOP and advise the user what the situation is.
+git cherry <base> <branch>
+^^ if any line starts with + then its not fully merged.
 
-Once you have finished, respond FINISHED
-```
