@@ -118,6 +118,18 @@
 - Avoid putting `_CompactButton` in same Row as icon + text for narrow panels
 - Always test with navigation integration tests after changing panel layouts
 
-## Test Counts (as of 2026-02-05)
-- Unit/widget tests: ~1952 total
+## CliAvailabilityService
+- File: `frontend/lib/services/cli_availability_service.dart`
+- Fake: `frontend/test/fakes/fake_cli_availability_service.dart`
+- Used by `ConversationPanel` (context.watch) and `SettingsScreen` (context.watch + context.read)
+- Package name is `cc_insights_v2` (NOT `frontend`) - imports must use `package:cc_insights_v2/...`
+- `CCInsightsApp` creates its own internally, so `app_providers_test.dart` does NOT need it injected
+- Tests rendering `ConversationPanel`, `SettingsScreen`, or `MainScreen` need:
+  ```dart
+  ChangeNotifierProvider<CliAvailabilityService>.value(value: fakeCliAvailability),
+  ```
+- FakeCliAvailabilityService defaults: `claudeAvailable=true`, `codexAvailable=true`, `checked=true`
+
+## Test Counts (as of 2026-02-06)
+- Unit/widget tests: ~2022 total
 - Integration tests: 9 (require macOS desktop build)
