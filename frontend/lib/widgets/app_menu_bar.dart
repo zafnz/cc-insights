@@ -36,6 +36,12 @@ class MenuCallbacks {
   final VoidCallback? onShowFileManager;
   final VoidCallback? onShowSettings;
 
+  // Panels
+  final VoidCallback? onToggleMergeChatsAgents;
+
+  /// Whether the chats and agents panels are currently merged.
+  final bool agentsMergedIntoChats;
+
   const MenuCallbacks({
     this.onOpenProject,
     this.onProjectSettings,
@@ -55,6 +61,8 @@ class MenuCallbacks {
     this.onShowWorkspace,
     this.onShowFileManager,
     this.onShowSettings,
+    this.onToggleMergeChatsAgents,
+    this.agentsMergedIntoChats = false,
   });
 }
 
@@ -353,29 +361,44 @@ class AppMenuBar extends StatelessWidget {
         PlatformMenu(
           label: 'View',
           menus: [
-            PlatformMenuItem(
-              label: 'Workspace',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.digit1,
-                meta: true,
-              ),
-              onSelected: hasProject ? callbacks.onShowWorkspace : null,
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Workspace',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.digit1,
+                    meta: true,
+                  ),
+                  onSelected: hasProject ? callbacks.onShowWorkspace : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Files',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.digit2,
+                    meta: true,
+                  ),
+                  onSelected: hasProject ? callbacks.onShowFileManager : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Settings',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.digit3,
+                    meta: true,
+                  ),
+                  onSelected: callbacks.onShowSettings,
+                ),
+              ],
             ),
-            PlatformMenuItem(
-              label: 'Files',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.digit2,
-                meta: true,
-              ),
-              onSelected: hasProject ? callbacks.onShowFileManager : null,
-            ),
-            PlatformMenuItem(
-              label: 'Settings',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.digit3,
-                meta: true,
-              ),
-              onSelected: callbacks.onShowSettings,
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: callbacks.agentsMergedIntoChats
+                      ? 'Split Chats & Agents'
+                      : 'Merge Chats & Agents',
+                  onSelected:
+                      hasProject ? callbacks.onToggleMergeChatsAgents : null,
+                ),
+              ],
             ),
           ],
         ),

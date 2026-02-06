@@ -508,8 +508,8 @@ class _EmptyChatsPlaceholder extends StatelessWidget {
 /// - Open circle: Finished, no unread messages
 /// - Spinner: Currently working
 /// - Exclamation mark: Permission/question waiting
-class _ChatStatusIndicator extends StatelessWidget {
-  const _ChatStatusIndicator({required this.chat});
+class ChatStatusIndicator extends StatelessWidget {
+  const ChatStatusIndicator({super.key, required this.chat});
 
   final ChatState chat;
 
@@ -625,7 +625,7 @@ class _ChatListItemState extends State<_ChatListItem> {
                     ),
                     const SizedBox(width: 6),
                     // Status indicator
-                    _ChatStatusIndicator(chat: widget.chat),
+                    ChatStatusIndicator(chat: widget.chat),
                     const SizedBox(width: 6),
                     // Chat name (single-click to select, double-click to rename)
                     Expanded(

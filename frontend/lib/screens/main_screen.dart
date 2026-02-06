@@ -74,6 +74,7 @@ class _MainScreenState extends State<MainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupBackendErrorListener();
       _setupMenuActionListener();
+      _syncMergeStateToMenu();
     });
   }
 
@@ -168,6 +169,15 @@ class _MainScreenState extends State<MainScreen> {
       case MenuAction.newChat:
         _handleNavigationChange(0);
         _handleNewChatShortcut();
+        break;
+
+      // Panels
+      case MenuAction.toggleMergeChatsAgents:
+        if (_agentsMergedIntoChats) {
+          _separateAgentsFromChats();
+        } else {
+          _mergeAgentsIntoChats();
+        }
         break;
 
       // Actions submenu - not wired up yet, just log for now
@@ -335,11 +345,23 @@ class _MainScreenState extends State<MainScreen> {
     return ReplaceInterceptResult.cancel;
   }
 
+  /// Syncs the merge state to the MenuActionService so the menu bar
+  /// can show the correct label ("Merge" vs "Split").
+  void _syncMergeStateToMenu() {
+    try {
+      context.read<MenuActionService>().agentsMergedIntoChats =
+          _agentsMergedIntoChats;
+    } catch (_) {
+      // Provider not available (e.g. during dispose or tests)
+    }
+  }
+
   /// Merge agents panel into chats panel.
   void _mergeAgentsIntoChats() {
     setState(() {
       _agentsMergedIntoChats = true;
     });
+    _syncMergeStateToMenu();
 
     // Remove the agents panel from the layout
     final agentsPath = _controller.findPathById('agents');
@@ -415,6 +437,7 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _agentsMergedIntoChats = false;
     });
+    _syncMergeStateToMenu();
 
     // Find the chats_agents panel
     final combinedPath = _controller.findPathById('chats_agents');

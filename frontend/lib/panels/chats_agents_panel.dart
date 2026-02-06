@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../models/chat.dart';
 import '../models/conversation.dart';
+import '../services/project_restore_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/editable_label.dart';
 import '../widgets/styled_popup_menu.dart';
+import 'chats_panel.dart' show ChatStatusIndicator, NewChatCard;
 import 'panel_wrapper.dart';
 import 'shared_tree_widgets.dart';
 
@@ -63,13 +65,26 @@ class _ChatsAgentsTreeContent extends StatelessWidget {
     final chats = selectedWorktree.chats;
 
     if (chats.isEmpty) {
-      return const EmptyPlaceholder(message: 'No chats in this worktree');
+      return Column(
+        children: [
+          const Expanded(
+            child: EmptyPlaceholder(message: 'No chats in this worktree'),
+          ),
+          const NewChatCard(),
+        ],
+      );
     }
+
+    // +1 for the ghost "New Chat" card
+    final itemCount = chats.length + 1;
 
     return ListView.builder(
       padding: EdgeInsets.zero,
-      itemCount: chats.length,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
+        if (index == chats.length) {
+          return const NewChatCard();
+        }
         final chat = chats[index];
         return _ChatWithAgentsTreeItem(
           chat: chat,
@@ -97,6 +112,12 @@ class _ChatWithAgentsTreeItem extends StatefulWidget {
 
 class _ChatWithAgentsTreeItemState extends State<_ChatWithAgentsTreeItem> {
   bool _isExpanded = true;
+  bool _isHovered = false;
+
+  Future<void> _closeChat(BuildContext context) async {
+    final restoreService = context.read<ProjectRestoreService>();
+    await widget.selection.closeChat(widget.chat, restoreService);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,71 +138,97 @@ class _ChatWithAgentsTreeItemState extends State<_ChatWithAgentsTreeItem> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Chat row
-        Material(
-          color: isSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-              : Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                // Expand/collapse icon
-                GestureDetector(
-                  onTap: hasChildren
-                      ? () => setState(() => _isExpanded = !_isExpanded)
-                      : null,
-                  child: SizedBox(
-                    width: 16,
-                    child: hasChildren
-                        ? Icon(
-                            _isExpanded
-                                ? Icons.expand_more
-                                : Icons.chevron_right,
-                            size: 14,
-                            color: colorScheme.onSurfaceVariant,
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                // Chat icon
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: 14,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                // Chat name (single-click to select, double-click to rename)
-                Expanded(
-                  child: EditableLabel(
-                    text: data.name,
-                    style: textTheme.bodyMedium,
-                    onTap: () => widget.selection.selectChat(widget.chat),
-                    onSubmit: (newName) => widget.chat.rename(newName),
-                  ),
-                ),
-                  // Agent count badge
-                  if (subagents.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '${subagents.length}',
-                        style: textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
-                        ),
+        MouseRegion(
+          onEnter: (_) => setState(() => _isHovered = true),
+          onExit: (_) => setState(() => _isHovered = false),
+          child: Material(
+            color: isSelected
+                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                : Colors.transparent,
+            child: InkWell(
+              onTap: () => widget.selection.selectChat(widget.chat),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    // Expand/collapse icon
+                    GestureDetector(
+                      onTap: hasChildren
+                          ? () => setState(() => _isExpanded = !_isExpanded)
+                          : null,
+                      child: SizedBox(
+                        width: 16,
+                        child: hasChildren
+                            ? Icon(
+                                _isExpanded
+                                    ? Icons.expand_more
+                                    : Icons.chevron_right,
+                                size: 14,
+                                color: colorScheme.onSurfaceVariant,
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ),
-                ],
+                    const SizedBox(width: 4),
+                    // Chat icon
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    // Status indicator
+                    ChatStatusIndicator(chat: widget.chat),
+                    const SizedBox(width: 6),
+                    // Chat name (single-click to select, double-click to rename)
+                    Expanded(
+                      child: EditableLabel(
+                        text: data.name,
+                        style: textTheme.bodyMedium,
+                        onTap: () => widget.selection.selectChat(widget.chat),
+                        onSubmit: (newName) => widget.chat.rename(newName),
+                      ),
+                    ),
+                    // Close button (visible on hover)
+                    if (_isHovered)
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          iconSize: 14,
+                          onPressed: () => _closeChat(context),
+                          icon: Icon(
+                            Icons.close,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          tooltip: 'Close chat',
+                        ),
+                      )
+                    // Agent count badge (visible when not hovered)
+                    else if (subagents.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${subagents.length}',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
+        ),
         // Agents (nested with indent)
         if (_isExpanded && hasChildren) ...[
           // Primary conversation entry

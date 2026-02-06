@@ -203,7 +203,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _menuActionService.addListener(_onMenuServiceChanged);
     _initializeServices();
+  }
+
+  /// Rebuilds when menu service state changes (e.g., merge state for labels).
+  void _onMenuServiceChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -524,6 +530,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void dispose() {
     _windowSizeDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _menuActionService.removeListener(_onMenuServiceChanged);
     _themeState?.removeListener(_onThemeChanged);
     _settingsService?.removeListener(_syncThemeFromSettings);
     RuntimeConfig.instance.removeListener(_onRuntimeConfigChanged);
@@ -802,6 +809,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           : null,
       onShowSettings: () =>
           _menuActionService.triggerAction(MenuAction.showSettings),
+
+      // Panels
+      onToggleMergeChatsAgents: _projectSelected
+          ? () => _menuActionService
+              .triggerAction(MenuAction.toggleMergeChatsAgents)
+          : null,
+      agentsMergedIntoChats: _menuActionService.agentsMergedIntoChats,
     );
   }
 
