@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -17,6 +18,13 @@ import 'persistence_models.dart';
 ///
 /// All paths are relative to `~/.ccinsights/` (or a custom directory if set).
 class PersistenceService {
+  /// Per-file write queue to serialize appends and prevent interleaving.
+  ///
+  /// Concurrent async writes to the same file can interleave bytes, corrupting
+  /// both JSON structure and multi-byte UTF-8 characters. This map chains
+  /// writes per file path so each write completes before the next begins.
+  final Map<String, Future<void>> _writeQueues = {};
+
   /// The base directory for all CC-Insights data.
   ///
   /// Can be overridden via the --config-dir CLI flag for test isolation.
@@ -267,9 +275,15 @@ class PersistenceService {
 
     final entries = <OutputEntry>[];
     var lineNumber = 0;
+    var skippedLines = 0;
 
     try {
-      final lines = await file.readAsLines();
+      // Read as bytes and decode with replacement to handle corrupted UTF-8.
+      // Concurrent writes can split multi-byte characters across lines,
+      // producing invalid UTF-8 that would cause readAsLines() to throw.
+      final bytes = await file.readAsBytes();
+      final content = utf8.decode(bytes, allowMalformed: true);
+      final lines = content.split('\n');
 
       for (final line in lines) {
         lineNumber++;
@@ -280,6 +294,7 @@ class PersistenceService {
           final entry = OutputEntry.fromJson(json);
           entries.add(entry);
         } catch (e) {
+          skippedLines++;
           developer.log(
             'Skipping invalid line $lineNumber in $chatId: $e',
             name: 'PersistenceService',
@@ -292,10 +307,19 @@ class PersistenceService {
       // Apply tool results to their corresponding tool use entries
       final processedEntries = _applyToolResults(entries);
 
-      developer.log(
-        'Loaded ${processedEntries.length} entries from $chatId',
-        name: 'PersistenceService',
-      );
+      if (skippedLines > 0) {
+        developer.log(
+          'Loaded ${processedEntries.length} entries from $chatId '
+          '($skippedLines corrupted lines skipped)',
+          name: 'PersistenceService',
+          level: 900, // Warning
+        );
+      } else {
+        developer.log(
+          'Loaded ${processedEntries.length} entries from $chatId',
+          name: 'PersistenceService',
+        );
+      }
 
       return processedEntries;
     } catch (e) {
@@ -342,34 +366,47 @@ class PersistenceService {
   ///
   /// Creates the file if it doesn't exist.
   /// Each entry is written as a single line with a trailing newline.
+  ///
+  /// Writes are serialized per file path to prevent concurrent async writes
+  /// from interleaving bytes, which can corrupt both JSON structure and
+  /// multi-byte UTF-8 characters.
   Future<void> appendChatEntry(
     String projectId,
     String chatId,
     OutputEntry entry,
-  ) async {
+  ) {
     final path = chatJsonlPath(projectId, chatId);
 
-    try {
-      await ensureDirectories(projectId);
+    // Chain this write after any pending write to the same file.
+    final previous = _writeQueues[path] ?? Future<void>.value();
+    final current = previous.then((_) async {
+      try {
+        await ensureDirectories(projectId);
 
-      final json = jsonEncode(entry.toJson());
-      final file = File(path);
+        final json = jsonEncode(entry.toJson());
+        final file = File(path);
 
-      // Append with newline
-      await file.writeAsString('$json\n', mode: FileMode.append);
+        // Append with newline
+        await file.writeAsString('$json\n', mode: FileMode.append);
 
-      developer.log(
-        'Appended entry to $chatId: ${entry.runtimeType}',
-        name: 'PersistenceService',
-      );
-    } catch (e) {
-      developer.log(
-        'Failed to append entry to $chatId: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
-      rethrow;
-    }
+        developer.log(
+          'Appended entry to $chatId: ${entry.runtimeType}',
+          name: 'PersistenceService',
+        );
+      } catch (e) {
+        developer.log(
+          'Failed to append entry to $chatId: $e',
+          name: 'PersistenceService',
+          error: e,
+        );
+        rethrow;
+      }
+    });
+
+    // Store the future (ignoring errors so the chain continues for next writes)
+    _writeQueues[path] = current.catchError((_) {});
+
+    return current;
   }
 
   /// Ensures the project and chat directories exist.
