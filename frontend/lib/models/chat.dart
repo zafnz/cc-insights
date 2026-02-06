@@ -17,6 +17,9 @@ import 'conversation.dart';
 import 'output_entry.dart';
 import 'timing_stats.dart';
 
+/// Diagnostic trace — only prints when [sdk.SdkLogger.debugEnabled] is true.
+void _t(String tag, String msg) => sdk.SdkLogger.instance.trace(tag, msg);
+
 /// Permission modes for tool execution.
 enum PermissionMode {
   /// Requires permission for most operations.
@@ -818,18 +821,31 @@ class ChatState extends ChangeNotifier {
     required String prompt,
     List<AttachedImage> images = const [],
   }) async {
+    _t('ChatState', '========== startSession ==========');
+    _t('ChatState', 'chatId: ${_data.id}');
+    _t('ChatState', 'chatName: ${_data.name}');
+    _t('ChatState', 'worktreeRoot: ${_data.worktreeRoot}');
+    _t('ChatState', 'model: ${model.id} (${model.backend.name})');
+    _t('ChatState', 'prompt: ${prompt.length > 80 ? '${prompt.substring(0, 80)}...' : prompt}');
+    _t('ChatState', 'images: ${images.length}');
+    _t('ChatState', 'lastSessionId: $_lastSessionId');
+    _t('ChatState', 'backendReady: ${backend.isReady}');
+
     if (_session != null) {
+      _t('ChatState', 'ERROR: Session already active');
       throw StateError('Session already active');
     }
 
     final worktreeRoot = _data.worktreeRoot;
     if (worktreeRoot == null) {
+      _t('ChatState', 'ERROR: Chat has no worktree root');
       throw StateError('Chat has no worktree root');
     }
 
     // Log if we're attempting to resume and add a session marker
     final isResumingSession = _lastSessionId != null;
     if (isResumingSession) {
+      _t('ChatState', 'Attempting to resume session: $_lastSessionId');
       developer.log(
         'Attempting to resume session: $_lastSessionId',
         name: 'ChatState',
@@ -852,6 +868,8 @@ class ChatState extends ChangeNotifier {
     }
 
     // Create session with current settings, including resume if available
+    _t('ChatState', 'Calling backend.createSessionForBackend...');
+    final sessionStopwatch = Stopwatch()..start();
     _session = await backend.createSessionForBackend(
       type: model.backend,
       prompt: prompt,
@@ -869,6 +887,8 @@ class ChatState extends ChangeNotifier {
       ),
       content: content,
     );
+
+    _t('ChatState', 'Session created in ${sessionStopwatch.elapsedMilliseconds}ms');
 
     // Capture capabilities from the backend so mid-session calls
     // can be guarded without re-querying the backend service.
@@ -903,11 +923,16 @@ class ChatState extends ChangeNotifier {
     }
 
     // Subscribe to message stream - handler takes ChatState as parameter
+    _t('ChatState', 'Subscribing to message stream...');
     _messageSubscription = _session!.messages.listen(
       (msg) {
+        final type = msg.rawJson?['type'] as String? ?? '?';
+        final subtype = msg.rawJson?['subtype'] as String? ?? '';
+        _t('ChatState:msg', 'type=$type${subtype.isNotEmpty ? ' subtype=$subtype' : ''} (chat=${_data.id})');
         // Update session ID if it changes during the session
         final msgSessionId = msg.sessionId;
         if (msgSessionId.isNotEmpty && msgSessionId != _lastSessionId) {
+          _t('ChatState', 'Session ID updated from message: $msgSessionId');
           developer.log(
             'Session ID updated from message: $msgSessionId',
             name: 'ChatState',
@@ -917,13 +942,21 @@ class ChatState extends ChangeNotifier {
         }
         messageHandler.handleMessage(this, msg.rawJson ?? {});
       },
-      onError: _handleError,
-      onDone: _handleSessionEnd,
+      onError: (error) {
+        _t('ChatState', 'Message stream ERROR: $error');
+        _handleError(error);
+      },
+      onDone: () {
+        _t('ChatState', 'Message stream DONE (chat=${_data.id})');
+        _handleSessionEnd();
+      },
     );
 
     // Subscribe to permission requests
+    _t('ChatState', 'Subscribing to permission requests...');
     _permissionSubscription = _session!.permissionRequests.listen(
       (req) {
+        _t('ChatState', 'Permission request: tool=${req.toolName} (chat=${_data.id})');
         setPendingPermission(req);
       },
     );
@@ -932,6 +965,7 @@ class ChatState extends ChangeNotifier {
     _isWorking = true;
     _workingStartTime = DateTime.now();
 
+    _t('ChatState', '========== Session fully set up, working=true ==========');
     notifyListeners();
   }
 
@@ -948,7 +982,9 @@ class ChatState extends ChangeNotifier {
     String text, {
     List<AttachedImage> images = const [],
   }) async {
+    _t('ChatState', 'sendMessage: ${text.length > 80 ? '${text.substring(0, 80)}...' : text} (chat=${_data.id}, images=${images.length})');
     if (_session == null) {
+      _t('ChatState', 'ERROR: sendMessage called with no active session');
       throw StateError('No active session');
     }
 
@@ -985,6 +1021,7 @@ class ChatState extends ChangeNotifier {
   /// Cancels stream subscriptions, kills the session, and clears
   /// session-related state. Active agents are also cleared.
   Future<void> stopSession() async {
+    _t('ChatState', 'stopSession (chat=${_data.id}, hasSession=${_session != null})');
     await _messageSubscription?.cancel();
     await _permissionSubscription?.cancel();
     await _session?.kill();
@@ -995,6 +1032,7 @@ class ChatState extends ChangeNotifier {
     _pendingPermissions.clear();
     _activeAgents.clear();
 
+    _t('ChatState', 'Session stopped');
     notifyListeners();
   }
 
@@ -1192,6 +1230,7 @@ class ChatState extends ChangeNotifier {
 
   /// Handles errors from the session message stream.
   void _handleError(Object error) {
+    _t('ChatState', '_handleError: $error (chat=${_data.id})');
     developer.log(
       'Session error: $error',
       name: 'ChatState',
@@ -1213,6 +1252,7 @@ class ChatState extends ChangeNotifier {
 
   /// Handles session end (when the message stream closes).
   void _handleSessionEnd() {
+    _t('ChatState', '_handleSessionEnd (chat=${_data.id}, isWorking=$_isWorking)');
     developer.log(
       'Session ended',
       name: 'ChatState',

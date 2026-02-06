@@ -8,6 +8,9 @@ import 'types/permission_suggestion.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 
+/// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
+void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
+
 /// A session communicating directly with claude-cli.
 ///
 /// This class manages the full lifecycle of a CLI session:
@@ -49,14 +52,17 @@ class CliSession {
   CliProcess get process => _process;
 
   void _setupMessageRouting() {
+    _t('CliSession', 'Setting up message routing for session $sessionId');
     _process.messages.listen(
       _handleMessage,
       onError: (Object error) {
+        _t('CliSession', 'Message stream error: $error (session=$sessionId)');
         if (!_disposed) {
           _messagesController.addError(error);
         }
       },
       onDone: () {
+        _t('CliSession', 'Message stream done (session=$sessionId, disposed=$_disposed)');
         if (!_disposed) {
           _dispose();
         }
@@ -65,9 +71,17 @@ class CliSession {
   }
 
   void _handleMessage(Map<String, dynamic> json) {
-    if (_disposed) return;
+    if (_disposed) {
+      _t('CliSession', 'WARNING: Message received on disposed session $sessionId');
+      return;
+    }
 
     final type = json['type'] as String?;
+    final subtype = json['subtype'] as String? ??
+        (json['request'] as Map<String, dynamic>?)?['subtype'] as String?;
+    _t('CliSession:route', 'type=$type'
+        '${subtype != null ? ' subtype=$subtype' : ''}'
+        ' (session=$sessionId)');
 
     switch (type) {
       case 'control_request':
@@ -164,6 +178,18 @@ class CliSession {
     List<ContentBlock>? content,
     Duration timeout = const Duration(seconds: 60),
   }) async {
+    final stopwatch = Stopwatch()..start();
+
+    _t('CliSession', '========== SESSION CREATE START ==========');
+    _t('CliSession', 'cwd: $cwd');
+    _t('CliSession', 'prompt: ${prompt.length > 80 ? '${prompt.substring(0, 80)}...' : prompt}');
+    _t('CliSession', 'model: ${options?.model ?? 'default'}');
+    _t('CliSession', 'permissionMode: ${options?.permissionMode?.value ?? 'default'}');
+    _t('CliSession', 'resume: ${options?.resume ?? 'none'}');
+    _t('CliSession', 'includePartialMessages: ${options?.includePartialMessages ?? false}');
+    _t('CliSession', 'timeout: ${timeout.inSeconds}s');
+    _t('CliSession', 'hasContent: ${content != null && content.isNotEmpty}');
+
     // Build CLI process config
     final config = processConfig ??
         CliProcessConfig(
@@ -183,13 +209,16 @@ class CliSession {
       'model': options?.model,
       'permissionMode': options?.permissionMode?.value,
     });
+    _t('CliSession', 'Step 0: Spawning CLI process...');
     final process = await CliProcess.spawn(config);
+    _t('CliSession', 'Step 0: Process spawned (${stopwatch.elapsedMilliseconds}ms)');
 
     try {
       // Generate request ID
       final requestId = _generateRequestId();
 
       // Step 1: Send control_request with initialize subtype
+      _t('CliSession', 'Step 1: Sending control_request (initialize), requestId=$requestId');
       final initRequest = {
         'type': 'control_request',
         'request_id': requestId,
@@ -205,9 +234,11 @@ class CliSession {
         },
       };
       process.send(initRequest);
+      _t('CliSession', 'Step 1: control_request sent (${stopwatch.elapsedMilliseconds}ms)');
 
       // Step 2: Send the initial user message immediately (don't wait for control_response)
       // Use content blocks if provided, otherwise send prompt as plain text
+      _t('CliSession', 'Step 2: Sending initial user message...');
       SdkLogger.instance.debug('Sending initial user message');
       final dynamic messageContent = content != null && content.isNotEmpty
           ? content.map((c) => c.toJson()).toList()
@@ -221,43 +252,69 @@ class CliSession {
         'parent_tool_use_id': null,
       };
       process.send(userMessage);
+      _t('CliSession', 'Step 2: User message sent (${stopwatch.elapsedMilliseconds}ms)');
 
       // Step 3: Wait for control_response and system init
+      _t('CliSession', 'Step 3: Waiting for control_response AND system init (timeout=${timeout.inSeconds}s)...');
       String? sessionId;
       SDKSystemMessage? systemInit;
       bool controlResponseReceived = false;
+      int messagesReceived = 0;
 
       await for (final json in process.messages.timeout(timeout)) {
+        messagesReceived++;
         final type = json['type'] as String?;
+        final subtype = json['subtype'] as String? ??
+            (json['request'] as Map<String, dynamic>?)?['subtype'] as String?;
+        _t('CliSession', 'Step 3: Message #$messagesReceived: type=$type'
+            '${subtype != null ? ' subtype=$subtype' : ''}'
+            ' (${stopwatch.elapsedMilliseconds}ms)');
 
         if (type == 'control_response') {
           controlResponseReceived = true;
+          _t('CliSession', 'Step 3: control_response received');
           SdkLogger.instance.debug('Received control_response');
         } else if (type == 'system') {
-          final subtype = json['subtype'] as String?;
-          if (subtype == 'init') {
+          final sysSubtype = json['subtype'] as String?;
+          if (sysSubtype == 'init') {
             sessionId = json['session_id'] as String?;
             systemInit = SDKSystemMessage.fromJson(json);
+            _t('CliSession', 'Step 3: system init received, sessionId=$sessionId');
             SdkLogger.instance.debug('Received system init',
                 sessionId: sessionId);
+          } else {
+            _t('CliSession', 'Step 3: system message with subtype=$sysSubtype (not "init", ignoring for handshake)');
           }
+        } else {
+          _t('CliSession', 'Step 3: (not a handshake message, continuing wait)');
         }
 
         // We have everything we need
         if (controlResponseReceived && sessionId != null && systemInit != null) {
+          _t('CliSession', 'Step 3: Both handshake messages received!');
           break;
         }
+
+        // Log what we're still waiting for
+        final waiting = <String>[];
+        if (!controlResponseReceived) waiting.add('control_response');
+        if (sessionId == null) waiting.add('system init');
+        _t('CliSession', 'Step 3: Still waiting for: ${waiting.join(', ')}');
       }
 
       if (!controlResponseReceived) {
+        _t('CliSession', 'TIMEOUT: No control_response after ${stopwatch.elapsedMilliseconds}ms ($messagesReceived messages received)');
         SdkLogger.instance.error('Session creation timed out: no control_response');
         throw StateError('Session creation timed out: no control_response');
       }
       if (sessionId == null || systemInit == null) {
+        _t('CliSession', 'TIMEOUT: No system init after ${stopwatch.elapsedMilliseconds}ms ($messagesReceived messages received)');
         SdkLogger.instance.error('Session creation timed out: no system init');
         throw StateError('Session creation timed out: no system init');
       }
 
+      _t('CliSession', '========== SESSION CREATED (${stopwatch.elapsedMilliseconds}ms) ==========');
+      _t('CliSession', 'sessionId: $sessionId');
       SdkLogger.instance.info('Session created successfully',
           sessionId: sessionId);
 
@@ -268,6 +325,8 @@ class CliSession {
       );
     } catch (e) {
       // Clean up on error
+      _t('CliSession', '========== SESSION CREATE FAILED (${stopwatch.elapsedMilliseconds}ms) ==========');
+      _t('CliSession', 'Error: $e');
       SdkLogger.instance.error('Session creation failed: $e');
       await process.dispose();
       rethrow;
@@ -301,9 +360,11 @@ class CliSession {
   /// Send a follow-up message to the session.
   Future<void> send(String message) async {
     if (_disposed) {
+      _t('CliSession', 'ERROR: send() called on disposed session $sessionId');
       throw StateError('Session has been disposed');
     }
 
+    _t('CliSession', 'Sending follow-up message (${message.length} chars, session=$sessionId)');
     _sendUserMessage(message);
   }
 

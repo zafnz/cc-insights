@@ -202,6 +202,16 @@ class SdkLogger {
     }
   }
 
+  /// Print a diagnostic trace line to stdout when debug logging is enabled.
+  ///
+  /// Use this for high-volume diagnostic output (e.g. per-message logging)
+  /// that should only appear when actively debugging.
+  /// All lines are prefixed with `[CCI:<tag>]` for easy grep filtering.
+  void trace(String tag, String message) {
+    if (!_debugEnabled) return;
+    print('[CCI:$tag] $message');
+  }
+
   /// Log a debug message.
   void debug(String message, {String? sessionId, Map<String, dynamic>? data}) {
     if (!_debugEnabled) return;

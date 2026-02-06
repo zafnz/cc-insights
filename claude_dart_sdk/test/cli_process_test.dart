@@ -40,7 +40,6 @@ void main() {
         maxTurns: 10,
         maxBudgetUsd: 5.0,
         resume: 'session-123',
-        verbose: true,
       );
 
       // Assert
@@ -52,7 +51,6 @@ void main() {
       expect(config.maxTurns, equals(10));
       expect(config.maxBudgetUsd, equals(5.0));
       expect(config.resume, equals('session-123'));
-      expect(config.verbose, isTrue);
     });
   });
 
@@ -189,45 +187,15 @@ void main() {
       expect(args[resumeIndex + 1], equals('previous-session-id'));
     });
 
-    test('adds verbose flag when enabled', () {
+    test('always includes verbose flag (required by stream-json)', () {
       // Arrange
-      final config = CliProcessConfig(
-        cwd: '/test',
-        verbose: true,
-      );
+      final config = CliProcessConfig(cwd: '/test');
 
       // Act
       final args = CliProcess.buildArguments(config);
 
-      // Assert
+      // Assert - verbose is always present exactly once
       expect(args, contains('--verbose'));
-    });
-
-    test('does not include verbose flag when disabled', () {
-      // Arrange
-      final config = CliProcessConfig(
-        cwd: '/test',
-        verbose: false,
-      );
-
-      // Act
-      final args = CliProcess.buildArguments(config);
-
-      // Assert
-      expect(args, isNot(contains('--verbose')));
-    });
-
-    test('includes verbose flag exactly once when enabled', () {
-      // Arrange
-      final config = CliProcessConfig(
-        cwd: '/test',
-        verbose: true,
-      );
-
-      // Act
-      final args = CliProcess.buildArguments(config);
-
-      // Assert
       expect(args.where((a) => a == '--verbose').length, equals(1));
     });
 
@@ -241,7 +209,6 @@ void main() {
         maxTurns: 5,
         maxBudgetUsd: 10.0,
         resume: 'sess-abc',
-        verbose: true,
       );
 
       // Act

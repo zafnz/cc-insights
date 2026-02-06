@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import '../models/chat_model.dart';
 import 'log_service.dart' as app_log;
 
+/// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
+void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
+
 /// Service for managing the Claude backend lifecycle.
 ///
 /// This service handles spawning and disposing the Claude CLI backend process,
@@ -122,15 +125,18 @@ class BackendService extends ChangeNotifier {
     BackendType type = BackendType.directCli,
     String? executablePath,
   }) async {
+    _t('BackendService', 'start() called, type=${type.name}, executablePath=${executablePath ?? 'default'}');
     _backendType = type;
     final existing = _backends[type];
     if (existing != null) {
+      _t('BackendService', 'Backend already exists for ${type.name}, refreshing models');
       unawaited(_refreshModelsIfSupported(type, existing));
       notifyListeners();
       return;
     }
 
     if (_starting.contains(type)) {
+      _t('BackendService', 'Backend ${type.name} already starting, skipping');
       return;
     }
 
@@ -139,11 +145,14 @@ class BackendService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      _t('BackendService', 'Creating backend for ${type.name}...');
       final backend = await createBackend(type: type, executablePath: executablePath);
       _backends[type] = backend;
+      _t('BackendService', 'Backend created for ${type.name}, capabilities: ${backend.capabilities}');
 
       // Monitor backend errors
       _errorSubscriptions[type] = backend.errors.listen((error) {
+        _t('BackendService', 'Backend error (${type.name}): $error');
         _errors[type] = error.toString();
         notifyListeners();
       });
@@ -192,10 +201,12 @@ class BackendService extends ChangeNotifier {
 
       unawaited(_refreshModelsIfSupported(type, backend));
     } catch (e) {
+      _t('BackendService', 'ERROR starting backend ${type.name}: $e');
       _errors[type] = e.toString();
       _backends.remove(type);
     } finally {
       _starting.remove(type);
+      _t('BackendService', 'start() complete for ${type.name}, isReady=$isReady, error=${_errors[type]}');
       notifyListeners();
     }
   }
@@ -266,17 +277,22 @@ class BackendService extends ChangeNotifier {
     List<ContentBlock>? content,
     String? executablePath,
   }) async {
+    _t('BackendService', 'createSessionForBackend type=${type.name} cwd=$cwd');
     await start(type: type, executablePath: executablePath);
     final backend = _backends[type];
     if (backend == null) {
+      _t('BackendService', 'ERROR: Backend ${type.name} not started after start() call');
       throw StateError('Backend not started. Call start() first.');
     }
-    return backend.createSession(
+    _t('BackendService', 'Delegating to backend.createSession...');
+    final session = await backend.createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
       content: content,
     );
+    _t('BackendService', 'Session created: ${session.sessionId}');
+    return session;
   }
 
   /// Creates a new Claude session.
@@ -297,14 +313,18 @@ class BackendService extends ChangeNotifier {
     SessionOptions? options,
     List<ContentBlock>? content,
   }) async {
+    _t('BackendService', 'createSession (default backend) cwd=$cwd');
     final backendType = _backendType;
     if (backendType == null) {
+      _t('BackendService', 'ERROR: No backend type set');
       throw StateError('Backend not started. Call start() first.');
     }
     final backend = _backends[backendType];
     if (backend == null) {
+      _t('BackendService', 'ERROR: No backend for ${backendType.name}');
       throw StateError('Backend not started. Call start() first.');
     }
+    _t('BackendService', 'Delegating to ${backendType.name} backend...');
     return backend.createSession(
       prompt: prompt,
       cwd: cwd,

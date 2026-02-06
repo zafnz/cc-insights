@@ -68,7 +68,7 @@ claude \
 - `--permission-mode <mode>` - Permission mode (default, acceptEdits, bypassPermissions, plan)
 - `--permission-prompt-tool stdio` - Use stdin/stdout for permission prompts (not interactive TTY)
 - `--setting-sources <sources>` - Comma-separated setting sources (user, project, local, or empty)
-- `--verbose` - Enable verbose logging to stderr
+- `--verbose` - Required for stream-json mode. Always included.
 
 **Other available arguments** (from SDK Options):
 - `--max-turns <n>` - Maximum conversation turns
@@ -542,7 +542,7 @@ class ClaudeCliBackend {
       '--permission-mode', options.permissionMode ?? 'default',
       '--permission-prompt-tool', 'stdio',
       '--setting-sources', (options.settingSources ?? []).join(','),
-      if (options.verbose) '--verbose',
+      '--verbose', // Required for stream-json mode
       if (options.cwd != null) '--cwd', options.cwd!,
       if (options.maxTurns != null) '--max-turns', options.maxTurns.toString(),
       // ... other options

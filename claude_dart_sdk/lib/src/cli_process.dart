@@ -5,6 +5,9 @@ import 'dart:io';
 import 'sdk_logger.dart';
 import 'types/session_options.dart';
 
+/// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
+void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
+
 /// Setting sources for the CLI.
 enum SettingSource {
   defaults('defaults'),
@@ -29,7 +32,6 @@ class CliProcessConfig {
     this.maxTurns,
     this.maxBudgetUsd,
     this.resume,
-    this.verbose = false,
     this.includePartialMessages = false,
   });
 
@@ -57,9 +59,6 @@ class CliProcessConfig {
 
   /// Resume an existing session by session ID.
   final String? resume;
-
-  /// Enable verbose output.
-  final bool verbose;
 
   /// Include partial message chunks as they arrive (streaming).
   final bool includePartialMessages;
@@ -121,6 +120,7 @@ class CliProcess {
       'stream-json',
       '--input-format',
       'stream-json',
+      '--verbose',
       '--permission-prompt-tool',
       'stdio',
     ];
@@ -150,10 +150,6 @@ class CliProcess {
       args.addAll(['--resume', config.resume!]);
     }
 
-    if (config.verbose) {
-      args.add('--verbose');
-    }
-
     if (config.includePartialMessages) {
       args.add('--include-partial-messages');
     }
@@ -166,6 +162,9 @@ class CliProcess {
     final executable = config.resolvedExecutablePath;
     final args = buildArguments(config);
 
+    _t('CliProcess', 'Spawning: $executable ${args.join(' ')}');
+    _t('CliProcess', '  cwd: ${config.cwd}');
+
     final process = await Process.start(
       executable,
       args,
@@ -173,10 +172,14 @@ class CliProcess {
       mode: ProcessStartMode.normal,
     );
 
+    _t('CliProcess', 'Process started (pid: ${process.pid})');
+
     return CliProcess._(process: process, config: config);
   }
 
   void _setupStreams() {
+    _t('CliProcess', 'Setting up stdout/stderr streams (pid: ${_process.pid})');
+
     // Parse stdout as JSON Lines with buffering for partial lines
     _stdoutSub = _process.stdout
         .transform(utf8.decoder)
@@ -191,9 +194,15 @@ class CliProcess {
       if (_stderrBuffer.length > _maxStderrBufferSize) {
         _stderrBuffer.removeAt(0);
       }
+      _t('CliProcess:stderr', line);
       // Log stderr to SDK logger
       SdkLogger.instance.logStderr(line);
       _stderrController.add(line);
+    });
+
+    // Monitor process exit
+    _process.exitCode.then((code) {
+      _t('CliProcess', 'Process exited with code: $code (pid: ${_process.pid})');
     });
   }
 
@@ -216,11 +225,19 @@ class CliProcess {
 
       try {
         final json = jsonDecode(line) as Map<String, dynamic>;
+        final type = json['type'] as String? ?? '?';
+        final subtype = json['subtype'] as String? ??
+            (json['request'] as Map<String, dynamic>?)?['subtype'] as String? ??
+            '';
+        _t('CliProcess:recv', 'type=$type${subtype.isNotEmpty ? ' subtype=$subtype' : ''}'
+            ' (${line.length} chars)');
         // Log incoming message
         SdkLogger.instance.logIncoming(json);
         _messagesController.add(json);
       } catch (e) {
         // If JSON parsing fails, log it as an error
+        _t('CliProcess:recv', 'PARSE ERROR: $e');
+        _t('CliProcess:recv', '  line: ${line.length > 200 ? '${line.substring(0, 200)}...' : line}');
         SdkLogger.instance.error(
           'Failed to parse JSON from CLI',
           data: {'error': e.toString(), 'line': line},
@@ -234,8 +251,13 @@ class CliProcess {
   /// Send a JSON message to stdin.
   void send(Map<String, dynamic> message) {
     if (_disposed) {
+      _t('CliProcess:send', 'ERROR: Attempted send on disposed process');
       throw StateError('CliProcess has been disposed');
     }
+
+    final type = message['type'] as String? ?? '?';
+    final subtype = (message['request'] as Map<String, dynamic>?)?['subtype'] as String? ?? '';
+    _t('CliProcess:send', 'type=$type${subtype.isNotEmpty ? ' subtype=$subtype' : ''}');
 
     // Log outgoing message
     SdkLogger.instance.logOutgoing(message);
@@ -259,6 +281,8 @@ class CliProcess {
     if (_disposed) return;
     _disposed = true;
 
+    _t('CliProcess', 'Disposing process (pid: ${_process.pid})');
+
     await _stdoutSub?.cancel();
     await _stderrSub?.cancel();
 
@@ -266,5 +290,6 @@ class CliProcess {
 
     await _messagesController.close();
     await _stderrController.close();
+    _t('CliProcess', 'Process disposed');
   }
 }

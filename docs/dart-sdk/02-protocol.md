@@ -26,7 +26,7 @@ Optional arguments:
 - `--model <model>` - Model selection (sonnet, opus, haiku)
 - `--permission-mode <mode>` - Permission mode (default, acceptEdits, plan)
 - `--max-turns <n>` - Maximum conversation turns
-- `--verbose` - Enable verbose logging
+- `--verbose` - Required for stream-json mode (always included)
 - `--resume <session-id>` - Resume a previous session
 
 ---

@@ -11,6 +11,9 @@ import 'types/permission_suggestion.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 
+/// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
+void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
+
 /// Backend that communicates directly with claude-cli.
 ///
 /// This class implements [AgentBackend] and manages the lifecycle of
@@ -85,7 +88,15 @@ class ClaudeCliBackend implements AgentBackend {
     SessionOptions? options,
     List<ContentBlock>? content,
   }) async {
+    _t('ClaudeCliBackend', 'createSession called');
+    _t('ClaudeCliBackend', '  cwd: $cwd');
+    _t('ClaudeCliBackend', '  prompt: ${prompt.length > 80 ? '${prompt.substring(0, 80)}...' : prompt}');
+    _t('ClaudeCliBackend', '  model: ${options?.model ?? 'default'}');
+    _t('ClaudeCliBackend', '  resume: ${options?.resume ?? 'none'}');
+    _t('ClaudeCliBackend', '  disposed: $_disposed');
+
     if (_disposed) {
+      _t('ClaudeCliBackend', 'ERROR: Backend has been disposed');
       throw const BackendProcessError('Backend has been disposed');
     }
 
@@ -93,12 +104,14 @@ class ClaudeCliBackend implements AgentBackend {
     if (options != null) {
       final validation = options.validateForCli();
       for (final warning in validation.warnings) {
+        _t('ClaudeCliBackend', 'WARN: $warning');
         SdkLogger.instance.warning(warning);
       }
     }
 
     try {
       // Create the CLI session
+      _t('ClaudeCliBackend', 'Creating CliSession...');
       final cliSession = await CliSession.create(
         cwd: cwd,
         prompt: prompt,
@@ -119,6 +132,8 @@ class ClaudeCliBackend implements AgentBackend {
             : null,
       );
 
+      _t('ClaudeCliBackend', 'CliSession created, wrapping in adapter (sessionId=${cliSession.sessionId})');
+
       // Wrap it in an adapter that implements AgentSession
       final adapter = _CliSessionAdapter(
         cliSession: cliSession,
@@ -126,12 +141,14 @@ class ClaudeCliBackend implements AgentBackend {
       );
 
       _sessions[cliSession.sessionId] = adapter;
+      _t('ClaudeCliBackend', 'Session tracked (total sessions: ${_sessions.length})');
 
       // Monitor for session errors and completion
       _setupSessionMonitoring(adapter);
 
       return adapter;
     } catch (e) {
+      _t('ClaudeCliBackend', 'ERROR creating session: $e');
       final error = e is BackendError
           ? e
           : BackendError(
@@ -144,6 +161,8 @@ class ClaudeCliBackend implements AgentBackend {
   }
 
   void _setupSessionMonitoring(_CliSessionAdapter adapter) {
+    _t('ClaudeCliBackend', 'Setting up monitoring for session ${adapter.sessionId}');
+
     // Note: stderr is now logged via SdkLogger in CliProcess
     // We still listen for errors here
     adapter._cliSession.process.stderr.listen(
@@ -151,6 +170,7 @@ class ClaudeCliBackend implements AgentBackend {
         // Stderr lines are logged via SdkLogger.logStderr in CliProcess
       },
       onError: (Object error) {
+        _t('ClaudeCliBackend', 'stderr stream error: $error (session=${adapter.sessionId})');
         if (!_disposed) {
           SdkLogger.instance.error(
             'stderr stream error: $error',
@@ -162,6 +182,7 @@ class ClaudeCliBackend implements AgentBackend {
 
     // Monitor for session termination
     adapter._cliSession.process.exitCode.then((exitCode) {
+      _t('ClaudeCliBackend', 'Session ${adapter.sessionId} process exited with code $exitCode');
       if (!_disposed) {
         _sessions.remove(adapter.sessionId);
         // Only report as error if:
@@ -169,6 +190,7 @@ class ClaudeCliBackend implements AgentBackend {
         // - Session wasn't intentionally killed (disposed)
         // Note: Exit code -15 is SIGTERM, which is expected when kill() is called
         if (exitCode != 0 && !adapter._disposed) {
+          _t('ClaudeCliBackend', 'ERROR: Session ${adapter.sessionId} unexpected exit code $exitCode');
           _errorsController.add(BackendError(
             'Session ${adapter.sessionId} exited with code $exitCode',
             code: 'SESSION_EXIT',
@@ -242,10 +264,13 @@ class _CliSessionAdapter implements AgentSession {
   Stream<HookRequest> get hookRequests => _hookRequestsController.stream;
 
   void _setupStreams() {
+    _t('CliSessionAdapter', 'Setting up permission/message stream adapters for session $sessionId');
+
     // Adapt CliPermissionRequest to PermissionRequest
     _cliSession.permissionRequests.listen(
       (cliRequest) {
         if (_disposed) return;
+        _t('CliSessionAdapter', 'Permission request: tool=${cliRequest.toolName} requestId=${cliRequest.requestId}');
 
         final completer = Completer<PermissionResponse>();
         final request = PermissionRequest(

@@ -35,7 +35,7 @@ claude \
 | `--permission-mode <mode>` | Permission mode (default, acceptEdits, bypassPermissions, plan) |
 | `--permission-prompt-tool stdio` | Use stdin/stdout for permission prompts |
 | `--setting-sources <sources>` | Comma-separated: user, project, local, or empty |
-| `--verbose` | Enable verbose logging to stderr |
+| `--verbose` | Required for stream-json mode. Always included. |
 
 **Additional arguments:**
 - `--max-turns <n>` - Maximum conversation turns

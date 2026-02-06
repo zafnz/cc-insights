@@ -141,7 +141,6 @@ class CliProcessConfig {
   final int? maxTurns;
   final double? maxBudgetUsd;
   final String? resume;
-  final bool verbose;
 }
 
 /// Manages a claude-cli subprocess.
