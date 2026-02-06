@@ -7,6 +7,7 @@ import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
+import 'package:cc_insights_v2/services/log_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:flutter/material.dart';
@@ -393,6 +394,7 @@ void main() {
     });
 
     tearDown(() async {
+      LogService.instance.clearBuffer();
       await resources.disposeAll();
     });
 
@@ -564,6 +566,7 @@ void main() {
         if (createButton.evaluate().isNotEmpty) {
           expect(find.text('Creating...'), findsOneWidget);
         }
+        LogService.instance.clearBuffer();
       });
 
       testWidgets('shows error card when creation fails with invalid path',
@@ -592,6 +595,7 @@ void main() {
           find.textContaining('cannot be inside the project repository'),
           findsOneWidget,
         );
+        LogService.instance.clearBuffer();
       });
 
       testWidgets('error card shows suggestions when provided', (tester) async {
@@ -619,6 +623,7 @@ void main() {
           find.textContaining('Choose a location outside'),
           findsOneWidget,
         );
+        LogService.instance.clearBuffer();
       });
     });
 

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'log_service.dart';
+
 /// Result of a git status check for a worktree.
 class GitStatus {
   /// Number of files with unstaged changes (modified, deleted).
@@ -503,6 +505,7 @@ class RealGitService implements GitService {
     String? workingDirectory,
   }) async {
     final command = 'git ${args.join(' ')}';
+    LogService.instance.debug('Git', command, meta: {'cwd': workingDirectory ?? '.'});
     try {
       final result = await Process.run(
         'git',

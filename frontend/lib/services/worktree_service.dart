@@ -7,6 +7,7 @@ import '../models/project.dart';
 import '../models/project_config.dart';
 import '../models/worktree.dart';
 import 'git_service.dart';
+import 'log_service.dart';
 import 'persistence_models.dart' as persistence;
 import 'persistence_service.dart';
 import 'project_config_service.dart';
@@ -110,6 +111,8 @@ class WorktreeService {
   }) async {
     final repoRoot = project.data.repoRoot;
 
+    LogService.instance.notice('Worktree', 'Creating workspace: branch=$branch root=$worktreeRoot${base != null ? ' base=$base' : ''}');
+
     // 1. Validate worktree root is outside project repo
     if (_isPathInsideRepo(worktreeRoot, repoRoot)) {
       throw WorktreeCreationException(
@@ -166,6 +169,7 @@ class WorktreeService {
     final config = await _configService.loadConfig(repoRoot);
     final preCreateHook = config.getHook('worktree-pre-create');
     if (preCreateHook != null && preCreateHook.isNotEmpty) {
+      LogService.instance.notice('Worktree', 'Running hook: worktree-pre-create');
       final exitCode = await _runHook(
         hookName: 'worktree-pre-create',
         command: preCreateHook,
@@ -211,6 +215,7 @@ class WorktreeService {
     // 9. Run post-create hook if configured
     final postCreateHook = config.getHook('worktree-post-create');
     if (postCreateHook != null && postCreateHook.isNotEmpty) {
+      LogService.instance.notice('Worktree', 'Running hook: worktree-post-create');
       // Run in the new worktree directory
       final exitCode = await _runHook(
         hookName: 'worktree-post-create',
@@ -256,6 +261,7 @@ class WorktreeService {
     await _persistWorktree(project, worktreeState, base: effectiveBase);
 
     // 14. Return WorktreeState
+    LogService.instance.info('Worktree', 'Workspace created: branch=$sanitizedBranch path=$worktreePath');
     return worktreeState;
   }
 

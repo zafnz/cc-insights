@@ -252,11 +252,14 @@ class LogService extends ChangeNotifier {
   // Testing
   // ---------------------------------------------------------------------------
 
-  /// Clears the in-memory buffer. For use in tests only.
+  /// Clears the in-memory buffer and cancels pending timers. For use in tests only.
   @visibleForTesting
   void clearBuffer() {
     _entries.clear();
     _sources.clear();
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    _dirty = false;
   }
 
   // ---------------------------------------------------------------------------

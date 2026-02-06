@@ -7,6 +7,7 @@ import '../models/agent.dart';
 import '../models/chat.dart';
 import '../models/output_entry.dart';
 import 'ask_ai_service.dart';
+import 'log_service.dart';
 import 'runtime_config.dart';
 
 /// Handles SDK messages and routes them to the correct conversation.
@@ -609,6 +610,8 @@ class SdkMessageHandler {
       );
     }
 
+    LogService.instance.debug('Task', 'Task tool created: type=${agentType ?? "unknown"} description=${taskDescription ?? "none"}');
+
     // Create subagent conversation and agent
     chat.addSubagentConversation(toolUseId, agentType, taskDescription);
 
@@ -649,6 +652,8 @@ class SdkMessageHandler {
       'resumeId=$resumeId, isError=$isError',
       name: 'SdkMessageHandler',
     );
+
+    LogService.instance.debug('Task', 'Task tool finished: status=${resultStatus ?? "unknown"} isError=$isError');
 
     // Determine agent status from result
     final AgentStatus agentStatus;

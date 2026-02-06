@@ -2,6 +2,7 @@ import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/foundation.dart';
 
 import '../services/git_service.dart';
+import '../services/log_service.dart';
 import '../services/runtime_config.dart';
 import 'chat.dart';
 import 'chat_model.dart';
@@ -368,6 +369,7 @@ class WorktreeState extends ChangeNotifier {
   ///
   /// Optionally selects the newly added chat if [select] is true.
   void addChat(ChatState chat, {bool select = false}) {
+    LogService.instance.notice('Chat', 'Chat created: "${chat.data.name}" in ${_data.branch}');
     _chats.add(chat);
     if (select) {
       _selectedChat = chat;

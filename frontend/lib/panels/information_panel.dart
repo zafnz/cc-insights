@@ -12,6 +12,7 @@ import '../services/ask_ai_service.dart';
 import '../services/backend_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
+import '../services/log_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
@@ -149,6 +150,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   Future<void> _showCommitDialog(BuildContext context) async {
+    LogService.instance.info('InfoPanel', 'Stage & Commit: ${data.branch}');
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
     final fileSystemService = context.read<FileSystemService>();
@@ -170,6 +172,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     BuildContext context,
     MergeOperationType operation,
   ) async {
+    LogService.instance.info('InfoPanel', '${operation.name} from base: ${data.branch}');
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
     final baseRef = data.baseRef ?? 'main';
@@ -205,6 +208,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   Future<void> _handleMergeIntoMain(BuildContext context) async {
+    LogService.instance.info('InfoPanel', 'Merge into main: ${data.branch}');
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
@@ -262,6 +266,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     BuildContext context, {
     bool setUpstream = false,
   }) async {
+    LogService.instance.info('InfoPanel', 'Push: ${data.branch}${setUpstream ? ' (set upstream)' : ''}');
     final gitService = context.read<GitService>();
     try {
       await gitService.push(worktreeRoot, setUpstream: setUpstream);
@@ -274,6 +279,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   Future<void> _handlePullRebase(BuildContext context) async {
+    LogService.instance.info('InfoPanel', 'Pull rebase: ${data.branch}');
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
@@ -310,6 +316,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   Future<void> _handlePullMerge(BuildContext context) async {
+    LogService.instance.info('InfoPanel', 'Pull merge: ${data.branch}');
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
@@ -346,6 +353,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   Future<void> _handleCreatePr(BuildContext context) async {
+    LogService.instance.info('InfoPanel', 'Create PR: ${data.branch}');
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
     final project = context.read<ProjectState>();
@@ -410,6 +418,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     // Only apply if the result differs from the previous value.
     if (result == previousValue) return;
 
+    LogService.instance.notice('Worktree', 'Base changed: ${data.branch} ${previousValue ?? "none"} -> $result');
     worktree.setBase(result);
 
     try {

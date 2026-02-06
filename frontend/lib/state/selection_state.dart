@@ -6,6 +6,7 @@ import '../models/chat.dart';
 import '../models/conversation.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
+import '../services/log_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 
@@ -233,6 +234,8 @@ class SelectionState extends ChangeNotifier {
   }) async {
     final worktree = selectedWorktree;
     if (worktree == null) return;
+
+    LogService.instance.notice('Chat', 'Chat closed: "${chat.data.name}" in ${worktree.data.branch}');
 
     // Perform the close operation (archives or deletes)
     await restoreService.closeChat(

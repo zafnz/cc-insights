@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/project.dart';
 import '../models/project_config.dart';
+import '../services/log_service.dart';
 import '../services/project_config_service.dart';
 import '../services/script_execution_service.dart';
 import '../state/selection_state.dart';
@@ -112,6 +113,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
   }
 
   void _runScript(String name, String command, String workingDirectory) {
+    LogService.instance.notice('Actions', 'Running action: $name');
     context.read<ScriptExecutionService>().runScript(
       name: name,
       command: command,
