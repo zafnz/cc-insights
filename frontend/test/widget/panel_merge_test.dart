@@ -135,12 +135,8 @@ void main() {
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
-        // Verify navigation rail toggle buttons exist (by their tooltips)
+        // Verify navigation rail buttons exist (by their tooltips)
         expect(find.byTooltip('Main View'), findsOneWidget);
-        expect(find.byTooltip('Worktrees'), findsOneWidget);
-        expect(find.byTooltip('Chats'), findsOneWidget);
-        expect(find.byTooltip('Agents'), findsOneWidget);
-        expect(find.byTooltip('Conversation'), findsOneWidget);
         expect(find.byTooltip('Settings'), findsOneWidget);
       });
 

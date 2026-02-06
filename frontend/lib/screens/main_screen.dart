@@ -664,34 +664,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  /// Handle panel toggle from nav rail.
-  /// If panel is merged, split it out. Otherwise toggle visibility.
-  void _togglePanel(String panelId) {
-    switch (panelId) {
-      case 'chats':
-        if (_chatsMergedIntoWorktrees) {
-          // Chats are merged into worktrees - split them out
-          _separateChatsFromWorktrees();
-        }
-        break;
-      case 'agents':
-        if (_chatsMergedIntoWorktrees) {
-          // Agents are hidden because chats (with agents) are in worktrees
-          // First separate chats, then separate agents if needed
-          _separateChatsFromWorktrees();
-          if (_agentsMergedIntoChats) {
-            _separateAgentsFromChats();
-          }
-        } else if (_agentsMergedIntoChats) {
-          // Agents are merged into chats - split them out
-          _separateAgentsFromChats();
-        }
-        break;
-      default:
-        // For other panels (worktrees, conversation), no action yet
-        break;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -713,13 +685,9 @@ class _MainScreenState extends State<MainScreen> {
                   // Navigation Rail
                   AppNavigationRail(
                     selectedIndex: _selectedNavIndex,
-                    isChatsSeparate: !_chatsMergedIntoWorktrees,
-                    isAgentsSeparate:
-                        !_agentsMergedIntoChats && !_chatsMergedIntoWorktrees,
                     onDestinationSelected: (index) {
                       _handleNavigationChange(index);
                     },
-                    onPanelToggle: _togglePanel,
                   ),
                   // Vertical divider
                   VerticalDivider(

@@ -309,12 +309,8 @@ void main() {
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
-      // Verify navigation rail toggle buttons are present
+      // Verify navigation rail buttons are present
       expect(find.byTooltip('Main View'), findsOneWidget);
-      expect(find.byTooltip('Worktrees'), findsOneWidget);
-      expect(find.byTooltip('Chats'), findsOneWidget);
-      expect(find.byTooltip('Agents'), findsOneWidget);
-      expect(find.byTooltip('Conversation'), findsOneWidget);
       expect(find.byTooltip('Settings'), findsOneWidget);
 
       await _takeScreenshot(tester, '09_navigation_rail');
