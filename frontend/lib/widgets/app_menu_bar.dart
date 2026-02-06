@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../services/runtime_config.dart';
 
 /// Callbacks for menu actions that need to be handled by the parent widget.
 class MenuCallbacks {
@@ -61,9 +66,10 @@ class MenuCallbacks {
 /// Menu structure:
 /// - CC Insights: About, Settings, Quit
 /// - Project: Open, Settings, Close
+/// - Edit: Standard undo/redo/cut/copy/paste/select all
 /// - Worktree: New Worktree, Delete Worktree, New Chat, Actions submenu, Git submenu
-/// - Edit: Standard cut/copy/paste/select all
 /// - View: Workspace, File Manager, Settings
+/// - Help: GitHub, Report Bug, View Logs
 class AppMenuBar extends StatelessWidget {
   final Widget child;
   final MenuCallbacks callbacks;
@@ -141,6 +147,74 @@ class AppMenuBar extends StatelessWidget {
             PlatformMenuItem(
               label: 'Close Project',
               onSelected: hasProject ? callbacks.onCloseProject : null,
+            ),
+          ],
+        ),
+
+        // Edit menu (standard entries)
+        PlatformMenu(
+          label: 'Edit',
+          menus: [
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Undo',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyZ,
+                    meta: true,
+                  ),
+                  onSelected: () {},
+                ),
+                PlatformMenuItem(
+                  label: 'Redo',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyZ,
+                    meta: true,
+                    shift: true,
+                  ),
+                  onSelected: () {},
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Cut',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyX,
+                    meta: true,
+                  ),
+                  onSelected: () {},
+                ),
+                PlatformMenuItem(
+                  label: 'Copy',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyC,
+                    meta: true,
+                  ),
+                  onSelected: () {},
+                ),
+                PlatformMenuItem(
+                  label: 'Paste',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyV,
+                    meta: true,
+                  ),
+                  onSelected: () {},
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Select All',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyA,
+                    meta: true,
+                  ),
+                  onSelected: () {},
+                ),
+              ],
             ),
           ],
         ),
@@ -275,74 +349,6 @@ class AppMenuBar extends StatelessWidget {
           ],
         ),
 
-        // Edit menu (standard entries)
-        PlatformMenu(
-          label: 'Edit',
-          menus: [
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Undo',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyZ,
-                    meta: true,
-                  ),
-                  onSelected: () {},
-                ),
-                PlatformMenuItem(
-                  label: 'Redo',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyZ,
-                    meta: true,
-                    shift: true,
-                  ),
-                  onSelected: () {},
-                ),
-              ],
-            ),
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Cut',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyX,
-                    meta: true,
-                  ),
-                  onSelected: () {},
-                ),
-                PlatformMenuItem(
-                  label: 'Copy',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyC,
-                    meta: true,
-                  ),
-                  onSelected: () {},
-                ),
-                PlatformMenuItem(
-                  label: 'Paste',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyV,
-                    meta: true,
-                  ),
-                  onSelected: () {},
-                ),
-              ],
-            ),
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Select All',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyA,
-                    meta: true,
-                  ),
-                  onSelected: () {},
-                ),
-              ],
-            ),
-          ],
-        ),
-
         // View menu
         PlatformMenu(
           label: 'View',
@@ -356,7 +362,7 @@ class AppMenuBar extends StatelessWidget {
               onSelected: hasProject ? callbacks.onShowWorkspace : null,
             ),
             PlatformMenuItem(
-              label: 'File Manager',
+              label: 'Files',
               shortcut: const SingleActivator(
                 LogicalKeyboardKey.digit2,
                 meta: true,
@@ -370,6 +376,29 @@ class AppMenuBar extends StatelessWidget {
                 meta: true,
               ),
               onSelected: callbacks.onShowSettings,
+            ),
+          ],
+        ),
+
+        // Help menu
+        PlatformMenu(
+          label: 'Help',
+          menus: [
+            PlatformMenuItem(
+              label: 'GitHub',
+              onSelected: () => _openUrl('https://github.com/zafnz/cc-insights/'),
+            ),
+            PlatformMenuItem(
+              label: 'Report Bug',
+              onSelected: () => _openUrl('https://github.com/zafnz/cc-insights/issues/new'),
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'View Logs',
+                  onSelected: () => _openLogFile(),
+                ),
+              ],
             ),
           ],
         ),
@@ -396,5 +425,42 @@ class AppMenuBar extends StatelessWidget {
 
   void _quitApp() {
     SystemNavigator.pop();
+  }
+
+  /// Opens a URL in the system's default browser.
+  void _openUrl(String url) {
+    launchUrl(Uri.parse(url));
+  }
+
+  /// Opens the log file using the system's default handler.
+  void _openLogFile() {
+    final logPath = _expandPath(RuntimeConfig.instance.loggingFilePath);
+    if (logPath.isEmpty) {
+      debugPrint('No log file path configured');
+      return;
+    }
+
+    final file = File(logPath);
+    if (!file.existsSync()) {
+      debugPrint('Log file does not exist: $logPath');
+      return;
+    }
+
+    // Use launchUrl with file:// scheme to open with system default handler
+    launchUrl(Uri.file(logPath));
+  }
+
+  /// Expands ~ to home directory in a path.
+  String _expandPath(String path) {
+    if (path.isEmpty) return path;
+    if (path.startsWith('~/')) {
+      final home = Platform.environment['HOME'];
+      if (home != null) {
+        return home + path.substring(1);
+      }
+    } else if (path == '~') {
+      return Platform.environment['HOME'] ?? path;
+    }
+    return path;
   }
 }
