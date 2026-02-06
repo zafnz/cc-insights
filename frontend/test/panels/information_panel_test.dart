@@ -539,7 +539,7 @@ void main() {
     );
 
     testWidgets(
-      'pull/rebase disabled when not behind upstream',
+      'pull/rebase always enabled even when not behind upstream',
       (tester) async {
         await tester.pumpWidget(buildTestWidget(
           worktreeData: const WorktreeData(
@@ -564,7 +564,7 @@ void main() {
             matching: find.byType(InkWell),
           ),
         );
-        check(inkWell.onTap).isNull();
+        check(inkWell.onTap).isNotNull();
       },
     );
 
@@ -627,7 +627,7 @@ void main() {
 
   group('Rebase/Merge enable/disable', () {
     testWidgets(
-      'rebase and merge disabled when not behind main',
+      'rebase and merge always enabled even when not behind main',
       (tester) async {
         await tester.pumpWidget(buildTestWidget(
           worktreeData: const WorktreeData(
@@ -637,43 +637,6 @@ void main() {
             baseRef: 'main',
             isRemoteBase: false,
             commitsBehindMain: 0,
-          ),
-        ));
-        await safePumpAndSettle(tester);
-
-        final rebaseButton =
-            find.byKey(InformationPanelKeys.rebaseOntoBaseButton);
-        final rebaseInkWell = tester.widget<InkWell>(
-          find.descendant(
-            of: rebaseButton,
-            matching: find.byType(InkWell),
-          ),
-        );
-        check(rebaseInkWell.onTap).isNull();
-
-        final mergeButton =
-            find.byKey(InformationPanelKeys.mergeBaseButton);
-        final mergeInkWell = tester.widget<InkWell>(
-          find.descendant(
-            of: mergeButton,
-            matching: find.byType(InkWell),
-          ),
-        );
-        check(mergeInkWell.onTap).isNull();
-      },
-    );
-
-    testWidgets(
-      'rebase and merge enabled when behind main',
-      (tester) async {
-        await tester.pumpWidget(buildTestWidget(
-          worktreeData: const WorktreeData(
-            worktreeRoot: linkedPath,
-            isPrimary: false,
-            branch: 'feature',
-            baseRef: 'main',
-            isRemoteBase: false,
-            commitsBehindMain: 3,
           ),
         ));
         await safePumpAndSettle(tester);

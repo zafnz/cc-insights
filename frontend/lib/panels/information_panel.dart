@@ -37,6 +37,7 @@ class InformationPanelKeys {
       Key('info_panel_merge_branch_into_main');
   static const pushButton = Key('info_panel_push');
   static const pullRebaseButton = Key('info_panel_pull_rebase');
+  static const pullMergeButton = Key('info_panel_pull_merge');
   static const createPrButton = Key('info_panel_create_pr');
   static const baseSection = Key('info_panel_base_section');
   static const upstreamSection = Key('info_panel_upstream_section');
@@ -317,6 +318,51 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     onStatusChanged();
   }
 
+  Future<void> _handlePullMerge(BuildContext context) async {
+    final gitService = context.read<GitService>();
+    final project = context.read<ProjectState>();
+
+    try {
+      await gitService.fetch(worktreeRoot);
+    } catch (e) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, 'Fetch failed: $e');
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final upstream = data.upstreamBranch;
+    if (upstream == null) return;
+
+    final result = await showConflictResolutionDialog(
+      context: context,
+      worktreePath: worktreeRoot,
+      branch: data.branch,
+      mainBranch: upstream,
+      operation: MergeOperationType.merge,
+      gitService: gitService,
+    );
+
+    if (!context.mounted) return;
+
+    if (result == ConflictResolutionResult.resolveWithClaude) {
+      final mainWorktreePath =
+          project.primaryWorktree.data.worktreeRoot;
+
+      await _openConflictManagerChat(
+        context,
+        branch: data.branch,
+        mainBranch: upstream,
+        worktreePath: worktreeRoot,
+        mainWorktreePath: mainWorktreePath,
+        operation: MergeOperationType.merge,
+      );
+    }
+
+    onStatusChanged();
+  }
+
   Future<void> _handleCreatePr(BuildContext context) async {
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
@@ -548,9 +594,8 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   }
 
   // -- Enable/disable logic --
-
-  bool get _canUpdateFromBase =>
-      data.commitsBehindMain > 0 && !data.isPrimary;
+  // Rebase, merge, and pull buttons are always enabled because we can't
+  // reliably know if the remote has changed since our last fetch.
 
   bool get _canMergeIntoMain =>
       data.commitsAheadOfMain > 0 &&
@@ -559,9 +604,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
 
   bool get _canPush =>
       data.upstreamBranch != null && data.commitsAhead > 0;
-
-  bool get _canPullRebase =>
-      data.upstreamBranch != null && data.commitsBehind > 0;
 
   bool get _canCreatePr =>
       data.commitsAheadOfMain > 0 &&
@@ -623,9 +665,11 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                 _PrimaryUpstreamSection(
                   data: data,
                   canPush: _canPush,
-                  canPullRebase: _canPullRebase,
                   onPush: () => _withLoading(
                     () => _handlePush(context),
+                  ),
+                  onPullMerge: () => _withLoading(
+                    () => _handlePullMerge(context),
                   ),
                   onPullRebase: () => _withLoading(
                     () => _handlePullRebase(context),
@@ -654,10 +698,8 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                 _ActionsSection(
                   data: data,
                   baseRef: baseRef,
-                  canUpdateFromBase: _canUpdateFromBase,
                   canMergeIntoMain: _canMergeIntoMain,
                   canPush: _canPush,
-                  canPullRebase: _canPullRebase,
                   canCreatePr: _canCreatePr,
                   onRebaseOntoBase: () => _withLoading(
                     () => _handleUpdateFromBase(
@@ -680,6 +722,9 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                       setUpstream:
                           data.upstreamBranch == null,
                     ),
+                  ),
+                  onPullMerge: () => _withLoading(
+                    () => _handlePullMerge(context),
                   ),
                   onPullRebase: () => _withLoading(
                     () => _handlePullRebase(context),
@@ -994,15 +1039,15 @@ class _PrimaryUpstreamSection extends StatelessWidget {
   const _PrimaryUpstreamSection({
     required this.data,
     required this.canPush,
-    required this.canPullRebase,
     required this.onPush,
+    required this.onPullMerge,
     required this.onPullRebase,
   });
 
   final WorktreeData data;
   final bool canPush;
-  final bool canPullRebase;
   final VoidCallback onPush;
+  final VoidCallback onPullMerge;
   final VoidCallback onPullRebase;
 
   @override
@@ -1042,27 +1087,31 @@ class _PrimaryUpstreamSection extends StatelessWidget {
           targetRef: data.upstreamBranch!,
         ),
         const SizedBox(height: 8),
+        _CompactButton(
+          key: InformationPanelKeys.pushButton,
+          onPressed: canPush ? onPush : null,
+          label: 'Push',
+          icon: Icons.cloud_upload,
+          tooltip: canPush ? null : 'Nothing to push',
+        ),
+        const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
               child: _CompactButton(
-                key: InformationPanelKeys.pushButton,
-                onPressed: canPush ? onPush : null,
-                label: 'Push',
-                icon: Icons.cloud_upload,
-                tooltip: canPush ? null : 'Nothing to push',
+                key: InformationPanelKeys.pullMergeButton,
+                onPressed: onPullMerge,
+                label: 'Pull / Merge',
+                icon: Icons.cloud_download,
               ),
             ),
             const SizedBox(width: 6),
             Expanded(
               child: _CompactButton(
                 key: InformationPanelKeys.pullRebaseButton,
-                onPressed: canPullRebase ? onPullRebase : null,
+                onPressed: onPullRebase,
                 label: 'Pull / Rebase',
                 icon: Icons.cloud_download,
-                tooltip: canPullRebase
-                    ? null
-                    : 'Already up-to-date with upstream',
               ),
             ),
           ],
@@ -1145,89 +1194,86 @@ class _ActionsSection extends StatelessWidget {
   const _ActionsSection({
     required this.data,
     required this.baseRef,
-    required this.canUpdateFromBase,
     required this.canMergeIntoMain,
     required this.canPush,
-    required this.canPullRebase,
     required this.canCreatePr,
     required this.onRebaseOntoBase,
     required this.onMergeBase,
     required this.onMergeIntoMain,
     required this.onPush,
+    required this.onPullMerge,
     required this.onPullRebase,
     required this.onCreatePr,
   });
 
   final WorktreeData data;
   final String baseRef;
-  final bool canUpdateFromBase;
   final bool canMergeIntoMain;
   final bool canPush;
-  final bool canPullRebase;
   final bool canCreatePr;
   final VoidCallback onRebaseOntoBase;
   final VoidCallback onMergeBase;
   final VoidCallback onMergeIntoMain;
   final VoidCallback onPush;
+  final VoidCallback onPullMerge;
   final VoidCallback onPullRebase;
   final VoidCallback onCreatePr;
 
   bool get _isLocalBase => !data.isRemoteBase;
   bool get _hasUpstream => data.upstreamBranch != null;
 
-  /// Returns the section labels based on the current mode.
-  /// Mode is determined by: Local (local base), Unpublished (remote base, no
-  /// upstream), or Published (remote base, has upstream).
-  (String topSection, String bottomSection) get _sectionLabels {
-    if (_isLocalBase) {
-      return ('Local actions', 'Integrate locally');
-    } else if (!_hasUpstream) {
-      return ('Remote-base actions', 'Publish');
-    } else {
-      return ('Remote-base actions', 'Sync');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final (topSection, bottomSection) = _sectionLabels;
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Top section divider
-        _SectionDivider(label: topSection),
-        const SizedBox(height: 8),
+        // Top section: Remote actions / Local actions
+        _SectionDivider(
+          label: _isLocalBase ? 'Local actions' : 'Remote actions',
+        ),
+        const SizedBox(height: 4),
 
-        // Rebase onto base
-        _CompactButton(
-          key: InformationPanelKeys.rebaseOntoBaseButton,
-          onPressed: canUpdateFromBase ? onRebaseOntoBase : null,
-          label: 'Rebase onto $baseRef',
-          icon: Icons.low_priority,
-          tooltip: canUpdateFromBase
-              ? null
-              : 'Already up-to-date with $baseRef',
+        // Description: "Update from <baseRef>"
+        Text(
+          'Update from $baseRef',
+          style: textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 6),
-        // Merge base into branch
-        _CompactButton(
-          key: InformationPanelKeys.mergeBaseButton,
-          onPressed: canUpdateFromBase ? onMergeBase : null,
-          label: 'Merge $baseRef into branch',
-          icon: Icons.merge,
-          tooltip: canUpdateFromBase
-              ? null
-              : 'Already up-to-date with $baseRef',
+
+        // Rebase / Merge side by side
+        Row(
+          children: [
+            Expanded(
+              child: _CompactButton(
+                key: InformationPanelKeys.rebaseOntoBaseButton,
+                onPressed: onRebaseOntoBase,
+                label: 'Rebase',
+                icon: Icons.low_priority,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _CompactButton(
+                key: InformationPanelKeys.mergeBaseButton,
+                onPressed: onMergeBase,
+                label: 'Merge',
+                icon: Icons.merge,
+              ),
+            ),
+          ],
         ),
 
-        // Bottom section divider
+        // Bottom section
         const SizedBox(height: 12),
-        _SectionDivider(label: bottomSection),
-        const SizedBox(height: 8),
 
-        // State-specific actions
         if (_isLocalBase) ...[
+          const _SectionDivider(label: 'Integrate locally'),
+          const SizedBox(height: 8),
           _CompactButton(
             key: InformationPanelKeys.mergeBranchIntoMainButton,
             onPressed:
@@ -1237,6 +1283,8 @@ class _ActionsSection extends StatelessWidget {
             tooltip: _mergeIntoMainTooltip,
           ),
         ] else if (!_hasUpstream) ...[
+          const _SectionDivider(label: 'Publish'),
+          const SizedBox(height: 8),
           _CompactButton(
             key: InformationPanelKeys.pushButton,
             onPressed: onPush,
@@ -1256,30 +1304,46 @@ class _ActionsSection extends StatelessWidget {
             tooltip: 'Push required before creating PR',
           ),
         ] else ...[
+          const _SectionDivider(label: 'Sync'),
+          const SizedBox(height: 4),
+
+          // Description: "Sync with <upstream>"
+          Text(
+            'Sync with ${data.upstreamBranch}',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Push full width
+          _CompactButton(
+            key: InformationPanelKeys.pushButton,
+            onPressed: canPush ? onPush : null,
+            label: 'Push',
+            icon: Icons.cloud_upload,
+            tooltip: canPush ? null : 'Nothing to push',
+          ),
+          const SizedBox(height: 6),
+
+          // Pull/Merge and Pull/Rebase side by side
           Row(
             children: [
               Expanded(
                 child: _CompactButton(
-                  key: InformationPanelKeys.pushButton,
-                  onPressed: canPush ? onPush : null,
-                  label: 'Push',
-                  icon: Icons.cloud_upload,
-                  tooltip: canPush
-                      ? null
-                      : 'Nothing to push',
+                  key: InformationPanelKeys.pullMergeButton,
+                  onPressed: onPullMerge,
+                  label: 'Pull / Merge',
+                  icon: Icons.cloud_download,
                 ),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: _CompactButton(
                   key: InformationPanelKeys.pullRebaseButton,
-                  onPressed:
-                      canPullRebase ? onPullRebase : null,
+                  onPressed: onPullRebase,
                   label: 'Pull / Rebase',
                   icon: Icons.cloud_download,
-                  tooltip: canPullRebase
-                      ? null
-                      : 'Already up-to-date with upstream',
                 ),
               ),
             ],
