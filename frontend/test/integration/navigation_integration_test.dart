@@ -107,7 +107,7 @@ void main() {
           ChangeNotifierProvider<WorktreeWatcherService>.value(
             value: worktreeWatcher,
           ),
-          Provider<ProjectConfigService>(
+          ChangeNotifierProvider<ProjectConfigService>(
             create: (_) => ProjectConfigService(),
           ),
           ChangeNotifierProvider<ScriptExecutionService>.value(
@@ -473,7 +473,7 @@ void main() {
                 ChangeNotifierProvider<WorktreeWatcherService>.value(
                   value: worktreeWatcher,
                 ),
-                Provider<ProjectConfigService>(
+                ChangeNotifierProvider<ProjectConfigService>(
                   create: (_) => ProjectConfigService(),
                 ),
                 ChangeNotifierProvider<ScriptExecutionService>.value(

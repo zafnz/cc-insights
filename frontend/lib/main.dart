@@ -972,7 +972,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
               previous ?? FileManagerState(project, fileService, selectionState),
         ),
         // Project config service for reading/writing .ccinsights/config.json
-        Provider<ProjectConfigService>(
+        ChangeNotifierProvider<ProjectConfigService>(
           create: (_) => ProjectConfigService(),
         ),
         // Worktree watcher service for monitoring git status changes.

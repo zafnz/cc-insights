@@ -62,7 +62,7 @@ void main() {
           ChangeNotifierProvider<FileManagerState>.value(
             value: fileManagerState,
           ),
-          Provider<ProjectConfigService>(
+          ChangeNotifierProvider<ProjectConfigService>(
             create: (_) => ProjectConfigService(),
           ),
           ChangeNotifierProvider<ScriptExecutionService>.value(

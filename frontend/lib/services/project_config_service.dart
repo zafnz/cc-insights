@@ -2,12 +2,16 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../models/project_config.dart';
 
 /// Service for reading and writing project configuration files.
 ///
 /// Configuration is stored at `{projectRoot}/.ccinsights/config.json`.
-class ProjectConfigService {
+/// Extends [ChangeNotifier] so listeners (e.g. ActionsPanel) are notified
+/// when the config is saved.
+class ProjectConfigService extends ChangeNotifier {
   static const _configDir = '.ccinsights';
   static const _configFile = 'config.json';
 
@@ -83,6 +87,8 @@ class ProjectConfigService {
         'Saved config to $filePath',
         name: 'ProjectConfigService',
       );
+
+      notifyListeners();
     } catch (e) {
       developer.log(
         'Failed to save config to $filePath: $e',

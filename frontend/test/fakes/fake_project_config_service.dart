@@ -29,6 +29,7 @@ class FakeProjectConfigService extends ProjectConfigService {
       throw Exception(throwMessage);
     }
     configs[projectRoot] = config;
+    notifyListeners();
   }
 
   @override

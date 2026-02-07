@@ -118,7 +118,8 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   @override
   void initState() {
     super.initState();
-    _configService = widget.configService ?? ProjectConfigService();
+    _configService =
+        widget.configService ?? context.read<ProjectConfigService>();
     _persistenceService = PersistenceService();
     _loadConfig();
   }

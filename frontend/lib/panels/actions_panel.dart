@@ -53,13 +53,22 @@ class _ActionsPanelContent extends StatefulWidget {
 }
 
 class _ActionsPanelContentState extends State<_ActionsPanelContent> {
-  final ProjectConfigService _configService = ProjectConfigService();
   ProjectConfig _config = const ProjectConfig.empty();
   String? _lastProjectRoot;
+  ProjectConfigService? _configService;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    // Subscribe to config service changes (e.g. saves from ProjectSettingsPanel)
+    final configService = context.read<ProjectConfigService>();
+    if (_configService != configService) {
+      _configService?.removeListener(_onConfigChanged);
+      _configService = configService;
+      _configService!.addListener(_onConfigChanged);
+    }
+
     final project = context.read<ProjectState>();
     final projectRoot = project.data.repoRoot;
 
@@ -70,9 +79,19 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     }
   }
 
+  @override
+  void dispose() {
+    _configService?.removeListener(_onConfigChanged);
+    super.dispose();
+  }
+
+  void _onConfigChanged() {
+    _loadConfig();
+  }
+
   Future<void> _loadConfig() async {
-    if (_lastProjectRoot == null) return;
-    final config = await _configService.loadConfig(_lastProjectRoot!);
+    if (_lastProjectRoot == null || _configService == null) return;
+    final config = await _configService!.loadConfig(_lastProjectRoot!);
     if (mounted) {
       setState(() => _config = config);
     }
@@ -97,12 +116,11 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
 
       if (newCommand != null && newCommand.isNotEmpty && mounted) {
         // Save to config
-        await _configService.updateUserAction(
+        await _configService!.updateUserAction(
           _lastProjectRoot!,
           name,
           newCommand,
         );
-        await _loadConfig();
 
         // Now run the script
         _runScript(name, newCommand, workingDirectory);
@@ -156,12 +174,11 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
       );
 
       if (newCommand != null && mounted) {
-        await _configService.updateUserAction(
+        await _configService!.updateUserAction(
           _lastProjectRoot!,
           name,
           newCommand,
         );
-        await _loadConfig();
       }
     }
   }
