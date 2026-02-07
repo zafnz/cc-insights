@@ -4,7 +4,8 @@
   },
   "user-actions": {
     "Test": "cd frontend && flutter test",
-    "Run": "./run.sh"
+    "Run": "./run.sh",
+    "Pelagia": "./run.sh /Users/zaf/projects/pelagia"
   },
   "default-base": "main"
 }
