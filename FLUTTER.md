@@ -335,8 +335,7 @@ linter:
   ```
 
 ## Testing
-* **Running Tests:** To run tests, use the `run_tests` tool if it is available,
-  otherwise use `flutter test`.
+* **Running Tests:** To run tests, use the frontend/run-flutter-test.sh 
 * **Unit Tests:** Use `package:test` for unit tests.
 * **Widget Tests:** Use `package:flutter_test` for widget tests.
 * **Integration Tests:** Use `package:integration_test` for integration tests.

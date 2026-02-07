@@ -338,14 +338,11 @@ frontend/test/
 
 ### Running Tests
 
-**CRITICAL FOR CLAUDE: Always use Flutter-Test MCP tools for testing. Never use Bash commands like `flutter test`.**
+**CRITICAL: Always use ./frontend/run-flutter-test.sh for frontend testing. Never use Bash commands like `flutter test`.**
 
-- **`mcp__flutter-test__run_tests`** - Run tests (NOT `flutter test`)
-- **`mcp__flutter-test__get_test_result`** - Fetch detailed test results for a specific test ID
-
-**IMPORTANT: When a test fails, use `get_test_result` with the test ID from `run_tests` output.
-DO NOT try to read the output file directly with Read, Grep, or Bash commands.
-The `get_test_result` tool is specifically designed to parse and return the relevant test output.**
+- **`./frontend/run-flutter-test.sh`**
+- **`./frontend/run-flutter-test.sh integration_test/app_test.dart -d macos`** for integration tests.
+- **Always run integration tests one at a time, never the directory**
 
 ---
 

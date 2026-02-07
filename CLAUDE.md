@@ -7,8 +7,8 @@
 **There must be NO pre-existing test failures.**
 
 Before completing any task:
-1. Run all tests using `mcp__flutter-test__run_tests`
-2. Run integration tests separately: `mcp__flutter-test__run_tests(path: "integration_test/app_test.dart")`
+1. Run all tests using `./frontend/run-flutter-test.sh` 
+2. Run integration tests separately: `./frontend/run-flutter-test.sh integration_test/app_test.dart -d macos`
 3. **ALL tests must pass** - even if the failure wasn't caused by you, YOU MUST FIX IT
 
 If you encounter a failing test:
@@ -354,15 +354,10 @@ frontend/test/
 
 ### Running Tests
 
-**CRITICAL FOR CLAUDE: Always use Flutter-Test MCP tools for testing. Never use Bash commands like `flutter test`.**
+**CRITICAL FOR CLAUDE: Always use the ./run-flutter-test.sh script**
 
-- **`mcp__flutter-test__run_tests`** - Run tests (NOT `flutter test`)
-- **`mcp__flutter-test__get_test_result`** - Fetch detailed test results for a specific test ID
-
-**IMPORTANT: When a test fails, use `get_test_result` with the test ID from `run_tests` output.
-DO NOT try to read the output file directly with Read, Grep, or Bash commands.
-The `get_test_result` tool is specifically designed to parse and return the relevant test output.**
-
+- Do NOT use `flutter test`, use `./frontend/run-flutter-test.sh` 
+- To run integration tests, specify the file and environment, like so run-flutter-test.sh integration_test/app_test.dart -d macos
 ---
 
 ## Common Pitfalls

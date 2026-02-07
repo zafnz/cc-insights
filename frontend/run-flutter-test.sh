@@ -1,0 +1,3 @@
+#!/bin/bash
+cd "$(dirname "$0")" || exit 1
+flutter test --no-pub -r github "$@" | grep -v ^✅
