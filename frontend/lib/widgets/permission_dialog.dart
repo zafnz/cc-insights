@@ -243,7 +243,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
           key: PermissionDialogKeys.dialog,
           // No margin, no rounded corners, no border - integrated look
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
+            color: colorScheme.surfaceContainer,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -265,7 +265,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color:
-                      colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      colorScheme.surfaceContainer.withValues(alpha: 0.3),
                   // No rounded corners - integrated look
                 ),
                 child: Row(
@@ -423,7 +423,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: colorScheme.surfaceContainer.withValues(alpha: 0.3),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -577,12 +577,12 @@ class _PermissionDialogState extends State<PermissionDialog> {
     return Container(
       key: PermissionDialogKeys.header,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: colorScheme.primaryContainer),
+      decoration: BoxDecoration(color: colorScheme.primary),
       child: Row(
         children: [
           Icon(
             Icons.description_outlined,
-            color: colorScheme.onPrimaryContainer,
+            color: colorScheme.onPrimary,
             size: 18,
           ),
           const SizedBox(width: 8),
@@ -591,7 +591,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
             style: textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 13,
-              color: colorScheme.onPrimaryContainer,
+              color: colorScheme.onPrimary,
             ),
           ),
         ],
@@ -607,13 +607,13 @@ class _PermissionDialogState extends State<PermissionDialog> {
       key: PermissionDialogKeys.header,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
+        color: colorScheme.primary,
       ),
       child: Row(
         children: [
           Icon(
             Icons.shield_outlined,
-            color: colorScheme.onPrimaryContainer,
+            color: colorScheme.onPrimary,
             size: 20,
           ),
           const SizedBox(width: 8),
@@ -622,7 +622,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
               'Permission Required: ${widget.request.toolName}',
               style: textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: colorScheme.onPrimaryContainer,
+                color: colorScheme.onPrimary,
               ),
             ),
           ),

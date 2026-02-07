@@ -81,7 +81,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
     return Container(
       key: AskUserQuestionDialogKeys.dialog,
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: colorScheme.surfaceContainer,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -92,13 +92,13 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
             key: AskUserQuestionDialogKeys.header,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
+              color: colorScheme.primary,
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.help_outline,
-                  color: colorScheme.onPrimaryContainer,
+                  color: colorScheme.onPrimary,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -107,7 +107,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
                   style: textStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: colorScheme.onPrimaryContainer,
+                    color: colorScheme.onPrimary,
                   ),
                 ),
               ],
@@ -130,7 +130,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              color: colorScheme.surfaceContainer.withValues(alpha: 0.3),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,

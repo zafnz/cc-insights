@@ -305,10 +305,10 @@ void main() {
     testWidgets('uses themed color scheme from colorScheme', (tester) async {
       await tester.pumpWidget(buildTestWidget(singleSelectRequest, (_) {}));
 
-      // Check header icon uses onPrimaryContainer from theme
+      // Check header icon uses onPrimary from theme
       final icon = tester.widget<Icon>(find.byIcon(Icons.help_outline));
       final colorScheme = ThemeData.dark().colorScheme;
-      expect(icon.color, colorScheme.onPrimaryContainer);
+      expect(icon.color, colorScheme.onPrimary);
     });
   });
 }
