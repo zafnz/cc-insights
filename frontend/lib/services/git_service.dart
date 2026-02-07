@@ -59,15 +59,20 @@ class WorktreeInfo {
   /// Current branch name, or null if in detached HEAD state.
   final String? branch;
 
+  /// Whether this worktree is prunable (directory no longer exists on disk).
+  final bool isPrunable;
+
   const WorktreeInfo({
     required this.path,
     required this.isPrimary,
     this.branch,
+    this.isPrunable = false,
   });
 
   @override
   String toString() =>
-      'WorktreeInfo(path: $path, isPrimary: $isPrimary, branch: $branch)';
+      'WorktreeInfo(path: $path, isPrimary: $isPrimary, branch: $branch'
+      '${isPrunable ? ', prunable' : ''})';
 }
 
 /// Status of a file in git.
@@ -448,6 +453,12 @@ abstract class GitService {
     required String body,
     bool draft = false,
   });
+
+  /// Prunes stale worktree entries whose directories no longer exist on disk.
+  ///
+  /// Runs `git worktree prune` to clean up the worktree list.
+  /// Throws [GitException] on failure.
+  Future<void> pruneWorktrees(String repoRoot);
 }
 
 /// Result of analyzing a directory's git repository status.
@@ -1376,6 +1387,11 @@ class RealGitService implements GitService {
       );
     }
   }
+
+  @override
+  Future<void> pruneWorktrees(String repoRoot) async {
+    await _runGit(['worktree', 'prune'], workingDirectory: repoRoot);
+  }
 }
 
 // =============================================================================
@@ -1455,10 +1471,12 @@ class GitWorktreeParser {
   /// Parses porcelain worktree list output into [WorktreeInfo] list.
   ///
   /// [primaryPath] is used to determine which worktree is primary.
+  /// Detects `prunable` lines to set [WorktreeInfo.isPrunable].
   static List<WorktreeInfo> parse(String output, String primaryPath) {
     final worktrees = <WorktreeInfo>[];
     String? currentPath;
     String? currentBranch;
+    bool currentPrunable = false;
 
     for (final line in output.split('\n')) {
       if (line.isEmpty) {
@@ -1468,10 +1486,12 @@ class GitWorktreeParser {
             path: currentPath,
             isPrimary: _pathsEqual(currentPath, primaryPath),
             branch: currentBranch,
+            isPrunable: currentPrunable,
           ));
         }
         currentPath = null;
         currentBranch = null;
+        currentPrunable = false;
         continue;
       }
 
@@ -1487,6 +1507,8 @@ class GitWorktreeParser {
         }
       } else if (line == 'detached') {
         currentBranch = null;
+      } else if (line.startsWith('prunable ')) {
+        currentPrunable = true;
       }
     }
 
@@ -1496,6 +1518,7 @@ class GitWorktreeParser {
         path: currentPath,
         isPrimary: _pathsEqual(currentPath, primaryPath),
         branch: currentBranch,
+        isPrunable: currentPrunable,
       ));
     }
 

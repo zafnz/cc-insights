@@ -113,25 +113,40 @@ class _RestoreWorktreeDialog extends StatelessWidget {
                 horizontal: 8.0,
                 vertical: 12.0,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  // Branch name
-                  Text(
-                    worktree.branch ?? '(detached HEAD)',
-                    style: textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
+                  if (worktree.isPrunable)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: Icon(
+                        Icons.warning_amber,
+                        size: 18,
+                        color: colorScheme.error,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Worktree path
-                  Text(
-                    worktree.path,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Branch name
+                        Text(
+                          worktree.branch ?? '(detached HEAD)',
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Worktree path
+                        Text(
+                          worktree.path,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

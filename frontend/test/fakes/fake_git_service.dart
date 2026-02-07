@@ -689,4 +689,24 @@ class FakeGitService implements GitService {
     }
     return createPullRequestResult;
   }
+
+  // =========================================================================
+  // Prune worktrees
+  // =========================================================================
+
+  /// Tracks calls to [pruneWorktrees].
+  final List<String> pruneWorktreesCalls = [];
+
+  /// If set, [pruneWorktrees] will throw this exception.
+  GitException? pruneWorktreesError;
+
+  @override
+  Future<void> pruneWorktrees(String repoRoot) async {
+    pruneWorktreesCalls.add(repoRoot);
+    await _maybeDelay();
+    _maybeThrow();
+    if (pruneWorktreesError != null) {
+      throw pruneWorktreesError!;
+    }
+  }
 }

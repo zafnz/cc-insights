@@ -6,13 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/project.dart';
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
+import '../services/git_service.dart';
 import '../services/menu_action_service.dart';
+import '../services/persistence_service.dart';
+import '../services/project_restore_service.dart';
 import '../services/settings_service.dart';
+import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/insights_widgets.dart';
+import '../widgets/restore_worktree_dialog.dart';
 import '../widgets/keyboard_focus_manager.dart';
 import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
@@ -176,6 +182,10 @@ class _MainScreenState extends State<MainScreen> {
         _handleNavigationChange(0);
         context.read<SelectionState>().showCreateWorktreePanel();
         break;
+      case MenuAction.restoreWorktree:
+        _handleNavigationChange(0);
+        _handleRestoreWorktree();
+        break;
       case MenuAction.newChat:
         _handleNavigationChange(0);
         _handleNewChatShortcut();
@@ -243,6 +253,153 @@ class _MainScreenState extends State<MainScreen> {
   void _handleNewWorktreeShortcut() {
     final selection = context.read<SelectionState>();
     selection.showCreateWorktreePanel();
+  }
+
+  /// Handles the "Restore Worktree" menu action.
+  ///
+  /// Discovers untracked worktrees, shows the restore dialog, and either
+  /// restores healthy worktrees or offers cleanup for prunable ones.
+  Future<void> _handleRestoreWorktree() async {
+    final project = context.read<ProjectState>();
+    final gitService = context.read<GitService>();
+    final repoRoot = project.data.repoRoot;
+
+    try {
+      // Discover all git worktrees
+      final allWorktrees = await gitService.discoverWorktrees(repoRoot);
+
+      // Find worktrees not tracked in the app
+      final trackedPaths = project.allWorktrees
+          .map((w) => w.data.worktreeRoot)
+          .toSet();
+      final untracked = allWorktrees
+          .where((wt) => !wt.isPrimary && !trackedPaths.contains(wt.path))
+          .toList();
+
+      if (!mounted) return;
+
+      // Show the restore dialog
+      final selected = await showRestoreWorktreeDialog(
+        context: context,
+        restorableWorktrees: untracked,
+      );
+
+      if (selected == null || !mounted) return;
+
+      // Check if the selected worktree is prunable
+      if (selected.isPrunable) {
+        await _handlePrunableWorktree(selected, repoRoot, gitService);
+        return;
+      }
+
+      // Restore the healthy worktree
+      await _restoreWorktreeAndRecoverChats(
+        project: project,
+        gitService: gitService,
+        worktreePath: selected.path,
+        branch: selected.branch ?? 'unknown',
+      );
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, 'Failed to restore worktree: $e');
+      }
+    }
+  }
+
+  /// Shows a cleanup confirmation dialog for a prunable worktree.
+  Future<void> _handlePrunableWorktree(
+    WorktreeInfo worktree,
+    String repoRoot,
+    GitService gitService,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Stale Worktree'),
+        content: Text(
+          'This worktree is listed as being at ${worktree.path}, '
+          'but doesn\'t exist on disk. Cleanup to remove the stale '
+          'entry and you can then try to restore by branch.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cleanup'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await gitService.pruneWorktrees(repoRoot);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Stale worktree entries cleaned up')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          showErrorSnackBar(context, 'Failed to prune worktrees: $e');
+        }
+      }
+    }
+  }
+
+  /// Restores a worktree and recovers any archived chats.
+  Future<void> _restoreWorktreeAndRecoverChats({
+    required ProjectState project,
+    required GitService gitService,
+    required String worktreePath,
+    required String branch,
+  }) async {
+    final worktreeService = WorktreeService(gitService: gitService);
+
+    final worktreeState = await worktreeService.restoreExistingWorktree(
+      project: project,
+      worktreePath: worktreePath,
+      branch: branch,
+    );
+
+    // Add to project state
+    project.addWorktree(worktreeState);
+
+    // Recover archived chats
+    final projectRoot = project.data.repoRoot;
+    final projectId = PersistenceService.generateProjectId(projectRoot);
+    final persistenceService = context.read<PersistenceService>();
+    final restoreService = ProjectRestoreService(persistence: persistenceService);
+
+    final archivedChats = await persistenceService.getArchivedChats(
+      projectRoot: projectRoot,
+    );
+
+    final suffix = '/cci/$branch';
+    final matchingChats = archivedChats
+        .where((chat) =>
+            chat.originalWorktreePath.endsWith(suffix) ||
+            chat.originalWorktreePath == worktreePath)
+        .toList();
+
+    for (final archivedRef in matchingChats) {
+      final chatState = await restoreService.restoreArchivedChat(
+        archivedRef,
+        worktreeState.data.worktreeRoot,
+        projectId,
+        projectRoot,
+      );
+      worktreeState.addChat(chatState);
+    }
+
+    // Select the restored worktree
+    if (mounted) {
+      final selection = context.read<SelectionState>();
+      selection.selectWorktree(worktreeState);
+    }
   }
 
   /// Whether the given nav index needs keyboard interception suspended.

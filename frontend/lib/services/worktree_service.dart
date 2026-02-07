@@ -81,6 +81,22 @@ class WorktreeBranchExistsException extends WorktreeCreationException {
         );
 }
 
+/// Exception thrown when the user tries to create a worktree for a branch
+/// that is already checked out in an existing worktree.
+///
+/// Contains the [WorktreeInfo] of the existing worktree so the UI can
+/// offer appropriate actions (open it, delete it, or prune if stale).
+class WorktreeAlreadyExistsException extends WorktreeCreationException {
+  /// Information about the existing worktree using this branch.
+  final WorktreeInfo existingWorktree;
+
+  WorktreeAlreadyExistsException(this.existingWorktree)
+      : super(
+          'Branch "${existingWorktree.branch}" is already a worktree at: '
+          '${existingWorktree.path}',
+        );
+}
+
 /// Service for creating and managing git worktrees.
 ///
 /// Encapsulates validation, creation, and persistence logic for worktrees.
@@ -159,14 +175,7 @@ class WorktreeService {
     }
 
     if (existingWorktree != null) {
-      throw WorktreeCreationException(
-        'Branch "$sanitizedBranch" is already a worktree at: '
-        '${existingWorktree.path}',
-        suggestions: [
-          'Select the existing worktree from the sidebar',
-          'Choose a different branch name',
-        ],
-      );
+      throw WorktreeAlreadyExistsException(existingWorktree);
     }
 
     // 3b. If branch exists but is not a worktree, signal for recovery prompt

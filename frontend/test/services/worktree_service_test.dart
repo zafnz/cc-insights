@@ -447,12 +447,13 @@ void main() {
             branch: 'feature',
             worktreeRoot: worktreeRoot,
           );
-          fail('Expected WorktreeCreationException');
-        } on WorktreeCreationException catch (e) {
+          fail('Expected WorktreeAlreadyExistsException');
+        } on WorktreeAlreadyExistsException catch (e) {
           // Assert
           check(e.message).contains(existingWorktreePath);
           check(e.message).contains('already a worktree');
-          check(e.suggestions).isNotEmpty();
+          check(e.existingWorktree.path).equals(existingWorktreePath);
+          check(e.existingWorktree.branch).equals('feature');
         }
       });
     });

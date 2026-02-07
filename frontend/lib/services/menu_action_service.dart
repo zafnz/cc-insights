@@ -11,6 +11,7 @@ enum MenuAction {
 
   // Worktree actions
   newWorktree,
+  restoreWorktree,
   newChat,
 
   // Actions submenu

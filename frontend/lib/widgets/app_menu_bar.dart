@@ -15,6 +15,7 @@ class MenuCallbacks {
 
   // Worktree menu
   final VoidCallback? onNewWorktree;
+  final VoidCallback? onRestoreWorktree;
   final VoidCallback? onDeleteWorktree;
   final VoidCallback? onNewChat;
 
@@ -48,6 +49,7 @@ class MenuCallbacks {
     this.onProjectSettings,
     this.onCloseProject,
     this.onNewWorktree,
+    this.onRestoreWorktree,
     this.onDeleteWorktree,
     this.onNewChat,
     this.onActionTest,
@@ -243,6 +245,10 @@ class AppMenuBar extends StatelessWidget {
                     meta: true,
                   ),
                   onSelected: hasProject ? callbacks.onNewWorktree : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Restore Worktree...',
+                  onSelected: hasProject ? callbacks.onRestoreWorktree : null,
                 ),
                 PlatformMenuItem(
                   label: 'Delete Worktree...',

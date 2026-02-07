@@ -198,5 +198,38 @@ void main() {
       check(pathText.overflow).equals(TextOverflow.ellipsis);
       check(pathText.maxLines).equals(1);
     });
+
+    testWidgets('shows warning icon for prunable worktrees', (tester) async {
+      const prunableWorktrees = [
+        WorktreeInfo(
+          path: '/path/to/healthy',
+          isPrimary: false,
+          branch: 'healthy-branch',
+        ),
+        WorktreeInfo(
+          path: '/path/to/stale',
+          isPrimary: false,
+          branch: 'stale-branch',
+          isPrunable: true,
+        ),
+      ];
+
+      await pumpDialog(tester, worktrees: prunableWorktrees);
+
+      // Verify warning icon is shown for the prunable worktree
+      expect(find.byIcon(Icons.warning_amber), findsOneWidget);
+
+      // Both worktrees should be listed
+      expect(find.text('healthy-branch'), findsOneWidget);
+      expect(find.text('stale-branch'), findsOneWidget);
+    });
+
+    testWidgets('does not show warning icon for non-prunable worktrees',
+        (tester) async {
+      await pumpDialog(tester, worktrees: testWorktrees);
+
+      // No warning icons should be present (none are prunable)
+      expect(find.byIcon(Icons.warning_amber), findsNothing);
+    });
   });
 }

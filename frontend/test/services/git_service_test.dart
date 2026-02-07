@@ -246,6 +246,51 @@ branch refs/heads/main''';
       expect(worktrees.length, 1);
       expect(worktrees[0].branch, 'main');
     });
+
+    test('parses prunable worktrees', () {
+      const output = '''
+worktree /tmp/cc-insights/myrepo
+HEAD abc123
+branch refs/heads/main
+
+worktree /tmp/cc-insights/myrepo-wt/stale
+HEAD def456
+branch refs/heads/stale-branch
+prunable gitdir file points to non-existent location
+
+worktree /tmp/cc-insights/myrepo-wt/active
+HEAD ghi789
+branch refs/heads/active-branch
+
+''';
+      final worktrees =
+          GitWorktreeParser.parse(output, '/tmp/cc-insights/myrepo');
+
+      expect(worktrees.length, 3);
+
+      expect(worktrees[0].isPrunable, false);
+      expect(worktrees[0].branch, 'main');
+
+      expect(worktrees[1].isPrunable, true);
+      expect(worktrees[1].branch, 'stale-branch');
+
+      expect(worktrees[2].isPrunable, false);
+      expect(worktrees[2].branch, 'active-branch');
+    });
+
+    test('non-prunable worktrees default to isPrunable false', () {
+      const output = '''
+worktree /tmp/cc-insights/myrepo
+HEAD abc123
+branch refs/heads/main
+
+''';
+      final worktrees =
+          GitWorktreeParser.parse(output, '/tmp/cc-insights/myrepo');
+
+      expect(worktrees.length, 1);
+      expect(worktrees[0].isPrunable, false);
+    });
   });
 
   // ===========================================================================

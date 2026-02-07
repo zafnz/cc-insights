@@ -11,7 +11,7 @@ import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
-import '../widgets/restore_worktree_dialog.dart';
+import '../widgets/branch_selector_dialog.dart';
 
 /// Keys for testing CreateWorktreePanel widgets.
 class CreateWorktreePanelKeys {
@@ -26,7 +26,14 @@ class CreateWorktreePanelKeys {
   static const recoverYesButton = Key('create_worktree_recover_yes');
   static const recoverNoButton = Key('create_worktree_recover_no');
   static const recoverCard = Key('create_worktree_recover_card');
-  static const restoreButton = Key('create_worktree_restore_button');
+  static const branchSelectorButton = Key('create_worktree_branch_selector');
+  static const existingWorktreeCard = Key('create_worktree_existing_card');
+  static const existingOpenButton = Key('create_worktree_existing_open');
+  static const existingDeleteButton = Key('create_worktree_existing_delete');
+  static const existingCancelButton = Key('create_worktree_existing_cancel');
+  static const prunableCard = Key('create_worktree_prunable_card');
+  static const prunableYesButton = Key('create_worktree_prunable_yes');
+  static const prunableCancelButton = Key('create_worktree_prunable_cancel');
 }
 
 /// Panel for creating a new git worktree.
@@ -62,11 +69,11 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   List<String> _availableBranches = [];
   List<String> _existingWorktreeBranches = [];
 
-  /// List of git worktrees that exist on disk but aren't tracked by the app.
-  List<WorktreeInfo> _restorableWorktrees = [];
-
   /// When non-null, shows a recovery prompt for this branch name.
   String? _recoverBranchName;
+
+  /// When non-null, shows the "already a worktree" card for this worktree.
+  WorktreeInfo? _existingWorktreeConflict;
 
   // Branch from selection
   BranchFromOption _branchFromOption = BranchFromOption.main;
@@ -109,14 +116,6 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
           .where((branch) => !worktreeBranches.contains(branch))
           .toList();
 
-      // Compute restorable worktrees (exist on disk but not tracked in app)
-      final trackedPaths = project.allWorktrees
-          .map((w) => w.data.worktreeRoot)
-          .toSet();
-      final restorable = worktrees
-          .where((wt) => !wt.isPrimary && !trackedPaths.contains(wt.path))
-          .toList();
-
       // Compute default worktree root
       final defaultRoot = await _computeDefaultWorktreeRoot(project, repoRoot);
 
@@ -124,7 +123,6 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
         setState(() {
           _availableBranches = available;
           _existingWorktreeBranches = worktreeBranches.toList();
-          _restorableWorktrees = restorable;
           _rootController.text = defaultRoot;
           _isLoading = false;
         });
@@ -216,6 +214,14 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
 
         // Return to conversation panel
         selection.showConversationPanel();
+      }
+    } on WorktreeAlreadyExistsException catch (e) {
+      if (mounted) {
+        setState(() {
+          _existingWorktreeConflict = e.existingWorktree;
+          _errorMessage = null;
+          _errorSuggestions = null;
+        });
       }
     } on WorktreeBranchExistsException catch (e) {
       if (mounted) {
@@ -320,16 +326,31 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     }
   }
 
-  Future<void> _handleRestore() async {
-    final selected = await showRestoreWorktreeDialog(
+  Future<void> _handleBranchSelector() async {
+    final selected = await showBranchSelectorDialog(
       context: context,
-      restorableWorktrees: _restorableWorktrees,
+      branches: _availableBranches,
     );
 
-    if (selected == null || !mounted) return;
+    if (selected != null && mounted) {
+      _branchController.text = selected;
+    }
+  }
+
+  void _handleExistingWorktreeCancel() {
+    setState(() {
+      _existingWorktreeConflict = null;
+    });
+  }
+
+  /// Opens the existing worktree (restores it to app tracking).
+  Future<void> _handleExistingWorktreeOpen() async {
+    final worktree = _existingWorktreeConflict;
+    if (worktree == null) return;
 
     setState(() {
       _isCreating = true;
+      _existingWorktreeConflict = null;
       _errorMessage = null;
       _errorSuggestions = null;
     });
@@ -342,21 +363,21 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
       // Restore the existing worktree
       final worktreeState = await worktreeService.restoreExistingWorktree(
         project: project,
-        worktreePath: selected.path,
-        branch: selected.branch ?? 'unknown',
+        worktreePath: worktree.path,
+        branch: worktree.branch ?? 'unknown',
       );
 
       // Add worktree to project state
       project.addWorktree(worktreeState);
 
-      // Recover archived chats that belonged to this worktree
+      // Recover archived chats
       await _recoverArchivedChats(
         project: project,
         worktreeState: worktreeState,
-        branch: selected.branch ?? 'unknown',
+        branch: worktree.branch ?? 'unknown',
       );
 
-      // Select the new worktree
+      // Select the restored worktree
       if (mounted) {
         final selection = context.read<SelectionState>();
         selection.selectWorktree(worktreeState);
@@ -373,6 +394,132 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
       if (mounted) {
         setState(() {
           _isCreating = false;
+        });
+      }
+    }
+  }
+
+  /// Handles the prunable worktree case: prune stale entries, then recover.
+  Future<void> _handlePrunableWorktreeRecreate() async {
+    final worktree = _existingWorktreeConflict;
+    if (worktree == null) return;
+
+    final worktreeRoot = _rootController.text.trim();
+
+    setState(() {
+      _isCreating = true;
+      _existingWorktreeConflict = null;
+      _errorMessage = null;
+      _errorSuggestions = null;
+    });
+
+    try {
+      final project = context.read<ProjectState>();
+      final gitService = context.read<GitService>();
+      final worktreeService = WorktreeService(gitService: gitService);
+
+      // Prune the stale entries first
+      await gitService.pruneWorktrees(project.data.repoRoot);
+
+      // Now recover the branch into a new worktree
+      final worktreeState = await worktreeService.recoverWorktree(
+        project: project,
+        branch: worktree.branch!,
+        worktreeRoot: worktreeRoot,
+      );
+
+      // Add worktree to project state
+      project.addWorktree(worktreeState);
+
+      // Recover archived chats
+      await _recoverArchivedChats(
+        project: project,
+        worktreeState: worktreeState,
+        branch: worktree.branch!,
+      );
+
+      // Select the new worktree
+      if (mounted) {
+        final selection = context.read<SelectionState>();
+        selection.selectWorktree(worktreeState);
+        selection.showConversationPanel();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to recreate worktree: $e';
+          _errorSuggestions = null;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+        });
+      }
+    }
+  }
+
+  /// Handles deleting the conflicting worktree, then retrying create.
+  Future<void> _handleExistingWorktreeDelete() async {
+    final worktree = _existingWorktreeConflict;
+    if (worktree == null) return;
+
+    // Show a confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Worktree'),
+        content: Text(
+          'Delete the worktree at ${worktree.path}? '
+          'This will remove the directory and then retry creating your worktree.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isCreating = true;
+      _existingWorktreeConflict = null;
+      _errorMessage = null;
+      _errorSuggestions = null;
+    });
+
+    try {
+      final project = context.read<ProjectState>();
+      final gitService = context.read<GitService>();
+
+      // Remove the existing worktree
+      await gitService.removeWorktree(
+        repoRoot: project.data.repoRoot,
+        worktreePath: worktree.path,
+        force: true,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+        });
+        // Retry the create
+        await _handleCreate();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+          _errorMessage = 'Failed to delete worktree: $e';
+          _errorSuggestions = null;
         });
       }
     }
@@ -532,13 +679,13 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                         onSubmitted: (_) => _handleCreate(),
                       ),
                     ),
-                    if (_restorableWorktrees.isNotEmpty) ...[
+                    if (_availableBranches.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       _IconButton(
-                        key: CreateWorktreePanelKeys.restoreButton,
-                        icon: Icons.restore,
-                        onPressed: _handleRestore,
-                        tooltip: 'Restore existing worktree',
+                        key: CreateWorktreePanelKeys.branchSelectorButton,
+                        icon: Icons.list_alt,
+                        onPressed: _handleBranchSelector,
+                        tooltip: 'Select existing branch',
                       ),
                     ],
                   ],
@@ -602,6 +749,26 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                   ),
                 ),
 
+                // Existing worktree conflict card
+                if (_existingWorktreeConflict != null) ...[
+                  const SizedBox(height: 20),
+                  if (_existingWorktreeConflict!.isPrunable)
+                    _PrunableWorktreeCard(
+                      worktree: _existingWorktreeConflict!,
+                      isCreating: _isCreating,
+                      onYes: _handlePrunableWorktreeRecreate,
+                      onCancel: _handleExistingWorktreeCancel,
+                    )
+                  else
+                    _ExistingWorktreeCard(
+                      worktree: _existingWorktreeConflict!,
+                      isCreating: _isCreating,
+                      onOpen: _handleExistingWorktreeOpen,
+                      onDelete: _handleExistingWorktreeDelete,
+                      onCancel: _handleExistingWorktreeCancel,
+                    ),
+                ],
+
                 // Recovery prompt when branch already exists
                 if (_recoverBranchName != null) ...[
                   const SizedBox(height: 20),
@@ -624,8 +791,8 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
 
                 const SizedBox(height: 32),
 
-                // Action buttons (hidden when recovery prompt is showing)
-                if (_recoverBranchName == null)
+                // Action buttons (hidden when recovery/conflict prompts show)
+                if (_recoverBranchName == null && _existingWorktreeConflict == null)
                   _ActionBar(
                     isCreating: _isCreating,
                     onCancel: _handleCancel,
@@ -1152,6 +1319,249 @@ class _RecoverBranchCard extends StatelessWidget {
                       )
                     : Text(
                         'Yes, Recover',
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Card shown when the branch is already checked out in a valid worktree.
+///
+/// Offers: [Open] the existing worktree, [Delete] it, or [Cancel].
+class _ExistingWorktreeCard extends StatelessWidget {
+  const _ExistingWorktreeCard({
+    required this.worktree,
+    required this.isCreating,
+    required this.onOpen,
+    required this.onDelete,
+    required this.onCancel,
+  });
+
+  final WorktreeInfo worktree;
+  final bool isCreating;
+  final VoidCallback onOpen;
+  final VoidCallback onDelete;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      key: CreateWorktreePanelKeys.existingWorktreeCard,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.tertiary.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 18,
+                color: colorScheme.tertiary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '"${worktree.branch}" branch exists on worktree at '
+                  '${worktree.path}. Open it there?',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              OutlinedButton(
+                key: CreateWorktreePanelKeys.existingDeleteButton,
+                onPressed: isCreating ? null : onDelete,
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  side: BorderSide(color: colorScheme.error),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'Delete',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.error,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                key: CreateWorktreePanelKeys.existingCancelButton,
+                onPressed: isCreating ? null : onCancel,
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  side: BorderSide(color: colorScheme.outline),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton(
+                key: CreateWorktreePanelKeys.existingOpenButton,
+                onPressed: isCreating ? null : onOpen,
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: isCreating
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onPrimary,
+                        ),
+                      )
+                    : Text(
+                        'Yes',
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Card shown when the branch is recorded as a worktree but the directory
+/// doesn't exist on disk (prunable).
+class _PrunableWorktreeCard extends StatelessWidget {
+  const _PrunableWorktreeCard({
+    required this.worktree,
+    required this.isCreating,
+    required this.onYes,
+    required this.onCancel,
+  });
+
+  final WorktreeInfo worktree;
+  final bool isCreating;
+  final VoidCallback onYes;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      key: CreateWorktreePanelKeys.prunableCard,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.error.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.warning_amber,
+                size: 18,
+                color: colorScheme.error,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '"${worktree.branch}" is recorded as a worktree at '
+                  '${worktree.path}, but that doesn\'t exist. '
+                  'Prune and recreate?',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              OutlinedButton(
+                key: CreateWorktreePanelKeys.prunableCancelButton,
+                onPressed: isCreating ? null : onCancel,
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  side: BorderSide(color: colorScheme.outline),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton(
+                key: CreateWorktreePanelKeys.prunableYesButton,
+                onPressed: isCreating ? null : onYes,
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: isCreating
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onPrimary,
+                        ),
+                      )
+                    : Text(
+                        'Yes',
                         style: textTheme.labelLarge?.copyWith(
                           color: colorScheme.onPrimary,
                           fontWeight: FontWeight.w600,

@@ -15,6 +15,7 @@ import '../services/persistence_service.dart';
 import '../services/project_config_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/script_execution_service.dart';
+import '../services/menu_action_service.dart';
 import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/delete_worktree_dialog.dart';
@@ -32,10 +33,36 @@ class WorktreePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const PanelWrapper(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return PanelWrapper(
       title: 'Worktrees',
       icon: Icons.account_tree,
-      child: _WorktreeListContent(),
+      contextMenuItems: [
+        styledMenuItem(
+          value: 'restore',
+          onTap: () {
+            context.read<MenuActionService>().triggerAction(
+              MenuAction.restoreWorktree,
+            );
+          },
+          child: Row(
+            children: [
+              Icon(
+                Icons.restore,
+                size: 16,
+                color: colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Restore Worktree...',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: const _WorktreeListContent(),
     );
   }
 }

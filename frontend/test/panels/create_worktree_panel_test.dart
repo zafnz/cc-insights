@@ -336,7 +336,10 @@ class TestGitService implements GitService {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
   }
 
-
+  @override
+  Future<void> pruneWorktrees(String repoRoot) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
 
   /// Sets up a simple repository.
   void setupSimpleRepo(String path, {String branch = 'main'}) {
@@ -900,35 +903,40 @@ void main() {
       });
     });
 
-    group('restore worktree button', () {
-      testWidgets('shows restore icon when restorable worktrees exist',
+    group('branch selector button', () {
+      testWidgets('shows branch selector icon when branches are available',
           (tester) async {
-        // Set up a worktree that exists on disk but is NOT tracked in the app
+        // Set up available branches
+        testGitService.branchLists['/test/project'] = [
+          'main',
+          'feature-x',
+          'develop',
+        ];
+
+        // The primary worktree uses 'main', so 'feature-x' and 'develop'
+        // should appear as available (non-worktree) branches.
         testGitService.worktrees['/test/project'] = [
           const WorktreeInfo(
             path: '/test/project',
             isPrimary: true,
             branch: 'main',
           ),
-          const WorktreeInfo(
-            path: '/outside/path/cci/feature-x',
-            isPrimary: false,
-            branch: 'feature-x',
-          ),
         ];
 
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        // Restore button should be visible
+        // Branch selector button should be visible
         expect(
-          find.byKey(CreateWorktreePanelKeys.restoreButton),
+          find.byKey(CreateWorktreePanelKeys.branchSelectorButton),
           findsOneWidget,
         );
       });
 
-      testWidgets('hides restore icon when no restorable worktrees exist',
+      testWidgets('hides branch selector icon when no branches available',
           (tester) async {
-        // Set up only the primary worktree (no linked worktrees to restore)
+        // No branches at all
+        testGitService.branchLists['/test/project'] = [];
+
         testGitService.worktrees['/test/project'] = [
           const WorktreeInfo(
             path: '/test/project',
@@ -939,50 +947,32 @@ void main() {
 
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        // Restore button should NOT be visible
+        // Branch selector button should NOT be visible
         expect(
-          find.byKey(CreateWorktreePanelKeys.restoreButton),
+          find.byKey(CreateWorktreePanelKeys.branchSelectorButton),
           findsNothing,
         );
       });
 
       testWidgets(
-          'hides restore icon when all worktrees are already tracked',
+          'hides branch selector when all branches are already worktrees',
           (tester) async {
-        // Add a linked worktree to the project state
-        final linkedWorktree = WorktreeState(
-          const WorktreeData(
-            worktreeRoot: '/outside/path/cci/feature-x',
-            isPrimary: false,
-            branch: 'feature-x',
-            uncommittedFiles: 0,
-            stagedFiles: 0,
-            commitsAhead: 0,
-            commitsBehind: 0,
-            hasMergeConflict: false,
-          ),
-        );
-        projectState.addWorktree(linkedWorktree);
+        // Only 'main' branch exists and it's already a worktree
+        testGitService.branchLists['/test/project'] = ['main'];
 
-        // Set up git to return both worktrees
         testGitService.worktrees['/test/project'] = [
           const WorktreeInfo(
             path: '/test/project',
             isPrimary: true,
             branch: 'main',
           ),
-          const WorktreeInfo(
-            path: '/outside/path/cci/feature-x',
-            isPrimary: false,
-            branch: 'feature-x',
-          ),
         ];
 
         await pumpWidgetWithRealAsync(tester, buildTestWidget());
 
-        // Restore button should NOT be visible since all worktrees are tracked
+        // Branch selector button should NOT be visible since no available branches
         expect(
-          find.byKey(CreateWorktreePanelKeys.restoreButton),
+          find.byKey(CreateWorktreePanelKeys.branchSelectorButton),
           findsNothing,
         );
       });

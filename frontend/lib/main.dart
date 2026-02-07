@@ -838,6 +838,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       onNewWorktree: _projectSelected
           ? () => _menuActionService.triggerAction(MenuAction.newWorktree)
           : null,
+      onRestoreWorktree: _projectSelected
+          ? () => _menuActionService.triggerAction(MenuAction.restoreWorktree)
+          : null,
       onDeleteWorktree: null, // Not wired up yet
       onNewChat: _projectSelected
           ? () => _menuActionService.triggerAction(MenuAction.newChat)
