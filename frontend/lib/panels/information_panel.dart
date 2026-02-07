@@ -903,7 +903,7 @@ class _BaseSection extends StatelessWidget {
                     style: const TextStyle(fontSize: 14),
                   ),
                   const SizedBox(width: 6),
-                  Flexible(
+                  Expanded(
                     child: Text(
                       baseLabel,
                       style: textTheme.bodySmall?.copyWith(
@@ -914,7 +914,7 @@ class _BaseSection extends StatelessWidget {
                       maxLines: 1,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   _CompactButton(
                     key: InformationPanelKeys.changeBaseButton,
                     onPressed: onChangeBase,
