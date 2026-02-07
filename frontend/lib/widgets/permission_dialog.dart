@@ -228,9 +228,6 @@ class _PermissionDialogState extends State<PermissionDialog> {
     final otherSuggestions =
         suggestions.where((s) => s.type != 'setMode').toList();
 
-    // Dark purple background for the permission dialog body
-    const dialogBackground = Color(0xFF2D1F3D);
-
     // Use LayoutBuilder to get the available height and limit the content area
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -245,8 +242,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
         return Container(
           key: PermissionDialogKeys.dialog,
           // No margin, no rounded corners, no border - integrated look
-          decoration: const BoxDecoration(
-            color: dialogBackground,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -288,7 +285,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
                         onPressed: () =>
                             _handleAllowWithMode(setModeSuggestion.first),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blue,
+                          foregroundColor: colorScheme.tertiary,
+                          side: BorderSide(color: colorScheme.tertiary.withValues(alpha: 0.5)),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 8),
                           visualDensity: VisualDensity.compact,
@@ -301,7 +299,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
                       key: PermissionDialogKeys.denyButton,
                       onPressed: _handleDeny,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
+                        foregroundColor: colorScheme.error,
+                        side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         visualDensity: VisualDensity.compact,
@@ -313,7 +312,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
                       key: PermissionDialogKeys.allowButton,
                       onPressed: _handleAllow,
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         visualDensity: VisualDensity.compact,
@@ -489,7 +489,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                         Icons.send_rounded,
                         size: 16,
                         color: hasText
-                            ? Colors.orange.shade300
+                            ? colorScheme.tertiary
                             : colorScheme.onSurface.withValues(alpha: 0.2),
                       ),
                       tooltip: 'Send feedback',
@@ -512,7 +512,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                 key: PermissionDialogKeys.planReject,
                 label: 'Reject',
                 icon: Icons.close,
-                color: Colors.red.shade300,
+                color: colorScheme.error,
                 onPressed: _handleDeny,
               ),
               const Spacer(),
@@ -522,7 +522,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                     key: PermissionDialogKeys.planClearContext,
                     label: 'Clear context, approve & allow edits',
                     icon: Icons.restart_alt,
-                    color: Colors.blue.shade300,
+                    color: colorScheme.tertiary,
                     onPressed: () =>
                         widget.onClearContextAndAcceptEdits!(plan),
                     outlined: true,
@@ -535,7 +535,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                   key: PermissionDialogKeys.planApproveAcceptEdits,
                   label: 'Approve & allow edits',
                   icon: Icons.edit_note,
-                  color: Colors.blue.shade300,
+                  color: colorScheme.tertiary,
                   onPressed: _handleAllowWithAcceptEdits,
                   outlined: true,
                 ),
@@ -545,7 +545,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
                 key: PermissionDialogKeys.planApproveManual,
                 label: 'Approve',
                 icon: Icons.check,
-                color: Colors.green,
+                color: colorScheme.primary,
                 onPressed: _handleAllow,
                 filled: true,
               ),
@@ -574,17 +574,15 @@ class _PermissionDialogState extends State<PermissionDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    const headerPurple = Color(0xFF3D2456);
-
     return Container(
       key: PermissionDialogKeys.header,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(color: headerPurple),
+      decoration: BoxDecoration(color: colorScheme.primaryContainer),
       child: Row(
         children: [
           Icon(
             Icons.description_outlined,
-            color: colorScheme.primary,
+            color: colorScheme.onPrimaryContainer,
             size: 18,
           ),
           const SizedBox(width: 8),
@@ -593,7 +591,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
             style: textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 13,
-              color: colorScheme.onSurface,
+              color: colorScheme.onPrimaryContainer,
             ),
           ),
         ],
@@ -605,21 +603,17 @@ class _PermissionDialogState extends State<PermissionDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    // Use a rich purple for the header - matches old app style
-    const headerPurple = Color(0xFF4A2066);
-
     return Container(
       key: PermissionDialogKeys.header,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: headerPurple,
-        // No rounded corners - integrated look
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
       ),
       child: Row(
         children: [
           Icon(
             Icons.shield_outlined,
-            color: colorScheme.primary,
+            color: colorScheme.onPrimaryContainer,
             size: 20,
           ),
           const SizedBox(width: 8),
@@ -628,7 +622,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
               'Permission Required: ${widget.request.toolName}',
               style: textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
+                color: colorScheme.onPrimaryContainer,
               ),
             ),
           ),
@@ -679,14 +673,14 @@ class _PermissionDialogState extends State<PermissionDialog> {
           width: double.infinity,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(4),
           ),
           child: SelectableText(
             '\$ $command',
             style: monoStyle(
               fontSize: PermissionFontSizes.commandText,
-              color: Colors.greenAccent,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -738,7 +732,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
               child: Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: SelectableText(
@@ -755,7 +749,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
               child: Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: SelectableText(
@@ -828,7 +822,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
           'Unknown suggestion: ${unknown.first.rawJson}',
           style: monoStyle(
             fontSize: PermissionFontSizes.badge,
-            color: Colors.orange.shade700,
+            color: Theme.of(context).colorScheme.tertiary,
           ),
           overflow: TextOverflow.ellipsis,
         ),
@@ -930,7 +924,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
             'in',
             style: textStyle(
               fontSize: PermissionFontSizes.footer,
-              color: Colors.grey,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(width: 4),
@@ -959,13 +953,14 @@ class _PermissionDialogState extends State<PermissionDialog> {
   }
 
   Color _behaviorColor(String behavior) {
+    final colorScheme = Theme.of(context).colorScheme;
     switch (behavior) {
       case 'allow':
-        return Colors.green;
+        return colorScheme.primary;
       case 'deny':
-        return Colors.red;
+        return colorScheme.error;
       default:
-        return Colors.grey;
+        return colorScheme.onSurfaceVariant;
     }
   }
 

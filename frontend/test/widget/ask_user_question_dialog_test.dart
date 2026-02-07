@@ -300,12 +300,13 @@ void main() {
       expect(find.text('multi-select'), findsNothing);
     });
 
-    testWidgets('uses green color scheme', (tester) async {
+    testWidgets('uses themed color scheme from colorScheme', (tester) async {
       await tester.pumpWidget(buildTestWidget(singleSelectRequest, (_) {}));
 
-      // Check header has green icon
+      // Check header icon uses onPrimaryContainer from theme
       final icon = tester.widget<Icon>(find.byIcon(Icons.help_outline));
-      expect(icon.color, Colors.greenAccent);
+      final colorScheme = ThemeData.dark().colorScheme;
+      expect(icon.color, colorScheme.onPrimaryContainer);
     });
   });
 }

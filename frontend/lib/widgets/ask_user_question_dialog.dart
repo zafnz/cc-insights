@@ -71,14 +71,10 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
     final toolInput = widget.request.toolInput;
     final questions = (toolInput['questions'] as List<dynamic>?) ?? [];
 
-    // Green-tinted background for questions (different from purple permissions)
-    const dialogBackground = Color(0xFF1F3D2D);
-    const headerGreen = Color(0xFF206644);
-
     return Container(
       key: AskUserQuestionDialogKeys.dialog,
-      decoration: const BoxDecoration(
-        color: dialogBackground,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -88,14 +84,14 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
           Container(
             key: AskUserQuestionDialogKeys.header,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: headerGreen,
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.help_outline,
-                  color: Colors.greenAccent,
+                  color: colorScheme.onPrimaryContainer,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -104,7 +100,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
                   style: textStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.greenAccent,
+                    color: colorScheme.onPrimaryContainer,
                   ),
                 ),
               ],
@@ -136,10 +132,10 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
                   key: AskUserQuestionDialogKeys.submitButton,
                   onPressed: _canSubmit() ? _submitAnswers : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E7D32), // Green 800
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[700],
-                    disabledForegroundColor: Colors.grey[400],
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    disabledBackgroundColor: colorScheme.onSurface.withValues(alpha: 0.12),
+                    disabledForegroundColor: colorScheme.onSurface.withValues(alpha: 0.38),
                   ),
                   child: const Text('Submit'),
                 ),
@@ -162,6 +158,8 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
       selectedAnswers[questionText] = {};
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -172,7 +170,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.3),
+                  color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -180,6 +178,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
                   style: textStyle(
                     fontSize: PermissionFontSizes.badge,
                     fontWeight: FontWeight.bold,
+                    color: colorScheme.onPrimaryContainer,
                   ),
                 ),
               ),
@@ -189,14 +188,14 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.2),
+                  color: colorScheme.tertiaryContainer,
                   borderRadius: BorderRadius.circular(3),
                 ),
                 child: Text(
                   'multi-select',
                   style: textStyle(
                     fontSize: PermissionFontSizes.smallBadge,
-                    color: Colors.blue,
+                    color: colorScheme.onTertiaryContainer,
                   ),
                 ),
               ),
@@ -209,6 +208,7 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
           style: textStyle(
             fontSize: PermissionFontSizes.questionText,
             fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 12),

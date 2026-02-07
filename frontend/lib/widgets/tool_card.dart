@@ -1129,25 +1129,28 @@ class _QuestionItemWidget extends StatelessWidget {
     final isOtherAnswer = selectedAnswer != null &&
         !selectedLabels.any((s) => optionLabels.contains(s));
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(Icons.help_outline, size: 14, color: Colors.green),
+            Icon(Icons.help_outline, size: 14, color: colorScheme.primary),
             const SizedBox(width: 8),
             if (header.isNotEmpty) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.2),
+                  color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   header,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
+                    color: colorScheme.onPrimaryContainer,
                   ),
                 ),
               ),
@@ -1157,12 +1160,12 @@ class _QuestionItemWidget extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.2),
+                  color: colorScheme.tertiaryContainer,
                   borderRadius: BorderRadius.circular(3),
                 ),
-                child: const Text(
+                child: Text(
                   'multi',
-                  style: TextStyle(fontSize: 9, color: Colors.blue),
+                  style: TextStyle(fontSize: 9, color: colorScheme.onTertiaryContainer),
                 ),
               ),
           ],
@@ -1210,6 +1213,7 @@ class _OptionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = option['label'] as String? ?? '';
     final description = option['description'] as String?;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Tooltip(
       message: description ?? '',
@@ -1217,13 +1221,13 @@ class _OptionChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.green.withValues(alpha: 0.3)
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
             color: isSelected
-                ? Colors.green
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                ? colorScheme.primary
+                : colorScheme.outline.withValues(alpha: 0.3),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -1231,7 +1235,7 @@ class _OptionChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isSelected) ...[
-              const Icon(Icons.check, size: 14, color: Colors.green),
+              Icon(Icons.check, size: 14, color: colorScheme.primary),
               const SizedBox(width: 4),
             ],
             Text(
@@ -1239,7 +1243,7 @@ class _OptionChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Colors.green : null,
+                color: isSelected ? colorScheme.onPrimaryContainer : null,
               ),
             ),
           ],
@@ -1257,32 +1261,34 @@ class _OtherAnswerChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.3),
+        color: colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.green, width: 2),
+        border: Border.all(color: colorScheme.primary, width: 2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check, size: 14, color: Colors.green),
+          Icon(Icons.check, size: 14, color: colorScheme.primary),
           const SizedBox(width: 4),
           Text(
             'Other: ',
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
           Text(
             answer,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: Colors.green,
+              color: colorScheme.onPrimaryContainer,
             ),
           ),
         ],
