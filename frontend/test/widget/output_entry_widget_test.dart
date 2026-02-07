@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
 import 'package:cc_insights_v2/widgets/output_entries/output_entry_widget.dart';
@@ -95,6 +96,7 @@ void main() {
         final entry = ToolUseOutputEntry(
           timestamp: DateTime.now(),
           toolName: 'Bash',
+          toolKind: ToolKind.execute,
           toolUseId: 'test-id',
           toolInput: {'command': 'ls'},
           result: 'output',
@@ -176,6 +178,7 @@ void main() {
         final entry = ToolUseOutputEntry(
           timestamp: DateTime.now(),
           toolName: 'Read',
+          toolKind: ToolKind.read,
           toolUseId: 'test-id',
           toolInput: {'file_path': '/path/to/file.txt'},
           result: 'file content',

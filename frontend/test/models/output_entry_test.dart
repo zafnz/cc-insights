@@ -193,6 +193,7 @@ void main() {
       final entry = ToolUseOutputEntry(
         timestamp: timestamp,
         toolName: 'Read',
+        toolKind: ToolKind.read,
         toolUseId: 'tool-123',
         toolInput: {'file_path': '/path/to/file.dart'},
       );
@@ -200,6 +201,7 @@ void main() {
       // Assert
       check(entry.timestamp).equals(timestamp);
       check(entry.toolName).equals('Read');
+      check(entry.toolKind).equals(ToolKind.read);
       check(entry.toolUseId).equals('tool-123');
       check(entry.toolInput['file_path']).equals('/path/to/file.dart');
       check(entry.model).isNull();
@@ -216,6 +218,7 @@ void main() {
       final entry = ToolUseOutputEntry(
         timestamp: timestamp,
         toolName: 'Write',
+        toolKind: ToolKind.edit,
         toolUseId: 'tool-456',
         toolInput: {'content': 'test'},
         model: 'claude-3-sonnet',
@@ -235,6 +238,7 @@ void main() {
       final entry = ToolUseOutputEntry(
         timestamp: DateTime.now(),
         toolName: 'Read',
+        toolKind: ToolKind.read,
         toolUseId: 'tool-789',
         toolInput: {},
         isExpanded: false,
@@ -581,6 +585,7 @@ void main() {
         final entry = ToolUseOutputEntry(
           timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
           toolName: 'Read',
+          toolKind: ToolKind.read,
           toolUseId: 'tu_123',
           toolInput: {'file_path': '/path/to/file.dart'},
           model: 'claude-sonnet-4',
@@ -595,7 +600,7 @@ void main() {
         check(json['type']).equals('tool_use');
         check(json['timestamp']).equals('2025-01-27T10:30:00.000Z');
         check(json['tool_name']).equals('Read');
-        check(json['tool_kind']).equals('other');
+        check(json['tool_kind']).equals('read');
         check(json['tool_use_id']).equals('tu_123');
         check((json['tool_input'] as Map)['file_path'])
             .equals('/path/to/file.dart');
@@ -609,6 +614,7 @@ void main() {
         final entry = ToolUseOutputEntry(
           timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
           toolName: 'Read',
+          toolKind: ToolKind.read,
           toolUseId: 'tu_123',
           toolInput: {},
         );
@@ -675,6 +681,7 @@ void main() {
         final original = ToolUseOutputEntry(
           timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
           toolName: 'Edit',
+          toolKind: ToolKind.edit,
           toolUseId: 'tu_complex',
           toolInput: {
             'file_path': '/path/file.dart',

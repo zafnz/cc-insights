@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/persistence_models.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
@@ -476,6 +477,7 @@ void main() {
         final toolUse = ToolUseOutputEntry(
           timestamp: DateTime(2024, 1, 1, 12, 0, 0),
           toolName: 'Read',
+          toolKind: ToolKind.read,
           toolUseId: toolUseId,
           toolInput: {'file_path': '/test/file.txt'},
         );
@@ -522,6 +524,7 @@ void main() {
         final toolUse = ToolUseOutputEntry(
           timestamp: DateTime(2024, 1, 1, 12, 0, 1),
           toolName: 'Write',
+          toolKind: ToolKind.edit,
           toolUseId: toolUseId,
           toolInput: {'content': 'test'},
         );
@@ -549,6 +552,7 @@ void main() {
         final toolUse = ToolUseOutputEntry(
           timestamp: DateTime(2024, 1, 1, 12, 0, 0),
           toolName: 'Bash',
+          toolKind: ToolKind.execute,
           toolUseId: toolUseId,
           toolInput: {'command': 'invalid-command'},
         );
@@ -589,6 +593,7 @@ void main() {
         final toolUse = ToolUseOutputEntry(
           timestamp: DateTime(2024, 1, 1, 12, 0, 1),
           toolName: 'Read',
+          toolKind: ToolKind.read,
           toolUseId: 'tool-123',
           toolInput: {'path': '/test'},
         );
@@ -636,6 +641,7 @@ void main() {
         final toolUse = ToolUseOutputEntry(
           timestamp: DateTime(2024, 1, 1, 12, 0, 0),
           toolName: 'Bash',
+          toolKind: ToolKind.execute,
           toolUseId: 'tool-pending',
           toolInput: {'command': 'sleep 10'},
         );

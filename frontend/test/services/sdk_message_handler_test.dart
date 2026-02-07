@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:cc_insights_v2/models/agent.dart';
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
@@ -1680,6 +1681,7 @@ void main() {
       final entry = ToolUseOutputEntry(
         timestamp: DateTime.now(),
         toolName: 'Read',
+        toolKind: ToolKind.read,
         toolUseId: 'toolu_test',
         toolInput: {'file_path': '/test.dart'},
       );

@@ -30,11 +30,14 @@ export 'src/single_request.dart';
 export 'src/sdk_logger.dart';
 
 // Types
-export 'src/types/sdk_messages.dart';
-export 'src/types/content_blocks.dart';
-export 'src/types/session_options.dart';
+export 'src/types/backend_provider.dart';
 export 'src/types/callbacks.dart';
-export 'src/types/permission_suggestion.dart';
-export 'src/types/usage.dart';
-export 'src/types/errors.dart';
+export 'src/types/content_blocks.dart';
 export 'src/types/control_messages.dart';
+export 'src/types/errors.dart';
+export 'src/types/insights_events.dart';
+export 'src/types/permission_suggestion.dart';
+export 'src/types/sdk_messages.dart';
+export 'src/types/session_options.dart';
+export 'src/types/tool_kind.dart';
+export 'src/types/usage.dart';

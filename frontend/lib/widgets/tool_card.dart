@@ -70,7 +70,7 @@ class _ToolCardState extends State<ToolCard> {
                   Icon(
                     _getToolIcon(entry.toolName),
                     size: 16,
-                    color: _getToolColor(entry.toolName),
+                    color: _getToolColor(),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -167,11 +167,6 @@ class _ToolCardState extends State<ToolCard> {
     return toolName;
   }
 
-  /// Returns true if the tool name matches the MCP pattern.
-  bool _isMcpTool(String toolName) {
-    return toolName.startsWith('mcp__');
-  }
-
   IconData _getToolIcon(String toolName) {
     return switch (widget.entry.toolKind) {
       ToolKind.execute => Icons.terminal,
@@ -197,7 +192,7 @@ class _ToolCardState extends State<ToolCard> {
     };
   }
 
-  Color _getToolColor(String toolName) {
+  Color _getToolColor() {
     return switch (widget.entry.toolKind) {
       ToolKind.execute => Colors.orange,
       ToolKind.read || ToolKind.edit => Colors.blue,
@@ -218,7 +213,6 @@ class _ToolCardState extends State<ToolCard> {
     ToolUseOutputEntry entry,
   ) {
     final summary = _getToolSummary(
-      entry.toolName,
       entry.toolInput,
       widget.projectDir,
     );
@@ -300,7 +294,6 @@ class _ToolCardState extends State<ToolCard> {
   }
 
   String _getToolSummary(
-    String toolName,
     Map<String, dynamic> input,
     String? projectDir,
   ) {

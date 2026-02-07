@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -71,6 +72,7 @@ void main() {
           timestamp:
               DateTime.now().subtract(Duration(minutes: entryCount - i, seconds: 30)),
           toolName: 'Bash',
+          toolKind: ToolKind.execute,
           toolUseId: 'tool-$i',
           toolInput: {'command': 'echo "test $i"', 'description': 'Test command $i'},
         )..updateResult('Output for test $i\n' + 'y' * 50, false));
