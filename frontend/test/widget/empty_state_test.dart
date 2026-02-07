@@ -2,6 +2,7 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/chats_panel.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
+import 'package:cc_insights_v2/panels/welcome_card.dart';
 import 'package:cc_insights_v2/panels/worktree_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';

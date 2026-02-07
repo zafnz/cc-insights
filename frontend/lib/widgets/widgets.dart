@@ -4,7 +4,6 @@
 /// multiple screens and panels.
 library;
 
-export 'conversation_panel.dart';
 export 'diff_view.dart';
 export 'editable_label.dart';
 export 'keyboard_focus_manager.dart';
