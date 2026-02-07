@@ -137,6 +137,13 @@
 - Archive methods in `PersistenceService`: `archiveChat`, `restoreArchivedChat`, `archiveWorktreeChats`, `deleteArchivedChat`, `getArchivedChats`
 - `_TestPersistenceService` needs `deleteChat` override + `createChatFiles`/`chatFilesExist` helpers for archive tests
 
+## WorktreeService Methods
+- `createWorktree`: Creates NEW git worktree + runs hooks + persists to projects.json
+- `recoverWorktree`: Creates git worktree from EXISTING branch + runs hooks + persists
+- `restoreExistingWorktree`: Re-registers EXISTING git worktree (no creation, no hooks) + persists
+- Pattern for effective base: Check `config.defaultBase` is not null/empty/"auto", use as effectiveBase
+- Test pattern: Use `_TrackingFakeGitService` to verify createWorktree was/wasn't called
+
 ## Test Counts (as of 2026-02-06)
-- Unit/widget tests: ~2041 total (1 skipped)
+- Unit/widget tests: ~2081 total (2 skipped)
 - Integration tests: 9 (require macOS desktop build)

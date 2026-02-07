@@ -899,6 +899,94 @@ void main() {
         );
       });
     });
+
+    group('restore worktree button', () {
+      testWidgets('shows restore icon when restorable worktrees exist',
+          (tester) async {
+        // Set up a worktree that exists on disk but is NOT tracked in the app
+        testGitService.worktrees['/test/project'] = [
+          const WorktreeInfo(
+            path: '/test/project',
+            isPrimary: true,
+            branch: 'main',
+          ),
+          const WorktreeInfo(
+            path: '/outside/path/cci/feature-x',
+            isPrimary: false,
+            branch: 'feature-x',
+          ),
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Restore button should be visible
+        expect(
+          find.byKey(CreateWorktreePanelKeys.restoreButton),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('hides restore icon when no restorable worktrees exist',
+          (tester) async {
+        // Set up only the primary worktree (no linked worktrees to restore)
+        testGitService.worktrees['/test/project'] = [
+          const WorktreeInfo(
+            path: '/test/project',
+            isPrimary: true,
+            branch: 'main',
+          ),
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Restore button should NOT be visible
+        expect(
+          find.byKey(CreateWorktreePanelKeys.restoreButton),
+          findsNothing,
+        );
+      });
+
+      testWidgets(
+          'hides restore icon when all worktrees are already tracked',
+          (tester) async {
+        // Add a linked worktree to the project state
+        final linkedWorktree = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/outside/path/cci/feature-x',
+            isPrimary: false,
+            branch: 'feature-x',
+            uncommittedFiles: 0,
+            stagedFiles: 0,
+            commitsAhead: 0,
+            commitsBehind: 0,
+            hasMergeConflict: false,
+          ),
+        );
+        projectState.addWorktree(linkedWorktree);
+
+        // Set up git to return both worktrees
+        testGitService.worktrees['/test/project'] = [
+          const WorktreeInfo(
+            path: '/test/project',
+            isPrimary: true,
+            branch: 'main',
+          ),
+          const WorktreeInfo(
+            path: '/outside/path/cci/feature-x',
+            isPrimary: false,
+            branch: 'feature-x',
+          ),
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Restore button should NOT be visible since all worktrees are tracked
+        expect(
+          find.byKey(CreateWorktreePanelKeys.restoreButton),
+          findsNothing,
+        );
+      });
+    });
   });
 
   group('ContentPanel mode switching', () {

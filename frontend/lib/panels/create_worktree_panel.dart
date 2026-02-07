@@ -11,6 +11,7 @@ import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/restore_worktree_dialog.dart';
 
 /// Keys for testing CreateWorktreePanel widgets.
 class CreateWorktreePanelKeys {
@@ -25,6 +26,7 @@ class CreateWorktreePanelKeys {
   static const recoverYesButton = Key('create_worktree_recover_yes');
   static const recoverNoButton = Key('create_worktree_recover_no');
   static const recoverCard = Key('create_worktree_recover_card');
+  static const restoreButton = Key('create_worktree_restore_button');
 }
 
 /// Panel for creating a new git worktree.
@@ -59,6 +61,9 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   List<String>? _errorSuggestions;
   List<String> _availableBranches = [];
   List<String> _existingWorktreeBranches = [];
+
+  /// List of git worktrees that exist on disk but aren't tracked by the app.
+  List<WorktreeInfo> _restorableWorktrees = [];
 
   /// When non-null, shows a recovery prompt for this branch name.
   String? _recoverBranchName;
@@ -104,6 +109,14 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
           .where((branch) => !worktreeBranches.contains(branch))
           .toList();
 
+      // Compute restorable worktrees (exist on disk but not tracked in app)
+      final trackedPaths = project.allWorktrees
+          .map((w) => w.data.worktreeRoot)
+          .toSet();
+      final restorable = worktrees
+          .where((wt) => !wt.isPrimary && !trackedPaths.contains(wt.path))
+          .toList();
+
       // Compute default worktree root
       final defaultRoot = await _computeDefaultWorktreeRoot(project, repoRoot);
 
@@ -111,6 +124,7 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
         setState(() {
           _availableBranches = available;
           _existingWorktreeBranches = worktreeBranches.toList();
+          _restorableWorktrees = restorable;
           _rootController.text = defaultRoot;
           _isLoading = false;
         });
@@ -306,10 +320,69 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     }
   }
 
+  Future<void> _handleRestore() async {
+    final selected = await showRestoreWorktreeDialog(
+      context: context,
+      restorableWorktrees: _restorableWorktrees,
+    );
+
+    if (selected == null || !mounted) return;
+
+    setState(() {
+      _isCreating = true;
+      _errorMessage = null;
+      _errorSuggestions = null;
+    });
+
+    try {
+      final project = context.read<ProjectState>();
+      final gitService = context.read<GitService>();
+      final worktreeService = WorktreeService(gitService: gitService);
+
+      // Restore the existing worktree
+      final worktreeState = await worktreeService.restoreExistingWorktree(
+        project: project,
+        worktreePath: selected.path,
+        branch: selected.branch ?? 'unknown',
+      );
+
+      // Add worktree to project state
+      project.addWorktree(worktreeState);
+
+      // Recover archived chats that belonged to this worktree
+      await _recoverArchivedChats(
+        project: project,
+        worktreeState: worktreeState,
+        branch: selected.branch ?? 'unknown',
+      );
+
+      // Select the new worktree
+      if (mounted) {
+        final selection = context.read<SelectionState>();
+        selection.selectWorktree(worktreeState);
+        selection.showConversationPanel();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to restore worktree: $e';
+          _errorSuggestions = null;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+        });
+      }
+    }
+  }
+
   /// Recovers archived chats whose original worktree path matches the branch.
   ///
   /// Looks for archived chats whose [originalWorktreePath] ends with
-  /// `/cci/{branch}` and restores them to the new worktree.
+  /// `/cci/{branch}` or exactly matches the worktree path, and restores them
+  /// to the new worktree.
   Future<void> _recoverArchivedChats({
     required ProjectState project,
     required WorktreeState worktreeState,
@@ -325,9 +398,13 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     );
 
     // Match archived chats whose original worktree path ends with /cci/{branch}
+    // or exactly matches the worktree's path
     final suffix = '/cci/$branch';
+    final worktreePath = worktreeState.data.worktreeRoot;
     final matchingChats = archivedChats
-        .where((chat) => chat.originalWorktreePath.endsWith(suffix))
+        .where((chat) =>
+            chat.originalWorktreePath.endsWith(suffix) ||
+            chat.originalWorktreePath == worktreePath)
         .toList();
 
     for (final archivedRef in matchingChats) {
@@ -444,12 +521,27 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
                 // Branch/worktree name
                 _buildLabel('Branch name', textTheme),
                 const SizedBox(height: 8),
-                _buildTextField(
-                  controller: _branchController,
-                  key: CreateWorktreePanelKeys.branchField,
-                  autofocus: true,
-                  hintText: 'e.g. feature/new-login, bugfix/header-alignment',
-                  onSubmitted: (_) => _handleCreate(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _branchController,
+                        key: CreateWorktreePanelKeys.branchField,
+                        autofocus: true,
+                        hintText: 'e.g. feature/new-login, bugfix/header-alignment',
+                        onSubmitted: (_) => _handleCreate(),
+                      ),
+                    ),
+                    if (_restorableWorktrees.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      _IconButton(
+                        key: CreateWorktreePanelKeys.restoreButton,
+                        icon: Icons.restore,
+                        onPressed: _handleRestore,
+                        tooltip: 'Restore existing worktree',
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(

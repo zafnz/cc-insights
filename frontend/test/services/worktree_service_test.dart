@@ -784,6 +784,93 @@ void main() {
       });
     });
 
+    group('restoreExistingWorktree', () {
+      test('restores existing worktree without creating git worktree',
+          () async {
+        // Arrange
+        final trackingGitService = _TrackingFakeGitService();
+        trackingGitService.setupSimpleRepo(repoRoot);
+        final existingWorktreePath = '$worktreeRoot/cci/existing-branch';
+        trackingGitService.statuses[existingWorktreePath] = const GitStatus();
+
+        final trackingService = WorktreeService(
+          gitService: trackingGitService,
+          persistenceService: persistenceService,
+        );
+
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        final result = await trackingService.restoreExistingWorktree(
+          project: project,
+          worktreePath: existingWorktreePath,
+          branch: 'existing-branch',
+        );
+
+        // Assert
+        check(result.data.branch).equals('existing-branch');
+        check(result.data.worktreeRoot).equals(existingWorktreePath);
+        check(result.data.isPrimary).isFalse();
+        // Should NOT call createWorktree
+        check(trackingGitService.createWorktreeCalls).isEmpty();
+      });
+
+      test('persists restored worktree to projects.json', () async {
+        // Arrange
+        gitService.setupSimpleRepo(repoRoot);
+        final existingWorktreePath = '$worktreeRoot/cci/existing-branch';
+        gitService.statuses[existingWorktreePath] = const GitStatus();
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        await worktreeService.restoreExistingWorktree(
+          project: project,
+          worktreePath: existingWorktreePath,
+          branch: 'existing-branch',
+        );
+
+        // Assert
+        final index = await persistenceService.loadProjectsIndex();
+        final projectInfo = index.projects[repoRoot];
+        check(projectInfo).isNotNull();
+        check(projectInfo!.worktrees[existingWorktreePath]).isNotNull();
+        final worktreeInfo = projectInfo.worktrees[existingWorktreePath]!;
+        check(worktreeInfo.isLinked).isTrue();
+        check(worktreeInfo.name).equals('existing-branch');
+      });
+
+      test('returns WorktreeState with correct git status', () async {
+        // Arrange
+        gitService.setupSimpleRepo(repoRoot);
+        final existingWorktreePath = '$worktreeRoot/cci/existing-branch';
+        gitService.statuses[existingWorktreePath] = const GitStatus(
+          staged: 3,
+          changedEntries: 7,
+          ahead: 2,
+          behind: 1,
+          hasConflicts: true,
+        );
+        final project = _createProject(repoRoot);
+        await _setupPersistence(persistenceService, repoRoot, project);
+
+        // Act
+        final result = await worktreeService.restoreExistingWorktree(
+          project: project,
+          worktreePath: existingWorktreePath,
+          branch: 'existing-branch',
+        );
+
+        // Assert
+        check(result.data.stagedFiles).equals(3);
+        check(result.data.uncommittedFiles).equals(7);
+        check(result.data.commitsAhead).equals(2);
+        check(result.data.commitsBehind).equals(1);
+        check(result.data.hasMergeConflict).isTrue();
+      });
+    });
+
     group('integration scenarios', () {
       test('multiple worktrees can be created for same project', () async {
         // Arrange

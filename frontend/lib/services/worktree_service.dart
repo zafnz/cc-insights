@@ -393,6 +393,58 @@ class WorktreeService {
     return worktreeState;
   }
 
+  /// Restores an existing git worktree to the app's tracking.
+  ///
+  /// This re-registers a worktree that exists on disk (discovered via
+  /// `git worktree list`) but is not currently tracked in projects.json.
+  /// Unlike [recoverWorktree], this does NOT create a new git worktree —
+  /// the worktree already exists on disk.
+  ///
+  /// Parameters:
+  /// - [project]: The project to add the worktree to.
+  /// - [worktreePath]: The absolute path to the existing worktree.
+  /// - [branch]: The branch name checked out in the worktree.
+  Future<WorktreeState> restoreExistingWorktree({
+    required ProjectState project,
+    required String worktreePath,
+    required String branch,
+  }) async {
+    final repoRoot = project.data.repoRoot;
+
+    LogService.instance.notice('Worktree', 'Restoring existing workspace: branch=$branch path=$worktreePath');
+
+    // 1. Get git status for the worktree
+    final status = await _gitService.getStatus(worktreePath);
+
+    // 2. Determine the base for this worktree.
+    final config = await _configService.loadConfig(repoRoot);
+    String? effectiveBase;
+    final defaultBase = config.defaultBase;
+    if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
+      effectiveBase = defaultBase;
+    }
+
+    // 3. Create WorktreeData and WorktreeState
+    final worktreeData = WorktreeData(
+      worktreeRoot: worktreePath,
+      isPrimary: false,
+      branch: branch,
+      uncommittedFiles: status.uncommittedFiles,
+      stagedFiles: status.staged,
+      commitsAhead: status.ahead,
+      commitsBehind: status.behind,
+      hasMergeConflict: status.hasConflicts,
+    );
+    final worktreeState = WorktreeState(worktreeData, base: effectiveBase);
+
+    // 4. Persist to projects.json
+    await _persistWorktree(project, worktreeState, base: effectiveBase);
+
+    // 5. Return WorktreeState
+    LogService.instance.info('Worktree', 'Workspace restored: branch=$branch path=$worktreePath');
+    return worktreeState;
+  }
+
   /// Sanitizes a branch name for git.
   ///
   /// - Trims whitespace
