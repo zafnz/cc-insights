@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendProvider, ToolKind;
 import 'package:flutter/foundation.dart';
 
 /// Per-model usage breakdown from SDK result message.
@@ -452,6 +453,12 @@ class ToolUseOutputEntry extends OutputEntry {
   /// The name of the tool being used.
   final String toolName;
 
+  /// Semantic category of the tool.
+  final ToolKind toolKind;
+
+  /// Which backend produced this tool call.
+  final BackendProvider? provider;
+
   /// The unique identifier for this tool use.
   final String toolUseId;
 
@@ -494,6 +501,8 @@ class ToolUseOutputEntry extends OutputEntry {
   ToolUseOutputEntry({
     required super.timestamp,
     required this.toolName,
+    this.toolKind = ToolKind.other,
+    this.provider,
     required this.toolUseId,
     required this.toolInput,
     this.model,
@@ -528,6 +537,8 @@ class ToolUseOutputEntry extends OutputEntry {
   ToolUseOutputEntry copyWith({
     DateTime? timestamp,
     String? toolName,
+    ToolKind? toolKind,
+    BackendProvider? provider,
     String? toolUseId,
     Map<String, dynamic>? toolInput,
     String? model,
@@ -540,6 +551,8 @@ class ToolUseOutputEntry extends OutputEntry {
     return ToolUseOutputEntry(
       timestamp: timestamp ?? this.timestamp,
       toolName: toolName ?? this.toolName,
+      toolKind: toolKind ?? this.toolKind,
+      provider: provider ?? this.provider,
       toolUseId: toolUseId ?? this.toolUseId,
       toolInput: toolInput ?? this.toolInput,
       model: model ?? this.model,
@@ -557,6 +570,8 @@ class ToolUseOutputEntry extends OutputEntry {
     return other is ToolUseOutputEntry &&
         other.timestamp == timestamp &&
         other.toolName == toolName &&
+        other.toolKind == toolKind &&
+        other.provider == provider &&
         other.toolUseId == toolUseId &&
         mapEquals(other.toolInput, toolInput) &&
         other.model == model &&
@@ -572,6 +587,8 @@ class ToolUseOutputEntry extends OutputEntry {
     return Object.hash(
       timestamp,
       toolName,
+      toolKind,
+      provider,
       toolUseId,
       Object.hashAll(toolInput.entries),
       model,
@@ -579,7 +596,6 @@ class ToolUseOutputEntry extends OutputEntry {
       isError,
       isExpanded,
       isStreaming,
-      rawMessages,
     );
   }
 
@@ -596,6 +612,7 @@ class ToolUseOutputEntry extends OutputEntry {
       'type': 'tool_use',
       'timestamp': timestamp.toIso8601String(),
       'tool_name': toolName,
+      'tool_kind': toolKind.name,
       'tool_use_id': toolUseId,
       'tool_input': toolInput,
       if (model != null) 'model': model,
@@ -606,9 +623,16 @@ class ToolUseOutputEntry extends OutputEntry {
 
   /// Deserializes a [ToolUseOutputEntry] from a JSON map.
   static ToolUseOutputEntry fromJson(Map<String, dynamic> json) {
+    final toolName = json['tool_name'] as String;
+    final toolKindStr = json['tool_kind'] as String?;
+    final toolKind = toolKindStr != null
+        ? ToolKind.values.asNameMap()[toolKindStr] ?? ToolKind.other
+        : ToolKind.fromToolName(toolName);
+
     return ToolUseOutputEntry(
       timestamp: DateTime.parse(json['timestamp'] as String),
-      toolName: json['tool_name'] as String,
+      toolName: toolName,
+      toolKind: toolKind,
       toolUseId: json['tool_use_id'] as String,
       toolInput: Map<String, dynamic>.from(json['tool_input'] as Map),
       model: json['model'] as String?,

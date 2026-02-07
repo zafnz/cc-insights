@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -79,7 +80,7 @@ class _ToolCardState extends State<ToolCard> {
                       fontSize: 13,
                     ),
                   ),
-                  if (entry.toolName == 'Task') ...[
+                  if (entry.toolKind == ToolKind.think) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -130,7 +131,7 @@ class _ToolCardState extends State<ToolCard> {
                 children: [
                   // Skip input widget for Task with structured result
                   // (the TaskResultWidget already shows the prompt)
-                  if (!(entry.toolName == 'Task' &&
+                  if (!(entry.toolKind == ToolKind.think &&
                       hasResult &&
                       entry.result is Map))
                     _buildToolInput(
@@ -172,39 +173,42 @@ class _ToolCardState extends State<ToolCard> {
   }
 
   IconData _getToolIcon(String toolName) {
-    if (_isMcpTool(toolName)) {
-      return Icons.extension;
-    }
-    return switch (toolName) {
-      'Read' => Icons.description,
-      'Write' => Icons.edit_document,
-      'Edit' => Icons.edit,
-      'Glob' => Icons.folder_open,
-      'Grep' => Icons.find_in_page,
-      'Bash' => Icons.terminal,
-      'Task' => Icons.account_tree,
-      'AskUserQuestion' => Icons.help,
-      'WebSearch' => Icons.travel_explore,
-      'WebFetch' => Icons.link,
-      'TodoWrite' => Icons.checklist,
-      'NotebookEdit' => Icons.code,
-      _ => Icons.extension,
+    return switch (widget.entry.toolKind) {
+      ToolKind.execute => Icons.terminal,
+      ToolKind.read => Icons.description,
+      ToolKind.edit => switch (toolName) {
+          'Write' => Icons.edit_document,
+          'NotebookEdit' => Icons.code,
+          _ => Icons.edit,
+        },
+      ToolKind.search => switch (toolName) {
+          'Glob' => Icons.folder_open,
+          _ => Icons.find_in_page,
+        },
+      ToolKind.fetch => Icons.link,
+      ToolKind.browse => Icons.travel_explore,
+      ToolKind.think => Icons.account_tree,
+      ToolKind.ask => Icons.help,
+      ToolKind.memory => Icons.checklist,
+      ToolKind.mcp => Icons.extension,
+      ToolKind.delete => Icons.delete_outline,
+      ToolKind.move => Icons.drive_file_move_outline,
+      ToolKind.other => Icons.extension,
     };
   }
 
   Color _getToolColor(String toolName) {
-    if (_isMcpTool(toolName)) {
-      return Colors.indigo;
-    }
-    return switch (toolName) {
-      'Read' || 'Write' || 'Edit' => Colors.blue,
-      'Glob' || 'Grep' => Colors.purple,
-      'Bash' => Colors.orange,
-      'Task' => Colors.deepOrange,
-      'AskUserQuestion' => Colors.green,
-      'WebSearch' || 'WebFetch' => Colors.cyan,
-      'TodoWrite' => Colors.teal,
-      _ => Colors.grey,
+    return switch (widget.entry.toolKind) {
+      ToolKind.execute => Colors.orange,
+      ToolKind.read || ToolKind.edit => Colors.blue,
+      ToolKind.search => Colors.purple,
+      ToolKind.fetch || ToolKind.browse => Colors.cyan,
+      ToolKind.think => Colors.deepOrange,
+      ToolKind.ask => Colors.green,
+      ToolKind.memory => Colors.teal,
+      ToolKind.mcp => Colors.indigo,
+      ToolKind.delete || ToolKind.move => Colors.amber,
+      ToolKind.other => Colors.grey,
     };
   }
 
@@ -223,7 +227,7 @@ class _ToolCardState extends State<ToolCard> {
 
     // For any tool with an error, show the error message after the summary
     if (isError) {
-      final resultText = entry.toolName == 'Bash'
+      final resultText = entry.toolKind == ToolKind.execute
           ? _extractBashOutput(entry.result)
           : entry.result?.toString();
       final errorMessage = _extractErrorMessage(resultText);
@@ -302,20 +306,19 @@ class _ToolCardState extends State<ToolCard> {
   ) {
     final config = RuntimeConfig.instance;
 
-    return switch (toolName) {
-      'Bash' => config.bashToolSummary == BashToolSummary.description
+    return switch (widget.entry.toolKind) {
+      ToolKind.execute => config.bashToolSummary == BashToolSummary.description
           ? input['description'] as String? ?? input['command'] as String? ?? ''
           : input['command'] as String? ?? '',
-      'Read' || 'Write' || 'Edit' => _formatFilePath(
+      ToolKind.read || ToolKind.edit => _formatFilePath(
           input['file_path'] as String? ?? '',
           projectDir,
           config.toolSummaryRelativeFilePaths,
         ),
-      'Grep' => input['pattern'] as String? ?? '',
-      'Glob' => input['pattern'] as String? ?? '',
-      'WebSearch' => input['query'] as String? ?? '',
-      'WebFetch' => input['url'] as String? ?? '',
-      'Task' => input['description'] as String? ?? '',
+      ToolKind.search => input['pattern'] as String? ?? '',
+      ToolKind.browse => input['query'] as String? ?? '',
+      ToolKind.fetch => input['url'] as String? ?? '',
+      ToolKind.think => input['description'] as String? ?? '',
       _ => '',
     };
   }
@@ -346,31 +349,38 @@ class _ToolCardState extends State<ToolCard> {
     Map<String, dynamic> input, {
     ToolUseOutputEntry? entry,
   }) {
-    return switch (toolName) {
-      'Bash' => BashInputWidget(input: input),
-      'Read' => ReadInputWidget(
+    return switch (entry?.toolKind ?? ToolKind.other) {
+      ToolKind.execute => BashInputWidget(input: input),
+      ToolKind.read => ReadInputWidget(
           input: input,
           projectDir: widget.projectDir,
         ),
-      'Write' => WriteInputWidget(
-          input: input,
-          projectDir: widget.projectDir,
-        ),
-      'Edit' => EditInputWidget(
-          entry: entry!,
-          projectDir: widget.projectDir,
-        ),
-      'Glob' => GlobInputWidget(input: input),
-      'Grep' => GrepInputWidget(input: input),
-      'WebSearch' => WebSearchInputWidget(input: input),
-      'WebFetch' => WebFetchInputWidget(input: input),
-      'Task' => TaskInputWidget(input: input),
-      'AskUserQuestion' => AskUserQuestionInputWidget(
+      ToolKind.edit => switch (toolName) {
+          'Write' => WriteInputWidget(
+              input: input,
+              projectDir: widget.projectDir,
+            ),
+          // Edit, NotebookEdit, and other edit tools
+          _ => EditInputWidget(
+              entry: entry!,
+              projectDir: widget.projectDir,
+            ),
+        },
+      ToolKind.search => switch (toolName) {
+          'Grep' => GrepInputWidget(input: input),
+          // Glob and other search tools
+          _ => GlobInputWidget(input: input),
+        },
+      ToolKind.browse => WebSearchInputWidget(input: input),
+      ToolKind.fetch => WebFetchInputWidget(input: input),
+      ToolKind.think => TaskInputWidget(input: input),
+      ToolKind.ask => AskUserQuestionInputWidget(
           input: input,
           result: entry?.result,
         ),
-      'TodoWrite' => const SizedBox.shrink(),
-      _ => GenericInputWidget(input: input),
+      ToolKind.memory => const SizedBox.shrink(),
+      ToolKind.mcp || ToolKind.delete || ToolKind.move || ToolKind.other =>
+        GenericInputWidget(input: input),
     };
   }
 
@@ -378,32 +388,32 @@ class _ToolCardState extends State<ToolCard> {
     final isError = entry.isError;
     final monoFont = RuntimeConfig.instance.monoFontFamily;
 
-    // Don't show result text for Edit/Write tools - the input view shows everything
-    if ((entry.toolName == 'Edit' || entry.toolName == 'Write') && !isError) {
+    // Don't show result text for edit tools - the input view shows everything
+    if (entry.toolKind == ToolKind.edit && !isError) {
       return const SizedBox.shrink();
     }
 
-    // Special rendering for TodoWrite
-    if (entry.toolName == 'TodoWrite' && entry.result is Map) {
+    // Special rendering for TodoWrite (memory tools)
+    if (entry.toolKind == ToolKind.memory && entry.result is Map) {
       return TodoWriteResultWidget(
         result: entry.result as Map<String, dynamic>,
       );
     }
 
-    // Special rendering for Task tool results
-    if (entry.toolName == 'Task' && entry.result is Map) {
+    // Special rendering for Task tool results (think tools)
+    if (entry.toolKind == ToolKind.think && entry.result is Map) {
       return TaskResultWidget(
         result: entry.result as Map<String, dynamic>,
       );
     }
 
     // Special rendering for Read tool with image content
-    if (entry.toolName == 'Read' && isImageResult(entry.result)) {
+    if (entry.toolKind == ToolKind.read && isImageResult(entry.result)) {
       return ImageResultWidget(content: entry.result);
     }
 
     // Special rendering for Bash results (black box with grey text)
-    if (entry.toolName == 'Bash' && !isError) {
+    if (entry.toolKind == ToolKind.execute && !isError) {
       final bashOutput = _extractBashOutput(entry.result);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,7 +446,7 @@ class _ToolCardState extends State<ToolCard> {
     }
 
     // Default result rendering
-    final resultText = entry.toolName == 'Bash'
+    final resultText = entry.toolKind == ToolKind.execute
         ? _extractBashOutput(entry.result)
         : entry.result?.toString() ?? '';
     return Column(

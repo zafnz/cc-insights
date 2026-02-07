@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendProvider, ToolKind;
 import 'package:flutter/foundation.dart';
 
 import '../models/agent.dart';
@@ -283,6 +284,8 @@ class SdkMessageHandler {
           final entry = ToolUseOutputEntry(
             timestamp: DateTime.now(),
             toolName: toolName,
+            toolKind: ToolKind.fromToolName(toolName),
+            provider: BackendProvider.claude,
             toolUseId: toolUseId,
             toolInput: Map<String, dynamic>.from(toolInput),
             model: model,
@@ -393,6 +396,8 @@ class SdkMessageHandler {
             final entry = ToolUseOutputEntry(
               timestamp: DateTime.now(),
               toolName: toolName,
+              toolKind: ToolKind.fromToolName(toolName),
+              provider: BackendProvider.claude,
               toolUseId: toolUseId,
               toolInput: Map<String, dynamic>.from(toolInput),
               model: model,
@@ -863,6 +868,8 @@ class SdkMessageHandler {
         entry = ToolUseOutputEntry(
           timestamp: DateTime.now(),
           toolName: toolName,
+          toolKind: ToolKind.fromToolName(toolName),
+          provider: BackendProvider.claude,
           toolUseId: toolUseId,
           toolInput: <String, dynamic>{},
           isStreaming: true,

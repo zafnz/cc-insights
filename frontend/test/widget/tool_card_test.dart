@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/widgets/tool_card.dart';
 import 'package:checks/checks.dart';
@@ -11,6 +12,7 @@ void main() {
     /// Creates a fake ToolUseOutputEntry for testing.
     ToolUseOutputEntry createToolEntry({
       String toolName = 'Bash',
+      ToolKind? toolKind,
       String toolUseId = 'test-id',
       Map<String, dynamic> toolInput = const {},
       dynamic result,
@@ -20,6 +22,7 @@ void main() {
       return ToolUseOutputEntry(
         timestamp: DateTime.now(),
         toolName: toolName,
+        toolKind: toolKind ?? ToolKind.fromToolName(toolName),
         toolUseId: toolUseId,
         toolInput: toolInput,
         result: result,

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -594,6 +595,7 @@ void main() {
         check(json['type']).equals('tool_use');
         check(json['timestamp']).equals('2025-01-27T10:30:00.000Z');
         check(json['tool_name']).equals('Read');
+        check(json['tool_kind']).equals('other');
         check(json['tool_use_id']).equals('tu_123');
         check((json['tool_input'] as Map)['file_path'])
             .equals('/path/to/file.dart');
@@ -638,6 +640,7 @@ void main() {
         // Assert
         check(entry.timestamp).equals(DateTime.utc(2025, 1, 27, 10, 30, 0));
         check(entry.toolName).equals('Write');
+        check(entry.toolKind).equals(ToolKind.edit); // Derived from toolName
         check(entry.toolUseId).equals('tu_456');
         check(entry.toolInput['content']).equals('test');
         check(entry.model).equals('claude-opus-4');
