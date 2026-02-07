@@ -97,14 +97,16 @@ void main() {
 
     Widget buildTestWidget(
       sdk.PermissionRequest request,
-      void Function(Map<String, String>) onSubmit,
-    ) {
+      void Function(Map<String, String>) onSubmit, {
+      VoidCallback? onCancel,
+    }) {
       return MaterialApp(
         theme: ThemeData.dark(),
         home: Scaffold(
           body: AskUserQuestionDialog(
             request: request,
             onSubmit: onSubmit,
+            onCancel: onCancel ?? () {},
           ),
         ),
       );

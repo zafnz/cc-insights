@@ -20,6 +20,9 @@ class AskUserQuestionDialogKeys {
   /// The submit button.
   static const submitButton = Key('ask_user_question_submit');
 
+  /// The cancel button.
+  static const cancelButton = Key('ask_user_question_cancel');
+
   /// The "Other" option chip.
   static const otherOption = Key('ask_user_question_other');
 
@@ -40,6 +43,7 @@ class AskUserQuestionDialog extends StatefulWidget {
     super.key,
     required this.request,
     required this.onSubmit,
+    required this.onCancel,
   });
 
   /// The permission request containing the questions.
@@ -48,6 +52,9 @@ class AskUserQuestionDialog extends StatefulWidget {
   /// Called when the user submits their answers.
   /// The map contains question text as keys and answer text as values.
   final void Function(Map<String, String> answers) onSubmit;
+
+  /// Called when the user cancels the question without answering.
+  final VoidCallback onCancel;
 
   @override
   State<AskUserQuestionDialog> createState() => _AskUserQuestionDialogState();
@@ -128,6 +135,18 @@ class _AskUserQuestionDialogState extends State<AskUserQuestionDialog> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                OutlinedButton(
+                  key: AskUserQuestionDialogKeys.cancelButton,
+                  onPressed: widget.onCancel,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorScheme.error,
+                    side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
                 FilledButton(
                   key: AskUserQuestionDialogKeys.submitButton,
                   onPressed: _canSubmit() ? _submitAnswers : null,

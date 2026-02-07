@@ -519,6 +519,7 @@ class _ConversationPanelState extends State<ConversationPanel>
             updatedInput: {'answers': answers},
           );
         },
+        onCancel: () => chat.denyPermission('User cancelled the question'),
       );
     } else {
       final selection = context.read<SelectionState>();
