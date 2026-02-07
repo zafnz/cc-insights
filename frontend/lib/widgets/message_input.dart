@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
+import '../config/fonts.dart';
 import '../models/output_entry.dart';
 import '../services/image_utils.dart';
 import 'insights_widgets.dart';
@@ -43,8 +44,12 @@ class MessageInput extends StatefulWidget {
   });
 
   /// Called when the user submits a message (Enter without Shift).
-  /// Includes any attached images.
-  final void Function(String text, List<AttachedImage> images) onSubmit;
+  /// Includes any attached images and the selected display format.
+  final void Function(
+    String text,
+    List<AttachedImage> images,
+    DisplayFormat displayFormat,
+  ) onSubmit;
 
   /// Called when the user clicks the interrupt button.
   /// If null, the interrupt button is hidden.
@@ -78,6 +83,7 @@ class _MessageInputState extends State<MessageInput>
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final List<AttachedImage> _pendingImages = [];
+  DisplayFormat _displayFormat = DisplayFormat.plain;
   bool _isDragging = false;
   bool _isProcessingImage = false;
 
@@ -150,14 +156,38 @@ class _MessageInputState extends State<MessageInput>
     final text = _controller.text;
     if (text.trim().isEmpty && _pendingImages.isEmpty) return;
 
-    widget.onSubmit(text, List.from(_pendingImages));
+    widget.onSubmit(text, List.from(_pendingImages), _displayFormat);
     _controller.clear();
     _pendingImages.clear();
-    setState(() {});
+    setState(() {
+      _displayFormat = DisplayFormat.plain;
+    });
 
     // Keep focus after submit
     _focusNode.requestFocus();
   }
+
+  void _cycleDisplayFormat() {
+    setState(() {
+      _displayFormat = switch (_displayFormat) {
+        DisplayFormat.plain => DisplayFormat.fixedWidth,
+        DisplayFormat.fixedWidth => DisplayFormat.markdown,
+        DisplayFormat.markdown => DisplayFormat.plain,
+      };
+    });
+  }
+
+  IconData get _displayFormatIcon => switch (_displayFormat) {
+    DisplayFormat.plain => Icons.notes,
+    DisplayFormat.fixedWidth => Icons.code,
+    DisplayFormat.markdown => Icons.integration_instructions,
+  };
+
+  String get _displayFormatTooltip => switch (_displayFormat) {
+    DisplayFormat.plain => 'Plain text',
+    DisplayFormat.fixedWidth => 'Fixed width',
+    DisplayFormat.markdown => 'Markdown',
+  };
 
   /// Handle key events - Enter submits, Shift+Enter adds newline, Cmd+V pastes.
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -392,7 +422,13 @@ class _MessageInputState extends State<MessageInput>
                       maxLines: 5,
                       minLines: 1,
                       textInputAction: TextInputAction.newline,
-                      style: textTheme.bodyMedium,
+                      style: _displayFormat == DisplayFormat.plain
+                          ? textTheme.bodyMedium
+                          : AppFonts.monoTextStyle(
+                              fontSize:
+                                  textTheme.bodyMedium?.fontSize ?? 14,
+                              color: textTheme.bodyMedium?.color,
+                            ),
                       decoration: InputDecoration(
                         hintText: _isDragging
                             ? 'Drop images here...'
@@ -408,6 +444,30 @@ class _MessageInputState extends State<MessageInput>
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 10,
+                        ),
+                        suffixIcon: Tooltip(
+                          message: _displayFormatTooltip,
+                          child: IconButton(
+                            icon: Icon(
+                              _displayFormatIcon,
+                              size: 18,
+                              color: _displayFormat == DisplayFormat.plain
+                                  ? colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.5)
+                                  : colorScheme.primary,
+                            ),
+                            onPressed: _cycleDisplayFormat,
+                            splashRadius: 16,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                          ),
+                        ),
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 32,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),

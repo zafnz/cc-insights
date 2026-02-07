@@ -983,6 +983,7 @@ class ChatState extends ChangeNotifier {
   Future<void> sendMessage(
     String text, {
     List<AttachedImage> images = const [],
+    DisplayFormat displayFormat = DisplayFormat.plain,
   }) async {
     _t('ChatState', 'sendMessage: ${text.length > 80 ? '${text.substring(0, 80)}...' : text} (chat=${_data.id}, images=${images.length})');
     if (_session == null) {
@@ -995,6 +996,7 @@ class ChatState extends ChangeNotifier {
       timestamp: DateTime.now(),
       text: text,
       images: images,
+      displayFormat: displayFormat,
     ));
 
     // Mark as working

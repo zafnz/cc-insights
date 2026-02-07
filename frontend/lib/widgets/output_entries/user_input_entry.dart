@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/fonts.dart';
 import '../../models/output_entry.dart';
 import '../../state/theme_state.dart';
+import '../markdown_renderer.dart';
 
 /// Displays a user input entry.
 class UserInputEntryWidget extends StatelessWidget {
@@ -29,7 +31,7 @@ class UserInputEntryWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Existing row with icon and text
+          // Row with icon and text content
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -40,11 +42,9 @@ class UserInputEntryWidget extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: SelectableText(
-                  entry.text,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: onBubbleColor,
-                  ),
+                child: _buildTextContent(
+                  textTheme,
+                  onBubbleColor,
                 ),
               ),
             ],
@@ -63,6 +63,31 @@ class UserInputEntryWidget extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildTextContent(TextTheme textTheme, Color onBubbleColor) {
+    switch (entry.displayFormat) {
+      case DisplayFormat.plain:
+        return SelectableText(
+          entry.text,
+          style: textTheme.bodyMedium?.copyWith(
+            color: onBubbleColor,
+          ),
+        );
+      case DisplayFormat.fixedWidth:
+        return SelectableText(
+          entry.text,
+          style: AppFonts.monoTextStyle(
+            fontSize: textTheme.bodyMedium?.fontSize ?? 14,
+            color: onBubbleColor,
+          ),
+        );
+      case DisplayFormat.markdown:
+        return MarkdownRenderer(
+          data: entry.text,
+          codeColor: onBubbleColor,
+        );
+    }
   }
 }
 

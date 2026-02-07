@@ -481,8 +481,8 @@ class _ConversationPanelState extends State<ConversationPanel>
                   key: ValueKey('input-${chat!.data.id}'),
                   initialText: chat.draftText,
                   onTextChanged: (text) => chat.draftText = text,
-                  onSubmit: (text, images) =>
-                      _handleSubmit(context, text, images),
+                  onSubmit: (text, images, displayFormat) =>
+                      _handleSubmit(context, text, images, displayFormat),
                   isWorking: isWorking,
                   onInterrupt:
                       isWorking ? () => _handleInterrupt(chat) : null,
@@ -668,6 +668,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     BuildContext context,
     String text,
     List<AttachedImage> images,
+    DisplayFormat displayFormat,
   ) async {
     if (text.trim().isEmpty && images.isEmpty) return;
 
@@ -695,6 +696,7 @@ class _ConversationPanelState extends State<ConversationPanel>
         timestamp: DateTime.now(),
         text: text,
         images: images,
+        displayFormat: displayFormat,
       ));
 
       // Generate a better title for the chat if it's new (fire-and-forget)
@@ -720,7 +722,11 @@ class _ConversationPanelState extends State<ConversationPanel>
     } else {
       // Subsequent message - send to existing session
       try {
-        await chat.sendMessage(text, images: images);
+        await chat.sendMessage(
+          text,
+          images: images,
+          displayFormat: displayFormat,
+        );
       } catch (e) {
         // Show error in conversation
         chat.addEntry(TextOutputEntry(

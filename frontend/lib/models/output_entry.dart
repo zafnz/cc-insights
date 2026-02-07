@@ -258,6 +258,21 @@ class UsageInfo {
   }
 }
 
+/// Display format for user input entries.
+///
+/// Controls how the user's message text is rendered in the output window.
+/// This is frontend-only metadata — it is not sent to the backend.
+enum DisplayFormat {
+  /// Regular text display (default).
+  plain,
+
+  /// Fixed-width / monospace font display.
+  fixedWidth,
+
+  /// Rendered as markdown.
+  markdown,
+}
+
 /// Base class for conversation log entries.
 ///
 /// All output entries are immutable and contain a timestamp indicating
@@ -732,11 +747,15 @@ class UserInputEntry extends OutputEntry {
   /// Images attached to the user's message.
   final List<AttachedImage> images;
 
+  /// How this message should be displayed in the output window.
+  final DisplayFormat displayFormat;
+
   /// Creates a [UserInputEntry].
   const UserInputEntry({
     required super.timestamp,
     required this.text,
     this.images = const [],
+    this.displayFormat = DisplayFormat.plain,
   });
 
   /// Creates a copy with the given fields replaced.
@@ -744,11 +763,13 @@ class UserInputEntry extends OutputEntry {
     DateTime? timestamp,
     String? text,
     List<AttachedImage>? images,
+    DisplayFormat? displayFormat,
   }) {
     return UserInputEntry(
       timestamp: timestamp ?? this.timestamp,
       text: text ?? this.text,
       images: images ?? this.images,
+      displayFormat: displayFormat ?? this.displayFormat,
     );
   }
 
@@ -758,16 +779,18 @@ class UserInputEntry extends OutputEntry {
     return other is UserInputEntry &&
         other.timestamp == timestamp &&
         other.text == text &&
-        listEquals(other.images, images);
+        listEquals(other.images, images) &&
+        other.displayFormat == displayFormat;
   }
 
   @override
-  int get hashCode => Object.hash(timestamp, text, Object.hashAll(images));
+  int get hashCode =>
+      Object.hash(timestamp, text, Object.hashAll(images), displayFormat);
 
   @override
   String toString() =>
       'UserInputEntry(timestamp: $timestamp, text: $text, '
-      'images: ${images.length})';
+      'images: ${images.length}, displayFormat: $displayFormat)';
 
   @override
   Map<String, dynamic> toJson() {
@@ -777,12 +800,21 @@ class UserInputEntry extends OutputEntry {
       'text': text,
       if (images.isNotEmpty)
         'images': images.map((img) => img.toJson()).toList(),
+      if (displayFormat != DisplayFormat.plain)
+        'display_format': displayFormat.name,
     };
   }
 
   /// Deserializes a [UserInputEntry] from a JSON map.
   static UserInputEntry fromJson(Map<String, dynamic> json) {
     final imagesList = json['images'] as List?;
+    final formatStr = json['display_format'] as String?;
+    final format = formatStr != null
+        ? DisplayFormat.values.firstWhere(
+            (e) => e.name == formatStr,
+            orElse: () => DisplayFormat.plain,
+          )
+        : DisplayFormat.plain;
     return UserInputEntry(
       timestamp: DateTime.parse(json['timestamp'] as String),
       text: json['text'] as String,
@@ -791,6 +823,7 @@ class UserInputEntry extends OutputEntry {
                   AttachedImage.fromJson(img as Map<String, dynamic>))
               .toList() ??
           const [],
+      displayFormat: format,
     );
   }
 }

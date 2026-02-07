@@ -174,8 +174,9 @@ class WelcomeCard extends StatelessWidget {
           ),
           initialText: worktree?.welcomeDraftText ?? '',
           onTextChanged: (text) => worktree?.welcomeDraftText = text,
-          onSubmit: (text, images) =>
-              _createChatAndSendMessage(context, worktree, text, images),
+          onSubmit: (text, images, displayFormat) =>
+              _createChatAndSendMessage(
+                  context, worktree, text, images, displayFormat),
         ),
       ],
     );
@@ -187,6 +188,7 @@ class WelcomeCard extends StatelessWidget {
     WorktreeState? worktree,
     String text,
     List<AttachedImage> images,
+    DisplayFormat displayFormat,
   ) async {
     if (text.trim().isEmpty && images.isEmpty) return;
 
@@ -252,6 +254,7 @@ class WelcomeCard extends StatelessWidget {
       timestamp: DateTime.now(),
       text: text,
       images: images,
+      displayFormat: displayFormat,
     );
     chat.addEntry(userEntry);
 

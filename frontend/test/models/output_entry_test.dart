@@ -371,6 +371,131 @@ void main() {
         check(restored.timestamp).equals(original.timestamp);
         check(restored.text).equals(original.text);
       });
+
+      test('toJson omits display_format when plain', () {
+        // Arrange
+        final entry = UserInputEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: 'Hello',
+        );
+
+        // Act
+        final json = entry.toJson();
+
+        // Assert
+        check(json.containsKey('display_format')).equals(false);
+      });
+
+      test('toJson includes display_format when fixedWidth', () {
+        // Arrange
+        final entry = UserInputEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: 'Hello',
+          displayFormat: DisplayFormat.fixedWidth,
+        );
+
+        // Act
+        final json = entry.toJson();
+
+        // Assert
+        check(json['display_format']).equals('fixedWidth');
+      });
+
+      test('toJson includes display_format when markdown', () {
+        // Arrange
+        final entry = UserInputEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: '# Hello',
+          displayFormat: DisplayFormat.markdown,
+        );
+
+        // Act
+        final json = entry.toJson();
+
+        // Assert
+        check(json['display_format']).equals('markdown');
+      });
+
+      test('fromJson defaults to plain when display_format is missing', () {
+        // Arrange
+        final json = {
+          'type': 'user',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Hello',
+        };
+
+        // Act
+        final entry = UserInputEntry.fromJson(json);
+
+        // Assert
+        check(entry.displayFormat).equals(DisplayFormat.plain);
+      });
+
+      test('fromJson restores fixedWidth display_format', () {
+        // Arrange
+        final json = {
+          'type': 'user',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Hello',
+          'display_format': 'fixedWidth',
+        };
+
+        // Act
+        final entry = UserInputEntry.fromJson(json);
+
+        // Assert
+        check(entry.displayFormat).equals(DisplayFormat.fixedWidth);
+      });
+
+      test('fromJson restores markdown display_format', () {
+        // Arrange
+        final json = {
+          'type': 'user',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': '# Hello',
+          'display_format': 'markdown',
+        };
+
+        // Act
+        final entry = UserInputEntry.fromJson(json);
+
+        // Assert
+        check(entry.displayFormat).equals(DisplayFormat.markdown);
+      });
+
+      test('fromJson defaults to plain for unknown display_format', () {
+        // Arrange
+        final json = {
+          'type': 'user',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Hello',
+          'display_format': 'unknown_format',
+        };
+
+        // Act
+        final entry = UserInputEntry.fromJson(json);
+
+        // Assert
+        check(entry.displayFormat).equals(DisplayFormat.plain);
+      });
+
+      test('round-trip preserves displayFormat', () {
+        // Arrange
+        final original = UserInputEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: 'Code example',
+          displayFormat: DisplayFormat.fixedWidth,
+        );
+
+        // Act
+        final json = jsonEncode(original.toJson());
+        final restored = UserInputEntry.fromJson(
+          jsonDecode(json) as Map<String, dynamic>,
+        );
+
+        // Assert
+        check(restored.displayFormat).equals(DisplayFormat.fixedWidth);
+      });
     });
 
     group('TextOutputEntry', () {

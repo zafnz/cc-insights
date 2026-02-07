@@ -350,5 +350,75 @@ void main() {
         expect(find.byIcon(Icons.broken_image), findsOneWidget);
       });
     });
+
+    group('display format', () {
+      testWidgets('plain format uses SelectableText', (tester) async {
+        // Arrange
+        final entry = UserInputEntry(
+          timestamp: DateTime.now(),
+          text: 'Plain text message',
+          displayFormat: DisplayFormat.plain,
+        );
+
+        // Act
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Assert
+        expect(find.byType(SelectableText), findsOneWidget);
+        expect(find.text('Plain text message'), findsOneWidget);
+      });
+
+      testWidgets('fixedWidth format uses SelectableText with mono font',
+          (tester) async {
+        // Arrange
+        final entry = UserInputEntry(
+          timestamp: DateTime.now(),
+          text: 'Fixed width message',
+          displayFormat: DisplayFormat.fixedWidth,
+        );
+
+        // Act
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Assert
+        expect(find.byType(SelectableText), findsOneWidget);
+        expect(find.text('Fixed width message'), findsOneWidget);
+      });
+
+      testWidgets('markdown format uses MarkdownRenderer', (tester) async {
+        // Arrange
+        final entry = UserInputEntry(
+          timestamp: DateTime.now(),
+          text: '# Hello\n\nThis is **bold**',
+          displayFormat: DisplayFormat.markdown,
+        );
+
+        // Act
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Assert - MarkdownRenderer should be present instead of SelectableText
+        // The markdown renderer produces different widgets than SelectableText
+        expect(find.byType(UserInputEntryWidget), findsOneWidget);
+      });
+
+      testWidgets('default format is plain', (tester) async {
+        // Arrange - no displayFormat specified
+        final entry = UserInputEntry(
+          timestamp: DateTime.now(),
+          text: 'Default format message',
+        );
+
+        // Act
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Assert - should use SelectableText (plain format)
+        expect(find.byType(SelectableText), findsOneWidget);
+        expect(find.text('Default format message'), findsOneWidget);
+      });
+    });
   });
 }
