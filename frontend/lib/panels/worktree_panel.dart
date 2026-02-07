@@ -533,39 +533,6 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   String get repoRoot => widget.repoRoot;
   bool get isSelected => widget.isSelected;
 
-  /// Computes a relative path from the repo root to the worktree.
-  /// Returns null for the primary worktree (at repo root).
-  String? _getRelativePath(String worktreePath) {
-    // Primary worktree at repo root - show full path
-    if (worktreePath == repoRoot) {
-      return null;
-    }
-
-    // Split paths into components
-    final repoComponents = repoRoot.split('/');
-    final worktreeComponents = worktreePath.split('/');
-
-    // Find common prefix length
-    int commonLength = 0;
-    while (commonLength < repoComponents.length &&
-        commonLength < worktreeComponents.length &&
-        repoComponents[commonLength] == worktreeComponents[commonLength]) {
-      commonLength++;
-    }
-
-    // Build relative path: go up from repo, then down to worktree
-    final upCount = repoComponents.length - commonLength;
-    final downPath = worktreeComponents.skip(commonLength).toList();
-
-    final parts = <String>[];
-    for (int i = 0; i < upCount; i++) {
-      parts.add('..');
-    }
-    parts.addAll(downPath);
-
-    return parts.isEmpty ? '.' : parts.join('/');
-  }
-
   void _showContextMenu(BuildContext context, Offset position) async {
     final data = worktree.data;
     final colorScheme = Theme.of(context).colorScheme;
@@ -842,9 +809,6 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       listenable: Listenable.merge([worktree, ...worktree.chats]),
       builder: (context, _) {
         final data = worktree.data;
-        final displayPath =
-            _getRelativePath(data.worktreeRoot) ??
-            data.worktreeRoot;
         // Check if any chat in this worktree has a pending permission
         final hasAnyPermissionPending =
             worktree.chats.any((chat) => chat.isWaitingForPermission);
@@ -920,18 +884,26 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                       ),
                     const SizedBox(height: 2),
                     // Path + status on same line (muted, monospace, ~11px)
+                    // Primary worktree: show full path trimmed from the start.
+                    // Linked worktrees: hide path (branch name already shown above).
                     Row(
                       children: [
-                        // Path (full for primary, relative for linked)
-                        Expanded(
-                          child: Text(
-                            displayPath,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                        if (data.isPrimary)
+                          Expanded(
+                            child: Directionality(
+                              textDirection: TextDirection.rtl,
+                              child: Text(
+                                data.worktreeRoot,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                          )
+                        else
+                          const Spacer(),
                         // Inline status indicators
                         InlineStatusIndicators(data: data),
                       ],
