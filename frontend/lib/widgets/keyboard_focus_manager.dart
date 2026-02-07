@@ -97,48 +97,20 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
   /// ```
   VoidCallback suspend() {
     _suspendCount++;
-    final caller = _callerFromStack(StackTrace.current);
-    debugPrint(
-      '[KeyboardFocusManager] SUSPENDED by $caller '
-      '(suspendCount=$_suspendCount)',
-    );
     var resumed = false;
     return () {
       if (!resumed) {
         resumed = true;
-        resume(caller);
+        resume();
       }
     };
   }
 
   /// Resume keyboard interception after a [suspend] call.
-  void resume([String? caller]) {
+  void resume() {
     if (_suspendCount > 0) {
       _suspendCount--;
-      debugPrint(
-        '[KeyboardFocusManager] RESUMED by ${caller ?? _callerFromStack(StackTrace.current)} '
-        '(suspendCount=$_suspendCount)',
-      );
     }
-  }
-
-  /// Extract a short caller description from a stack trace.
-  static String _callerFromStack(StackTrace stack) {
-    final lines = stack.toString().split('\n');
-    // Skip frame 0 (this method) and frame 1 (suspend/resume),
-    // return frame 2 which is the actual caller.
-    for (var i = 1; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) continue;
-      // Skip frames inside this class
-      if (line.contains('KeyboardFocusManagerState.suspend') ||
-          line.contains('KeyboardFocusManagerState.resume') ||
-          line.contains('KeyboardFocusManagerState._callerFromStack')) {
-        continue;
-      }
-      return line;
-    }
-    return 'unknown';
   }
 
   /// Tracks if we're currently suspended due to a dialog.
@@ -166,11 +138,6 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
     if (observer.hasOpenDialog && !_suspendedForDialog) {
       _suspendedForDialog = true;
       _suspendCount++;
-      debugPrint(
-        '[KeyboardFocusManager] SUSPENDED by DialogObserver '
-        '(already-open dialog on connect, '
-        'suspendCount=$_suspendCount)',
-      );
     }
   }
 
@@ -186,10 +153,6 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
       _suspendedForDialog = false;
       if (_suspendCount > 0) {
         _suspendCount--;
-        debugPrint(
-          '[KeyboardFocusManager] RESUMED by DialogObserver '
-          '(disconnect cleanup, suspendCount=$_suspendCount)',
-        );
       }
     }
   }
@@ -198,10 +161,6 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
     if (!_suspendedForDialog) {
       _suspendedForDialog = true;
       _suspendCount++;
-      debugPrint(
-        '[KeyboardFocusManager] SUSPENDED by DialogObserver '
-        '(dialog opened, suspendCount=$_suspendCount)',
-      );
     }
   }
 
@@ -212,10 +171,6 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
       _suspendedForDialog = false;
       if (_suspendCount > 0) {
         _suspendCount--;
-        debugPrint(
-          '[KeyboardFocusManager] RESUMED by DialogObserver '
-          '(dialog closed, suspendCount=$_suspendCount)',
-        );
       }
     }
   }
