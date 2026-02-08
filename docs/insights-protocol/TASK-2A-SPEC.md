@@ -1,64 +1,53 @@
-# Task 2a Implementation Spec: Claude Events Emission
+# Task 2a Implementation Spec: Claude CLI → InsightsEvent Conversion
 
 **For:** Sonnet implementation in Task 2b
-**Purpose:** Detailed specification for converting Claude CLI JSON messages to InsightsEvent objects
-**File to modify:** `claude_dart_sdk/lib/src/cli_session.dart` (626 lines)
+**File to modify:** `claude_dart_sdk/lib/src/cli_session.dart`
+
+---
+
+## Current State (Post-Task 1)
+
+Task 1 is complete. `CliSession` already has:
+- `_eventsController` (broadcast `StreamController<InsightsEvent>`) — line 37
+- `events` getter — line 47
+- `_eventsController.close()` in `_dispose()` — line 491
+- Import for `types/insights_events.dart` — line 7
+
+**What's missing:** Nothing is ever added to `_eventsController`. The conversion methods don't exist yet.
 
 ---
 
 ## Overview
 
-The conversion layer sits in `CliSession._handleMessage()` (line 78). After the existing SDKMessage parsing, we'll add InsightsEvent conversion and emit to `_eventsController`.
+Add conversion methods to `CliSession` that transform incoming CLI JSON messages into `InsightsEvent` objects and emit them on the existing `_eventsController`.
 
-### Architecture
+### Data Flow
 
 ```
-JSON from CLI → _handleMessage() → SDKMessage (existing)
-                                 ↓
-                                 _convertToInsightsEvents() → List<InsightsEvent>
-                                 ↓
-                                 _eventsController.add(event)
+JSON from CLI → _handleMessage() → SDKMessage on _messagesController (existing)
+                                  ↓
+                                  _convertToInsightsEvents(json) → List<InsightsEvent>
+                                  ↓
+                                  _eventsController.add(event) for each
 ```
 
-**Key principle:** One incoming message can produce **multiple** InsightsEvent objects. For example, an `assistant` message with [text, thinking, tool_use] produces 3 events.
+**Key principle:** One incoming JSON message can produce **multiple** InsightsEvent objects. An `assistant` message with `[text, thinking, tool_use]` content blocks produces 3 events (possibly 4 if the tool_use is a Task tool, which also emits SubagentSpawnEvent).
 
 ---
 
-## Session State Management
+## Change 1: Store control_response Data
 
-### Store control_response Data
+The `control_response` received during `create()` contains models, account info, and slash commands needed for `SessionInitEvent`. Currently this data is discarded after the handshake check. Store it.
 
-The `control_response` received during session initialization contains data needed later for `SessionInitEvent`. Store it as instance state.
-
-**Add to CliSession class (after line 34):**
+### Add instance field (after line 34, `final SDKSystemMessage systemInit;`):
 
 ```dart
-Map<String, dynamic>? _controlResponseData;
+/// Data from the control_response received during initialization.
+/// Merged into SessionInitEvent when system/init arrives.
+final Map<String, dynamic>? _controlResponseData;
 ```
 
-**In the `create()` method, capture it (around line 282):**
-
-```dart
-if (type == 'control_response') {
-  controlResponseReceived = true;
-  _controlResponseData = json['response'] as Map<String, dynamic>?; // STORE THIS
-  _t('CliSession', 'Step 3: control_response received');
-  SdkLogger.instance.debug('Received control_response');
-}
-```
-
-**Pass it to constructor (line 329):**
-
-```dart
-return CliSession._(
-  process: process,
-  sessionId: sessionId,
-  systemInit: systemInit,
-  controlResponseData: _controlResponseData,
-);
-```
-
-**Update constructor signature (line 24):**
+### Update constructor (line 24):
 
 ```dart
 CliSession._({
@@ -72,98 +61,148 @@ CliSession._({
 }
 ```
 
+### Capture in create() — around line 281-283:
+
+Currently:
+```dart
+if (type == 'control_response') {
+  controlResponseReceived = true;
+  _t('CliSession', 'Step 3: control_response received');
+```
+
+Add a local variable before the `await for` loop (after line 269):
+```dart
+Map<String, dynamic>? controlResponseData;
+```
+
+Inside the `control_response` check:
+```dart
+if (type == 'control_response') {
+  controlResponseReceived = true;
+  controlResponseData = json['response'] as Map<String, dynamic>?;
+  _t('CliSession', 'Step 3: control_response received');
+```
+
+Pass to constructor (line 329):
+```dart
+return CliSession._(
+  process: process,
+  sessionId: sessionId,
+  systemInit: systemInit,
+  controlResponseData: controlResponseData,
+);
+```
+
 ---
 
-## UUID Generation Strategy
+## Change 2: Event ID Generation
 
-Use `DateTime.now().microsecondsSinceEpoch` combined with a counter for guaranteed uniqueness within a session.
+Add a monotonic counter for unique event IDs within a session.
 
-**Add to CliSession class (after the _controlResponseData field):**
+### Add after the `_controlResponseData` field:
 
 ```dart
 int _eventIdCounter = 0;
 
+/// Generate a unique event ID for this session.
 String _nextEventId() {
-  final now = DateTime.now().microsecondsSinceEpoch;
   _eventIdCounter++;
-  return 'evt-$now-$_eventIdCounter';
+  return 'evt-${sessionId.hashCode.toRadixString(16)}-$_eventIdCounter';
 }
 ```
 
+Why this pattern:
+- No external dependency (no `uuid` package needed)
+- Unique within a session (counter is per-instance)
+- Includes session hash for cross-session uniqueness
+- Short and readable for debugging
+
 ---
 
-## Main Conversion Method
+## Change 3: New Imports
 
-**Add after the `_handleMessage()` method (around line 168):**
+Add these imports at the top of `cli_session.dart` (some may already exist — only add what's missing):
 
 ```dart
-/// Convert a CLI JSON message into one or more InsightsEvent objects.
+import 'types/backend_provider.dart';
+import 'types/tool_kind.dart';
+import 'types/usage.dart';
+```
+
+`insights_events.dart` is already imported (line 7).
+
+---
+
+## Change 4: Main Conversion Method
+
+Add after `_handleMessage()` (after line 168):
+
+```dart
+/// Convert a CLI JSON message into InsightsEvent objects.
 ///
-/// Returns a list because some messages (e.g., assistant with multiple content
-/// blocks) produce multiple events.
+/// Returns a list because some messages (e.g., assistant with multiple
+/// content blocks) produce multiple events.
 List<InsightsEvent> _convertToInsightsEvents(Map<String, dynamic> json) {
   final type = json['type'] as String?;
   final subtype = json['subtype'] as String?;
 
-  switch (type) {
-    case 'system':
-      if (subtype == 'init') {
-        return [_convertSystemInit(json)];
-      } else if (subtype == 'status') {
-        return [_convertSystemStatus(json)];
-      } else if (subtype == 'compact_boundary') {
-        return [_convertCompactBoundary(json)];
-      } else if (subtype == 'context_cleared') {
-        return [_convertContextCleared(json)];
-      }
-      return [];
-
-    case 'assistant':
-      return _convertAssistant(json);
-
-    case 'user':
-      return _convertUser(json);
-
-    case 'result':
-      return _convertResult(json);
-
-    case 'control_request':
-      return _convertControlRequest(json);
-
-    case 'stream_event':
-      return _convertStreamEvent(json);
-
-    default:
-      return [];
-  }
+  return switch (type) {
+    'system' => switch (subtype) {
+      'init' => [_convertSystemInit(json)],
+      'status' => [_convertSystemStatus(json)],
+      'compact_boundary' => [_convertCompactBoundary(json)],
+      'context_cleared' => [_convertContextCleared(json)],
+      _ => <InsightsEvent>[],
+    },
+    'assistant' => _convertAssistant(json),
+    'user' => _convertUser(json),
+    'result' => _convertResult(json),
+    'control_request' => _convertControlRequest(json),
+    'stream_event' => _convertStreamEvent(json),
+    _ => <InsightsEvent>[],
+  };
 }
 ```
 
 ---
 
-## Per-Message Conversion Methods
+## Change 5: Integration into _handleMessage
 
-### 1. _convertSystemInit
-
-Merges data from both `system/init` message and the stored `control_response`.
-
-**Signature:**
+At the end of `_handleMessage()`, after the existing switch statement (before the closing `}`), add:
 
 ```dart
-SessionInitEvent _convertSystemInit(Map<String, dynamic> json)
+// Emit InsightsEvents
+try {
+  final insightsEvents = _convertToInsightsEvents(json);
+  for (final event in insightsEvents) {
+    _eventsController.add(event);
+  }
+} catch (e) {
+  SdkLogger.instance.error(
+    'Failed to convert to InsightsEvent',
+    sessionId: sessionId,
+    data: {'error': e.toString(), 'type': json['type']},
+  );
+}
 ```
 
-**Implementation:**
+**Important:** This runs for ALL message types including `control_request`. The existing `control_request` case in the switch handles the permission flow via `_permissionRequestsController`. The new code additionally emits a `PermissionRequestEvent` on the events stream. Both streams are needed: the permission requests stream drives the interactive allow/deny flow, while the events stream is for observation/logging.
+
+**Also important:** The `control_response` case currently does nothing (`break`). We do NOT emit an event for `control_response` — its data is captured during `create()` and merged into `SessionInitEvent` when `system/init` arrives.
+
+---
+
+## Change 6: Per-Message Conversion Methods
+
+### 6.1: _convertSystemInit
+
+Merges `system/init` JSON with stored `_controlResponseData`.
 
 ```dart
 SessionInitEvent _convertSystemInit(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
-  final model = json['model'] as String?;
-  final cwd = json['cwd'] as String?;
-  final tools = (json['tools'] as List?)?.cast<String>();
-  final permissionMode = json['permissionMode'] as String?;
+  final sid = json['session_id'] as String? ?? sessionId;
 
-  // Parse MCP servers
+  // Parse MCP servers from system/init
   List<McpServerStatus>? mcpServers;
   final mcpList = json['mcp_servers'] as List?;
   if (mcpList != null) {
@@ -173,24 +212,29 @@ SessionInitEvent _convertSystemInit(Map<String, dynamic> json) {
         .toList();
   }
 
-  // Parse slash commands (simple string list from system/init)
+  // Slash commands: start with simple string list from system/init
   List<SlashCommand>? slashCommands;
   final slashList = json['slash_commands'] as List?;
   if (slashList != null) {
     slashCommands = slashList
         .whereType<String>()
-        .map((name) => SlashCommand(
-              name: name,
-              description: '',
-              argumentHint: '',
-            ))
+        .map((name) => SlashCommand(name: name, description: '', argumentHint: ''))
         .toList();
   }
 
-  // From control_response (if available)
+  // Merge richer data from control_response
   List<ModelInfo>? availableModels;
   AccountInfo? account;
   if (_controlResponseData != null) {
+    // Richer slash commands override the string list
+    final commands = _controlResponseData!['commands'] as List?;
+    if (commands != null) {
+      slashCommands = commands
+          .whereType<Map<String, dynamic>>()
+          .map((c) => SlashCommand.fromJson(c))
+          .toList();
+    }
+
     final models = _controlResponseData!['models'] as List?;
     if (models != null) {
       availableModels = models
@@ -203,27 +247,14 @@ SessionInitEvent _convertSystemInit(Map<String, dynamic> json) {
     if (accountJson != null) {
       account = AccountInfo.fromJson(accountJson);
     }
-
-    // Richer slash commands from control_response
-    final commands = _controlResponseData!['commands'] as List?;
-    if (commands != null) {
-      slashCommands = commands
-          .whereType<Map<String, dynamic>>()
-          .map((c) => SlashCommand.fromJson(c))
-          .toList();
-    }
   }
 
-  // Extensions for Claude-specific fields
+  // Claude-specific extensions
   final extensions = <String, dynamic>{};
   final apiKeySource = json['apiKeySource'] as String?;
-  if (apiKeySource != null) {
-    extensions['claude.apiKeySource'] = apiKeySource;
-  }
+  if (apiKeySource != null) extensions['claude.apiKeySource'] = apiKeySource;
   final outputStyle = json['output_style'] as String?;
-  if (outputStyle != null) {
-    extensions['claude.outputStyle'] = outputStyle;
-  }
+  if (outputStyle != null) extensions['claude.outputStyle'] = outputStyle;
 
   return SessionInitEvent(
     id: _nextEventId(),
@@ -231,12 +262,12 @@ SessionInitEvent _convertSystemInit(Map<String, dynamic> json) {
     provider: BackendProvider.claude,
     raw: json,
     extensions: extensions.isNotEmpty ? extensions : null,
-    sessionId: sessionId,
-    model: model,
-    cwd: cwd,
-    availableTools: tools,
+    sessionId: sid,
+    model: json['model'] as String?,
+    cwd: json['cwd'] as String?,
+    availableTools: (json['tools'] as List?)?.cast<String>(),
     mcpServers: mcpServers,
-    permissionMode: permissionMode,
+    permissionMode: json['permissionMode'] as String?,
     account: account,
     slashCommands: slashCommands,
     availableModels: availableModels,
@@ -244,45 +275,46 @@ SessionInitEvent _convertSystemInit(Map<String, dynamic> json) {
 }
 ```
 
+**JSON paths consumed:**
+| JSON path | → Event field |
+|-----------|---------------|
+| `session_id` | `sessionId` |
+| `model` | `model` |
+| `cwd` | `cwd` |
+| `tools` | `availableTools` |
+| `mcp_servers[].{name, status, serverInfo}` | `mcpServers` |
+| `permissionMode` | `permissionMode` |
+| `slash_commands[]` | `slashCommands` (fallback) |
+| `apiKeySource` | `extensions['claude.apiKeySource']` |
+| `output_style` | `extensions['claude.outputStyle']` |
+| _From stored `_controlResponseData`:_ | |
+| `commands[].{name, description, argumentHint}` | `slashCommands` (preferred) |
+| `models[].{value, displayName, description}` | `availableModels` |
+| `account.{email, organization, subscriptionType, ...}` | `account` |
+
 ---
 
-### 2. _convertSystemStatus
-
-**Signature:**
-
-```dart
-SessionStatusEvent _convertSystemStatus(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.2: _convertSystemStatus
 
 ```dart
 SessionStatusEvent _convertSystemStatus(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
+  final sid = json['session_id'] as String? ?? sessionId;
   final statusStr = json['status'] as String?;
 
-  SessionStatus status;
-  switch (statusStr) {
-    case 'compacting':
-      status = SessionStatus.compacting;
-    case 'resuming':
-      status = SessionStatus.resuming;
-    case 'interrupted':
-      status = SessionStatus.interrupted;
-    case 'ended':
-      status = SessionStatus.ended;
-    case 'error':
-      status = SessionStatus.error;
-    default:
-      status = SessionStatus.error;
-  }
+  final status = switch (statusStr) {
+    'compacting' => SessionStatus.compacting,
+    'resuming' => SessionStatus.resuming,
+    'interrupted' => SessionStatus.interrupted,
+    'ended' => SessionStatus.ended,
+    _ => SessionStatus.error,
+  };
 
   return SessionStatusEvent(
     id: _nextEventId(),
     timestamp: DateTime.now(),
     provider: BackendProvider.claude,
     raw: json,
-    sessionId: sessionId,
+    sessionId: sid,
     status: status,
     message: json['message'] as String?,
   );
@@ -291,68 +323,42 @@ SessionStatusEvent _convertSystemStatus(Map<String, dynamic> json) {
 
 ---
 
-### 3. _convertCompactBoundary
-
-**Signature:**
-
-```dart
-ContextCompactionEvent _convertCompactBoundary(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.3: _convertCompactBoundary
 
 ```dart
 ContextCompactionEvent _convertCompactBoundary(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
+  final sid = json['session_id'] as String? ?? sessionId;
   final metadata = json['compact_metadata'] as Map<String, dynamic>?;
 
-  final triggerStr = metadata?['trigger'] as String?;
-  CompactionTrigger trigger;
-  switch (triggerStr) {
-    case 'auto':
-      trigger = CompactionTrigger.auto;
-    case 'manual':
-      trigger = CompactionTrigger.manual;
-    default:
-      trigger = CompactionTrigger.auto;
-  }
-
-  final preTokens = metadata?['pre_tokens'] as int?;
+  final trigger = switch (metadata?['trigger'] as String?) {
+    'manual' => CompactionTrigger.manual,
+    _ => CompactionTrigger.auto,
+  };
 
   return ContextCompactionEvent(
     id: _nextEventId(),
     timestamp: DateTime.now(),
     provider: BackendProvider.claude,
     raw: json,
-    sessionId: sessionId,
+    sessionId: sid,
     trigger: trigger,
-    preTokens: preTokens,
+    preTokens: metadata?['pre_tokens'] as int?,
   );
 }
 ```
 
 ---
 
-### 4. _convertContextCleared
-
-**Signature:**
-
-```dart
-ContextCompactionEvent _convertContextCleared(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.4: _convertContextCleared
 
 ```dart
 ContextCompactionEvent _convertContextCleared(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
-
   return ContextCompactionEvent(
     id: _nextEventId(),
     timestamp: DateTime.now(),
     provider: BackendProvider.claude,
     raw: json,
-    sessionId: sessionId,
+    sessionId: json['session_id'] as String? ?? sessionId,
     trigger: CompactionTrigger.cleared,
   );
 }
@@ -360,21 +366,13 @@ ContextCompactionEvent _convertContextCleared(Map<String, dynamic> json) {
 
 ---
 
-### 5. _convertAssistant
+### 6.5: _convertAssistant
 
-**Returns multiple events** — one per content block.
-
-**Signature:**
-
-```dart
-List<InsightsEvent> _convertAssistant(Map<String, dynamic> json)
-```
-
-**Implementation:**
+Returns **multiple events** — one per content block. This is the most complex converter.
 
 ```dart
 List<InsightsEvent> _convertAssistant(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
+  final sid = json['session_id'] as String? ?? sessionId;
   final parentToolUseId = json['parent_tool_use_id'] as String?;
   final message = json['message'] as Map<String, dynamic>?;
   final model = message?['model'] as String?;
@@ -386,78 +384,69 @@ List<InsightsEvent> _convertAssistant(Map<String, dynamic> json) {
 
   for (final block in content) {
     if (block is! Map<String, dynamic>) continue;
-
     final blockType = block['type'] as String?;
 
     switch (blockType) {
       case 'text':
-        final text = block['text'] as String? ?? '';
         events.add(TextEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
           provider: BackendProvider.claude,
           raw: json,
-          sessionId: sessionId,
-          text: text,
+          sessionId: sid,
+          text: block['text'] as String? ?? '',
           kind: TextKind.text,
           parentCallId: parentToolUseId,
           model: model,
         ));
 
       case 'thinking':
-        final thinking = block['thinking'] as String? ?? '';
         events.add(TextEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
           provider: BackendProvider.claude,
           raw: json,
-          sessionId: sessionId,
-          text: thinking,
+          sessionId: sid,
+          text: block['thinking'] as String? ?? '',
           kind: TextKind.thinking,
           parentCallId: parentToolUseId,
           model: model,
         ));
 
       case 'tool_use':
-        final toolUseId = block['id'] as String?;
+        final callId = block['id'] as String? ?? _nextEventId();
         final toolName = block['name'] as String? ?? '';
         final input = block['input'] as Map<String, dynamic>? ?? {};
-
-        // Extract locations from common input fields
-        final locations = _extractLocations(toolName, input);
 
         events.add(ToolInvocationEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
           provider: BackendProvider.claude,
           raw: json,
-          callId: toolUseId ?? _nextEventId(),
+          callId: callId,
           parentCallId: parentToolUseId,
-          sessionId: sessionId,
+          sessionId: sid,
           kind: ToolKind.fromToolName(toolName),
           toolName: toolName,
           input: input,
-          locations: locations,
+          locations: _extractLocations(toolName, input),
           model: model,
         ));
 
-        // Special case: Task tool → also emit SubagentSpawnEvent
+        // Task tool → also emit SubagentSpawnEvent
         if (toolName == 'Task') {
-          final agentType = input['subagent_type'] as String? ?? input['name'] as String?;
-          final description = input['description'] as String? ??
-              input['prompt'] as String? ??
-              input['task'] as String?;
           final resume = input['resume'] as String?;
-
           events.add(SubagentSpawnEvent(
             id: _nextEventId(),
             timestamp: DateTime.now(),
             provider: BackendProvider.claude,
             raw: json,
-            sessionId: sessionId,
-            callId: toolUseId ?? _nextEventId(),
-            agentType: agentType,
-            description: description,
+            sessionId: sid,
+            callId: callId,
+            agentType: input['subagent_type'] as String? ?? input['name'] as String?,
+            description: input['description'] as String?
+                ?? input['prompt'] as String?
+                ?? input['task'] as String?,
             isResume: resume != null,
             resumeAgentId: resume,
           ));
@@ -469,14 +458,29 @@ List<InsightsEvent> _convertAssistant(Map<String, dynamic> json) {
 }
 ```
 
-**Helper method for location extraction:**
+**Content block → Event mapping:**
+
+| Block type | → Event type | Key fields |
+|------------|--------------|------------|
+| `text` | `TextEvent(kind: TextKind.text)` | `block['text']` → `text` |
+| `thinking` | `TextEvent(kind: TextKind.thinking)` | `block['thinking']` → `text` |
+| `tool_use` | `ToolInvocationEvent` | `block['id']` → `callId`, `block['name']` → `toolName`, `block['input']` → `input` |
+| `tool_use` where name == `Task` | `ToolInvocationEvent` + `SubagentSpawnEvent` | `input['subagent_type']` → `agentType`, `input['description']` → `description` |
+
+**Common fields for all events from an assistant message:**
+- `parentCallId` ← `json['parent_tool_use_id']` (non-null when this is a subagent response)
+- `model` ← `json['message']['model']`
+- `sessionId` ← `json['session_id']`
+
+---
+
+### 6.6: _extractLocations (helper)
 
 ```dart
-/// Extract file/directory locations from tool input.
+/// Extract file/directory locations from tool input parameters.
 List<String>? _extractLocations(String toolName, Map<String, dynamic> input) {
   final locations = <String>[];
 
-  // Common location fields
   final filePath = input['file_path'] as String?;
   if (filePath != null) locations.add(filePath);
 
@@ -486,48 +490,53 @@ List<String>? _extractLocations(String toolName, Map<String, dynamic> input) {
   final notebookPath = input['notebook_path'] as String?;
   if (notebookPath != null) locations.add(notebookPath);
 
-  final cwd = input['cwd'] as String?;
-  if (cwd != null) locations.add(cwd);
-
-  final pattern = input['pattern'] as String?;
-  if (pattern != null && toolName == 'Glob') locations.add(pattern);
+  // For Glob, the pattern is the location
+  if (toolName == 'Glob') {
+    final pattern = input['pattern'] as String?;
+    if (pattern != null) locations.add(pattern);
+  }
 
   return locations.isNotEmpty ? locations : null;
 }
 ```
 
+Supported input field names:
+- `file_path` — Read, Write, Edit
+- `path` — Grep, Glob (directory)
+- `notebook_path` — NotebookEdit
+- `pattern` — Glob only (treat glob pattern as a location for display)
+
+Note: `cwd` from Bash input is intentionally excluded — it's a working directory, not a target location.
+
 ---
 
-### 6. _convertUser
-
-**Signature:**
-
-```dart
-List<InsightsEvent> _convertUser(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.7: _convertUser
 
 ```dart
 List<InsightsEvent> _convertUser(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
+  final sid = json['session_id'] as String? ?? sessionId;
   final isSynthetic = json['isSynthetic'] as bool? ?? false;
   final isReplay = json['isReplay'] as bool? ?? false;
   final message = json['message'] as Map<String, dynamic>?;
-  final content = message?['content'] as List?;
+  final content = message?['content'];
 
-  if (content == null || content.isEmpty) return [];
+  // Handle string content (simple user text)
+  if (content is String) {
+    return []; // Plain user input — not emitted as InsightsEvent here
+  }
+
+  final contentList = content as List?;
+  if (contentList == null || contentList.isEmpty) return [];
 
   final events = <InsightsEvent>[];
 
-  for (final block in content) {
+  for (final block in contentList) {
     if (block is! Map<String, dynamic>) continue;
-
     final blockType = block['type'] as String?;
 
     switch (blockType) {
       case 'tool_result':
-        final toolUseId = block['tool_use_id'] as String?;
+        final toolUseId = block['tool_use_id'] as String? ?? _nextEventId();
         final isError = block['is_error'] as bool? ?? false;
 
         // Prefer structured tool_use_result over content field
@@ -538,18 +547,18 @@ List<InsightsEvent> _convertUser(Map<String, dynamic> json) {
           timestamp: DateTime.now(),
           provider: BackendProvider.claude,
           raw: json,
-          callId: toolUseId ?? _nextEventId(),
-          sessionId: sessionId,
+          callId: toolUseId,
+          sessionId: sid,
           status: isError ? ToolCallStatus.failed : ToolCallStatus.completed,
           output: output,
           isError: isError,
         ));
 
       case 'text':
-        // Synthetic user messages (context summaries after compaction)
-        if (isSynthetic) {
-          final text = block['text'] as String? ?? '';
-          final extensions = <String, dynamic>{'claude.isSynthetic': true};
+        if (isSynthetic || isReplay) {
+          final extensions = <String, dynamic>{};
+          if (isSynthetic) extensions['claude.isSynthetic'] = true;
+          if (isReplay) extensions['claude.isReplay'] = true;
 
           events.add(TextEvent(
             id: _nextEventId(),
@@ -557,27 +566,14 @@ List<InsightsEvent> _convertUser(Map<String, dynamic> json) {
             provider: BackendProvider.claude,
             raw: json,
             extensions: extensions,
-            sessionId: sessionId,
-            text: text,
+            sessionId: sid,
+            text: block['text'] as String? ?? '',
             kind: TextKind.text,
           ));
         }
-        // Replay messages
-        else if (isReplay) {
-          final text = block['text'] as String? ?? '';
-          final extensions = <String, dynamic>{'claude.isReplay': true};
-
-          events.add(TextEvent(
-            id: _nextEventId(),
-            timestamp: DateTime.now(),
-            provider: BackendProvider.claude,
-            raw: json,
-            extensions: extensions,
-            sessionId: sessionId,
-            text: text,
-            kind: TextKind.text,
-          ));
-        }
+        // Regular user text blocks in non-synthetic messages are not
+        // emitted as events (the user's input was already sent by the
+        // frontend — we don't echo it back).
     }
   }
 
@@ -585,31 +581,22 @@ List<InsightsEvent> _convertUser(Map<String, dynamic> json) {
 }
 ```
 
+**Key behaviors:**
+- `tool_result` blocks → `ToolCompletionEvent` with `callId` matching the original `ToolInvocationEvent.callId`
+- `tool_use_result` field (top-level on the user message JSON) is preferred over `block['content']` because it contains richer structured data (e.g., TodoWrite returns `{oldTodos, newTodos}`)
+- Synthetic text blocks (after compaction) → `TextEvent` with `extensions['claude.isSynthetic'] = true`
+- Replay text blocks (session resume) → `TextEvent` with `extensions['claude.isReplay'] = true`
+- Regular user text is NOT emitted (the frontend already knows what the user typed)
+
 ---
 
-### 7. _convertResult
-
-**Signature:**
-
-```dart
-List<InsightsEvent> _convertResult(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.8: _convertResult
 
 ```dart
 List<InsightsEvent> _convertResult(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
-  final subtype = json['subtype'] as String?;
-  final isError = json['is_error'] as bool? ?? false;
-  final durationMs = json['duration_ms'] as int?;
-  final durationApiMs = json['duration_api_ms'] as int?;
-  final numTurns = json['num_turns'] as int?;
-  final totalCostUsd = (json['total_cost_usd'] as num?)?.toDouble();
-  final result = json['result'] as String?;
-  final errors = (json['errors'] as List?)?.cast<String>();
+  final sid = json['session_id'] as String? ?? sessionId;
 
-  // Parse usage
+  // Parse aggregate usage
   TokenUsage? usage;
   final usageJson = json['usage'] as Map<String, dynamic>?;
   if (usageJson != null) {
@@ -621,21 +608,22 @@ List<InsightsEvent> _convertResult(Map<String, dynamic> json) {
     );
   }
 
-  // Parse per-model usage
+  // Parse per-model usage (camelCase keys on the wire)
   Map<String, ModelTokenUsage>? modelUsage;
   final modelUsageJson = json['modelUsage'] as Map<String, dynamic>?;
   if (modelUsageJson != null) {
     modelUsage = {};
     for (final entry in modelUsageJson.entries) {
-      final modelJson = entry.value as Map<String, dynamic>;
+      if (entry.value is! Map<String, dynamic>) continue;
+      final m = entry.value as Map<String, dynamic>;
       modelUsage[entry.key] = ModelTokenUsage(
-        inputTokens: modelJson['inputTokens'] as int? ?? 0,
-        outputTokens: modelJson['outputTokens'] as int? ?? 0,
-        cacheReadTokens: modelJson['cacheReadInputTokens'] as int?,
-        cacheCreationTokens: modelJson['cacheCreationInputTokens'] as int?,
-        costUsd: (modelJson['costUsd'] as num?)?.toDouble(),
-        contextWindow: modelJson['contextWindow'] as int?,
-        webSearchRequests: modelJson['webSearchRequests'] as int?,
+        inputTokens: m['inputTokens'] as int? ?? 0,
+        outputTokens: m['outputTokens'] as int? ?? 0,
+        cacheReadTokens: m['cacheReadInputTokens'] as int?,
+        cacheCreationTokens: m['cacheCreationInputTokens'] as int?,
+        costUsd: (m['costUSD'] as num?)?.toDouble(),
+        contextWindow: m['contextWindow'] as int?,
+        webSearchRequests: m['webSearchRequests'] as int?,
       );
     }
   }
@@ -650,62 +638,70 @@ List<InsightsEvent> _convertResult(Map<String, dynamic> json) {
         .toList();
   }
 
-  final event = TurnCompleteEvent(
-    id: _nextEventId(),
-    timestamp: DateTime.now(),
-    provider: BackendProvider.claude,
-    raw: json,
-    sessionId: sessionId,
-    isError: isError,
-    subtype: subtype,
-    errors: errors,
-    result: result,
-    costUsd: totalCostUsd,
-    durationMs: durationMs,
-    durationApiMs: durationApiMs,
-    numTurns: numTurns,
-    usage: usage,
-    modelUsage: modelUsage,
-    permissionDenials: permissionDenials,
-  );
-
-  return [event];
+  return [
+    TurnCompleteEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: json,
+      sessionId: sid,
+      isError: json['is_error'] as bool? ?? false,
+      subtype: json['subtype'] as String?,
+      errors: (json['errors'] as List?)?.cast<String>(),
+      result: json['result'] as String?,
+      costUsd: (json['total_cost_usd'] as num?)?.toDouble(),
+      durationMs: json['duration_ms'] as int?,
+      durationApiMs: json['duration_api_ms'] as int?,
+      numTurns: json['num_turns'] as int?,
+      usage: usage,
+      modelUsage: modelUsage,
+      permissionDenials: permissionDenials,
+    ),
+  ];
 }
 ```
 
+**JSON → Event field mapping:**
+
+| Wire JSON key | → Event field | Notes |
+|---------------|---------------|-------|
+| `subtype` | `subtype` | `"success"`, `"error_max_turns"`, etc. |
+| `is_error` | `isError` | |
+| `duration_ms` | `durationMs` | Claude-only |
+| `duration_api_ms` | `durationApiMs` | Claude-only |
+| `num_turns` | `numTurns` | Claude-only |
+| `total_cost_usd` | `costUsd` | Claude-only |
+| `result` | `result` | Final text output |
+| `errors` | `errors` | Error message strings |
+| `usage.input_tokens` | `usage.inputTokens` | snake_case on wire |
+| `usage.output_tokens` | `usage.outputTokens` | snake_case on wire |
+| `usage.cache_read_input_tokens` | `usage.cacheReadTokens` | snake_case on wire |
+| `usage.cache_creation_input_tokens` | `usage.cacheCreationTokens` | snake_case on wire |
+| `modelUsage.<model>.inputTokens` | `modelUsage[model].inputTokens` | camelCase on wire |
+| `modelUsage.<model>.costUSD` | `modelUsage[model].costUsd` | Note: capital USD on wire |
+| `modelUsage.<model>.contextWindow` | `modelUsage[model].contextWindow` | camelCase on wire |
+| `permission_denials` | `permissionDenials` | Uses `PermissionDenial.fromJson` |
+
 ---
 
-### 8. _convertControlRequest
-
-**Signature:**
-
-```dart
-List<InsightsEvent> _convertControlRequest(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.9: _convertControlRequest
 
 ```dart
 List<InsightsEvent> _convertControlRequest(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
-  final requestId = json['request_id'] as String?;
+  final sid = json['session_id'] as String? ?? sessionId;
   final request = json['request'] as Map<String, dynamic>?;
-
   if (request == null) return [];
 
-  final subtype = request['subtype'] as String?;
-
-  // Only convert can_use_tool requests
-  if (subtype != 'can_use_tool') return [];
+  // Only convert can_use_tool requests to events
+  if (request['subtype'] != 'can_use_tool') return [];
 
   final toolName = request['tool_name'] as String? ?? '';
   final toolInput = request['input'] as Map<String, dynamic>? ?? {};
-  final toolUseId = request['tool_use_id'] as String?;
-  final blockedPath = request['blocked_path'] as String?;
 
-  // Parse permission suggestions
+  // Parse permission suggestions into data-only form
   List<PermissionSuggestionData>? suggestions;
-  final suggestionsJson = request['permission_suggestions'] as List?;
+  final suggestionsJson = request['permission_suggestions'] as List?
+      ?? request['suggestions'] as List?;
   if (suggestionsJson != null) {
     suggestions = suggestionsJson
         .whereType<Map<String, dynamic>>()
@@ -725,37 +721,34 @@ List<InsightsEvent> _convertControlRequest(Map<String, dynamic> json) {
       timestamp: DateTime.now(),
       provider: BackendProvider.claude,
       raw: json,
-      sessionId: sessionId,
-      requestId: requestId ?? _nextEventId(),
+      sessionId: sid,
+      requestId: json['request_id'] as String? ?? _nextEventId(),
       toolName: toolName,
       toolKind: ToolKind.fromToolName(toolName),
       toolInput: toolInput,
-      toolUseId: toolUseId,
-      blockedPath: blockedPath,
+      toolUseId: request['tool_use_id'] as String?,
+      blockedPath: request['blocked_path'] as String?,
       suggestions: suggestions,
     ),
   ];
 }
 ```
 
+**Note:** This emits a `PermissionRequestEvent` on the `events` stream alongside the existing `CliPermissionRequest` on the `permissionRequests` stream. They serve different purposes:
+- `permissionRequests` stream: interactive flow (allow/deny with response callbacks)
+- `events` stream: observation/logging (data-only, no response mechanism)
+
+**Note on PermissionSuggestionData:** The events stream uses the simplified `PermissionSuggestionData` from `insights_events.dart`, NOT the full `PermissionSuggestion` type. The `PermissionSuggestion` type carries `rawJson` for passthrough to the SDK — that's only needed by the interactive permission flow, not the event observation layer.
+
 ---
 
-### 9. _convertStreamEvent
-
-**Signature:**
-
-```dart
-List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json)
-```
-
-**Implementation:**
+### 6.10: _convertStreamEvent
 
 ```dart
 List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
-  final sessionId = json['session_id'] as String? ?? this.sessionId;
+  final sid = json['session_id'] as String? ?? sessionId;
   final parentToolUseId = json['parent_tool_use_id'] as String?;
   final event = json['event'] as Map<String, dynamic>?;
-
   if (event == null) return [];
 
   final eventType = event['type'] as String?;
@@ -765,6 +758,7 @@ List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
   String? jsonDelta;
   int? blockIndex;
   String? callId;
+  Map<String, dynamic>? extensions;
 
   switch (eventType) {
     case 'message_start':
@@ -773,36 +767,26 @@ List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
     case 'content_block_start':
       kind = StreamDeltaKind.blockStart;
       blockIndex = event['index'] as int?;
-
       final contentBlock = event['content_block'] as Map<String, dynamic>?;
-      if (contentBlock != null) {
-        final blockType = contentBlock['type'] as String?;
-        if (blockType == 'tool_use') {
-          callId = contentBlock['id'] as String?;
-        }
+      if (contentBlock?['type'] == 'tool_use') {
+        callId = contentBlock?['id'] as String?;
       }
 
     case 'content_block_delta':
       blockIndex = event['index'] as int?;
       final delta = event['delta'] as Map<String, dynamic>?;
+      final deltaType = delta?['type'] as String?;
 
-      if (delta != null) {
-        final deltaType = delta['type'] as String?;
-
-        switch (deltaType) {
-          case 'text_delta':
-            kind = StreamDeltaKind.text;
-            textDelta = delta['text'] as String?;
-
-          case 'thinking_delta':
-            kind = StreamDeltaKind.thinking;
-            textDelta = delta['thinking'] as String?;
-
-          case 'input_json_delta':
-            kind = StreamDeltaKind.toolInput;
-            jsonDelta = delta['partial_json'] as String?;
-            callId = event['tool_use_id'] as String?;
-        }
+      switch (deltaType) {
+        case 'text_delta':
+          kind = StreamDeltaKind.text;
+          textDelta = delta?['text'] as String?;
+        case 'thinking_delta':
+          kind = StreamDeltaKind.thinking;
+          textDelta = delta?['thinking'] as String?;
+        case 'input_json_delta':
+          kind = StreamDeltaKind.toolInput;
+          jsonDelta = delta?['partial_json'] as String?;
       }
 
     case 'content_block_stop':
@@ -814,9 +798,9 @@ List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
 
     case 'message_delta':
       kind = StreamDeltaKind.messageStop;
-      final stopReason = event['delta']?['stop_reason'] as String?;
+      final stopReason = (event['delta'] as Map<String, dynamic>?)?['stop_reason'] as String?;
       if (stopReason != null) {
-        // Store in extensions
+        extensions = {'claude.stopReason': stopReason};
       }
   }
 
@@ -828,7 +812,8 @@ List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
       timestamp: DateTime.now(),
       provider: BackendProvider.claude,
       raw: json,
-      sessionId: sessionId,
+      extensions: extensions,
+      sessionId: sid,
       parentCallId: parentToolUseId,
       kind: kind,
       textDelta: textDelta,
@@ -840,111 +825,97 @@ List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
 }
 ```
 
----
+**Stream event type → StreamDeltaKind mapping:**
 
-## Integration into _handleMessage
-
-**Modify the existing `_handleMessage()` method (line 78). After the switch statement, add:**
-
-```dart
-void _handleMessage(Map<String, dynamic> json) {
-  // ... existing code (lines 79-167) ...
-
-  // NEW: Convert to InsightsEvents and emit
-  try {
-    final events = _convertToInsightsEvents(json);
-    for (final event in events) {
-      _eventsController.add(event);
-    }
-  } catch (e, stack) {
-    SdkLogger.instance.error(
-      'Failed to convert message to InsightsEvent',
-      sessionId: sessionId,
-      data: {'error': e.toString(), 'json': json, 'stack': stack.toString()},
-    );
-  }
-}
-```
+| Wire `event.type` | `event.delta.type` | → `StreamDeltaKind` | Data extracted |
+|--------------------|--------------------|----------------------|----------------|
+| `message_start` | — | `messageStart` | — |
+| `content_block_start` | — | `blockStart` | `blockIndex`, `callId` (if tool_use) |
+| `content_block_delta` | `text_delta` | `text` | `textDelta` ← `delta.text` |
+| `content_block_delta` | `thinking_delta` | `thinking` | `textDelta` ← `delta.thinking` |
+| `content_block_delta` | `input_json_delta` | `toolInput` | `jsonDelta` ← `delta.partial_json` |
+| `content_block_stop` | — | `blockStop` | `blockIndex` |
+| `message_stop` | — | `messageStop` | — |
+| `message_delta` | — | `messageStop` | `stopReason` in extensions |
 
 ---
 
-## Required Imports
+## Summary of All Changes
 
-Add to the top of `cli_session.dart` (after existing imports):
+| # | Location | Change | Lines |
+|---|----------|--------|-------|
+| 1 | Instance field | Add `_controlResponseData` field | 3 |
+| 2 | Constructor | Accept `controlResponseData` parameter | 3 |
+| 3 | `create()` | Declare local var, capture response data, pass to constructor | 5 |
+| 4 | Instance field + method | Add `_eventIdCounter` + `_nextEventId()` | 6 |
+| 5 | Imports | Add `backend_provider.dart`, `tool_kind.dart`, `usage.dart` | 3 |
+| 6 | New method | `_convertToInsightsEvents()` — main dispatch | 16 |
+| 7 | `_handleMessage()` | Add event emission at end | 9 |
+| 8 | New method | `_convertSystemInit()` | 55 |
+| 9 | New method | `_convertSystemStatus()` | 18 |
+| 10 | New method | `_convertCompactBoundary()` | 18 |
+| 11 | New method | `_convertContextCleared()` | 10 |
+| 12 | New method | `_convertAssistant()` | 75 |
+| 13 | New method | `_extractLocations()` | 15 |
+| 14 | New method | `_convertUser()` | 55 |
+| 15 | New method | `_convertResult()` | 55 |
+| 16 | New method | `_convertControlRequest()` | 35 |
+| 17 | New method | `_convertStreamEvent()` | 55 |
 
-```dart
-import 'types/insights_events.dart';
-import 'types/tool_kind.dart';
-import 'types/backend_provider.dart';
-import 'types/usage.dart';
-```
+**Total new code:** ~430 lines
+**Modified existing code:** ~11 lines (constructor, create(), _handleMessage, imports)
 
 ---
 
-## Summary of Changes
+## Edge Cases
 
-| Location | Change |
-|----------|--------|
-| Instance fields | Add `_controlResponseData`, `_eventIdCounter` |
-| Constructor | Accept and store `controlResponseData` |
-| `create()` method | Capture `control_response` data |
-| After `_handleMessage()` | Add `_convertToInsightsEvents()` and 9 converter methods |
-| Helper method | Add `_extractLocations()` |
-| Helper method | Add `_nextEventId()` |
-| End of `_handleMessage()` | Add event conversion and emission |
-| Imports | Add 4 new imports |
+1. **Missing fields:** All field access uses null-aware operators (`as String?`) with `?? defaultValue` fallbacks. No `!` operators.
 
-**Total new code:** ~500 lines
-**Modified existing code:** ~10 lines
+2. **Malformed content blocks:** `if (block is! Map<String, dynamic>) continue` — silently skips non-map entries in content arrays.
+
+3. **Empty content arrays:** Returns empty list — no error, no event emitted.
+
+4. **Unknown block types:** The `switch` on `blockType` has no default — unknown types are silently ignored (standard Dart exhaustive-check-free switch).
+
+5. **Multiple tool_results in one user message:** Each tool_result block produces a separate `ToolCompletionEvent`. The `tool_use_result` field (top-level) is shared across all — this is correct because Claude CLI only sends one tool_result per user message in practice. If multiple appear, all get the same structured result, but the `callId` differs.
+
+6. **control_response during normal operation:** The existing `_handleMessage` already breaks on this case. The new `_convertToInsightsEvents` doesn't match it (no case for `'control_response'` in the switch), so it returns `[]`. Correct.
+
+7. **Null event from stream_event:** If the `event.type` is unrecognized, `kind` remains null and we return `[]`. No crash.
 
 ---
 
 ## Testing Strategy (for Task 2c)
 
-Create tests that:
-1. Feed known JSON (from `03-claude-mapping.md`) into a `CliSession`
-2. Listen to the `events` stream
-3. Verify correct event types and field values
+Tests should:
+1. Construct a `CliSession` with mocked `CliProcess`
+2. Feed known JSON messages via the process mock
+3. Collect events from `session.events`
+4. Assert event types, field values, and count
 
-Example:
-```dart
-test('converts assistant message with text', () async {
-  final session = await CliSession.create(...);
+**Test cases to cover:**
 
-  final events = <InsightsEvent>[];
-  session.events.listen(events.add);
-
-  // Inject mock JSON via process
-  // ...
-
-  expect(events.whereType<TextEvent>().length, 1);
-  final textEvent = events.whereType<TextEvent>().first;
-  expect(textEvent.text, 'Here is the fix...');
-  expect(textEvent.kind, TextKind.text);
-});
-```
-
----
-
-## Edge Cases & Error Handling
-
-1. **Missing fields:** All field access uses null-aware operators or defaults
-2. **Malformed JSON:** Wrapped in try-catch, logs error but doesn't crash
-3. **Empty content arrays:** Returns empty list, no error
-4. **Unknown enum values:** Falls back to sensible defaults
-5. **Multiple events from one message:** All added to list, emitted sequentially
-
----
-
-## Performance Considerations
-
-- Event ID generation is O(1) (microseconds + counter)
-- Location extraction is O(n) where n = number of input keys (typically < 10)
-- Per-message overhead: ~1-5 event objects (small allocations)
-- No blocking operations, all synchronous transforms
+| Test | Input JSON | Expected Events |
+|------|-----------|-----------------|
+| System init | `{type: system, subtype: init, ...}` | 1 × `SessionInitEvent` |
+| System init with control_response | System init + stored control_response | `SessionInitEvent` with `availableModels`, `account`, rich `slashCommands` |
+| System status | `{type: system, subtype: status, status: compacting}` | 1 × `SessionStatusEvent(status: compacting)` |
+| Compact boundary | `{type: system, subtype: compact_boundary, compact_metadata: {trigger: auto, pre_tokens: 180000}}` | 1 × `ContextCompactionEvent(trigger: auto, preTokens: 180000)` |
+| Context cleared | `{type: system, subtype: context_cleared}` | 1 × `ContextCompactionEvent(trigger: cleared)` |
+| Assistant with text | `{type: assistant, message: {content: [{type: text, text: "Hi"}]}}` | 1 × `TextEvent(kind: text, text: "Hi")` |
+| Assistant with thinking | `{type: assistant, message: {content: [{type: thinking, thinking: "..."}]}}` | 1 × `TextEvent(kind: thinking)` |
+| Assistant with tool_use | `{type: assistant, message: {content: [{type: tool_use, id: "tu_1", name: "Bash", input: {command: "ls"}}]}}` | 1 × `ToolInvocationEvent(callId: "tu_1", kind: execute, toolName: "Bash")` |
+| Assistant with mixed blocks | text + thinking + tool_use | 3 events in order |
+| Assistant with Task tool | `{name: "Task", input: {subagent_type: "Explore", ...}}` | `ToolInvocationEvent` + `SubagentSpawnEvent` |
+| User with tool_result | `{type: user, message: {content: [{type: tool_result, tool_use_id: "tu_1"}]}}` | 1 × `ToolCompletionEvent(callId: "tu_1")` |
+| User with tool_use_result | Same + `tool_use_result: {stdout: "..."}` | `ToolCompletionEvent` with `output` = structured data |
+| Synthetic user | `{isSynthetic: true, message: {content: [{type: text, text: "Summary"}]}}` | 1 × `TextEvent` with `extensions['claude.isSynthetic'] = true` |
+| Result message | `{type: result, ...}` | 1 × `TurnCompleteEvent` with all fields |
+| Control request | `{type: control_request, request: {subtype: can_use_tool, ...}}` | 1 × `PermissionRequestEvent` |
+| Stream text delta | `{type: stream_event, event: {type: content_block_delta, delta: {type: text_delta, text: "Hi"}}}` | 1 × `StreamDeltaEvent(kind: text, textDelta: "Hi")` |
+| Unknown type | `{type: "foo"}` | 0 events (no error) |
+| parentToolUseId | assistant message with `parent_tool_use_id: "tu_parent"` | All events have `parentCallId: "tu_parent"` |
 
 ---
 
 ## End of Specification
-
-This spec provides everything Sonnet needs to implement Task 2b. All field mappings, method signatures, and control flow are explicitly defined.
