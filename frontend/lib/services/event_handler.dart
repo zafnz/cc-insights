@@ -238,29 +238,244 @@ class EventHandler {
     return tokens.toString();
   }
 
-  // Stub methods for 4c
+  // Task 4c methods
   void _handleText(ChatState chat, TextEvent event) {
-    // TODO: Implement in Task 4c
+    final conversationId = _resolveConversationId(chat, event.parentCallId);
+
+    // Check for streaming entries to finalize: when a non-streaming event arrives
+    // and there are active streaming entries for that conversation, finalize the
+    // first matching text entry.
+    final streamingEntries = _activeStreamingEntries.remove(conversationId);
+    if (streamingEntries != null && streamingEntries.isNotEmpty) {
+      // Find the first TextOutputEntry to finalize
+      for (final entry in streamingEntries) {
+        if (entry is TextOutputEntry) {
+          // Finalize with authoritative text
+          entry.text = event.text;
+          entry.isStreaming = false;
+          entry.addRawMessage(event.raw ?? {});
+          chat.persistStreamingEntry(entry);
+          chat.notifyListeners();
+          return;
+        }
+      }
+    }
+
+    // Non-streaming path: create entry
+    final String contentType;
+    String? errorType;
+
+    switch (event.kind) {
+      case TextKind.thinking:
+        contentType = 'thinking';
+      case TextKind.error:
+        contentType = 'text';
+        errorType = 'error';
+      case TextKind.text:
+      case TextKind.plan:
+        contentType = 'text';
+    }
+
+    final entry = TextOutputEntry(
+      timestamp: DateTime.now(),
+      text: event.text,
+      contentType: contentType,
+      errorType: errorType,
+    );
+
+    entry.addRawMessage(event.raw ?? {});
+    chat.addOutputEntry(conversationId, entry);
+
+    // Mark that we have assistant output for this turn (main agent only)
+    if (event.parentCallId == null) {
+      _hasAssistantOutputThisTurn[chat.data.id] = true;
+    }
   }
 
   void _handleUserInput(ChatState chat, UserInputEvent event) {
-    // TODO: Implement in Task 4c
+    final chatId = chat.data.id;
+
+    // Check if this is a context summary message (after compaction)
+    // The SDK may send this with isSynthetic=true, or we track it via
+    // _expectingContextSummary flag after receiving compact_boundary
+    if (event.isSynthetic ||
+        (_expectingContextSummary[chatId] ?? false)) {
+      // Reset the flag
+      _expectingContextSummary[chatId] = false;
+
+      // Extract the text content and display as a context summary entry
+      if (event.text.isNotEmpty) {
+        chat.addEntry(ContextSummaryEntry(
+          timestamp: DateTime.now(),
+          summary: event.text,
+        ));
+      }
+      return;
+    }
+
+    // Handle local command output (e.g., /cost, /compact).
+    // These arrive as user messages with isReplay: true and text content
+    // wrapped in <local-command-stdout> tags.
+    final isReplay = event.extensions?['isReplay'] == true;
+    if (isReplay) {
+      final localCmdRegex = RegExp(
+        r'<local-command-stdout>([\s\S]*?)</local-command-stdout>',
+      );
+      final match = localCmdRegex.firstMatch(event.text);
+      if (match != null) {
+        final output = match.group(1)?.trim() ?? '';
+        if (output.isNotEmpty) {
+          chat.addEntry(SystemNotificationEntry(
+            timestamp: DateTime.now(),
+            message: output,
+          ));
+        }
+      }
+      return;
+    }
+
+    // Normal user input - no-op (user input entries are added by ChatState.sendMessage)
   }
 
   void _handleSessionInit(ChatState chat, SessionInitEvent event) {
-    // TODO: Implement in Task 4c
+    // No-op - matches current SdkMessageHandler behavior for system:init
   }
 
   void _handleSessionStatus(ChatState chat, SessionStatusEvent event) {
-    // TODO: Implement in Task 4c
+    // Update compacting state
+    if (event.status == SessionStatus.compacting) {
+      chat.setCompacting(true);
+    } else {
+      chat.setCompacting(false);
+    }
+
+    // Sync permission mode when the CLI reports it (e.g., entering plan mode)
+    final permMode = event.extensions?['permissionMode'] as String?;
+    if (permMode != null) {
+      chat.setPermissionMode(PermissionMode.fromApiName(permMode));
+    }
   }
 
   void _handleCompaction(ChatState chat, ContextCompactionEvent event) {
-    // TODO: Implement in Task 4c
+    // Check for context_cleared trigger
+    if (event.trigger == CompactionTrigger.cleared) {
+      chat.addEntry(ContextClearedEntry(timestamp: DateTime.now()));
+      chat.resetContext();
+      return;
+    }
+
+    // Create AutoCompactionEntry
+    final message = event.preTokens != null
+        ? 'Was ${_formatTokens(event.preTokens!)} tokens'
+        : null;
+    final isManual = event.trigger == CompactionTrigger.manual;
+
+    chat.addEntry(AutoCompactionEntry(
+      timestamp: DateTime.now(),
+      message: message,
+      isManual: isManual,
+    ));
+
+    // Handle summary
+    if (event.summary != null) {
+      // Summary provided immediately - create entry
+      chat.addEntry(ContextSummaryEntry(
+        timestamp: DateTime.now(),
+        summary: event.summary!,
+      ));
+    } else {
+      // Summary will arrive in the next user message
+      _expectingContextSummary[chat.data.id] = true;
+    }
   }
 
   void _handleTurnComplete(ChatState chat, TurnCompleteEvent event) {
-    // TODO: Implement in Task 4c
+    // Determine if main agent or subagent
+    final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
+
+    // Extract usage
+    UsageInfo? usageInfo;
+    if (event.usage != null) {
+      final u = event.usage!;
+      usageInfo = UsageInfo(
+        inputTokens: u.inputTokens,
+        outputTokens: u.outputTokens,
+        cacheReadTokens: u.cacheReadTokens ?? 0,
+        cacheCreationTokens: u.cacheCreationTokens ?? 0,
+        costUsd: event.costUsd ?? 0.0,
+      );
+    }
+
+    // Extract per-model usage breakdown
+    List<ModelUsageInfo>? modelUsageList;
+    int? contextWindow;
+    if (event.modelUsage != null && event.modelUsage!.isNotEmpty) {
+      modelUsageList = event.modelUsage!.entries.map((entry) {
+        final data = entry.value;
+        return ModelUsageInfo(
+          modelName: entry.key,
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          cacheReadTokens: data.cacheReadTokens ?? 0,
+          cacheCreationTokens: data.cacheCreationTokens ?? 0,
+          costUsd: data.costUsd ?? 0.0,
+          contextWindow: data.contextWindow ?? 200000,
+        );
+      }).toList();
+
+      // Get context window from first model (they should all be the same)
+      if (modelUsageList.isNotEmpty) {
+        contextWindow = modelUsageList.first.contextWindow;
+      }
+    }
+
+    if (parentCallId == null) {
+      // Main agent result
+      if (usageInfo != null) {
+        chat.updateCumulativeUsage(
+          usage: usageInfo,
+          totalCostUsd: event.costUsd ?? 0.0,
+          modelUsage: modelUsageList,
+          contextWindow: contextWindow,
+        );
+      }
+
+      chat.setWorking(false);
+
+      // Handle no-output result: if no assistant output was added during this
+      // turn and there's a result message, display it as a system notification
+      // (e.g., "Unknown skill: clear")
+      final chatId = chat.data.id;
+      final result = event.result;
+      if (!(_hasAssistantOutputThisTurn[chatId] ?? false) &&
+          result != null &&
+          result.isNotEmpty) {
+        chat.addEntry(SystemNotificationEntry(
+          timestamp: DateTime.now(),
+          message: result,
+        ));
+      }
+
+      // Reset the flag for the next turn
+      _hasAssistantOutputThisTurn[chatId] = false;
+    } else {
+      // Subagent result - determine agent status from subtype
+      final AgentStatus status;
+      final subtype = event.subtype;
+
+      if (subtype == 'success') {
+        status = AgentStatus.completed;
+      } else if (subtype == 'error_max_turns' ||
+          subtype == 'error_tool' ||
+          subtype == 'error_api' ||
+          subtype == 'error_budget') {
+        status = AgentStatus.error;
+      } else {
+        status = AgentStatus.completed;
+      }
+
+      chat.updateAgent(status, parentCallId);
+    }
   }
 
   // Stub methods for 4d

@@ -3,8 +3,20 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         BackendProvider,
         ToolInvocationEvent,
         ToolCompletionEvent,
+        TextEvent,
+        UserInputEvent,
+        TurnCompleteEvent,
+        SessionInitEvent,
+        SessionStatusEvent,
+        ContextCompactionEvent,
         ToolKind,
-        ToolCallStatus;
+        ToolCallStatus,
+        TextKind,
+        SessionStatus,
+        CompactionTrigger,
+        TokenUsage,
+        ModelTokenUsage;
+import 'package:cc_insights_v2/models/agent.dart';
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
@@ -59,6 +71,126 @@ ToolCompletionEvent makeToolCompletion({
     status: status,
     output: output,
     isError: isError,
+    raw: raw,
+  );
+}
+
+/// Helper to create TextEvent with default boilerplate fields.
+TextEvent makeText({
+  String text = 'Test text',
+  TextKind kind = TextKind.text,
+  String? parentCallId,
+  String? model,
+  Map<String, dynamic>? raw,
+}) {
+  return TextEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    text: text,
+    kind: kind,
+    parentCallId: parentCallId,
+    model: model,
+    raw: raw,
+  );
+}
+
+/// Helper to create UserInputEvent with default boilerplate fields.
+UserInputEvent makeUserInput({
+  String text = 'Test user message',
+  bool isSynthetic = false,
+  Map<String, dynamic>? extensions,
+  Map<String, dynamic>? raw,
+}) {
+  return UserInputEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    text: text,
+    isSynthetic: isSynthetic,
+    extensions: extensions,
+    raw: raw,
+  );
+}
+
+/// Helper to create SessionInitEvent with default boilerplate fields.
+SessionInitEvent makeSessionInit({
+  String? model,
+  Map<String, dynamic>? raw,
+}) {
+  return SessionInitEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    model: model,
+    raw: raw,
+  );
+}
+
+/// Helper to create SessionStatusEvent with default boilerplate fields.
+SessionStatusEvent makeSessionStatus({
+  required SessionStatus status,
+  String? message,
+  Map<String, dynamic>? extensions,
+  Map<String, dynamic>? raw,
+}) {
+  return SessionStatusEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    status: status,
+    message: message,
+    extensions: extensions,
+    raw: raw,
+  );
+}
+
+/// Helper to create ContextCompactionEvent with default boilerplate fields.
+ContextCompactionEvent makeCompaction({
+  CompactionTrigger trigger = CompactionTrigger.auto,
+  int? preTokens,
+  String? summary,
+  Map<String, dynamic>? raw,
+}) {
+  return ContextCompactionEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    trigger: trigger,
+    preTokens: preTokens,
+    summary: summary,
+    raw: raw,
+  );
+}
+
+/// Helper to create TurnCompleteEvent with default boilerplate fields.
+TurnCompleteEvent makeTurnComplete({
+  bool isError = false,
+  String? subtype,
+  String? result,
+  double? costUsd,
+  TokenUsage? usage,
+  Map<String, ModelTokenUsage>? modelUsage,
+  Map<String, dynamic>? extensions,
+  Map<String, dynamic>? raw,
+}) {
+  return TurnCompleteEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    isError: isError,
+    subtype: subtype,
+    result: result,
+    costUsd: costUsd,
+    usage: usage,
+    modelUsage: modelUsage,
+    extensions: extensions,
     raw: raw,
   );
 }
@@ -340,5 +472,429 @@ void main() {
 
     // Note: _formatTokens is private and will be tested indirectly
     // through compaction events in Task 4c
+  });
+
+  group('EventHandler - Task 4c: Text, User Input, Lifecycle, Compaction, Turn Complete', () {
+    late ChatState chat;
+    late EventHandler handler;
+
+    setUp(() {
+      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+      handler = EventHandler();
+      _idCounter = 0;
+    });
+
+    tearDown(() {
+      handler.dispose();
+      chat.dispose();
+    });
+
+    group('_handleText', () {
+      test('creates TextOutputEntry with contentType text', () {
+        handler.handleEvent(chat, makeText(
+          text: 'Hello, world!',
+          kind: TextKind.text,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Hello, world!');
+        check(textEntry.contentType).equals('text');
+        check(textEntry.errorType).isNull();
+      });
+
+      test('creates thinking entry with contentType thinking', () {
+        handler.handleEvent(chat, makeText(
+          text: 'Let me think...',
+          kind: TextKind.thinking,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Let me think...');
+        check(textEntry.contentType).equals('thinking');
+        check(textEntry.errorType).isNull();
+      });
+
+      test('creates error entry with errorType error', () {
+        handler.handleEvent(chat, makeText(
+          text: 'Error occurred',
+          kind: TextKind.error,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Error occurred');
+        check(textEntry.contentType).equals('text');
+        check(textEntry.errorType).equals('error');
+      });
+
+      test('marks assistant output for main agent only', () {
+        // Main agent text (parentCallId null)
+        handler.handleEvent(chat, makeText(
+          text: 'Main agent response',
+          parentCallId: null,
+        ));
+
+        // Trigger turn complete to see if flag is read
+        handler.handleEvent(chat, makeTurnComplete());
+
+        // The flag should have been set and then reset
+        // We verify indirectly - no system notification should be added
+        // since we had assistant output
+        final entries = chat.data.primaryConversation.entries;
+        // Should be: 1 text entry + 0 system notifications (because flag was set)
+        check(entries.length).equals(1);
+      });
+
+      test('does NOT mark assistant output for subagent', () {
+        // Subagent text (parentCallId set)
+        handler.handleEvent(chat, makeText(
+          text: 'Subagent response',
+          parentCallId: 'agent-123',
+        ));
+
+        // Trigger turn complete with result but flag not set
+        handler.handleEvent(chat, makeTurnComplete(
+          result: 'No output message',
+        ));
+
+        // Should create system notification because flag wasn't set
+        final entries = chat.data.primaryConversation.entries;
+        final hasSystemNotification = entries.any((e) => e is SystemNotificationEntry);
+        check(hasSystemNotification).isTrue();
+      });
+    });
+
+    group('_handleUserInput', () {
+      test('creates ContextSummaryEntry for synthetic messages', () {
+        handler.handleEvent(chat, makeUserInput(
+          text: 'This is a context summary',
+          isSynthetic: true,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<ContextSummaryEntry>();
+
+        final summary = entries.first as ContextSummaryEntry;
+        check(summary.summary).equals('This is a context summary');
+      });
+
+      test('creates SystemNotificationEntry for local command replay', () {
+        handler.handleEvent(chat, makeUserInput(
+          text: '<local-command-stdout>Cost: \$0.50</local-command-stdout>',
+          extensions: {'isReplay': true},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<SystemNotificationEntry>();
+
+        final notification = entries.first as SystemNotificationEntry;
+        check(notification.message).equals('Cost: \$0.50');
+      });
+
+      test('creates ContextSummaryEntry when expectingContextSummary flag is set', () {
+        // First trigger compaction without summary
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          preTokens: 45000,
+          summary: null, // No summary yet
+        ));
+
+        // Now send user message - should be treated as summary
+        handler.handleEvent(chat, makeUserInput(
+          text: 'Compacted summary here',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        // Should be: AutoCompactionEntry + ContextSummaryEntry
+        check(entries.length).equals(2);
+        check(entries[1]).isA<ContextSummaryEntry>();
+
+        final summary = entries[1] as ContextSummaryEntry;
+        check(summary.summary).equals('Compacted summary here');
+      });
+
+      test('resets expectingContextSummary flag after handling', () {
+        // Trigger compaction without summary
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          summary: null,
+        ));
+
+        // First user message creates summary
+        handler.handleEvent(chat, makeUserInput(text: 'Summary'));
+
+        // Second user message should NOT create summary (flag was reset)
+        handler.handleEvent(chat, makeUserInput(text: 'Normal message'));
+
+        final entries = chat.data.primaryConversation.entries;
+        // Should be: AutoCompactionEntry + ContextSummaryEntry (not 2 summaries)
+        check(entries.length).equals(2);
+      });
+
+      test('no-op for normal user messages', () {
+        // Normal user messages don't create entries (ChatState.sendMessage does that)
+        handler.handleEvent(chat, makeUserInput(
+          text: 'Hello Claude',
+          isSynthetic: false,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(0);
+      });
+    });
+
+    group('_handleSessionInit', () {
+      test('no-op (matches SdkMessageHandler behavior)', () {
+        handler.handleEvent(chat, makeSessionInit(
+          model: 'claude-sonnet-4-5',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(0);
+      });
+    });
+
+    group('_handleSessionStatus', () {
+      test('sets compacting to true', () {
+        check(chat.isCompacting).isFalse();
+
+        handler.handleEvent(chat, makeSessionStatus(
+          status: SessionStatus.compacting,
+        ));
+
+        check(chat.isCompacting).isTrue();
+      });
+
+      test('sets compacting to false', () {
+        // First set to true
+        handler.handleEvent(chat, makeSessionStatus(
+          status: SessionStatus.compacting,
+        ));
+        check(chat.isCompacting).isTrue();
+
+        // Then set to false (any non-compacting status)
+        handler.handleEvent(chat, makeSessionStatus(
+          status: SessionStatus.ended,
+        ));
+
+        check(chat.isCompacting).isFalse();
+      });
+
+      test('syncs permission mode from extensions', () {
+        handler.handleEvent(chat, makeSessionStatus(
+          status: SessionStatus.resuming,
+          extensions: {'permissionMode': 'plan'},
+        ));
+
+        check(chat.permissionMode).equals(PermissionMode.plan);
+      });
+    });
+
+    group('_handleCompaction', () {
+      test('creates AutoCompactionEntry with token message', () {
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          preTokens: 45000,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<AutoCompactionEntry>();
+
+        final compaction = entries.first as AutoCompactionEntry;
+        check(compaction.message).equals('Was 45.0K tokens');
+        check(compaction.isManual).isFalse();
+      });
+
+      test('creates AutoCompactionEntry with manual flag', () {
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.manual,
+          preTokens: 30000,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.first).isA<AutoCompactionEntry>();
+
+        final compaction = entries.first as AutoCompactionEntry;
+        check(compaction.isManual).isTrue();
+      });
+
+      test('creates ContextClearedEntry for cleared trigger', () {
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.cleared,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<ContextClearedEntry>();
+      });
+
+      test('sets expectingContextSummary when no summary provided', () {
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          preTokens: 50000,
+          summary: null,
+        ));
+
+        // Now send a user message - should be treated as summary
+        handler.handleEvent(chat, makeUserInput(text: 'Summary text'));
+
+        final entries = chat.data.primaryConversation.entries;
+        // AutoCompactionEntry + ContextSummaryEntry
+        check(entries.length).equals(2);
+        check(entries[1]).isA<ContextSummaryEntry>();
+      });
+
+      test('creates ContextSummaryEntry when summary is provided', () {
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          preTokens: 50000,
+          summary: 'Immediate summary',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        // AutoCompactionEntry + ContextSummaryEntry
+        check(entries.length).equals(2);
+        check(entries[1]).isA<ContextSummaryEntry>();
+
+        final summary = entries[1] as ContextSummaryEntry;
+        check(summary.summary).equals('Immediate summary');
+      });
+    });
+
+    group('_handleTurnComplete', () {
+      test('updates cumulative usage for main agent', () {
+        final usage = const TokenUsage(
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheReadTokens: 100,
+          cacheCreationTokens: 50,
+        );
+
+        final modelUsage = {
+          'claude-sonnet-4-5': const ModelTokenUsage(
+            inputTokens: 1000,
+            outputTokens: 500,
+            cacheReadTokens: 100,
+            cacheCreationTokens: 50,
+            costUsd: 0.05,
+            contextWindow: 200000,
+          ),
+        };
+
+        handler.handleEvent(chat, makeTurnComplete(
+          usage: usage,
+          costUsd: 0.05,
+          modelUsage: modelUsage,
+        ));
+
+        // Verify usage was updated
+        check(chat.cumulativeUsage.inputTokens).equals(1000);
+        check(chat.cumulativeUsage.outputTokens).equals(500);
+        check(chat.cumulativeUsage.cacheReadTokens).equals(100);
+        check(chat.cumulativeUsage.cacheCreationTokens).equals(50);
+      });
+
+      test('sets working to false for main agent', () {
+        // Simulate working state
+        chat.setWorking(true);
+        check(chat.isWorking).isTrue();
+
+        handler.handleEvent(chat, makeTurnComplete());
+
+        check(chat.isWorking).isFalse();
+      });
+
+      test('updates agent status for subagent (completed)', () {
+        // Create a subagent first
+        chat.addSubagentConversation('agent-123', 'Explore', 'Search task');
+        check(chat.activeAgents['agent-123']?.status).equals(AgentStatus.working);
+
+        // Send turn complete for subagent
+        handler.handleEvent(chat, makeTurnComplete(
+          subtype: 'success',
+          extensions: {'parent_tool_use_id': 'agent-123'},
+        ));
+
+        check(chat.activeAgents['agent-123']?.status).equals(AgentStatus.completed);
+      });
+
+      test('updates agent status for subagent (error subtypes)', () {
+        // Create a subagent first
+        chat.addSubagentConversation('agent-456', 'Plan', 'Plan task');
+
+        // Send error turn complete
+        handler.handleEvent(chat, makeTurnComplete(
+          subtype: 'error_max_turns',
+          extensions: {'parent_tool_use_id': 'agent-456'},
+        ));
+
+        check(chat.activeAgents['agent-456']?.status).equals(AgentStatus.error);
+      });
+
+      test('creates SystemNotificationEntry when no assistant output and result present', () {
+        // Don't send any assistant text (flag not set)
+        handler.handleEvent(chat, makeTurnComplete(
+          result: 'Unknown skill: clear',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<SystemNotificationEntry>();
+
+        final notification = entries.first as SystemNotificationEntry;
+        check(notification.message).equals('Unknown skill: clear');
+      });
+
+      test('does not create notification when result is null', () {
+        handler.handleEvent(chat, makeTurnComplete(
+          result: null,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(0);
+      });
+
+      test('does not create notification when result is empty', () {
+        handler.handleEvent(chat, makeTurnComplete(
+          result: '',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(0);
+      });
+
+      test('resets hasAssistantOutputThisTurn flag', () {
+        // Send text to set the flag
+        handler.handleEvent(chat, makeText(text: 'Response'));
+
+        // Send turn complete
+        handler.handleEvent(chat, makeTurnComplete());
+
+        // Send another turn complete with result
+        // Should create notification because flag was reset
+        handler.handleEvent(chat, makeTurnComplete(
+          result: 'Next turn message',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        // TextEntry + SystemNotificationEntry
+        check(entries.length).equals(2);
+        check(entries[1]).isA<SystemNotificationEntry>();
+      });
+    });
   });
 }
