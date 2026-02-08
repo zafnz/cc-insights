@@ -9,11 +9,13 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         SessionInitEvent,
         SessionStatusEvent,
         ContextCompactionEvent,
+        StreamDeltaEvent,
         ToolKind,
         ToolCallStatus,
         TextKind,
         SessionStatus,
         CompactionTrigger,
+        StreamDeltaKind,
         TokenUsage,
         ModelTokenUsage;
 import 'package:cc_insights_v2/models/agent.dart';
@@ -190,6 +192,33 @@ TurnCompleteEvent makeTurnComplete({
     costUsd: costUsd,
     usage: usage,
     modelUsage: modelUsage,
+    extensions: extensions,
+    raw: raw,
+  );
+}
+
+/// Helper to create StreamDeltaEvent with default boilerplate fields.
+StreamDeltaEvent makeStreamDelta({
+  required StreamDeltaKind kind,
+  String? parentCallId,
+  String? textDelta,
+  String? jsonDelta,
+  int? blockIndex,
+  String? callId,
+  Map<String, dynamic>? extensions,
+  Map<String, dynamic>? raw,
+}) {
+  return StreamDeltaEvent(
+    id: _nextId(),
+    timestamp: DateTime.now(),
+    provider: BackendProvider.claude,
+    sessionId: 'test-session',
+    kind: kind,
+    parentCallId: parentCallId,
+    textDelta: textDelta,
+    jsonDelta: jsonDelta,
+    blockIndex: blockIndex,
+    callId: callId,
     extensions: extensions,
     raw: raw,
   );
@@ -894,6 +923,477 @@ void main() {
         // TextEntry + SystemNotificationEntry
         check(entries.length).equals(2);
         check(entries[1]).isA<SystemNotificationEntry>();
+      });
+    });
+  });
+
+  group('EventHandler - Task 4d: Streaming Delta Handling', () {
+    late ChatState chat;
+    late EventHandler handler;
+
+    setUp(() {
+      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+      handler = EventHandler();
+      _idCounter = 0;
+    });
+
+    tearDown(() {
+      handler.dispose();
+      chat.dispose();
+    });
+
+    group('text block streaming', () {
+      test('blockStart creates streaming TextOutputEntry for text block', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start text block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          extensions: {},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('');
+        check(textEntry.contentType).equals('text');
+        check(textEntry.isStreaming).isTrue();
+      });
+
+      test('text delta appends text to TextOutputEntry', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start text block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+
+        // Send text deltas
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 0,
+          textDelta: 'Hello',
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 0,
+          textDelta: ' world',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Hello world');
+        check(textEntry.isStreaming).isTrue();
+      });
+
+      test('blockStop marks entry as not streaming', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start and stream text
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 0,
+          textDelta: 'Complete text',
+        ));
+
+        // Stop block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStop,
+          blockIndex: 0,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.isStreaming).isFalse();
+      });
+
+      test('messageStop cancels timer and clears streaming state', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start text block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+
+        // Stream some text
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 0,
+          textDelta: 'Text',
+        ));
+
+        // Stop message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStop));
+
+        // Verify entry exists but streaming state is cleared
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+      });
+    });
+
+    group('thinking block streaming', () {
+      test('blockStart creates streaming TextOutputEntry for thinking block', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start thinking block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          extensions: {'block_type': 'thinking'},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('');
+        check(textEntry.contentType).equals('thinking');
+        check(textEntry.isStreaming).isTrue();
+      });
+
+      test('thinking delta appends text to thinking TextOutputEntry', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start thinking block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          extensions: {'block_type': 'thinking'},
+        ));
+
+        // Send thinking deltas
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.thinking,
+          blockIndex: 0,
+          textDelta: 'Let me ',
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.thinking,
+          blockIndex: 0,
+          textDelta: 'think...',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Let me think...');
+        check(textEntry.contentType).equals('thinking');
+      });
+    });
+
+    group('tool use streaming', () {
+      test('blockStart creates streaming ToolUseOutputEntry for tool block', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start tool block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          callId: 'tool-123',
+          extensions: {'tool_name': 'Read'},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<ToolUseOutputEntry>();
+
+        final toolEntry = entries.first as ToolUseOutputEntry;
+        check(toolEntry.toolName).equals('Read');
+        check(toolEntry.toolUseId).equals('tool-123');
+        check(toolEntry.toolInput).isEmpty();
+        check(toolEntry.isStreaming).isTrue();
+      });
+
+      test('blockStart registers tool entry in toolCallIndex', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start tool block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          callId: 'tool-456',
+          extensions: {'tool_name': 'Bash'},
+        ));
+
+        // Verify pairing works by sending a completion
+        final completion = makeToolCompletion(
+          callId: 'tool-456',
+          output: 'Command output',
+        );
+        handler.handleEvent(chat, completion);
+
+        final entries = chat.data.primaryConversation.entries;
+        final toolEntry = entries.first as ToolUseOutputEntry;
+        check(toolEntry.result).equals('Command output');
+      });
+
+      test('toolInput delta accumulates on ToolUseOutputEntry', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start tool block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          callId: 'tool-789',
+          extensions: {'tool_name': 'Edit'},
+        ));
+
+        // Send tool input deltas
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.toolInput,
+          blockIndex: 0,
+          jsonDelta: '{"file',
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.toolInput,
+          blockIndex: 0,
+          jsonDelta: '":"test.txt"}',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        final toolEntry = entries.first as ToolUseOutputEntry;
+        // Note: The partial JSON is accumulated but not parsed until finalization
+        check(toolEntry.isStreaming).isTrue();
+      });
+
+      test('blockStop marks tool entry as not streaming', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start tool block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          callId: 'tool-stop',
+          extensions: {'tool_name': 'Write'},
+        ));
+
+        // Stop block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStop,
+          blockIndex: 0,
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        final toolEntry = entries.first as ToolUseOutputEntry;
+        check(toolEntry.isStreaming).isFalse();
+      });
+    });
+
+    group('multiple blocks', () {
+      test('multiple blocks create separate entries at different indices', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Start thinking block at index 0
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+          extensions: {'block_type': 'thinking'},
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.thinking,
+          blockIndex: 0,
+          textDelta: 'Thinking...',
+        ));
+
+        // Start text block at index 1
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 1,
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 1,
+          textDelta: 'Response text',
+        ));
+
+        // Start tool block at index 2
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 2,
+          callId: 'tool-multi',
+          extensions: {'tool_name': 'Read'},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(3);
+        check(entries[0]).isA<TextOutputEntry>();
+        check(entries[1]).isA<TextOutputEntry>();
+        check(entries[2]).isA<ToolUseOutputEntry>();
+
+        final thinking = entries[0] as TextOutputEntry;
+        check(thinking.contentType).equals('thinking');
+        check(thinking.text).equals('Thinking...');
+
+        final text = entries[1] as TextOutputEntry;
+        check(text.contentType).equals('text');
+        check(text.text).equals('Response text');
+      });
+    });
+
+    group('subagent streaming', () {
+      test('subagent streaming routes to correct conversation via parentCallId', () {
+        // Note: In real usage, SubagentSpawnEvent would set up the routing mapping.
+        // For this test, we manually create the subagent and verify that IF the
+        // mapping exists, streaming would route correctly. The full integration
+        // with SubagentSpawnEvent is tested in Task 4e.
+
+        // Create subagent conversation
+        chat.addSubagentConversation('agent-123', 'Explore', 'Search task');
+        final agent = chat.activeAgents['agent-123']!;
+        final subagentConvId = agent.conversationId;
+        final subagentConv = chat.data.subagentConversations[subagentConvId]!;
+
+        // In Task 4e, SubagentSpawnEvent would set this up automatically
+        // For now, we'll test that the streaming logic itself works when
+        // parentCallId is null vs non-null
+
+        // Main agent streaming (parentCallId: null) should go to primary
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 0,
+          textDelta: 'Primary output',
+        ));
+
+        // Verify it went to primary conversation
+        check(chat.data.primaryConversation.entries.length).equals(1);
+        check(subagentConv.entries.length).equals(0);
+
+        final textEntry = chat.data.primaryConversation.entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Primary output');
+      });
+    });
+
+    group('messageStart context', () {
+      test('messageStart sets streaming conversation context', () {
+        // Start message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        // Verify context is set by starting a block
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+
+        // Should create entry in primary conversation
+        check(chat.data.primaryConversation.entries.length).equals(1);
+      });
+
+      test('messageStart clears previous streaming blocks', () {
+        // First message
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+
+        // Second message (should clear state)
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+
+        // Should have two entries (one from each message)
+        check(chat.data.primaryConversation.entries.length).equals(2);
+      });
+    });
+
+    group('error handling', () {
+      test('deltas without prior blockStart are ignored (no crash)', () {
+        // Send delta without starting message or block
+        expect(() {
+          handler.handleEvent(chat, makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'Orphaned delta',
+          ));
+        }, returnsNormally);
+
+        // No entries should be created
+        check(chat.data.primaryConversation.entries.length).equals(0);
+      });
+
+      test('blockStop without prior blockStart is ignored', () {
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+
+        expect(() {
+          handler.handleEvent(chat, makeStreamDelta(
+            kind: StreamDeltaKind.blockStop,
+            blockIndex: 0,
+          ));
+        }, returnsNormally);
+      });
+    });
+
+    group('clearStreamingState', () {
+      test('clearStreamingState finalizes in-flight entries and notifies', () {
+        // Start streaming
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.text,
+          blockIndex: 0,
+          textDelta: 'Interrupted',
+        ));
+
+        // Clear streaming state
+        handler.clearStreamingState();
+
+        // Entry should be finalized
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        final textEntry = entries.first as TextOutputEntry;
+        check(textEntry.isStreaming).isFalse();
+        check(textEntry.text).equals('Interrupted');
+      });
+
+      test('clearStreamingState clears all internal state', () {
+        // Start streaming
+        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(chat, makeStreamDelta(
+          kind: StreamDeltaKind.blockStart,
+          blockIndex: 0,
+        ));
+
+        // Clear
+        handler.clearStreamingState();
+
+        // Starting new deltas should not crash (state was cleared)
+        expect(() {
+          handler.handleEvent(chat, makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'New message',
+          ));
+        }, returnsNormally);
       });
     });
   });

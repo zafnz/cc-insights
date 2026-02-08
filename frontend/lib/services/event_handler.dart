@@ -478,9 +478,172 @@ class EventHandler {
     }
   }
 
-  // Stub methods for 4d
+  // Task 4d: Streaming delta handling
   void _handleStreamDelta(ChatState chat, StreamDeltaEvent event) {
-    // TODO: Implement in Task 4d
+    switch (event.kind) {
+      case StreamDeltaKind.messageStart:
+        _onMessageStart(chat, event.parentCallId);
+      case StreamDeltaKind.blockStart:
+        _onContentBlockStart(chat, event.blockIndex ?? 0, event);
+      case StreamDeltaKind.text:
+        _onContentBlockDelta(chat, event.blockIndex ?? 0, event);
+      case StreamDeltaKind.thinking:
+        _onContentBlockDelta(chat, event.blockIndex ?? 0, event);
+      case StreamDeltaKind.toolInput:
+        _onContentBlockDelta(chat, event.blockIndex ?? 0, event);
+      case StreamDeltaKind.blockStop:
+        _onContentBlockStop(event.blockIndex ?? 0);
+      case StreamDeltaKind.messageStop:
+        _onMessageStop(chat);
+    }
+  }
+
+  void _onMessageStart(ChatState chat, String? parentCallId) {
+    _streamingConversationId = _resolveConversationId(chat, parentCallId);
+    _streamingChat = chat;
+    _streamingBlocks.clear();
+  }
+
+  void _onContentBlockStart(
+    ChatState chat,
+    int index,
+    StreamDeltaEvent event,
+  ) {
+    final convId = _streamingConversationId;
+    if (convId == null) return;
+
+    OutputEntry? entry;
+
+    // Determine block type from event fields
+    if (event.callId != null) {
+      // tool_use block
+      final toolName = event.extensions?['tool_name'] as String? ?? '';
+      entry = ToolUseOutputEntry(
+        timestamp: DateTime.now(),
+        toolName: toolName,
+        toolKind: ToolKind.fromToolName(toolName),
+        provider: event.provider,
+        toolUseId: event.callId!,
+        toolInput: <String, dynamic>{},
+        isStreaming: true,
+      );
+      // Register for tool result pairing
+      _toolCallIndex[event.callId!] = entry as ToolUseOutputEntry;
+    } else if (event.extensions?['block_type'] == 'thinking') {
+      // thinking block
+      entry = TextOutputEntry(
+        timestamp: DateTime.now(),
+        text: '',
+        contentType: 'thinking',
+        isStreaming: true,
+      );
+    } else {
+      // text block (default)
+      entry = TextOutputEntry(
+        timestamp: DateTime.now(),
+        text: '',
+        contentType: 'text',
+        isStreaming: true,
+      );
+    }
+
+    _streamingBlocks[(convId, index)] = entry;
+    chat.addOutputEntry(convId, entry);
+    _activeStreamingEntries.putIfAbsent(convId, () => []).add(entry);
+  }
+
+  void _onContentBlockDelta(
+    ChatState chat,
+    int index,
+    StreamDeltaEvent event,
+  ) {
+    final convId = _streamingConversationId;
+    if (convId == null) return;
+
+    final entry = _streamingBlocks[(convId, index)];
+    if (entry == null) return;
+
+    switch (event.kind) {
+      case StreamDeltaKind.text:
+      case StreamDeltaKind.thinking:
+        if (entry is TextOutputEntry) {
+          entry.appendDelta(event.textDelta ?? '');
+        }
+      case StreamDeltaKind.toolInput:
+        if (entry is ToolUseOutputEntry) {
+          entry.appendInputDelta(event.jsonDelta ?? '');
+        }
+      default:
+        break;
+    }
+
+    _scheduleNotify();
+  }
+
+  void _onContentBlockStop(int index) {
+    final convId = _streamingConversationId;
+    if (convId == null) return;
+
+    final entry = _streamingBlocks[(convId, index)];
+    if (entry is TextOutputEntry) {
+      entry.isStreaming = false;
+    } else if (entry is ToolUseOutputEntry) {
+      entry.isStreaming = false;
+    }
+  }
+
+  void _onMessageStop(ChatState chat) {
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    if (_hasPendingNotify) {
+      _hasPendingNotify = false;
+      chat.notifyListeners();
+    }
+
+    _streamingBlocks.clear();
+    _streamingConversationId = null;
+    _streamingChat = null;
+  }
+
+  void _scheduleNotify() {
+    _hasPendingNotify = true;
+    _notifyTimer ??= Timer.periodic(
+      const Duration(milliseconds: 50),
+      (_) {
+        if (_hasPendingNotify && _streamingChat != null) {
+          _hasPendingNotify = false;
+          _streamingChat!.notifyListeners();
+        }
+      },
+    );
+  }
+
+  /// Clears in-flight streaming state.
+  ///
+  /// Marks any streaming entries as finalized and flushes pending
+  /// notifications. Call this when a session is interrupted.
+  void clearStreamingState() {
+    _notifyTimer?.cancel();
+    _notifyTimer = null;
+    _hasPendingNotify = false;
+
+    // Finalize any in-flight streaming entries
+    for (final entry in _streamingBlocks.values) {
+      if (entry is TextOutputEntry) {
+        entry.isStreaming = false;
+      } else if (entry is ToolUseOutputEntry) {
+        entry.isStreaming = false;
+      }
+    }
+
+    if (_streamingChat != null) {
+      _streamingChat!.notifyListeners();
+    }
+
+    _streamingBlocks.clear();
+    _activeStreamingEntries.clear();
+    _streamingConversationId = null;
+    _streamingChat = null;
   }
 
   // Stub methods for 4e
