@@ -333,6 +333,7 @@ class MockAgentSession implements AgentSession {
       : sessionId = sessionId ?? 'mock-session';
 
   final _messagesController = StreamController<SDKMessage>.broadcast();
+  final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
   final _hookRequestsController = StreamController<HookRequest>.broadcast();
@@ -350,6 +351,9 @@ class MockAgentSession implements AgentSession {
 
   @override
   Stream<SDKMessage> get messages => _messagesController.stream;
+
+  @override
+  Stream<InsightsEvent> get events => _eventsController.stream;
 
   @override
   Stream<PermissionRequest> get permissionRequests =>
@@ -390,6 +394,7 @@ class MockAgentSession implements AgentSession {
     if (_disposed) return;
     _disposed = true;
     await _messagesController.close();
+    await _eventsController.close();
     await _permissionRequestsController.close();
     await _hookRequestsController.close();
   }

@@ -522,6 +522,85 @@ void main() {
         },
         timeout: Timeout(Duration(seconds: 60)),
       );
+
+      test(
+        'emits InsightsEvents on events stream (Task 2c)',
+        () async {
+          // Arrange
+          final session = await CliSession.create(
+            cwd: tempDir.path,
+            prompt: 'What is 1 + 1? Reply with just the number.',
+            options: SessionOptions(
+              model: 'haiku',
+              maxTurns: 1,
+            ),
+            timeout: const Duration(seconds: 60),
+          );
+
+          try {
+            // Act - collect both SDKMessages and InsightsEvents
+            final messages = <SDKMessage>[];
+            final events = <InsightsEvent>[];
+            SDKResultMessage? result;
+
+            // Listen to both streams
+            final eventsSub = session.events.listen(events.add);
+
+            await for (final message in session.messages.timeout(
+              Duration(seconds: 45),
+              onTimeout: (sink) => sink.close(),
+            )) {
+              messages.add(message);
+              if (message is SDKResultMessage) {
+                result = message;
+                break;
+              }
+            }
+
+            // Give events time to be emitted
+            await Future.delayed(Duration(milliseconds: 500));
+            await eventsSub.cancel();
+
+            // Assert - verify we received InsightsEvents
+            expect(result, isNotNull, reason: 'Should have received a result');
+            expect(events, isNotEmpty, reason: 'Should have received InsightsEvents');
+
+            // Verify we got a SessionInitEvent (from initialization)
+            final initEvents = events.whereType<SessionInitEvent>().toList();
+            expect(initEvents, isNotEmpty, reason: 'Should have SessionInitEvent');
+            final initEvent = initEvents.first;
+            expect(initEvent.sessionId, isNotEmpty);
+            expect(initEvent.model, isNotEmpty);
+            expect(initEvent.availableTools, isNotEmpty);
+
+            // Verify we got TextEvents (from assistant response)
+            final textEvents = events.whereType<TextEvent>().toList();
+            expect(textEvents, isNotEmpty, reason: 'Should have TextEvents from assistant');
+
+            // Verify we got a TurnCompleteEvent (from result)
+            final completeEvents = events.whereType<TurnCompleteEvent>().toList();
+            expect(completeEvents, isNotEmpty, reason: 'Should have TurnCompleteEvent');
+            final completeEvent = completeEvents.first;
+            expect(completeEvent.isError, isFalse);
+            expect(completeEvent.usage, isNotNull);
+            expect(completeEvent.usage!.inputTokens, greaterThan(0));
+            expect(completeEvent.usage!.outputTokens, greaterThan(0));
+
+            // Verify event provider is Claude
+            expect(initEvent.provider, equals(BackendProvider.claude));
+            expect(completeEvent.provider, equals(BackendProvider.claude));
+
+            print('✓ InsightsEvents verification:');
+            print('  - ${initEvents.length} SessionInitEvent(s)');
+            print('  - ${textEvents.length} TextEvent(s)');
+            print('  - ${completeEvents.length} TurnCompleteEvent(s)');
+            print('  - Total: ${events.length} events emitted');
+          } finally {
+            await session.dispose();
+          }
+        },
+        timeout: Timeout(Duration(seconds: 90)),
+      );
     },
   );
 }

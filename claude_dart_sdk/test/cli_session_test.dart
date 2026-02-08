@@ -1230,6 +1230,7 @@ class CliSessionForTestingImpl implements CliSession {
   final SDKSystemMessage systemInit;
 
   final _messagesController = StreamController<SDKMessage>.broadcast();
+  final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<CliPermissionRequest>.broadcast();
 
@@ -1237,6 +1238,9 @@ class CliSessionForTestingImpl implements CliSession {
 
   @override
   Stream<SDKMessage> get messages => _messagesController.stream;
+
+  @override
+  Stream<InsightsEvent> get events => _eventsController.stream;
 
   @override
   Stream<CliPermissionRequest> get permissionRequests =>
@@ -1366,6 +1370,7 @@ class CliSessionForTestingImpl implements CliSession {
     if (_disposed) return;
     _disposed = true;
     _messagesController.close();
+    _eventsController.close();
     _permissionRequestsController.close();
   }
 

@@ -35,6 +35,484 @@ JSON from CLI → _handleMessage() → SDKMessage on _messagesController (existi
 
 ---
 
+## Reference: Claude CLI Wire Format
+
+This section contains everything Sonnet needs to know about the incoming JSON shapes and how they map to InsightsEvent types. All example JSON is taken from the actual CLI protocol.
+
+### ToolKind Mapping Table
+
+`ToolKind.fromToolName(toolName)` already exists in `agent_sdk_core/lib/src/types/tool_kind.dart`. The mapping:
+
+| Claude CLI Tool Name | → `ToolKind` |
+|----------------------|--------------|
+| `Bash` | `execute` |
+| `Read` | `read` |
+| `Write` | `edit` |
+| `Edit` | `edit` |
+| `NotebookEdit` | `edit` |
+| `Glob` | `search` |
+| `Grep` | `search` |
+| `WebFetch` | `fetch` |
+| `WebSearch` | `browse` |
+| `Task` | `think` |
+| `AskUserQuestion` | `ask` |
+| `TodoWrite` | `memory` |
+| `mcp__*` (any prefix) | `mcp` |
+| (anything else) | `other` |
+
+### Message Type: `system` (subtype: `init`)
+
+Example JSON:
+```json
+{
+  "type": "system",
+  "subtype": "init",
+  "session_id": "abc-123",
+  "uuid": "...",
+  "model": "claude-sonnet-4-5-20250929",
+  "cwd": "/Users/zaf/project",
+  "tools": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "WebFetch", "WebSearch", "AskUserQuestion", "TodoWrite", "NotebookEdit"],
+  "mcp_servers": [{"name": "flutter-test", "status": "connected"}],
+  "permissionMode": "default",
+  "apiKeySource": "ANTHROPIC_API_KEY",
+  "slash_commands": ["compact", "clear", "help"],
+  "output_style": "concise"
+}
+```
+
+→ **`SessionInitEvent`**
+
+| JSON field | → Event field | Notes |
+|------------|---------------|-------|
+| `session_id` | `sessionId` | |
+| `model` | `model` | |
+| `cwd` | `cwd` | |
+| `tools` | `availableTools` | `List<String>` |
+| `mcp_servers` | `mcpServers` | Parsed via `McpServerStatus.fromJson` |
+| `permissionMode` | `permissionMode` | |
+| `slash_commands` | `slashCommands` | Fallback: wrap strings as `SlashCommand(name: s, description: '', argumentHint: '')` |
+| `apiKeySource` | `extensions['claude.apiKeySource']` | Claude-specific |
+| `output_style` | `extensions['claude.outputStyle']` | Claude-specific |
+
+Additionally merges data from the stored `control_response` (see below).
+
+### Message Type: `control_response` (during initialization)
+
+Example JSON:
+```json
+{
+  "type": "control_response",
+  "response": {
+    "models": [
+      {"value": "claude-sonnet-4-5-20250929", "displayName": "Sonnet 4.5", "description": "..."}
+    ],
+    "account": {
+      "email": "user@example.com",
+      "organization": "...",
+      "subscriptionType": "pro",
+      "tokenSource": "...",
+      "apiKeySource": "..."
+    },
+    "commands": [
+      {"name": "compact", "description": "Compact conversation", "argumentHint": ""}
+    ],
+    "output_style": "concise",
+    "available_output_styles": ["plain", "concise", "verbose"]
+  }
+}
+```
+
+This is NOT emitted as a separate event. It's captured during `create()` and merged into `SessionInitEvent`:
+
+| JSON path (under `response`) | → Event field | Notes |
+|------------------------------|---------------|-------|
+| `models[]` | `availableModels` | Parsed via `ModelInfo.fromJson` |
+| `account` | `account` | Parsed via `AccountInfo.fromJson` |
+| `commands[]` | `slashCommands` | Overrides the simple string list from `system/init`. Parsed via `SlashCommand.fromJson` |
+
+### Message Type: `system` (subtype: `status`)
+
+Example JSON:
+```json
+{"type": "system", "subtype": "status", "session_id": "abc-123", "status": "compacting"}
+```
+
+→ **`SessionStatusEvent`**
+
+| JSON field | → Event field | Notes |
+|------------|---------------|-------|
+| `session_id` | `sessionId` | |
+| `status` | `status` | Map string → `SessionStatus` enum: `"compacting"` → `.compacting`, `"resuming"` → `.resuming`, `"interrupted"` → `.interrupted`, `"ended"` → `.ended`, default → `.error` |
+| `message` | `message` | Optional |
+
+### Message Type: `system` (subtype: `compact_boundary`)
+
+Example JSON:
+```json
+{
+  "type": "system",
+  "subtype": "compact_boundary",
+  "session_id": "abc-123",
+  "compact_metadata": {"trigger": "auto", "pre_tokens": 180000}
+}
+```
+
+→ **`ContextCompactionEvent`**
+
+| JSON field | → Event field | Notes |
+|------------|---------------|-------|
+| `session_id` | `sessionId` | |
+| `compact_metadata.trigger` | `trigger` | `"auto"` → `.auto`, `"manual"` → `.manual` |
+| `compact_metadata.pre_tokens` | `preTokens` | |
+
+### Message Type: `system` (subtype: `context_cleared`)
+
+Example JSON:
+```json
+{"type": "system", "subtype": "context_cleared", "session_id": "abc-123"}
+```
+
+→ **`ContextCompactionEvent`** with `trigger: CompactionTrigger.cleared`
+
+### Message Type: `assistant`
+
+Example JSON:
+```json
+{
+  "type": "assistant",
+  "uuid": "...",
+  "session_id": "abc-123",
+  "parent_tool_use_id": null,
+  "message": {
+    "role": "assistant",
+    "model": "claude-sonnet-4-5-20250929",
+    "content": [
+      {"type": "text", "text": "Here's the fix..."},
+      {"type": "thinking", "thinking": "Let me analyze...", "signature": "..."},
+      {"type": "tool_use", "id": "tu_123", "name": "Edit", "input": {"file_path": "/foo/bar.dart", "old_string": "...", "new_string": "..."}}
+    ],
+    "usage": {"input_tokens": 1000, "output_tokens": 500}
+  }
+}
+```
+
+Each content block produces a **separate** event:
+
+#### `text` block → `TextEvent`
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `message.content[].text` | `text` | |
+| `parent_tool_use_id` | `parentCallId` | Non-null for subagent messages |
+| `message.model` | `model` | |
+| — | `kind` | Always `TextKind.text` |
+| `session_id` | `sessionId` | |
+
+#### `thinking` block → `TextEvent`
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `message.content[].thinking` | `text` | Note: field is `thinking`, not `text` |
+| `parent_tool_use_id` | `parentCallId` | |
+| `message.model` | `model` | |
+| — | `kind` | Always `TextKind.thinking` |
+| `session_id` | `sessionId` | |
+
+#### `tool_use` block → `ToolInvocationEvent`
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `message.content[].id` | `callId` | Unique tool call ID for pairing with completion |
+| `message.content[].name` | `toolName` | Raw tool name string |
+| `message.content[].name` | `kind` | Derived via `ToolKind.fromToolName(toolName)` |
+| `message.content[].input` | `input` | `Map<String, dynamic>` |
+| `parent_tool_use_id` | `parentCallId` | |
+| `message.model` | `model` | |
+| `session_id` | `sessionId` | |
+| Extracted from `input` | `locations` | See `_extractLocations` helper below |
+
+#### `tool_use` where `name == "Task"` → additionally `SubagentSpawnEvent`
+
+When the tool name is `"Task"`, emit **both** a `ToolInvocationEvent` (as above) **and** a `SubagentSpawnEvent`:
+
+| JSON path (from `input`) | → Event field | Notes |
+|--------------------------|---------------|-------|
+| `input.subagent_type` or `input.name` | `agentType` | Try `subagent_type` first, fall back to `name` |
+| `input.description` or `input.prompt` or `input.task` | `description` | Try in this order |
+| `input.resume` | `isResume` | `true` if `resume` is non-null |
+| `input.resume` | `resumeAgentId` | The agent ID being resumed |
+| `message.content[].id` | `callId` | Same `callId` as the `ToolInvocationEvent` |
+| `session_id` | `sessionId` | |
+
+#### Location Extraction from Tool Input
+
+The `_extractLocations` helper extracts file paths from tool input for display:
+
+| Input field | Used by tools | Notes |
+|-------------|--------------|-------|
+| `file_path` | Read, Write, Edit | Primary file target |
+| `path` | Grep, Glob | Search path/directory |
+| `notebook_path` | NotebookEdit | Notebook file target |
+| `pattern` | Glob only | Glob pattern as display location |
+
+`cwd` from Bash input is intentionally **excluded** — it's a working directory, not a target.
+
+### Message Type: `user`
+
+Example JSON (tool result):
+```json
+{
+  "type": "user",
+  "uuid": "...",
+  "session_id": "abc-123",
+  "parent_tool_use_id": null,
+  "isSynthetic": false,
+  "tool_use_result": {"stdout": "file1.dart\nfile2.dart", "stderr": "", "exit_code": 0},
+  "message": {
+    "role": "user",
+    "content": [
+      {"type": "tool_result", "tool_use_id": "tu_123", "content": "file1.dart\nfile2.dart", "is_error": false}
+    ]
+  }
+}
+```
+
+#### `tool_result` block → `ToolCompletionEvent`
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `message.content[].tool_use_id` | `callId` | Pairs with the `ToolInvocationEvent.callId` |
+| `tool_use_result` (top-level) | `output` | **Preferred** — richer structured data |
+| `message.content[].content` | `output` | Fallback if `tool_use_result` is absent |
+| `message.content[].is_error` | `isError` | |
+| — | `status` | `isError ? ToolCallStatus.failed : ToolCallStatus.completed` |
+| `session_id` | `sessionId` | |
+
+**Why prefer `tool_use_result`:** The `content[].content` field is a flattened string. The `tool_use_result` field is structured data from the tool itself (e.g., `{stdout, stderr, exit_code}` for Bash, `{oldTodos, newTodos}` for TodoWrite).
+
+#### Synthetic user message (context summary after compaction) → `TextEvent`
+
+When `isSynthetic == true` and content contains a `text` block:
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `message.content[].text` | `text` | The compaction summary |
+| — | `kind` | `TextKind.text` |
+| — | `extensions['claude.isSynthetic']` | `true` |
+| `session_id` | `sessionId` | |
+
+#### Replay user message (session resume) → `TextEvent`
+
+When `isReplay == true` and content contains a `text` block:
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `message.content[].text` | `text` | Contains `<local-command-stdout>` XML tags |
+| — | `kind` | `TextKind.text` |
+| — | `extensions['claude.isReplay']` | `true` |
+| `session_id` | `sessionId` | |
+
+#### Regular user text
+
+When `isSynthetic == false` and `isReplay == false`, text blocks in user messages are **not emitted** as events. The frontend already knows what the user typed.
+
+#### String content
+
+When `message.content` is a plain string (not a list), return empty — no event.
+
+### Message Type: `result`
+
+Example JSON:
+```json
+{
+  "type": "result",
+  "subtype": "success",
+  "uuid": "...",
+  "session_id": "abc-123",
+  "duration_ms": 15000,
+  "duration_api_ms": 12000,
+  "is_error": false,
+  "num_turns": 3,
+  "total_cost_usd": 0.0234,
+  "usage": {
+    "input_tokens": 50000,
+    "output_tokens": 3000,
+    "cache_creation_input_tokens": 10000,
+    "cache_read_input_tokens": 40000
+  },
+  "modelUsage": {
+    "claude-sonnet-4-5-20250929": {
+      "inputTokens": 50000,
+      "outputTokens": 3000,
+      "cacheReadInputTokens": 40000,
+      "cacheCreationInputTokens": 10000,
+      "webSearchRequests": 0,
+      "costUSD": 0.0234,
+      "contextWindow": 200000
+    }
+  },
+  "permission_denials": [
+    {"tool_name": "Bash", "tool_use_id": "tu_456", "tool_input": {"command": "rm -rf /"}}
+  ]
+}
+```
+
+→ **`TurnCompleteEvent`**
+
+| JSON field | → Event field | Notes |
+|------------|---------------|-------|
+| `subtype` | `subtype` | `"success"`, `"error_max_turns"`, etc. |
+| `is_error` | `isError` | |
+| `duration_ms` | `durationMs` | Claude-only |
+| `duration_api_ms` | `durationApiMs` | Claude-only |
+| `num_turns` | `numTurns` | Claude-only |
+| `total_cost_usd` | `costUsd` | Claude-only. Note: snake_case on wire |
+| `result` | `result` | Final text output |
+| `errors` | `errors` | `List<String>` |
+| `session_id` | `sessionId` | |
+
+**Aggregate `usage` (snake_case keys on wire):**
+
+| JSON path | → `TokenUsage` field |
+|-----------|---------------------|
+| `usage.input_tokens` | `inputTokens` |
+| `usage.output_tokens` | `outputTokens` |
+| `usage.cache_read_input_tokens` | `cacheReadTokens` |
+| `usage.cache_creation_input_tokens` | `cacheCreationTokens` |
+
+**Per-model `modelUsage` (camelCase keys on wire, map keyed by model name):**
+
+| JSON path | → `ModelTokenUsage` field | Notes |
+|-----------|--------------------------|-------|
+| `modelUsage.<model>.inputTokens` | `inputTokens` | camelCase on wire |
+| `modelUsage.<model>.outputTokens` | `outputTokens` | camelCase on wire |
+| `modelUsage.<model>.cacheReadInputTokens` | `cacheReadTokens` | camelCase on wire |
+| `modelUsage.<model>.cacheCreationInputTokens` | `cacheCreationTokens` | camelCase on wire |
+| `modelUsage.<model>.costUSD` | `costUsd` | **Capital `USD` on wire** |
+| `modelUsage.<model>.contextWindow` | `contextWindow` | camelCase on wire |
+| `modelUsage.<model>.webSearchRequests` | `webSearchRequests` | camelCase on wire |
+
+**Permission denials:**
+
+| JSON path | → `PermissionDenial` field |
+|-----------|--------------------------|
+| `permission_denials[].tool_name` | `toolName` |
+| `permission_denials[].tool_use_id` | `toolUseId` |
+| `permission_denials[].tool_input` | `toolInput` |
+
+Parse via existing `PermissionDenial.fromJson()`.
+
+### Message Type: `control_request`
+
+Example JSON:
+```json
+{
+  "type": "control_request",
+  "request_id": "req-789",
+  "session_id": "abc-123",
+  "request": {
+    "subtype": "can_use_tool",
+    "tool_name": "Bash",
+    "input": {"command": "npm test"},
+    "tool_use_id": "tu_789",
+    "permission_suggestions": [
+      {
+        "type": "addRules",
+        "rules": [{"toolName": "Bash", "ruleContent": "npm test:*"}],
+        "behavior": "allow",
+        "destination": "localSettings"
+      }
+    ],
+    "blocked_path": "/Users/zaf/project"
+  }
+}
+```
+
+→ **`PermissionRequestEvent`** (only for `subtype == "can_use_tool"`)
+
+| JSON path | → Event field | Notes |
+|-----------|---------------|-------|
+| `request_id` | `requestId` | |
+| `session_id` | `sessionId` | |
+| `request.tool_name` | `toolName` | |
+| `request.tool_name` | `toolKind` | Derived via `ToolKind.fromToolName` |
+| `request.input` | `toolInput` | |
+| `request.tool_use_id` | `toolUseId` | |
+| `request.blocked_path` | `blockedPath` | |
+| `request.permission_suggestions[]` | `suggestions` | Mapped to `PermissionSuggestionData` (see below) |
+
+**PermissionSuggestionData mapping** (simplified data-only form, NOT the full `PermissionSuggestion` type):
+
+| JSON path | → `PermissionSuggestionData` field |
+|-----------|-----------------------------------|
+| `type` | `type` |
+| `tool_name` | `toolName` |
+| `directory` | `directory` |
+| `mode` | `mode` |
+| `description` | `description` |
+
+Note: also check for `suggestions` key (without `permission_` prefix) as a fallback — `request['permission_suggestions'] ?? request['suggestions']`.
+
+Other `control_request` subtypes (e.g., `set_model`, `interrupt`) are **not** converted to events — return empty list.
+
+### Message Type: `stream_event`
+
+Example JSON sequence:
+```json
+{"type": "stream_event", "session_id": "abc-123", "parent_tool_use_id": null,
+ "event": {"type": "message_start", "message": {"id": "msg_01...", "model": "claude-sonnet-4-5-20250929"}}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Here"}}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "Let me..."}}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta", "partial_json": "{\"command\":"}}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "content_block_stop", "index": 0}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}}
+
+{"type": "stream_event", "session_id": "abc-123",
+ "event": {"type": "message_stop"}}
+```
+
+→ **`StreamDeltaEvent`** (one per stream_event message)
+
+| Wire `event.type` | `event.delta.type` | → `StreamDeltaKind` | Data extracted |
+|--------------------|--------------------|----------------------|----------------|
+| `message_start` | — | `messageStart` | — |
+| `content_block_start` | — | `blockStart` | `blockIndex` ← `event.index`; `callId` ← `event.content_block.id` if `content_block.type == "tool_use"` |
+| `content_block_delta` | `text_delta` | `text` | `textDelta` ← `delta.text` |
+| `content_block_delta` | `thinking_delta` | `thinking` | `textDelta` ← `delta.thinking` |
+| `content_block_delta` | `input_json_delta` | `toolInput` | `jsonDelta` ← `delta.partial_json` |
+| `content_block_stop` | — | `blockStop` | `blockIndex` ← `event.index` |
+| `message_stop` | — | `messageStop` | — |
+| `message_delta` | — | `messageStop` | `extensions['claude.stopReason']` ← `delta.stop_reason` |
+
+Common fields for all `StreamDeltaEvent`:
+- `sessionId` ← `json['session_id']`
+- `parentCallId` ← `json['parent_tool_use_id']`
+
+If `event.type` is unrecognized → return empty list (no error).
+
+### Types NOT Converted to Events
+
+| Wire type | Reason |
+|-----------|--------|
+| `control_response` | Data captured during `create()`, merged into `SessionInitEvent` |
+| Unknown types | Return empty list, no error |
+| `control_request` with subtype != `can_use_tool` | Not a permission event |
+
+---
+
 ## Change 1: Store control_response Data
 
 The `control_response` received during `create()` contains models, account info, and slash commands needed for `SessionInitEvent`. Currently this data is discarded after the handshake check. Store it.
