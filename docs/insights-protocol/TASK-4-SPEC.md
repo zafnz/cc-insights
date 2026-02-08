@@ -486,4 +486,207 @@ ToolInvocationEvent makeToolInvocation({
 
 ---
 
+## Brief 4f: Wire EventHandler into ChatState
+
+**Files to modify:**
+- `frontend/lib/models/chat.dart` — add `_eventSubscription`, update `startSession` signature and body
+- `frontend/lib/main.dart` — register `EventHandler` as a Provider alongside `SdkMessageHandler`
+- `frontend/lib/panels/conversation_panel.dart` — pass `EventHandler` to `startSession`
+- `frontend/lib/panels/welcome_card.dart` — pass `EventHandler` to `startSession`
+- `frontend/lib/panels/information_panel.dart` — pass `EventHandler` to `startSession`
+
+**Test files to update:**
+- `frontend/test/models/chat_session_test.dart` — update `startSession` calls
+- `frontend/test/widget/conversation_panel_test.dart` — update `startSession` calls
+- `frontend/test/widget/app_providers_test.dart` — add `EventHandler` to provider list
+
+**Dependency:** 4b–4e must be complete (EventHandler exists and is tested).
+
+### What to Build
+
+This is a **dual-consumption wiring** — both `SdkMessageHandler` and `EventHandler` will consume from the same session simultaneously during the transition period. The existing `messages` stream continues to feed `SdkMessageHandler`; the new `events` stream feeds `EventHandler`.
+
+#### 1. Update `chat.dart` imports
+
+Add:
+```dart
+import '../services/event_handler.dart';
+```
+
+#### 2. Add `_eventSubscription` field
+
+After `_messageSubscription` (line 219):
+```dart
+StreamSubscription<sdk.InsightsEvent>? _eventSubscription;
+```
+
+#### 3. Update `startSession` signature
+
+Change:
+```dart
+Future<void> startSession({
+  required BackendService backend,
+  required SdkMessageHandler messageHandler,
+  required String prompt,
+  List<AttachedImage> images = const [],
+}) async {
+```
+To:
+```dart
+Future<void> startSession({
+  required BackendService backend,
+  required SdkMessageHandler messageHandler,
+  required EventHandler eventHandler,
+  required String prompt,
+  List<AttachedImage> images = const [],
+}) async {
+```
+
+#### 4. Add events stream subscription in `startSession`
+
+After the existing `_messageSubscription` block (after line 955), add:
+```dart
+// Subscribe to events stream for EventHandler
+_eventSubscription = _session!.events.listen(
+  (event) {
+    eventHandler.handleEvent(this, event);
+  },
+  onError: (error) {
+    // Errors already handled by message stream subscription
+    _t('ChatState', 'Event stream ERROR: $error');
+  },
+);
+```
+
+**Note:** No `onDone` callback needed — session lifecycle is already managed by the `_messageSubscription.onDone` handler. The events stream will close at the same time.
+
+#### 5. Update all cleanup sites
+
+Every place that cancels/nulls `_messageSubscription` must also handle `_eventSubscription`. There are 5 locations:
+
+**`stopSession()` (line 1029):**
+```dart
+await _messageSubscription?.cancel();
+await _permissionSubscription?.cancel();
+await _eventSubscription?.cancel();
+```
+And (line 1034):
+```dart
+_messageSubscription = null;
+_eventSubscription = null;
+```
+
+**`_handleSessionEnd()` (line 1307):**
+```dart
+_messageSubscription = null;
+_eventSubscription = null;
+```
+
+**`clearSession()` (line 1373):**
+```dart
+_messageSubscription?.cancel();
+_permissionSubscription?.cancel();
+_eventSubscription?.cancel();
+```
+And (line 1375):
+```dart
+_messageSubscription = null;
+_eventSubscription = null;
+```
+
+**`dispose()` (line 1722):**
+```dart
+_messageSubscription?.cancel();
+_permissionSubscription?.cancel();
+_eventSubscription?.cancel();
+```
+And (line 1728):
+```dart
+_messageSubscription = null;
+_eventSubscription = null;
+```
+
+#### 6. Update `main.dart`
+
+Add import:
+```dart
+import 'services/event_handler.dart';
+```
+
+Add field (after `_handler` on line 171):
+```dart
+EventHandler? _eventHandler;
+```
+
+Create instance (after `_handler` creation on line 369):
+```dart
+_eventHandler = EventHandler(askAiService: _askAiService);
+```
+
+Add Provider (after the `SdkMessageHandler` provider on line 937):
+```dart
+Provider<EventHandler>.value(value: _eventHandler!),
+```
+
+Also update the `CCInsightsApp` widget to accept an optional `EventHandler` for testing:
+```dart
+final EventHandler? eventHandler;
+```
+And the constructor and creation logic accordingly.
+
+#### 7. Update all `startSession` call sites
+
+All 4 call sites need to read `EventHandler` from the Provider and pass it:
+
+**`conversation_panel.dart` (lines 576, 690):**
+```dart
+final messageHandler = context.read<SdkMessageHandler>();
+final eventHandler = context.read<EventHandler>();
+```
+Pass `eventHandler: eventHandler` to `startSession(...)`.
+
+**`welcome_card.dart` (line 200):**
+Same pattern — read `EventHandler` from context, pass to `startSession`.
+
+**`information_panel.dart` (line 466):**
+Same pattern.
+
+**Also update `generateChatTitle` calls** — currently calls `messageHandler.generateChatTitle(...)`. Change to `eventHandler.generateChatTitle(...)` (or keep both during transition — the title gen is idempotent and will no-op if already generated).
+
+#### 8. Update doc comments
+
+Update the 4 doc comments in `chat.dart` that reference `SdkMessageHandler` (lines 1123, 1144, 1595, 1604, 1709) to also mention `EventHandler`.
+
+### Tests to Update
+
+**`chat_session_test.dart`:**
+- All `startSession` calls need `eventHandler:` parameter added.
+- Create a test `EventHandler` instance in setUp.
+- The `FakeTestSession` already has an `events` stream.
+
+**`conversation_panel_test.dart`:**
+- Add `EventHandler` to the test providers.
+- Update any `startSession` calls.
+
+**`app_providers_test.dart`:**
+- Add `Provider<EventHandler>.value(...)` to the test provider list.
+
+### What NOT to Change
+
+- Do NOT remove `SdkMessageHandler` or `_messageSubscription` — that happens in a later phase.
+- Do NOT change any behavior — both handlers process the same data in parallel. The UI result should be identical (both create the same OutputEntry objects, but via different code paths).
+- Do NOT remove `messageHandler` from `startSession` signature — it's still needed.
+
+### Key Reference Files
+
+- **`chat.dart`** — lines 219 (`_messageSubscription` field), 820-972 (`startSession`), 1023-1042 (`stopSession`), 1296-1317 (`_handleSessionEnd`), 1367-1380 (`clearSession`), 1717-1735 (`dispose`)
+- **`main.dart`** — lines 156-171 (fields), 366-369 (creation), 935-937 (providers)
+- **`conversation_panel.dart`** — lines 576-594, 690-714 (startSession call sites)
+- **`welcome_card.dart`** — lines 200, 262-270 (startSession call site)
+- **`information_panel.dart`** — lines 466, 531-535 (startSession call site)
+- **`agent_sdk_core/lib/src/backend_interface.dart`** — line 154 (`Stream<InsightsEvent> get events`)
+- **`event_handler.dart`** — the completed EventHandler from 4b-4e
+
+---
+
 ## End of Specification
