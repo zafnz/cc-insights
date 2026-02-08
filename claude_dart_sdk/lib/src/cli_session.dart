@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'cli_process.dart';
 import 'sdk_logger.dart';
+import 'types/backend_provider.dart';
 import 'types/content_blocks.dart';
 import 'types/control_messages.dart';
 import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
+import 'types/tool_kind.dart';
+import 'types/usage.dart';
 
 /// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
 void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
@@ -25,13 +28,26 @@ class CliSession {
     required CliProcess process,
     required this.sessionId,
     required this.systemInit,
-  }) : _process = process {
+    Map<String, dynamic>? controlResponseData,
+  })  : _process = process,
+        _controlResponseData = controlResponseData {
     _setupMessageRouting();
   }
 
   final CliProcess _process;
   final String sessionId;
   final SDKSystemMessage systemInit;
+  /// Data from the control_response received during initialization.
+  /// Merged into SessionInitEvent when system/init arrives.
+  final Map<String, dynamic>? _controlResponseData;
+
+  int _eventIdCounter = 0;
+
+  /// Generate a unique event ID for this session.
+  String _nextEventId() {
+    _eventIdCounter++;
+    return 'evt-${sessionId.hashCode.toRadixString(16)}-$_eventIdCounter';
+  }
 
   final _messagesController = StreamController<SDKMessage>.broadcast();
   final _eventsController = StreamController<InsightsEvent>.broadcast();
@@ -165,6 +181,547 @@ class CliSession {
               sessionId: sessionId, data: {'type': type});
         }
     }
+
+    // Emit InsightsEvents
+    try {
+      final insightsEvents = _convertToInsightsEvents(json);
+      for (final event in insightsEvents) {
+        _eventsController.add(event);
+      }
+    } catch (e) {
+      SdkLogger.instance.error(
+        'Failed to convert to InsightsEvent',
+        sessionId: sessionId,
+        data: {'error': e.toString(), 'type': json['type']},
+      );
+    }
+  }
+
+  /// Convert a CLI JSON message into InsightsEvent objects.
+  ///
+  /// Returns a list because some messages (e.g., assistant with multiple
+  /// content blocks) produce multiple events.
+  List<InsightsEvent> _convertToInsightsEvents(Map<String, dynamic> json) {
+    final type = json['type'] as String?;
+    final subtype = json['subtype'] as String?;
+
+    return switch (type) {
+      'system' => switch (subtype) {
+        'init' => [_convertSystemInit(json)],
+        'status' => [_convertSystemStatus(json)],
+        'compact_boundary' => [_convertCompactBoundary(json)],
+        'context_cleared' => [_convertContextCleared(json)],
+        _ => <InsightsEvent>[],
+      },
+      'assistant' => _convertAssistant(json),
+      'user' => _convertUser(json),
+      'result' => _convertResult(json),
+      'control_request' => _convertControlRequest(json),
+      'stream_event' => _convertStreamEvent(json),
+      _ => <InsightsEvent>[],
+    };
+  }
+
+  SessionInitEvent _convertSystemInit(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+
+    // Parse MCP servers from system/init
+    List<McpServerStatus>? mcpServers;
+    final mcpList = json['mcp_servers'] as List?;
+    if (mcpList != null) {
+      mcpServers = mcpList
+          .whereType<Map<String, dynamic>>()
+          .map((m) => McpServerStatus.fromJson(m))
+          .toList();
+    }
+
+    // Slash commands: start with simple string list from system/init
+    List<SlashCommand>? slashCommands;
+    final slashList = json['slash_commands'] as List?;
+    if (slashList != null) {
+      slashCommands = slashList
+          .whereType<String>()
+          .map((name) =>
+              SlashCommand(name: name, description: '', argumentHint: ''))
+          .toList();
+    }
+
+    // Merge richer data from control_response
+    List<ModelInfo>? availableModels;
+    AccountInfo? account;
+    if (_controlResponseData != null) {
+      // Richer slash commands override the string list
+      final commands = _controlResponseData!['commands'] as List?;
+      if (commands != null) {
+        slashCommands = commands
+            .whereType<Map<String, dynamic>>()
+            .map((c) => SlashCommand.fromJson(c))
+            .toList();
+      }
+
+      final models = _controlResponseData!['models'] as List?;
+      if (models != null) {
+        availableModels = models
+            .whereType<Map<String, dynamic>>()
+            .map((m) => ModelInfo.fromJson(m))
+            .toList();
+      }
+
+      final accountJson =
+          _controlResponseData!['account'] as Map<String, dynamic>?;
+      if (accountJson != null) {
+        account = AccountInfo.fromJson(accountJson);
+      }
+    }
+
+    // Claude-specific extensions
+    final extensions = <String, dynamic>{};
+    final apiKeySource = json['apiKeySource'] as String?;
+    if (apiKeySource != null) extensions['claude.apiKeySource'] = apiKeySource;
+    final outputStyle = json['output_style'] as String?;
+    if (outputStyle != null) extensions['claude.outputStyle'] = outputStyle;
+
+    return SessionInitEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: json,
+      extensions: extensions.isNotEmpty ? extensions : null,
+      sessionId: sid,
+      model: json['model'] as String?,
+      cwd: json['cwd'] as String?,
+      availableTools: (json['tools'] as List?)?.cast<String>(),
+      mcpServers: mcpServers,
+      permissionMode: json['permissionMode'] as String?,
+      account: account,
+      slashCommands: slashCommands,
+      availableModels: availableModels,
+    );
+  }
+
+  SessionStatusEvent _convertSystemStatus(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+    final statusStr = json['status'] as String?;
+
+    final status = switch (statusStr) {
+      'compacting' => SessionStatus.compacting,
+      'resuming' => SessionStatus.resuming,
+      'interrupted' => SessionStatus.interrupted,
+      'ended' => SessionStatus.ended,
+      _ => SessionStatus.error,
+    };
+
+    return SessionStatusEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: json,
+      sessionId: sid,
+      status: status,
+      message: json['message'] as String?,
+    );
+  }
+
+  ContextCompactionEvent _convertCompactBoundary(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+    final metadata = json['compact_metadata'] as Map<String, dynamic>?;
+
+    final trigger = switch (metadata?['trigger'] as String?) {
+      'manual' => CompactionTrigger.manual,
+      _ => CompactionTrigger.auto,
+    };
+
+    return ContextCompactionEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: json,
+      sessionId: sid,
+      trigger: trigger,
+      preTokens: metadata?['pre_tokens'] as int?,
+    );
+  }
+
+  ContextCompactionEvent _convertContextCleared(Map<String, dynamic> json) {
+    return ContextCompactionEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: json,
+      sessionId: json['session_id'] as String? ?? sessionId,
+      trigger: CompactionTrigger.cleared,
+    );
+  }
+
+  List<InsightsEvent> _convertAssistant(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+    final parentToolUseId = json['parent_tool_use_id'] as String?;
+    final message = json['message'] as Map<String, dynamic>?;
+    final model = message?['model'] as String?;
+    final content = message?['content'] as List?;
+
+    if (content == null || content.isEmpty) return [];
+
+    final events = <InsightsEvent>[];
+
+    for (final block in content) {
+      if (block is! Map<String, dynamic>) continue;
+      final blockType = block['type'] as String?;
+
+      switch (blockType) {
+        case 'text':
+          events.add(TextEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            raw: json,
+            sessionId: sid,
+            text: block['text'] as String? ?? '',
+            kind: TextKind.text,
+            parentCallId: parentToolUseId,
+            model: model,
+          ));
+
+        case 'thinking':
+          events.add(TextEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            raw: json,
+            sessionId: sid,
+            text: block['thinking'] as String? ?? '',
+            kind: TextKind.thinking,
+            parentCallId: parentToolUseId,
+            model: model,
+          ));
+
+        case 'tool_use':
+          final callId = block['id'] as String? ?? _nextEventId();
+          final toolName = block['name'] as String? ?? '';
+          final input = block['input'] as Map<String, dynamic>? ?? {};
+
+          events.add(ToolInvocationEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            raw: json,
+            callId: callId,
+            parentCallId: parentToolUseId,
+            sessionId: sid,
+            kind: ToolKind.fromToolName(toolName),
+            toolName: toolName,
+            input: input,
+            locations: _extractLocations(toolName, input),
+            model: model,
+          ));
+
+          // Task tool → also emit SubagentSpawnEvent
+          if (toolName == 'Task') {
+            final resume = input['resume'] as String?;
+            events.add(SubagentSpawnEvent(
+              id: _nextEventId(),
+              timestamp: DateTime.now(),
+              provider: BackendProvider.claude,
+              raw: json,
+              sessionId: sid,
+              callId: callId,
+              agentType:
+                  input['subagent_type'] as String? ?? input['name'] as String?,
+              description: input['description'] as String?
+                  ?? input['prompt'] as String?
+                  ?? input['task'] as String?,
+              isResume: resume != null,
+              resumeAgentId: resume,
+            ));
+          }
+      }
+    }
+
+    return events;
+  }
+
+  /// Extract file/directory locations from tool input parameters.
+  List<String>? _extractLocations(String toolName, Map<String, dynamic> input) {
+    final locations = <String>[];
+
+    final filePath = input['file_path'] as String?;
+    if (filePath != null) locations.add(filePath);
+
+    final path = input['path'] as String?;
+    if (path != null) locations.add(path);
+
+    final notebookPath = input['notebook_path'] as String?;
+    if (notebookPath != null) locations.add(notebookPath);
+
+    // For Glob, the pattern is the location
+    if (toolName == 'Glob') {
+      final pattern = input['pattern'] as String?;
+      if (pattern != null) locations.add(pattern);
+    }
+
+    return locations.isNotEmpty ? locations : null;
+  }
+
+  List<InsightsEvent> _convertUser(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+    final isSynthetic = json['isSynthetic'] as bool? ?? false;
+    final isReplay = json['isReplay'] as bool? ?? false;
+    final message = json['message'] as Map<String, dynamic>?;
+    final content = message?['content'];
+
+    // Handle string content (simple user text)
+    if (content is String) {
+      return []; // Plain user input — not emitted as InsightsEvent here
+    }
+
+    final contentList = content as List?;
+    if (contentList == null || contentList.isEmpty) return [];
+
+    final events = <InsightsEvent>[];
+
+    for (final block in contentList) {
+      if (block is! Map<String, dynamic>) continue;
+      final blockType = block['type'] as String?;
+
+      switch (blockType) {
+        case 'tool_result':
+          final toolUseId = block['tool_use_id'] as String? ?? _nextEventId();
+          final isError = block['is_error'] as bool? ?? false;
+
+          // Prefer structured tool_use_result over content field
+          final output = json['tool_use_result'] ?? block['content'];
+
+          events.add(ToolCompletionEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            raw: json,
+            callId: toolUseId,
+            sessionId: sid,
+            status:
+                isError ? ToolCallStatus.failed : ToolCallStatus.completed,
+            output: output,
+            isError: isError,
+          ));
+
+        case 'text':
+          if (isSynthetic || isReplay) {
+            final extensions = <String, dynamic>{};
+            if (isSynthetic) extensions['claude.isSynthetic'] = true;
+            if (isReplay) extensions['claude.isReplay'] = true;
+
+            events.add(TextEvent(
+              id: _nextEventId(),
+              timestamp: DateTime.now(),
+              provider: BackendProvider.claude,
+              raw: json,
+              extensions: extensions,
+              sessionId: sid,
+              text: block['text'] as String? ?? '',
+              kind: TextKind.text,
+            ));
+          }
+        // Regular user text blocks in non-synthetic messages are not
+        // emitted as events (the user's input was already sent by the
+        // frontend — we don't echo it back).
+      }
+    }
+
+    return events;
+  }
+
+  List<InsightsEvent> _convertResult(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+
+    // Parse aggregate usage
+    TokenUsage? usage;
+    final usageJson = json['usage'] as Map<String, dynamic>?;
+    if (usageJson != null) {
+      usage = TokenUsage(
+        inputTokens: usageJson['input_tokens'] as int? ?? 0,
+        outputTokens: usageJson['output_tokens'] as int? ?? 0,
+        cacheReadTokens: usageJson['cache_read_input_tokens'] as int?,
+        cacheCreationTokens:
+            usageJson['cache_creation_input_tokens'] as int?,
+      );
+    }
+
+    // Parse per-model usage (camelCase keys on the wire)
+    Map<String, ModelTokenUsage>? modelUsage;
+    final modelUsageJson = json['modelUsage'] as Map<String, dynamic>?;
+    if (modelUsageJson != null) {
+      modelUsage = {};
+      for (final entry in modelUsageJson.entries) {
+        if (entry.value is! Map<String, dynamic>) continue;
+        final m = entry.value as Map<String, dynamic>;
+        modelUsage[entry.key] = ModelTokenUsage(
+          inputTokens: m['inputTokens'] as int? ?? 0,
+          outputTokens: m['outputTokens'] as int? ?? 0,
+          cacheReadTokens: m['cacheReadInputTokens'] as int?,
+          cacheCreationTokens: m['cacheCreationInputTokens'] as int?,
+          costUsd: (m['costUSD'] as num?)?.toDouble(),
+          contextWindow: m['contextWindow'] as int?,
+          webSearchRequests: m['webSearchRequests'] as int?,
+        );
+      }
+    }
+
+    // Parse permission denials
+    List<PermissionDenial>? permissionDenials;
+    final denialsJson = json['permission_denials'] as List?;
+    if (denialsJson != null) {
+      permissionDenials = denialsJson
+          .whereType<Map<String, dynamic>>()
+          .map((d) => PermissionDenial.fromJson(d))
+          .toList();
+    }
+
+    return [
+      TurnCompleteEvent(
+        id: _nextEventId(),
+        timestamp: DateTime.now(),
+        provider: BackendProvider.claude,
+        raw: json,
+        sessionId: sid,
+        isError: json['is_error'] as bool? ?? false,
+        subtype: json['subtype'] as String?,
+        errors: (json['errors'] as List?)?.cast<String>(),
+        result: json['result'] as String?,
+        costUsd: (json['total_cost_usd'] as num?)?.toDouble(),
+        durationMs: json['duration_ms'] as int?,
+        durationApiMs: json['duration_api_ms'] as int?,
+        numTurns: json['num_turns'] as int?,
+        usage: usage,
+        modelUsage: modelUsage,
+        permissionDenials: permissionDenials,
+      ),
+    ];
+  }
+
+  List<InsightsEvent> _convertControlRequest(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+    final request = json['request'] as Map<String, dynamic>?;
+    if (request == null) return [];
+
+    // Only convert can_use_tool requests to events
+    if (request['subtype'] != 'can_use_tool') return [];
+
+    final toolName = request['tool_name'] as String? ?? '';
+    final toolInput = request['input'] as Map<String, dynamic>? ?? {};
+
+    // Parse permission suggestions into data-only form
+    List<PermissionSuggestionData>? suggestions;
+    final suggestionsJson = request['permission_suggestions'] as List?
+        ?? request['suggestions'] as List?;
+    if (suggestionsJson != null) {
+      suggestions = suggestionsJson
+          .whereType<Map<String, dynamic>>()
+          .map((s) => PermissionSuggestionData(
+                type: s['type'] as String? ?? '',
+                toolName: s['tool_name'] as String?,
+                directory: s['directory'] as String?,
+                mode: s['mode'] as String?,
+                description: s['description'] as String? ?? '',
+              ))
+          .toList();
+    }
+
+    return [
+      PermissionRequestEvent(
+        id: _nextEventId(),
+        timestamp: DateTime.now(),
+        provider: BackendProvider.claude,
+        raw: json,
+        sessionId: sid,
+        requestId: json['request_id'] as String? ?? _nextEventId(),
+        toolName: toolName,
+        toolKind: ToolKind.fromToolName(toolName),
+        toolInput: toolInput,
+        toolUseId: request['tool_use_id'] as String?,
+        blockedPath: request['blocked_path'] as String?,
+        suggestions: suggestions,
+      ),
+    ];
+  }
+
+  List<InsightsEvent> _convertStreamEvent(Map<String, dynamic> json) {
+    final sid = json['session_id'] as String? ?? sessionId;
+    final parentToolUseId = json['parent_tool_use_id'] as String?;
+    final event = json['event'] as Map<String, dynamic>?;
+    if (event == null) return [];
+
+    final eventType = event['type'] as String?;
+
+    StreamDeltaKind? kind;
+    String? textDelta;
+    String? jsonDelta;
+    int? blockIndex;
+    String? callId;
+    Map<String, dynamic>? extensions;
+
+    switch (eventType) {
+      case 'message_start':
+        kind = StreamDeltaKind.messageStart;
+
+      case 'content_block_start':
+        kind = StreamDeltaKind.blockStart;
+        blockIndex = event['index'] as int?;
+        final contentBlock = event['content_block'] as Map<String, dynamic>?;
+        if (contentBlock?['type'] == 'tool_use') {
+          callId = contentBlock?['id'] as String?;
+        }
+
+      case 'content_block_delta':
+        blockIndex = event['index'] as int?;
+        final delta = event['delta'] as Map<String, dynamic>?;
+        final deltaType = delta?['type'] as String?;
+
+        switch (deltaType) {
+          case 'text_delta':
+            kind = StreamDeltaKind.text;
+            textDelta = delta?['text'] as String?;
+          case 'thinking_delta':
+            kind = StreamDeltaKind.thinking;
+            textDelta = delta?['thinking'] as String?;
+          case 'input_json_delta':
+            kind = StreamDeltaKind.toolInput;
+            jsonDelta = delta?['partial_json'] as String?;
+        }
+
+      case 'content_block_stop':
+        kind = StreamDeltaKind.blockStop;
+        blockIndex = event['index'] as int?;
+
+      case 'message_stop':
+        kind = StreamDeltaKind.messageStop;
+
+      case 'message_delta':
+        kind = StreamDeltaKind.messageStop;
+        final stopReason =
+            (event['delta'] as Map<String, dynamic>?)?['stop_reason'] as String?;
+        if (stopReason != null) {
+          extensions = {'claude.stopReason': stopReason};
+        }
+    }
+
+    if (kind == null) return [];
+
+    return [
+      StreamDeltaEvent(
+        id: _nextEventId(),
+        timestamp: DateTime.now(),
+        provider: BackendProvider.claude,
+        raw: json,
+        extensions: extensions,
+        sessionId: sid,
+        parentCallId: parentToolUseId,
+        kind: kind,
+        textDelta: textDelta,
+        jsonDelta: jsonDelta,
+        blockIndex: blockIndex,
+        callId: callId,
+      ),
+    ];
   }
 
   /// Create and initialize a new CLI session.
@@ -267,6 +824,7 @@ class CliSession {
       String? sessionId;
       SDKSystemMessage? systemInit;
       bool controlResponseReceived = false;
+      Map<String, dynamic>? controlResponseData;
       int messagesReceived = 0;
 
       await for (final json in process.messages.timeout(timeout)) {
@@ -280,6 +838,7 @@ class CliSession {
 
         if (type == 'control_response') {
           controlResponseReceived = true;
+          controlResponseData = json['response'] as Map<String, dynamic>?;
           _t('CliSession', 'Step 3: control_response received');
           SdkLogger.instance.debug('Received control_response');
         } else if (type == 'system') {
@@ -330,6 +889,7 @@ class CliSession {
         process: process,
         sessionId: sessionId,
         systemInit: systemInit,
+        controlResponseData: controlResponseData,
       );
     } catch (e) {
       // Clean up on error
