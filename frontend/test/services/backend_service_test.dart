@@ -153,6 +153,9 @@ class FakeAgentSession implements AgentSession {
   Stream<SDKMessage> get messages => const Stream.empty();
 
   @override
+  Stream<InsightsEvent> get events => const Stream.empty();
+
+  @override
   Stream<PermissionRequest> get permissionRequests => const Stream.empty();
 
   @override

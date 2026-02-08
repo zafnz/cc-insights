@@ -107,6 +107,9 @@ class _FakeSession implements sdk.AgentSession {
   Stream<sdk.SDKMessage> get messages => const Stream.empty();
 
   @override
+  Stream<sdk.InsightsEvent> get events => const Stream.empty();
+
+  @override
   Stream<sdk.PermissionRequest> get permissionRequests => const Stream.empty();
 
   @override

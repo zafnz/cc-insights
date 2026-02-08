@@ -112,6 +112,9 @@ class _FakeTestSession implements TestSession {
   Stream<SDKMessage> get messages => const Stream.empty();
 
   @override
+  Stream<InsightsEvent> get events => const Stream.empty();
+
+  @override
   Stream<PermissionRequest> get permissionRequests => const Stream.empty();
 
   @override
@@ -150,6 +153,9 @@ class _FakeTestSession implements TestSession {
 
   @override
   void emitTestMessage(SDKMessage message) {}
+
+  @override
+  void emitTestEvent(InsightsEvent event) {}
 
   @override
   Future<PermissionResponse> emitTestPermissionRequest({

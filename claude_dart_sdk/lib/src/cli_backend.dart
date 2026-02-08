@@ -7,6 +7,7 @@ import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/errors.dart';
+import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
@@ -258,6 +259,9 @@ class _CliSessionAdapter implements AgentSession {
 
   @override
   Stream<SDKMessage> get messages => _cliSession.messages;
+
+  @override
+  Stream<InsightsEvent> get events => _cliSession.events;
 
   @override
   Stream<PermissionRequest> get permissionRequests =>

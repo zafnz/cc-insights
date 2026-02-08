@@ -38,6 +38,7 @@ class CodexSession implements AgentSession {
   String? get resolvedSessionId => threadId;
 
   final _messagesController = StreamController<SDKMessage>.broadcast();
+  final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionController =
       StreamController<PermissionRequest>.broadcast();
   final _hookController = StreamController<HookRequest>.broadcast();
@@ -64,6 +65,9 @@ class CodexSession implements AgentSession {
 
   @override
   Stream<SDKMessage> get messages => _messagesController.stream;
+
+  @override
+  Stream<InsightsEvent> get events => _eventsController.stream;
 
   @override
   Stream<PermissionRequest> get permissionRequests =>
@@ -621,6 +625,7 @@ class CodexSession implements AgentSession {
     _notificationSub?.cancel();
     _requestSub?.cancel();
     _messagesController.close();
+    _eventsController.close();
     _permissionController.close();
     _hookController.close();
   }

@@ -175,6 +175,7 @@ class _CreateSessionCall {
 /// Minimal fake TestSession for testing.
 class FakeTestSession implements sdk.TestSession {
   final _messagesController = StreamController<sdk.SDKMessage>.broadcast();
+  final _eventsController = StreamController<sdk.InsightsEvent>.broadcast();
   final _permissionsController =
       StreamController<sdk.PermissionRequest>.broadcast();
   final _hooksController = StreamController<sdk.HookRequest>.broadcast();
@@ -193,6 +194,9 @@ class FakeTestSession implements sdk.TestSession {
 
   @override
   Stream<sdk.SDKMessage> get messages => _messagesController.stream;
+
+  @override
+  Stream<sdk.InsightsEvent> get events => _eventsController.stream;
 
   @override
   Stream<sdk.PermissionRequest> get permissionRequests =>
@@ -240,6 +244,11 @@ class FakeTestSession implements sdk.TestSession {
   }
 
   @override
+  void emitTestEvent(sdk.InsightsEvent event) {
+    _eventsController.add(event);
+  }
+
+  @override
   Future<sdk.PermissionResponse> emitTestPermissionRequest({
     required String id,
     required String toolName,
@@ -250,6 +259,7 @@ class FakeTestSession implements sdk.TestSession {
 
   void dispose() {
     _messagesController.close();
+    _eventsController.close();
     _permissionsController.close();
     _hooksController.close();
   }

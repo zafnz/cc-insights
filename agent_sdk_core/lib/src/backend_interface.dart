@@ -6,6 +6,7 @@ import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/errors.dart';
+import 'types/insights_events.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 import 'types/usage.dart';
@@ -148,6 +149,9 @@ abstract class AgentSession {
 
   /// Stream of SDK messages (assistant, user, result, etc.).
   Stream<SDKMessage> get messages;
+
+  /// Stream of insights events.
+  Stream<InsightsEvent> get events;
 
   /// Stream of permission requests.
   Stream<PermissionRequest> get permissionRequests;

@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import 'backend_interface.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
+import 'types/insights_events.dart';
 import 'types/sdk_messages.dart';
 
 /// A test-only session for use in widget and integration tests.
@@ -40,6 +41,7 @@ class TestSession implements AgentSession {
   String? get resolvedSessionId => sdkSessionId ?? sessionId;
 
   final _messagesController = StreamController<SDKMessage>.broadcast();
+  final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
   final _hookRequestsController = StreamController<HookRequest>.broadcast();
@@ -47,6 +49,10 @@ class TestSession implements AgentSession {
   /// Stream of SDK messages.
   @override
   Stream<SDKMessage> get messages => _messagesController.stream;
+
+  /// Stream of insights events.
+  @override
+  Stream<InsightsEvent> get events => _eventsController.stream;
 
   /// Stream of permission requests.
   @override
@@ -125,6 +131,13 @@ class TestSession implements AgentSession {
     _messagesController.add(message);
   }
 
+  /// Emits an event to the [events] stream.
+  @visibleForTesting
+  void emitTestEvent(InsightsEvent event) {
+    if (_disposed) return;
+    _eventsController.add(event);
+  }
+
   /// Emits a permission request to the [permissionRequests] stream.
   ///
   /// Returns the completer's future so tests can verify the response.
@@ -152,6 +165,7 @@ class TestSession implements AgentSession {
     if (_disposed) return;
     _disposed = true;
     _messagesController.close();
+    _eventsController.close();
     _permissionRequestsController.close();
     _hookRequestsController.close();
   }

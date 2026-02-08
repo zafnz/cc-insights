@@ -4,6 +4,7 @@ import 'cli_process.dart';
 import 'sdk_logger.dart';
 import 'types/content_blocks.dart';
 import 'types/control_messages.dart';
+import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
 import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
@@ -33,6 +34,7 @@ class CliSession {
   final SDKSystemMessage systemInit;
 
   final _messagesController = StreamController<SDKMessage>.broadcast();
+  final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<CliPermissionRequest>.broadcast();
 
@@ -40,6 +42,9 @@ class CliSession {
 
   /// Stream of SDK messages (assistant, user, result, stream_event, etc.).
   Stream<SDKMessage> get messages => _messagesController.stream;
+
+  /// Stream of insights events.
+  Stream<InsightsEvent> get events => _eventsController.stream;
 
   /// Stream of permission requests requiring user response.
   Stream<CliPermissionRequest> get permissionRequests =>
@@ -483,6 +488,7 @@ class CliSession {
     _disposed = true;
     SdkLogger.instance.info('Session disposed', sessionId: sessionId);
     _messagesController.close();
+    _eventsController.close();
     _permissionRequestsController.close();
   }
 

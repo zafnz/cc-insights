@@ -84,6 +84,8 @@ class FakeBackendService extends BackendService {
 class FakeTestSession implements TestSession {
   final StreamController<SDKMessage> _messagesController =
       StreamController<SDKMessage>.broadcast();
+  final StreamController<sdk.InsightsEvent> _eventsController =
+      StreamController<sdk.InsightsEvent>.broadcast();
   final StreamController<PermissionRequest> _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
   final StreamController<HookRequest> _hookRequestsController =
@@ -95,6 +97,9 @@ class FakeTestSession implements TestSession {
 
   @override
   Stream<SDKMessage> get messages => _messagesController.stream;
+
+  @override
+  Stream<sdk.InsightsEvent> get events => _eventsController.stream;
 
   @override
   Stream<PermissionRequest> get permissionRequests =>
@@ -127,6 +132,7 @@ class FakeTestSession implements TestSession {
   Future<void> kill() async {
     killCalled = true;
     await _messagesController.close();
+    await _eventsController.close();
     await _permissionRequestsController.close();
     await _hookRequestsController.close();
   }
@@ -155,6 +161,11 @@ class FakeTestSession implements TestSession {
   @override
   void emitTestMessage(SDKMessage message) {
     _messagesController.add(message);
+  }
+
+  @override
+  void emitTestEvent(sdk.InsightsEvent event) {
+    _eventsController.add(event);
   }
 
   @override
