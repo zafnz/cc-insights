@@ -646,13 +646,226 @@ class EventHandler {
     _streamingChat = null;
   }
 
-  // Stub methods for 4e
+  // Task 4e: Subagent routing + title generation
   void _handleSubagentSpawn(ChatState chat, SubagentSpawnEvent event) {
-    // TODO: Implement in Task 4e
+    // Check if this is a resume of an existing agent
+    if (event.isResume && event.resumeAgentId != null) {
+      final existingAgent = chat.findAgentByResumeId(event.resumeAgentId!);
+      if (existingAgent != null) {
+        developer.log(
+          'Resuming existing agent: resumeId=${event.resumeAgentId} -> '
+          'conversationId=${existingAgent.conversationId}',
+          name: 'EventHandler',
+        );
+
+        // Update the agent status back to working
+        chat.updateAgent(AgentStatus.working, existingAgent.sdkAgentId);
+
+        // Map this new callId to the existing conversation
+        _agentIdToConversationId[event.callId] = existingAgent.conversationId;
+
+        // Also map the new callId to the existing agent for result routing
+        _toolUseIdToAgentId[event.callId] = existingAgent.sdkAgentId;
+
+        return;
+      } else {
+        developer.log(
+          'Resume requested but agent not found: resumeId=${event.resumeAgentId}',
+          name: 'EventHandler',
+          level: 900, // Warning
+        );
+        // Fall through to create a new agent
+      }
+    }
+
+    developer.log(
+      'Creating subagent: type=${event.agentType ?? "null"}, '
+      'description=${event.description?.substring(0, event.description!.length > 50 ? 50 : event.description!.length) ?? "null"}...',
+      name: 'EventHandler',
+    );
+
+    // Log warning if expected fields are missing
+    if (event.agentType == null) {
+      developer.log(
+        'SubagentSpawnEvent missing agentType field',
+        name: 'EventHandler',
+      );
+    }
+    if (event.description == null) {
+      developer.log(
+        'SubagentSpawnEvent missing description field',
+        name: 'EventHandler',
+      );
+    }
+
+    LogService.instance.debug(
+      'Task',
+      'Task tool created: type=${event.agentType ?? "unknown"} '
+      'description=${event.description ?? "none"}',
+    );
+
+    // Create subagent conversation and agent
+    chat.addSubagentConversation(event.callId, event.agentType, event.description);
+
+    // Map this callId to the new conversation for routing
+    final agent = chat.activeAgents[event.callId];
+    if (agent != null) {
+      _agentIdToConversationId[event.callId] = agent.conversationId;
+      developer.log(
+        'Subagent created: callId=${event.callId} -> '
+        'conversationId=${agent.conversationId}',
+        name: 'EventHandler',
+      );
+    } else {
+      developer.log(
+        'ERROR: Failed to create agent for callId=${event.callId}',
+        name: 'EventHandler',
+        level: 1000, // Error level
+      );
+    }
   }
 
   void _handleSubagentComplete(ChatState chat, SubagentCompleteEvent event) {
-    // TODO: Implement in Task 4e
+    // Look up correct agent ID: for resumed agents, use the mapped ID
+    final agentId = _toolUseIdToAgentId[event.callId] ?? event.callId;
+
+    // Determine agent status from event status
+    final AgentStatus agentStatus;
+    if (event.status == 'completed') {
+      agentStatus = AgentStatus.completed;
+    } else if (event.status == 'error' ||
+        event.status == 'error_max_turns' ||
+        event.status == 'error_tool' ||
+        event.status == 'error_api' ||
+        event.status == 'error_budget') {
+      agentStatus = AgentStatus.error;
+    } else {
+      // Unknown status - treat as completed
+      agentStatus = AgentStatus.completed;
+    }
+
+    developer.log(
+      'Subagent complete: callId=${event.callId}, agentId=$agentId, '
+      'status=${event.status}, agentStatus=${agentStatus.name}',
+      name: 'EventHandler',
+    );
+
+    LogService.instance.debug(
+      'Task',
+      'Task tool finished: status=${event.status ?? "unknown"}',
+    );
+
+    // Update the agent status and store the resumeId for future resume operations
+    chat.updateAgent(
+      agentStatus,
+      agentId,
+      result: event.summary,
+      resumeId: event.agentId,
+    );
+  }
+
+  /// Generates an AI-powered title for a chat based on the user's message.
+  ///
+  /// Call this when creating a new chat and sending the first message.
+  /// The title generation is fire-and-forget - failures are logged but don't
+  /// affect the user experience.
+  ///
+  /// The method is idempotent - it tracks which chats have had title generation
+  /// attempted and won't generate twice for the same chat.
+  ///
+  /// Parameters:
+  /// - [chat]: The chat to generate a title for
+  /// - [userMessage]: The user's message to base the title on
+  void generateChatTitle(ChatState chat, String userMessage) {
+    // Fire and forget - don't await
+    _generateChatTitleAsync(chat, userMessage);
+  }
+
+  Future<void> _generateChatTitleAsync(
+    ChatState chat,
+    String userMessage,
+  ) async {
+    // Skip if no AskAiService available
+    if (_askAiService == null) return;
+
+    // Skip if AI chat labels are disabled
+    final config = RuntimeConfig.instance;
+    if (!config.aiChatLabelsEnabled) return;
+
+    // Skip if we've already generated (or attempted to generate) a title for this chat
+    if (_titlesGenerated.contains(chat.data.id)) return;
+
+    // Skip if currently generating a title for this chat
+    if (_pendingTitleGenerations.contains(chat.data.id)) return;
+
+    if (userMessage.isEmpty) return;
+
+    // Get the working directory
+    final workingDirectory = chat.data.worktreeRoot;
+    if (workingDirectory == null) return;
+
+    // Mark as generated (even before we start, to prevent duplicate attempts)
+    _titlesGenerated.add(chat.data.id);
+
+    // Mark as pending (prevents duplicate concurrent requests)
+    _pendingTitleGenerations.add(chat.data.id);
+
+    try {
+      final prompt = '''Read the following and produce a short 3-5 word statement succiciently summing up what the request is. It should be concise, do not worry about grammer.
+Your reply should be between ==== marks. eg:
+=====
+Automatic Chat Summary
+=====
+
+User's message:
+$userMessage''';
+
+      final result = await _askAiService!.ask(
+        prompt: prompt,
+        workingDirectory: workingDirectory,
+        model: config.aiChatLabelModel,
+        allowedTools: [], // No tools needed for title generation
+        maxTurns: 1, // Single turn only - no tool use
+        timeoutSeconds: 30,
+      );
+
+      if (result != null && !result.isError && result.result.isNotEmpty) {
+        // Extract the title from between ==== marks
+        final rawResult = result.result;
+        final titleMatch = RegExp(r'=+\s*\n(.+?)\n\s*=+', dotAll: true)
+            .firstMatch(rawResult);
+
+        String title;
+        if (titleMatch != null) {
+          title = titleMatch.group(1)?.trim() ?? rawResult.trim();
+        } else {
+          // Fallback: use the raw result if no ==== marks found
+          title = rawResult.trim();
+        }
+
+        // Clean up the title - remove any remaining markers and limit length
+        title = title
+            .replaceAll(RegExp(r'^=+'), '')
+            .replaceAll(RegExp(r'=+$'), '')
+            .trim();
+        if (title.length > 50) {
+          title = '${title.substring(0, 47)}...';
+        }
+
+        if (title.isNotEmpty) {
+          chat.rename(title);
+        }
+      }
+    } catch (e) {
+      // Title generation is fire-and-forget - log but don't propagate errors
+      developer.log(
+        'Failed to generate chat title: $e',
+        name: 'EventHandler',
+        level: 900,
+      );
+    } finally {
+      _pendingTitleGenerations.remove(chat.data.id);
+    }
   }
 
   /// Clears all internal state.

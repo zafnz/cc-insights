@@ -10,6 +10,8 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         SessionStatusEvent,
         ContextCompactionEvent,
         StreamDeltaEvent,
+        SubagentSpawnEvent,
+        SubagentCompleteEvent,
         ToolKind,
         ToolCallStatus,
         TextKind,
@@ -21,8 +23,10 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
 import 'package:cc_insights_v2/models/agent.dart';
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
+import 'package:cc_insights_v2/services/ask_ai_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:checks/checks.dart';
+import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Event ID counter for generating unique event IDs.
@@ -1397,4 +1401,480 @@ void main() {
       });
     });
   });
+
+  /// Helper to create SubagentSpawnEvent with default boilerplate fields.
+  SubagentSpawnEvent makeSubagentSpawn({
+    required String callId,
+    String? agentType,
+    String? description,
+    bool isResume = false,
+    String? resumeAgentId,
+    Map<String, dynamic>? raw,
+  }) {
+    return SubagentSpawnEvent(
+      id: _nextId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      sessionId: 'test-session',
+      callId: callId,
+      agentType: agentType,
+      description: description,
+      isResume: isResume,
+      resumeAgentId: resumeAgentId,
+      raw: raw,
+    );
+  }
+
+  /// Helper to create SubagentCompleteEvent with default boilerplate fields.
+  SubagentCompleteEvent makeSubagentComplete({
+    required String callId,
+    String? agentId,
+    String? status,
+    String? summary,
+    Map<String, dynamic>? raw,
+  }) {
+    return SubagentCompleteEvent(
+      id: _nextId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      sessionId: 'test-session',
+      callId: callId,
+      agentId: agentId,
+      status: status,
+      summary: summary,
+      raw: raw,
+    );
+  }
+
+  group('EventHandler - Task 4e: Subagent Routing + Title Generation', () {
+    late ChatState chat;
+    late EventHandler handler;
+
+    setUp(() {
+      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+      handler = EventHandler();
+      _idCounter = 0;
+    });
+
+    tearDown(() {
+      handler.dispose();
+      chat.dispose();
+    });
+
+    group('_handleSubagentSpawn', () {
+      test('creates subagent conversation with agentType and description', () {
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-123',
+          agentType: 'Explore',
+          description: 'Search for files',
+        ));
+
+        // Verify subagent was created
+        check(chat.activeAgents.length).equals(1);
+        final agent = chat.activeAgents['task-123'];
+        check(agent).isNotNull();
+        check(agent!.status).equals(AgentStatus.working);
+
+        // Verify subagent conversation exists
+        check(chat.data.subagentConversations.length).equals(1);
+        final subagentConv = chat.data.subagentConversations[agent.conversationId];
+        check(subagentConv).isNotNull();
+      });
+
+      test('maps callId to conversation for routing', () {
+        // Create subagent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-456',
+          agentType: 'Plan',
+          description: 'Plan implementation',
+        ));
+
+        final agent = chat.activeAgents['task-456']!;
+
+        // Now send a text event with parentCallId - should route to subagent conversation
+        handler.handleEvent(chat, makeText(
+          text: 'Subagent output',
+          parentCallId: 'task-456',
+        ));
+
+        // Verify the text went to the subagent conversation
+        final subagentConv = chat.data.subagentConversations[agent.conversationId]!;
+        check(subagentConv.entries.length).equals(1);
+        check(subagentConv.entries.first).isA<TextOutputEntry>();
+
+        final textEntry = subagentConv.entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Subagent output');
+      });
+
+      test('resumes existing agent (updates status, maps routing)', () {
+        // First, create an agent and complete it
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-original',
+          agentType: 'Explore',
+          description: 'Original task',
+        ));
+
+        final originalAgent = chat.activeAgents['task-original']!;
+
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-original',
+          agentId: 'abc123', // Resume ID
+          status: 'completed',
+          summary: 'First round complete',
+        ));
+
+        // Verify agent completed
+        check(chat.activeAgents['task-original']!.status).equals(AgentStatus.completed);
+        check(chat.activeAgents['task-original']!.resumeId).equals('abc123');
+
+        // Now resume the same agent with a new Task call
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-resumed',
+          agentType: 'Explore',
+          description: 'Continue task',
+          isResume: true,
+          resumeAgentId: 'abc123',
+        ));
+
+        // Verify agent status updated to working
+        check(chat.activeAgents['task-original']!.status).equals(AgentStatus.working);
+
+        // Verify new callId routes to the same conversation
+        handler.handleEvent(chat, makeText(
+          text: 'Resumed output',
+          parentCallId: 'task-resumed',
+        ));
+
+        final subagentConv = chat.data.subagentConversations[originalAgent.conversationId]!;
+        check(subagentConv.entries.length).equals(1);
+        final textEntry = subagentConv.entries.first as TextOutputEntry;
+        check(textEntry.text).equals('Resumed output');
+      });
+
+      test('falls through to create when resumeAgentId not found', () {
+        // Try to resume a non-existent agent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-new',
+          agentType: 'Explore',
+          description: 'New task',
+          isResume: true,
+          resumeAgentId: 'nonexistent',
+        ));
+
+        // Should create a new agent instead
+        check(chat.activeAgents.length).equals(1);
+        final agent = chat.activeAgents['task-new'];
+        check(agent).isNotNull();
+        check(agent!.status).equals(AgentStatus.working);
+      });
+
+      test('handles missing agentType gracefully', () {
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-no-type',
+          agentType: null,
+          description: 'Task description',
+        ));
+
+        // Should still create the agent
+        check(chat.activeAgents.length).equals(1);
+        check(chat.data.subagentConversations.length).equals(1);
+      });
+
+      test('handles missing description gracefully', () {
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-no-desc',
+          agentType: 'Explore',
+          description: null,
+        ));
+
+        // Should still create the agent
+        check(chat.activeAgents.length).equals(1);
+        check(chat.data.subagentConversations.length).equals(1);
+      });
+    });
+
+    group('_handleSubagentComplete', () {
+      test('updates agent to completed', () {
+        // Create subagent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-123',
+          agentType: 'Explore',
+          description: 'Search task',
+        ));
+
+        check(chat.activeAgents['task-123']!.status).equals(AgentStatus.working);
+
+        // Complete the agent
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-123',
+          agentId: 'abc123',
+          status: 'completed',
+          summary: 'Task finished successfully',
+        ));
+
+        final agent = chat.activeAgents['task-123']!;
+        check(agent.status).equals(AgentStatus.completed);
+        check(agent.result).equals('Task finished successfully');
+        check(agent.resumeId).equals('abc123');
+      });
+
+      test('updates agent to error for error statuses', () {
+        // Create subagent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-456',
+          agentType: 'Plan',
+          description: 'Plan task',
+        ));
+
+        // Complete with error
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-456',
+          status: 'error_max_turns',
+          summary: 'Max turns exceeded',
+        ));
+
+        final agent = chat.activeAgents['task-456']!;
+        check(agent.status).equals(AgentStatus.error);
+        check(agent.result).equals('Max turns exceeded');
+      });
+
+      test('uses _toolUseIdToAgentId for resumed agents', () {
+        // Create and complete original agent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-original',
+          agentType: 'Explore',
+          description: 'Original task',
+        ));
+
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-original',
+          agentId: 'abc123',
+          status: 'completed',
+        ));
+
+        // Resume the agent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-resumed',
+          isResume: true,
+          resumeAgentId: 'abc123',
+        ));
+
+        // Complete the resumed agent - should update the original agent
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-resumed',
+          agentId: 'abc123',
+          status: 'completed',
+          summary: 'Resume complete',
+        ));
+
+        // Verify the original agent was updated
+        final agent = chat.activeAgents['task-original']!;
+        check(agent.status).equals(AgentStatus.completed);
+        check(agent.result).equals('Resume complete');
+      });
+
+      test('defaults to completed for unknown status', () {
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-789',
+          agentType: 'Explore',
+          description: 'Task',
+        ));
+
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-789',
+          status: 'unknown_status',
+        ));
+
+        check(chat.activeAgents['task-789']!.status).equals(AgentStatus.completed);
+      });
+
+      test('handles null status', () {
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-null',
+          agentType: 'Plan',
+          description: 'Task',
+        ));
+
+        handler.handleEvent(chat, makeSubagentComplete(
+          callId: 'task-null',
+          status: null,
+        ));
+
+        check(chat.activeAgents['task-null']!.status).equals(AgentStatus.completed);
+      });
+    });
+
+    group('conversation routing', () {
+      test('messages with parentCallId route to subagent conversation', () {
+        // Create subagent
+        handler.handleEvent(chat, makeSubagentSpawn(
+          callId: 'task-123',
+          agentType: 'Explore',
+          description: 'Search task',
+        ));
+
+        final agent = chat.activeAgents['task-123']!;
+
+        // Send text with parentCallId
+        handler.handleEvent(chat, makeText(
+          text: 'Subagent text',
+          parentCallId: 'task-123',
+        ));
+
+        // Send tool invocation with parentCallId
+        handler.handleEvent(chat, makeToolInvocation(
+          callId: 'tool-sub',
+          toolName: 'Read',
+          parentCallId: 'task-123',
+        ));
+
+        // Verify both went to subagent conversation
+        final subagentConv = chat.data.subagentConversations[agent.conversationId]!;
+        check(subagentConv.entries.length).equals(2);
+        check(subagentConv.entries[0]).isA<TextOutputEntry>();
+        check(subagentConv.entries[1]).isA<ToolUseOutputEntry>();
+
+        // Verify nothing went to primary
+        check(chat.data.primaryConversation.entries.length).equals(0);
+      });
+
+      test('messages without parentCallId route to primary', () {
+        // Send text without parentCallId
+        handler.handleEvent(chat, makeText(
+          text: 'Main text',
+          parentCallId: null,
+        ));
+
+        // Send tool invocation without parentCallId
+        handler.handleEvent(chat, makeToolInvocation(
+          callId: 'tool-main',
+          toolName: 'Bash',
+          parentCallId: null,
+        ));
+
+        // Verify both went to primary conversation
+        check(chat.data.primaryConversation.entries.length).equals(2);
+        check(chat.data.primaryConversation.entries[0]).isA<TextOutputEntry>();
+        check(chat.data.primaryConversation.entries[1]).isA<ToolUseOutputEntry>();
+      });
+    });
+
+    group('generateChatTitle', () {
+      test('generates title using AskAiService', () async {
+        // Create mock service
+        final mockService = MockAskAiService();
+        mockService.titleToReturn = 'Generated Test Title';
+
+        final handlerWithService = EventHandler(askAiService: mockService);
+
+        // Generate title
+        handlerWithService.generateChatTitle(chat, 'Help me implement feature X');
+
+        // Wait for async title generation
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Verify title was set
+        check(chat.data.name).equals('Generated Test Title');
+        check(chat.data.isAutoGeneratedName).isFalse();
+
+        // Verify service was called
+        check(mockService.lastPrompt).isNotNull();
+        check(mockService.lastWorkingDirectory).equals('/tmp/test');
+
+        handlerWithService.dispose();
+      });
+
+      test('is idempotent (does not generate twice for same chat)', () async {
+        final mockService = MockAskAiService();
+        mockService.titleToReturn = 'First Title';
+
+        final handlerWithService = EventHandler(askAiService: mockService);
+
+        // First generation
+        handlerWithService.generateChatTitle(chat, 'First message');
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        check(chat.data.name).equals('First Title');
+
+        // Try to generate again - should be no-op
+        mockService.titleToReturn = 'Second Title';
+        handlerWithService.generateChatTitle(chat, 'Second message');
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Name should still be "First Title"
+        check(chat.data.name).equals('First Title');
+
+        handlerWithService.dispose();
+      });
+
+      test('handles failure gracefully', () async {
+        final mockService = MockAskAiService();
+        mockService.shouldFail = true;
+
+        final handlerWithService = EventHandler(askAiService: mockService);
+
+        final originalName = chat.data.name;
+
+        // Generate title (will fail)
+        handlerWithService.generateChatTitle(chat, 'Test message');
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Name should not change
+        check(chat.data.name).equals(originalName);
+
+        handlerWithService.dispose();
+      });
+
+      test('is no-op without AskAiService', () async {
+        final handlerNoService = EventHandler();
+
+        final originalName = chat.data.name;
+
+        // Generate title without service
+        handlerNoService.generateChatTitle(chat, 'Test message');
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Name should not change
+        check(chat.data.name).equals(originalName);
+
+        handlerNoService.dispose();
+      });
+    });
+  });
+}
+
+/// Mock AskAiService that returns a predefined title.
+class MockAskAiService extends AskAiService {
+  String? titleToReturn;
+  bool shouldFail = false;
+  String? lastPrompt;
+  String? lastWorkingDirectory;
+
+  @override
+  Future<sdk.SingleRequestResult?> ask({
+    required String prompt,
+    required String workingDirectory,
+    String model = 'haiku',
+    List<String>? allowedTools,
+    int? maxTurns,
+    int timeoutSeconds = 60,
+  }) async {
+    lastPrompt = prompt;
+    lastWorkingDirectory = workingDirectory;
+
+    if (shouldFail) {
+      return null;
+    }
+
+    final title = titleToReturn ?? 'Generated Title';
+    return sdk.SingleRequestResult(
+      result: '=====\n$title\n=====',
+      isError: false,
+      usage: const sdk.Usage(inputTokens: 10, outputTokens: 5),
+      durationMs: 100,
+      durationApiMs: 80,
+      numTurns: 1,
+      totalCostUsd: 0.001,
+    );
+  }
 }
