@@ -60,6 +60,60 @@ class CodexSession implements AgentSession {
   String? _currentTurnId;
   String? _effortOverride;
 
+  int _eventIdCounter = 0;
+
+  String _nextEventId() {
+    _eventIdCounter++;
+    return 'evt-codex-${threadId.hashCode.toRadixString(16)}-$_eventIdCounter';
+  }
+
+  /// Maps a Codex item type to a ToolKind and display tool name.
+  ({ToolKind kind, String toolName}) _codexToolKind(
+      String itemType, Map<String, dynamic> item) {
+    return switch (itemType) {
+      'commandExecution' => (kind: ToolKind.execute, toolName: 'Bash'),
+      'fileChange' => (kind: ToolKind.edit, toolName: 'FileChange'),
+      'mcpToolCall' => (
+          kind: ToolKind.mcp,
+          toolName: _mcpToolName(item),
+        ),
+      _ => (kind: ToolKind.other, toolName: itemType),
+    };
+  }
+
+  /// Constructs a Claude-compatible MCP tool name: `mcp__<server>__<tool>`.
+  String _mcpToolName(Map<String, dynamic> item) {
+    final server = item['server'] as String? ?? '';
+    final tool = item['tool'] as String? ?? '';
+    if (server.isNotEmpty && tool.isNotEmpty) {
+      return 'mcp__${server}__$tool';
+    }
+    return 'McpTool';
+  }
+
+  /// Extract file paths from a Codex item for the `locations` field.
+  List<String>? _extractCodexLocations(
+      String itemType, Map<String, dynamic> item) {
+    switch (itemType) {
+      case 'commandExecution':
+        // No file location for commands (cwd is not a target)
+        return null;
+      case 'fileChange':
+        final changes = item['changes'] as List<dynamic>? ?? const [];
+        final paths = changes
+            .whereType<Map<String, dynamic>>()
+            .map((c) => c['path'] as String?)
+            .whereType<String>()
+            .toList();
+        return paths.isNotEmpty ? paths : null;
+      case 'mcpToolCall':
+        // MCP tools don't have standard file paths
+        return null;
+      default:
+        return null;
+    }
+  }
+
   @override
   bool get isActive => !_disposed;
 
@@ -122,6 +176,26 @@ class CodexSession implements AgentSession {
           },
           toolUseId: params['itemId'] as String?,
         );
+        _eventsController.add(PermissionRequestEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          sessionId: threadId,
+          requestId: request.id.toString(),
+          toolName: 'Bash',
+          toolKind: ToolKind.execute,
+          toolInput: {
+            'command': params['command'] ?? '',
+            'cwd': params['cwd'] ?? '',
+          },
+          toolUseId: params['itemId'] as String?,
+          reason: params['reason'] as String?,
+          extensions: {
+            if (params['commandActions'] != null)
+              'codex.commandActions': params['commandActions'],
+          },
+        ));
       case 'item/fileChange/requestApproval':
         _emitApprovalRequest(
           request,
@@ -131,8 +205,40 @@ class CodexSession implements AgentSession {
           },
           toolUseId: params['itemId'] as String?,
         );
+        _eventsController.add(PermissionRequestEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          sessionId: threadId,
+          requestId: request.id.toString(),
+          toolName: 'Write',
+          toolKind: ToolKind.edit,
+          toolInput: {
+            'file_path': params['grantRoot'] ?? '',
+          },
+          toolUseId: params['itemId'] as String?,
+          extensions: {
+            if (params['grantRoot'] != null)
+              'codex.grantRoot': params['grantRoot'],
+          },
+        ));
       case 'item/tool/requestUserInput':
         _emitAskUserQuestion(request, params);
+        _eventsController.add(PermissionRequestEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          sessionId: threadId,
+          requestId: request.id.toString(),
+          toolName: 'AskUserQuestion',
+          toolKind: ToolKind.ask,
+          toolInput: {
+            'questions': params['questions'] ?? const [],
+          },
+          toolUseId: params['itemId'] as String?,
+        ));
       default:
         _process?.sendError(
           request.id,
@@ -218,6 +324,18 @@ class CodexSession implements AgentSession {
       'uuid': _nextUuid(),
       'model': thread?['model'] as String?,
     });
+
+    _eventsController.add(SessionInitEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.codex,
+      raw: params,
+      sessionId: threadId,
+      model: thread?['model'] as String?,
+      // Codex doesn't provide these in thread/started:
+      // cwd, availableTools, mcpServers, permissionMode,
+      // account, slashCommands, availableModels
+    ));
   }
 
   void _handleTurnStarted(Map<String, dynamic> params) {
@@ -252,12 +370,45 @@ class CodexSession implements AgentSession {
             'cwd': item['cwd'] ?? '',
           },
         );
+        _eventsController.add(ToolInvocationEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          callId: item['id'] as String? ?? '',
+          sessionId: threadId,
+          kind: ToolKind.execute,
+          toolName: 'Bash',
+          input: {
+            'command': item['command'] ?? '',
+            'cwd': item['cwd'] ?? '',
+          },
+          extensions: {
+            'codex.itemType': 'commandExecution',
+          },
+        ));
       case 'fileChange':
         _emitToolUse(
           toolUseId: item['id'] as String? ?? '',
           toolName: 'Write',
           toolInput: _fileChangeInput(item),
         );
+        final fileChangePaths = _extractCodexLocations('fileChange', item);
+        _eventsController.add(ToolInvocationEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          callId: item['id'] as String? ?? '',
+          sessionId: threadId,
+          kind: ToolKind.edit,
+          toolName: 'FileChange',
+          input: _fileChangeInput(item),
+          locations: fileChangePaths,
+          extensions: {
+            'codex.itemType': 'fileChange',
+          },
+        ));
       case 'mcpToolCall':
         _emitToolUse(
           toolUseId: item['id'] as String? ?? '',
@@ -268,6 +419,24 @@ class CodexSession implements AgentSession {
             'arguments': item['arguments'],
           },
         );
+        _eventsController.add(ToolInvocationEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          callId: item['id'] as String? ?? '',
+          sessionId: threadId,
+          kind: ToolKind.mcp,
+          toolName: _mcpToolName(item),
+          input: {
+            'server': item['server'],
+            'tool': item['tool'],
+            'arguments': item['arguments'],
+          },
+          extensions: {
+            'codex.itemType': 'mcpToolCall',
+          },
+        ));
       default:
         break;
     }
@@ -284,15 +453,42 @@ class CodexSession implements AgentSession {
     switch (type) {
       case 'agentMessage':
         _emitAssistantText(item['text'] as String? ?? '');
+        _eventsController.add(TextEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          sessionId: threadId,
+          text: item['text'] as String? ?? '',
+          kind: TextKind.text,
+        ));
       case 'reasoning':
         final summary = (item['summary'] as List?)?.join('\n') ?? '';
         final content = (item['content'] as List?)?.join('\n') ?? '';
         final thinking = summary.isNotEmpty ? summary : content;
         if (thinking.isNotEmpty) {
           _emitAssistantThinking(thinking);
+          _eventsController.add(TextEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.codex,
+            raw: params,
+            sessionId: threadId,
+            text: thinking,
+            kind: TextKind.thinking,
+          ));
         }
       case 'plan':
         _emitAssistantText(item['text'] as String? ?? '');
+        _eventsController.add(TextEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          sessionId: threadId,
+          text: item['text'] as String? ?? '',
+          kind: TextKind.plan,
+        ));
       case 'commandExecution':
         _emitToolResult(
           toolUseId: item['id'] as String? ?? '',
@@ -304,12 +500,43 @@ class CodexSession implements AgentSession {
           isError: (item['exitCode'] as int?) != null &&
               (item['exitCode'] as int?) != 0,
         );
+        final cmdIsError = (item['exitCode'] as int?) != null &&
+            (item['exitCode'] as int?) != 0;
+        _eventsController.add(ToolCompletionEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          callId: item['id'] as String? ?? '',
+          sessionId: threadId,
+          status: cmdIsError ? ToolCallStatus.failed : ToolCallStatus.completed,
+          output: {
+            'stdout': item['aggregatedOutput'] ?? '',
+            'stderr': '',
+            'exit_code': item['exitCode'],
+          },
+          isError: cmdIsError,
+        ));
       case 'fileChange':
         _emitToolResult(
           toolUseId: item['id'] as String? ?? '',
           result: _fileChangeResult(item),
           isError: (item['status'] as String?) == 'failed',
         );
+        final fileIsError = (item['status'] as String?) == 'failed';
+        final completedPaths = _extractCodexLocations('fileChange', item);
+        _eventsController.add(ToolCompletionEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          callId: item['id'] as String? ?? '',
+          sessionId: threadId,
+          status: fileIsError ? ToolCallStatus.failed : ToolCallStatus.completed,
+          output: _fileChangeResult(item),
+          isError: fileIsError,
+          locations: completedPaths,
+        ));
       case 'mcpToolCall':
         final error = item['error'] as Map<String, dynamic>?;
         final result = item['result'] as Map<String, dynamic>?;
@@ -318,6 +545,17 @@ class CodexSession implements AgentSession {
           result: result ?? error ?? {},
           isError: error != null,
         );
+        _eventsController.add(ToolCompletionEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.codex,
+          raw: params,
+          callId: item['id'] as String? ?? '',
+          sessionId: threadId,
+          status: error != null ? ToolCallStatus.failed : ToolCallStatus.completed,
+          output: result ?? error ?? {},
+          isError: error != null,
+        ));
       default:
         break;
     }
@@ -350,6 +588,24 @@ class CodexSession implements AgentSession {
         'cache_creation_input_tokens': 0,
       },
     });
+
+    _eventsController.add(TurnCompleteEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.codex,
+      raw: params,
+      sessionId: threadId,
+      isError: false,
+      subtype: 'success',
+      usage: TokenUsage(
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+        cacheReadTokens: cachedInput > 0 ? cachedInput : null,
+      ),
+      // Codex doesn't provide these:
+      // costUsd, durationMs, durationApiMs, numTurns,
+      // modelUsage, permissionDenials, errors, result
+    ));
   }
 
   Map<String, dynamic> _fileChangeInput(Map<String, dynamic> item) {
@@ -616,6 +872,18 @@ class CodexSession implements AgentSession {
       }
       _tempImagePaths.remove(path);
     }
+  }
+
+  /// Injects a notification for testing purposes.
+  @visibleForTesting
+  void injectNotification(JsonRpcNotification notification) {
+    _handleNotification(notification);
+  }
+
+  /// Injects a server request for testing purposes.
+  @visibleForTesting
+  void injectServerRequest(JsonRpcServerRequest request) {
+    _handleServerRequest(request);
   }
 
   void _dispose() {
