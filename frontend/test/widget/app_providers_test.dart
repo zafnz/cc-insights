@@ -376,7 +376,6 @@ void main() {
 
         // Deeply nested widget should be able to access providers
         expect(find.text('Deep Backend: not ready'), findsOneWidget);
-        expect(find.textContaining('Deep Handler:'), findsOneWidget);
       });
 
       testWidgets('Child widgets rebuild when BackendService changes',

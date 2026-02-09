@@ -930,8 +930,12 @@ class ChatState extends ChangeNotifier {
         eventHandler.handleEvent(this, event);
       },
       onError: (error) {
-        // Errors already handled by message stream subscription
         _t('ChatState', 'Event stream ERROR: $error');
+        _handleError(error);
+      },
+      onDone: () {
+        _t('ChatState', 'Event stream DONE (chat=${_data.id})');
+        _handleSessionEnd();
       },
     );
 

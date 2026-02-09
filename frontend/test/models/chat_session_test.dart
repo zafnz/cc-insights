@@ -82,8 +82,6 @@ class FakeBackendService extends BackendService {
 
 /// Fake implementation of [TestSession] for testing.
 class FakeTestSession implements TestSession {
-  final StreamController<SDKMessage> _messagesController =
-      StreamController<SDKMessage>.broadcast();
   final StreamController<sdk.InsightsEvent> _eventsController =
       StreamController<sdk.InsightsEvent>.broadcast();
   final StreamController<PermissionRequest> _permissionRequestsController =
@@ -94,9 +92,6 @@ class FakeTestSession implements TestSession {
   final List<String> sentMessages = [];
   bool killCalled = false;
   bool interruptCalled = false;
-
-  @override
-  Stream<SDKMessage> get messages => _messagesController.stream;
 
   @override
   Stream<sdk.InsightsEvent> get events => _eventsController.stream;
@@ -131,7 +126,6 @@ class FakeTestSession implements TestSession {
   @override
   Future<void> kill() async {
     killCalled = true;
-    await _messagesController.close();
     await _eventsController.close();
     await _permissionRequestsController.close();
     await _hookRequestsController.close();
@@ -159,11 +153,6 @@ class FakeTestSession implements TestSession {
   Future<void> Function(String message)? onTestSend;
 
   @override
-  void emitTestMessage(SDKMessage message) {
-    _messagesController.add(message);
-  }
-
-  @override
   void emitTestEvent(sdk.InsightsEvent event) {
     _eventsController.add(event);
   }
@@ -177,19 +166,14 @@ class FakeTestSession implements TestSession {
   }) async =>
       PermissionDenyResponse(message: 'Test deny');
 
-  /// Emit a message to the stream.
-  void emitMessage(SDKMessage message) {
-    _messagesController.add(message);
-  }
-
-  /// Emit an error to the stream.
+  /// Emit an error to the events stream.
   void emitError(Object error) {
-    _messagesController.addError(error);
+    _eventsController.addError(error);
   }
 
-  /// Complete the message stream (simulates session end).
+  /// Complete the events stream (simulates session end).
   void completeStream() {
-    _messagesController.close();
+    _eventsController.close();
   }
 
   /// Emit a permission request.
@@ -211,31 +195,6 @@ PermissionRequest createFakePermissionRequest({
     toolName: toolName,
     toolInput: toolInput ?? {'command': 'ls -la'},
     completer: completer,
-  );
-}
-
-/// Creates a fake [SDKMessage] for testing.
-SDKMessage createFakeAssistantMessage({
-  String text = 'Hello from Claude',
-}) {
-  return SDKAssistantMessage(
-    uuid: 'msg-1',
-    sessionId: 'fake-session-id',
-    message: APIAssistantMessage(
-      role: 'assistant',
-      content: [TextBlock(text: text)],
-    ),
-    rawJson: {
-      'type': 'assistant',
-      'uuid': 'msg-1',
-      'session_id': 'fake-session-id',
-      'message': {
-        'role': 'assistant',
-        'content': [
-          {'type': 'text', 'text': text},
-        ],
-      },
-    },
   );
 }
 
@@ -708,34 +667,6 @@ void main() {
         check(state.hasActiveSession).isFalse();
         check(state.pendingPermission).isNull();
         check(notified).isTrue();
-      });
-    });
-
-    group('message handling', () {
-      test('routes messages to handler', () async {
-        // Arrange
-        final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
-        );
-        final backend = FakeBackendService();
-        final session = FakeTestSession();
-        backend.sessionToReturn = session;
-
-        await state.startSession(
-          backend: backend,
-          eventHandler: eventHandler,
-          prompt: 'Hello',
-        );
-
-        // Act - emit a message
-        final message = createFakeAssistantMessage(text: 'Hello!');
-        session.emitMessage(message);
-
-        // Give the stream time to process
-        await Future<void>.delayed(Duration.zero);
-
-        // The message subscription is removed, EventHandler processes events instead
-        // No assertions needed here as this test was for the old message handler
       });
     });
 
