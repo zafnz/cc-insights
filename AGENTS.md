@@ -13,10 +13,12 @@ CC-Insights is a desktop application for monitoring and interacting with Claude 
 - Preserve working components (Dart SDK, display widgets)
 
 **Architecture:**
-- **Dart SDK** (`claude_dart_sdk/`): Flutter/Dart SDK that communicates directly with the Claude CLI
+- **Agent SDK Core** (`agent_sdk_core/`): Shared types, interfaces, and transport abstraction used by all backends
+- **Claude Dart SDK** (`claude_dart_sdk/`): Claude CLI backend - spawns Claude CLI as subprocess
+- **Codex Dart SDK** (`codex_dart_sdk/`): OpenAI Codex backend - communicates via JSON-RPC
 - **Frontend** (`frontend/`): Flutter desktop app (macOS) with Provider state management
 
-**Communication:** Dart SDK spawns the Claude CLI directly as a subprocess, communicating via stdin/stdout JSON lines using the CLI's stream-json protocol.
+**Communication:** Backend SDKs convert provider-specific wire formats into a unified `InsightsEvent` stream. The frontend consumes events through an `EventTransport` abstraction, sending commands back via `BackendCommand` types. See `docs/insights-protocol/` for the full protocol specification.
 
 ---
 
@@ -67,25 +69,43 @@ Project: CC-Insights
 
 ```
 cc-insights/
-├── claude_dart_sdk/                  # Dart SDK for Claude CLI
+├── agent_sdk_core/                   # Shared SDK types and interfaces
 │   ├── lib/
-│   │   ├── claude_sdk.dart           # Main export
+│   │   ├── agent_sdk_core.dart       # Main export
 │   │   └── src/
-│   │       ├── cli_process.dart      # CLI subprocess management
-│   │       ├── cli_session.dart      # CLI session implementation
-│   │       ├── cli_backend.dart      # CLI backend implementation
-│   │       ├── backend_factory.dart  # Backend type selection
-│   │       ├── backend_interface.dart # Abstract backend interface
-│   │       ├── protocol.dart         # Protocol (stdin/stdout JSON)
-│   │       ├── sdk_logger.dart       # SDK logging
-│   │       └── types/                # Type definitions
-│   │           ├── sdk_messages.dart
-│   │           ├── control_messages.dart
+│   │       ├── backend_interface.dart # AgentSession/AgentBackend interfaces
+│   │       ├── transport/            # Transport abstraction layer
+│   │       │   ├── event_transport.dart  # EventTransport interface
+│   │       │   └── in_process_transport.dart # In-process implementation
+│   │       └── types/                # Shared type definitions
+│   │           ├── backend_commands.dart  # BackendCommand sealed hierarchy
+│   │           ├── backend_provider.dart  # BackendProvider enum (claude, codex, etc.)
 │   │           ├── callbacks.dart
 │   │           ├── content_blocks.dart
+│   │           ├── control_messages.dart
+│   │           ├── insights_events.dart   # InsightsEvent sealed hierarchy
 │   │           ├── session_options.dart
+│   │           ├── tool_kind.dart         # ToolKind enum (ACP-aligned)
 │   │           └── usage.dart
-│   └── docs/                         # SDK-specific documentation
+│
+├── claude_dart_sdk/                  # Claude CLI backend
+│   ├── lib/
+│   │   ├── claude_sdk.dart           # Main export (re-exports agent_sdk_core)
+│   │   └── src/
+│   │       ├── cli_process.dart      # CLI subprocess management
+│   │       ├── cli_session.dart      # CLI session (emits InsightsEvents)
+│   │       ├── cli_backend.dart      # CLI backend implementation
+│   │       ├── backend_factory.dart  # Backend type selection
+│   │       ├── sdk_logger.dart       # SDK logging
+│   │       └── types/                # Re-export shims for agent_sdk_core types
+│
+├── codex_dart_sdk/                   # OpenAI Codex backend
+│   ├── lib/
+│   │   └── src/
+│   │       ├── codex_process.dart    # Codex CLI subprocess management
+│   │       ├── codex_session.dart    # Codex session (emits InsightsEvents)
+│   │       ├── codex_backend.dart    # Codex backend implementation
+│   │       └── json_rpc.dart         # JSON-RPC 2.0 protocol layer
 │
 ├── frontend/                         # Flutter desktop app
 │   ├── lib/
@@ -106,12 +126,12 @@ cc-insights/
 │   │   │   ├── file_manager_state.dart
 │   │   │   └── theme_state.dart
 │   │   ├── services/                 # Business logic
-│   │   │   ├── backend_service.dart  # SDK integration
+│   │   │   ├── backend_service.dart  # SDK integration + transport creation
+│   │   │   ├── event_handler.dart    # InsightsEvent → OutputEntry processing
 │   │   │   ├── git_service.dart
 │   │   │   ├── worktree_service.dart
 │   │   │   ├── persistence_service.dart
-│   │   │   ├── settings_service.dart
-│   │   │   └── sdk_message_handler.dart
+│   │   │   └── settings_service.dart
 │   │   ├── screens/                  # Full-screen views
 │   │   │   ├── main_screen.dart
 │   │   │   ├── welcome_screen.dart
@@ -153,7 +173,7 @@ cc-insights/
 │   ├── dart-sdk/                     # Dart SDK implementation docs
 │   ├── architecture/                 # Architecture documentation
 │   ├── features/                     # Feature documentation
-│   └── insights-protocol/            # Unified protocol docs
+│   └── insights-protocol/            # InsightsEvent protocol docs
 │
 ├── CLAUDE.md                         # Claude agent instructions
 ├── AGENTS.md                         # Agent definitions
@@ -179,34 +199,34 @@ Quick reference to SDK documentation in `docs/anthropic-agent-cli-sdk/`:
 
 ---
 
-## Message Flow
+## Insights Protocol & Message Flow
 
-The Dart SDK communicates directly with the Claude CLI using stream-json format:
+The frontend communicates with backend sessions through the **InsightsEvent protocol** - a provider-neutral event model that preserves the full richness of each backend while providing a unified consumption interface.
 
+**Data flow:**
 ```
-Claude CLI ← → CliProcess ← → CliSession ← → Chat model → UI
-              (stdin/stdout)   (SDK messages)
-```
-
-**Initialization:**
-1. `CliProcess` spawns Claude CLI with `--output-format stream-json --input-format stream-json`
-2. Dart sends `control_request` with `subtype: "initialize"`
-3. CLI responds with `control_response` containing available commands, models, etc.
-4. CLI sends `system` message with `subtype: "init"` (tools, MCP servers, etc.)
-5. Dart sends initial user message via `session.create`
-
-**Message flow:**
-```
-UI → Chat.sendMessage() → CliSession.send() →
-  stdin (JSON lines) → Claude CLI → Claude API
+Backend CLI ← → Process ← → Session ← → InProcessTransport ← → ChatState → UI
+              (wire format)  (InsightsEvents) (EventTransport)   (BackendCommands)
 ```
 
-**Permission requests:**
+**Key components:**
+- **InsightsEvent** (sealed class hierarchy) - Typed events emitted by all backends: `TextEvent`, `ToolInvocationEvent`, `ToolCompletionEvent`, `TurnCompleteEvent`, `PermissionRequestEvent`, `StreamDeltaEvent`, etc.
+- **BackendCommand** (sealed class hierarchy) - Commands sent from frontend to backend: `SendMessageCommand`, `PermissionResponseCommand`, `InterruptCommand`, `KillCommand`, etc.
+- **EventTransport** - Abstract interface between ChatState and backend sessions
+- **InProcessTransport** - Current implementation wrapping in-process `AgentSession` objects
+- **EventHandler** - Processes `InsightsEvent`s into `OutputEntry` models for the UI
+
+**Backend-specific conversion:**
+- Claude CLI: `CliSession` converts stream-json messages → `InsightsEvent`s (richest: cost tracking, context window, streaming deltas, subagents)
+- Codex CLI: `CodexSession` converts JSON-RPC notifications → `InsightsEvent`s (file diffs, command execution, plan/reasoning)
+
+**UI adapts based on available data** - feature-detect, not backend-detect:
+```dart
+if (turnComplete.costUsd != null) showCostBadge();  // Claude only
+if (turnComplete.reasoningEffort != null) showEffortSelector();  // Codex only
 ```
-Claude CLI → callback.request (can_use_tool) → CliSession.permissionRequests →
-  UI shows permission dialog → User approves/denies →
-  callback.response → Claude CLI
-```
+
+See `docs/insights-protocol/` for the complete protocol specification (event model, backend mappings, permissions, streaming, transport).
 
 ### Permission System
 

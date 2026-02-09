@@ -29,10 +29,12 @@ CC-Insights is a desktop application for monitoring and interacting with Claude 
 - Preserve working components (Dart SDK, display widgets)
 
 **Architecture:**
-- **Dart SDK** (`claude_dart_sdk/`): Flutter/Dart SDK that communicates directly with the Claude CLI
+- **Agent SDK Core** (`agent_sdk_core/`): Shared types, interfaces, and transport abstraction used by all backends
+- **Claude Dart SDK** (`claude_dart_sdk/`): Claude CLI backend - spawns Claude CLI as subprocess
+- **Codex Dart SDK** (`codex_dart_sdk/`): OpenAI Codex backend - communicates via JSON-RPC
 - **Frontend** (`frontend/`): Flutter desktop app (macOS) with Provider state management
 
-**Communication:** Dart SDK spawns the Claude CLI directly as a subprocess, communicating via stdin/stdout JSON lines using the CLI's stream-json protocol.
+**Communication:** Backend SDKs convert provider-specific wire formats into a unified `InsightsEvent` stream. The frontend consumes events through an `EventTransport` abstraction, sending commands back via `BackendCommand` types. See `docs/insights-protocol/` for the full protocol specification.
 
 ---
 

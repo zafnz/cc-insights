@@ -148,44 +148,46 @@ If you wish to contribute, this section is for you.
 
 ### Architecture
 
-CC-Insights communicates directly with the Claude CLI using the stream-json protocol. No Node.js backend required.
+CC-Insights uses a **multi-backend architecture** with a unified event protocol. Each backend SDK converts its native wire format into typed `InsightsEvent` objects, which the frontend consumes through an `EventTransport` abstraction. No Node.js backend required.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Flutter Desktop App                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
-│  │ Session List │  │  Agent Tree  │  │     Output Panel      │  │
-│  │              │  │              │  │  - Text output        │  │
-│  │ - Sessions   │  │ - Main       │  │  - Tool use/results   │  │
-│  │ - Status     │  │ - Subagents  │  │  - Questions          │  │
-│  │ - Costs      │  │ - Status     │  │  - Markdown render    │  │
-│  └──────────────┘  └──────────────┘  └───────────────────────┘  │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                  Dart SDK (claude_sdk)                   │   │
-│  │  - Direct CLI process management                         │   │
-│  │  - Type-safe protocol layer                              │   │
-│  │  - Session management & streaming                        │   │
-│  │  - Permission request handling                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ stdin/stdout (JSON lines)
-                              │ --output-format stream-json
-                              │ --input-format stream-json
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Claude CLI (claude)                        │
-│  - Spawned directly by Dart SDK                                 │
-│  - One process per session                                      │
-│  - Handles tool execution, permissions, MCP servers             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Claude API
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Anthropic API                              │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Flutter Desktop App                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐   │
+│  │ Worktree     │  │  Agent Tree  │  │     Output Panel        │   │
+│  │ & Chat List  │  │              │  │  - Text output          │   │
+│  │              │  │ - Main       │  │  - Tool use/results     │   │
+│  │ - Worktrees  │  │ - Subagents  │  │  - Permissions          │   │
+│  │ - Chats      │  │ - Status     │  │  - Streaming            │   │
+│  │ - Costs      │  │              │  │  - Markdown render      │   │
+│  └──────────────┘  └──────────────┘  └─────────────────────────┘   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              EventTransport (BackendCommands ↓ Events ↑)    │   │
+│  │  - InProcessTransport (current: wraps in-process sessions)  │   │
+│  │  - Future: WebSocketTransport, DockerTransport              │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────────────────┐  ┌─────────────────────────────┐  │
+│  │  Claude SDK (claude_sdk)    │  │  Codex SDK (codex_sdk)      │  │
+│  │  - CLI process management   │  │  - JSON-RPC 2.0 protocol    │  │
+│  │  - InsightsEvent emission   │  │  - InsightsEvent emission   │  │
+│  │  - Streaming deltas         │  │  - File diffs & reasoning   │  │
+│  │  - Cost/context tracking    │  │  - Plan mode support        │  │
+│  └─────────────────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+          │                                      │
+          │ stdin/stdout (stream-json)           │ JSON-RPC 2.0
+          ▼                                      ▼
+┌──────────────────────┐              ┌──────────────────────┐
+│   Claude CLI         │              │   Codex CLI          │
+│   (claude)           │              │   (codex)            │
+└──────────────────────┘              └──────────────────────┘
+          │                                      │
+          ▼                                      ▼
+┌──────────────────────┐              ┌──────────────────────┐
+│   Anthropic API      │              │   OpenAI API         │
+└──────────────────────┘              └──────────────────────┘
 ```
 
 
@@ -223,26 +225,43 @@ Those logs go to `~/claude_mitm.log` and are parsable with `jq`.
 
 ```
 cc-insights/
-├── claude_dart_sdk/                  # Dart SDK for Claude CLI
+├── agent_sdk_core/                   # Shared SDK types and interfaces
 │   ├── lib/
-│   │   ├── claude_sdk.dart           # Main export
+│   │   ├── agent_sdk_core.dart       # Main export
 │   │   └── src/
-│   │       ├── cli_process.dart      # CLI subprocess management
-│   │       ├── cli_session.dart      # CLI session implementation
-│   │       ├── cli_backend.dart      # CLI backend implementation
-│   │       ├── backend_factory.dart  # Backend type selection
-│   │       ├── backend_interface.dart # Abstract backend interface
-│   │       ├── protocol.dart         # Protocol (stdin/stdout JSON)
-│   │       ├── sdk_logger.dart       # SDK logging
-│   │       └── types/                # Type definitions
-│   │           ├── sdk_messages.dart
-│   │           ├── control_messages.dart
+│   │       ├── backend_interface.dart # AgentSession/AgentBackend interfaces
+│   │       ├── transport/            # Transport abstraction layer
+│   │       │   ├── event_transport.dart  # EventTransport interface
+│   │       │   └── in_process_transport.dart
+│   │       └── types/                # Shared type definitions
+│   │           ├── insights_events.dart   # InsightsEvent sealed hierarchy
+│   │           ├── backend_commands.dart  # BackendCommand sealed hierarchy
+│   │           ├── backend_provider.dart  # Provider enum (claude, codex, etc.)
+│   │           ├── tool_kind.dart         # ACP-aligned tool categories
 │   │           ├── callbacks.dart
 │   │           ├── content_blocks.dart
+│   │           ├── control_messages.dart
 │   │           ├── session_options.dart
 │   │           └── usage.dart
-│   ├── docs/                         # SDK documentation
-│   └── pubspec.yaml
+│
+├── claude_dart_sdk/                  # Claude CLI backend
+│   ├── lib/
+│   │   ├── claude_sdk.dart           # Main export (re-exports agent_sdk_core)
+│   │   └── src/
+│   │       ├── cli_process.dart      # CLI subprocess management
+│   │       ├── cli_session.dart      # Session impl (emits InsightsEvents)
+│   │       ├── cli_backend.dart      # Backend implementation
+│   │       ├── backend_factory.dart  # Backend type selection
+│   │       └── sdk_logger.dart       # SDK logging
+│   └── docs/                         # SDK documentation
+│
+├── codex_dart_sdk/                   # OpenAI Codex backend
+│   ├── lib/
+│   │   └── src/
+│   │       ├── codex_process.dart    # Codex CLI subprocess
+│   │       ├── codex_session.dart    # Session impl (emits InsightsEvents)
+│   │       ├── codex_backend.dart    # Backend implementation
+│   │       └── json_rpc.dart         # JSON-RPC 2.0 protocol
 │
 ├── frontend/                         # Flutter desktop app
 │   ├── lib/
@@ -250,77 +269,42 @@ cc-insights/
 │   │   ├── config/
 │   │   │   └── fonts.dart            # Font configuration
 │   │   ├── models/                   # Data models
-│   │   │   ├── project.dart          # Project model
-│   │   │   ├── worktree.dart         # Worktree model
-│   │   │   ├── chat.dart             # Chat model
-│   │   │   ├── conversation.dart     # Conversation model
-│   │   │   ├── agent.dart            # Agent model
-│   │   │   ├── output_entry.dart     # Output entry types
-│   │   │   ├── cost_tracking.dart    # Cost tracking
-│   │   │   └── context_tracker.dart  # Context usage tracking
+│   │   │   ├── project.dart
+│   │   │   ├── worktree.dart
+│   │   │   ├── chat.dart
+│   │   │   ├── conversation.dart
+│   │   │   ├── agent.dart
+│   │   │   ├── output_entry.dart
+│   │   │   ├── cost_tracking.dart
+│   │   │   └── context_tracker.dart
 │   │   ├── state/                    # State management
-│   │   │   ├── selection_state.dart  # Selection state
+│   │   │   ├── selection_state.dart
 │   │   │   ├── file_manager_state.dart
 │   │   │   └── theme_state.dart
 │   │   ├── services/                 # Business logic
-│   │   │   ├── backend_service.dart  # SDK integration
-│   │   │   ├── git_service.dart      # Git operations
-│   │   │   ├── worktree_service.dart # Worktree management
-│   │   │   ├── persistence_service.dart # Data persistence
-│   │   │   ├── settings_service.dart
-│   │   │   └── sdk_message_handler.dart
+│   │   │   ├── backend_service.dart  # SDK integration + transport creation
+│   │   │   ├── event_handler.dart    # InsightsEvent → OutputEntry processing
+│   │   │   ├── git_service.dart
+│   │   │   ├── worktree_service.dart
+│   │   │   ├── persistence_service.dart
+│   │   │   └── settings_service.dart
 │   │   ├── screens/                  # Full-screen views
-│   │   │   ├── main_screen.dart      # Main application screen
-│   │   │   ├── welcome_screen.dart   # Welcome/project selection
-│   │   │   ├── settings_screen.dart
-│   │   │   └── file_manager_screen.dart
 │   │   ├── panels/                   # UI panels
-│   │   │   ├── worktree_panel.dart
-│   │   │   ├── chats_panel.dart
-│   │   │   ├── agents_panel.dart
-│   │   │   ├── conversation_panel.dart
-│   │   │   ├── content_panel.dart
-│   │   │   ├── actions_panel.dart
-│   │   │   ├── file_tree_panel.dart
-│   │   │   ├── file_viewer_panel.dart
-│   │   │   └── combined_panels.dart  # Merged panel variants
 │   │   ├── widgets/                  # Reusable widgets
-│   │   │   ├── message_input.dart    # Chat input
-│   │   │   ├── tool_card.dart        # Tool use display
-│   │   │   ├── diff_view.dart        # Diff visualization
-│   │   │   ├── permission_dialog.dart
-│   │   │   ├── cost_indicator.dart
-│   │   │   ├── context_indicator.dart
-│   │   │   ├── markdown_renderer.dart
 │   │   │   ├── output_entries/       # Output entry widgets
 │   │   │   └── file_viewers/         # File viewer widgets
 │   │   └── testing/                  # Test utilities
-│   │       ├── mock_backend.dart
-│   │       ├── mock_data.dart
-│   │       └── message_log_player.dart
-│   ├── test/                         # Tests
-│   │   ├── test_helpers.dart         # Shared test helpers
-│   │   ├── widget/                   # Widget tests
-│   │   ├── models/                   # Model tests
-│   │   ├── services/                 # Service tests
-│   │   └── integration/              # Integration tests
-│   └── pubspec.yaml
+│   └── test/                         # Tests
 │
 ├── examples/                         # Example JSONL message logs
-│   ├── can-use-tool.jsonl
-│   ├── simple-subagent.jsonl
-│   └── ...
-│
 ├── tools/                            # Development utilities
-│   ├── claude-mitm.py                # MITM proxy for debugging
-│   └── anonymize_uuids.py
 │
 ├── docs/
 │   ├── anthropic-agent-cli-sdk/      # Claude SDK reference
 │   ├── dart-sdk/                     # Dart SDK implementation docs
 │   ├── architecture/                 # Architecture documentation
 │   ├── features/                     # Feature documentation
-│   └── insights-protocol/            # Unified protocol docs
+│   └── insights-protocol/            # InsightsEvent protocol docs
 │
 ├── CLAUDE.md                         # Claude agent instructions
 ├── AGENTS.md                         # Agent definitions
@@ -331,32 +315,37 @@ cc-insights/
 
 ## Protocol
 
-The Dart SDK communicates directly with the Claude CLI using the stream-json protocol over stdin/stdout.
+CC-Insights uses the **InsightsEvent protocol** - a provider-neutral event model that unifies communication across multiple AI coding agent backends.
 
-### Dart SDK → Claude CLI (stdin)
+### InsightsEvent (Backend → Frontend)
 
-| Message Type | Description |
+All backends emit typed `InsightsEvent` objects:
+
+| Event Type | Description |
+|------------|-------------|
+| `SessionInitEvent` | Session established (model, tools, capabilities) |
+| `TextEvent` | Text output (regular, thinking, plan, error) |
+| `ToolInvocationEvent` | Tool invoked (with ACP-aligned `ToolKind`) |
+| `ToolCompletionEvent` | Tool completed (with result/error) |
+| `TurnCompleteEvent` | Turn finished (cost, usage, duration) |
+| `PermissionRequestEvent` | Backend needs user permission |
+| `StreamDeltaEvent` | Partial content during streaming |
+| `SubagentSpawnEvent` | Subagent was spawned |
+| `ContextCompactionEvent` | Context was compacted |
+| `SessionStatusEvent` | Backend status change |
+
+### BackendCommand (Frontend → Backend)
+
+| Command Type | Description |
 |--------------|-------------|
-| `control_request` | Initialize session, configure options |
-| `session.create` | Start a new conversation |
-| `session.send` | Send user message to session |
-| `session.interrupt` | Interrupt running session |
-| `callback.response` | Response to permission request |
+| `SendMessageCommand` | Send user message |
+| `PermissionResponseCommand` | Allow/deny permission request |
+| `InterruptCommand` | Interrupt running session |
+| `KillCommand` | Terminate session |
+| `SetModelCommand` | Change model mid-session |
+| `SetPermissionModeCommand` | Change permission mode |
 
-### Claude CLI → Dart SDK (stdout)
-
-| Message Type | Description |
-|--------------|-------------|
-| `control_response` | Response to control request |
-| `session.created` | Session created successfully |
-| `system` | System messages (init, tools, etc.) |
-| `assistant` | Assistant responses with content |
-| `user` | User messages and tool results |
-| `result` | Turn completion status |
-| `callback.request` | Permission request (can_use_tool) |
-| `error` | Error occurred |
-
-See `docs/dart-sdk/02-protocol.md` for complete protocol specification.
+See `docs/insights-protocol/` for the complete protocol specification including backend-specific mappings.
 
 ## Development
 
