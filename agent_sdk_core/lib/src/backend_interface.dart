@@ -147,9 +147,6 @@ abstract class AgentSession {
   /// Whether the session is active.
   bool get isActive;
 
-  /// Stream of SDK messages (assistant, user, result, etc.).
-  Stream<SDKMessage> get messages;
-
   /// Stream of insights events.
   Stream<InsightsEvent> get events;
 

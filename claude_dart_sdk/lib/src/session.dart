@@ -40,15 +40,10 @@ class TestSession implements AgentSession {
   @override
   String? get resolvedSessionId => sdkSessionId ?? sessionId;
 
-  final _messagesController = StreamController<SDKMessage>.broadcast();
   final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
   final _hookRequestsController = StreamController<HookRequest>.broadcast();
-
-  /// Stream of SDK messages.
-  @override
-  Stream<SDKMessage> get messages => _messagesController.stream;
 
   /// Stream of insights events.
   @override
@@ -124,13 +119,6 @@ class TestSession implements AgentSession {
   // Test Helpers
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Emits a message to the [messages] stream.
-  @visibleForTesting
-  void emitTestMessage(SDKMessage message) {
-    if (_disposed) return;
-    _messagesController.add(message);
-  }
-
   /// Emits an event to the [events] stream.
   @visibleForTesting
   void emitTestEvent(InsightsEvent event) {
@@ -164,7 +152,6 @@ class TestSession implements AgentSession {
   void _dispose() {
     if (_disposed) return;
     _disposed = true;
-    _messagesController.close();
     _eventsController.close();
     _permissionRequestsController.close();
     _hookRequestsController.close();

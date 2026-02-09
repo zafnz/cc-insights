@@ -49,15 +49,11 @@ class CliSession {
     return 'evt-${sessionId.hashCode.toRadixString(16)}-$_eventIdCounter';
   }
 
-  final _messagesController = StreamController<SDKMessage>.broadcast();
   final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<CliPermissionRequest>.broadcast();
 
   bool _disposed = false;
-
-  /// Stream of SDK messages (assistant, user, result, stream_event, etc.).
-  Stream<SDKMessage> get messages => _messagesController.stream;
 
   /// Stream of insights events.
   Stream<InsightsEvent> get events => _eventsController.stream;
@@ -78,9 +74,6 @@ class CliSession {
       _handleMessage,
       onError: (Object error) {
         _t('CliSession', 'Message stream error: $error (session=$sessionId)');
-        if (!_disposed) {
-          _messagesController.addError(error);
-        }
       },
       onDone: () {
         _t('CliSession', 'Message stream done (session=$sessionId, disposed=$_disposed)');
@@ -154,32 +147,17 @@ class CliSession {
         break;
 
       case 'system':
-        // System message - parse and emit
-        final sdkMessage = SDKMessage.fromJson(json);
-        _messagesController.add(sdkMessage);
-
       case 'assistant':
       case 'user':
       case 'result':
       case 'stream_event':
-        // SDK messages - parse and emit
-        try {
-          final sdkMessage = SDKMessage.fromJson(json);
-          _messagesController.add(sdkMessage);
-        } catch (e) {
-          SdkLogger.instance.error('Failed to parse SDK message',
-              sessionId: sessionId, data: {'error': e.toString(), 'json': json});
-        }
+        // These message types are handled via InsightsEvents conversion below
+        break;
 
       default:
-        // Unknown message type - try to parse as SDK message anyway
-        try {
-          final sdkMessage = SDKMessage.fromJson(json);
-          _messagesController.add(sdkMessage);
-        } catch (_) {
-          SdkLogger.instance.debug('Unknown message type ignored',
-              sessionId: sessionId, data: {'type': type});
-        }
+        // Unknown message type - log and continue
+        SdkLogger.instance.debug('Unknown message type ignored',
+            sessionId: sessionId, data: {'type': type});
     }
 
     // Emit InsightsEvents
@@ -1047,7 +1025,6 @@ class CliSession {
     if (_disposed) return;
     _disposed = true;
     SdkLogger.instance.info('Session disposed', sessionId: sessionId);
-    _messagesController.close();
     _eventsController.close();
     _permissionRequestsController.close();
   }

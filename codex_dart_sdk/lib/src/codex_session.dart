@@ -37,7 +37,6 @@ class CodexSession implements AgentSession {
   @override
   String? get resolvedSessionId => threadId;
 
-  final _messagesController = StreamController<SDKMessage>.broadcast();
   final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionController =
       StreamController<PermissionRequest>.broadcast();
@@ -116,9 +115,6 @@ class CodexSession implements AgentSession {
 
   @override
   bool get isActive => !_disposed;
-
-  @override
-  Stream<SDKMessage> get messages => _messagesController.stream;
 
   @override
   Stream<InsightsEvent> get events => _eventsController.stream;
@@ -317,14 +313,6 @@ class CodexSession implements AgentSession {
     final id = thread?['id'] as String?;
     if (id != threadId) return;
 
-    _emitSdkMessage({
-      'type': 'system',
-      'subtype': 'init',
-      'session_id': threadId,
-      'uuid': _nextUuid(),
-      'model': thread?['model'] as String?,
-    });
-
     _eventsController.add(SessionInitEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -362,14 +350,6 @@ class CodexSession implements AgentSession {
     final type = item['type'] as String?;
     switch (type) {
       case 'commandExecution':
-        _emitToolUse(
-          toolUseId: item['id'] as String? ?? '',
-          toolName: 'Bash',
-          toolInput: {
-            'command': item['command'] ?? '',
-            'cwd': item['cwd'] ?? '',
-          },
-        );
         _eventsController.add(ToolInvocationEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
@@ -388,11 +368,6 @@ class CodexSession implements AgentSession {
           },
         ));
       case 'fileChange':
-        _emitToolUse(
-          toolUseId: item['id'] as String? ?? '',
-          toolName: 'Write',
-          toolInput: _fileChangeInput(item),
-        );
         final fileChangePaths = _extractCodexLocations('fileChange', item);
         _eventsController.add(ToolInvocationEvent(
           id: _nextEventId(),
@@ -410,15 +385,6 @@ class CodexSession implements AgentSession {
           },
         ));
       case 'mcpToolCall':
-        _emitToolUse(
-          toolUseId: item['id'] as String? ?? '',
-          toolName: 'McpTool',
-          toolInput: {
-            'server': item['server'],
-            'tool': item['tool'],
-            'arguments': item['arguments'],
-          },
-        );
         _eventsController.add(ToolInvocationEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
@@ -452,7 +418,6 @@ class CodexSession implements AgentSession {
     final type = item['type'] as String?;
     switch (type) {
       case 'agentMessage':
-        _emitAssistantText(item['text'] as String? ?? '');
         _eventsController.add(TextEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
@@ -467,7 +432,6 @@ class CodexSession implements AgentSession {
         final content = (item['content'] as List?)?.join('\n') ?? '';
         final thinking = summary.isNotEmpty ? summary : content;
         if (thinking.isNotEmpty) {
-          _emitAssistantThinking(thinking);
           _eventsController.add(TextEvent(
             id: _nextEventId(),
             timestamp: DateTime.now(),
@@ -479,7 +443,6 @@ class CodexSession implements AgentSession {
           ));
         }
       case 'plan':
-        _emitAssistantText(item['text'] as String? ?? '');
         _eventsController.add(TextEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
@@ -490,16 +453,6 @@ class CodexSession implements AgentSession {
           kind: TextKind.plan,
         ));
       case 'commandExecution':
-        _emitToolResult(
-          toolUseId: item['id'] as String? ?? '',
-          result: {
-            'stdout': item['aggregatedOutput'] ?? '',
-            'stderr': '',
-            'exit_code': item['exitCode'],
-          },
-          isError: (item['exitCode'] as int?) != null &&
-              (item['exitCode'] as int?) != 0,
-        );
         final cmdIsError = (item['exitCode'] as int?) != null &&
             (item['exitCode'] as int?) != 0;
         _eventsController.add(ToolCompletionEvent(
@@ -518,11 +471,6 @@ class CodexSession implements AgentSession {
           isError: cmdIsError,
         ));
       case 'fileChange':
-        _emitToolResult(
-          toolUseId: item['id'] as String? ?? '',
-          result: _fileChangeResult(item),
-          isError: (item['status'] as String?) == 'failed',
-        );
         final fileIsError = (item['status'] as String?) == 'failed';
         final completedPaths = _extractCodexLocations('fileChange', item);
         _eventsController.add(ToolCompletionEvent(
@@ -540,11 +488,6 @@ class CodexSession implements AgentSession {
       case 'mcpToolCall':
         final error = item['error'] as Map<String, dynamic>?;
         final result = item['result'] as Map<String, dynamic>?;
-        _emitToolResult(
-          toolUseId: item['id'] as String? ?? '',
-          result: result ?? error ?? {},
-          isError: error != null,
-        );
         _eventsController.add(ToolCompletionEvent(
           id: _nextEventId(),
           timestamp: DateTime.now(),
@@ -570,24 +513,6 @@ class CodexSession implements AgentSession {
     final inputTokens = (usage?['inputTokens'] as num?)?.toInt() ?? 0;
     final outputTokens = (usage?['outputTokens'] as num?)?.toInt() ?? 0;
     final cachedInput = (usage?['cachedInputTokens'] as num?)?.toInt() ?? 0;
-
-    _emitSdkMessage({
-      'type': 'result',
-      'subtype': 'success',
-      'uuid': _nextUuid(),
-      'session_id': threadId,
-      'duration_ms': 0,
-      'duration_api_ms': 0,
-      'is_error': false,
-      'num_turns': 1,
-      'total_cost_usd': 0.0,
-      'usage': {
-        'input_tokens': inputTokens,
-        'output_tokens': outputTokens,
-        'cache_read_input_tokens': cachedInput,
-        'cache_creation_input_tokens': 0,
-      },
-    });
 
     _eventsController.add(TurnCompleteEvent(
       id: _nextEventId(),
@@ -638,85 +563,6 @@ class CodexSession implements AgentSession {
     return {
       'diff': diffs.join('\n\n'),
     };
-  }
-
-  void _emitAssistantText(String text) {
-    _emitSdkMessage({
-      'type': 'assistant',
-      'uuid': _nextUuid(),
-      'session_id': threadId,
-      'message': {
-        'role': 'assistant',
-        'content': [
-          {'type': 'text', 'text': text}
-        ],
-      },
-    });
-  }
-
-  void _emitAssistantThinking(String text) {
-    _emitSdkMessage({
-      'type': 'assistant',
-      'uuid': _nextUuid(),
-      'session_id': threadId,
-      'message': {
-        'role': 'assistant',
-        'content': [
-          {'type': 'thinking', 'thinking': text, 'signature': ''}
-        ],
-      },
-    });
-  }
-
-  void _emitToolUse({
-    required String toolUseId,
-    required String toolName,
-    required Map<String, dynamic> toolInput,
-  }) {
-    _emitSdkMessage({
-      'type': 'assistant',
-      'uuid': _nextUuid(),
-      'session_id': threadId,
-      'message': {
-        'role': 'assistant',
-        'content': [
-          {
-            'type': 'tool_use',
-            'id': toolUseId,
-            'name': toolName,
-            'input': toolInput,
-          }
-        ],
-      },
-    });
-  }
-
-  void _emitToolResult({
-    required String toolUseId,
-    required dynamic result,
-    required bool isError,
-  }) {
-    _emitSdkMessage({
-      'type': 'user',
-      'uuid': _nextUuid(),
-      'session_id': threadId,
-      'message': {
-        'role': 'user',
-        'content': [
-          {
-            'type': 'tool_result',
-            'tool_use_id': toolUseId,
-            'content': result,
-            'is_error': isError,
-          }
-        ],
-      },
-    });
-  }
-
-  void _emitSdkMessage(Map<String, dynamic> raw) {
-    final message = SDKMessage.fromJson(raw);
-    _messagesController.add(message);
   }
 
   String _nextUuid() {
@@ -892,7 +738,6 @@ class CodexSession implements AgentSession {
     _deleteTempFiles(Set<String>.of(_tempImagePaths));
     _notificationSub?.cancel();
     _requestSub?.cancel();
-    _messagesController.close();
     _eventsController.close();
     _permissionController.close();
     _hookController.close();

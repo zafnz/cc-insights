@@ -258,9 +258,6 @@ class _CliSessionAdapter implements AgentSession {
   bool get isActive => !_disposed && _cliSession.isActive;
 
   @override
-  Stream<SDKMessage> get messages => _cliSession.messages;
-
-  @override
   Stream<InsightsEvent> get events => _cliSession.events;
 
   @override

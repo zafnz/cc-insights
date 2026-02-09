@@ -189,23 +189,25 @@ class MockBackendService extends BackendService {
       if (permTrigger != null && message.contains(permTrigger.triggerPhrase)) {
         debugPrint('MockBackend: Permission trigger matched! Emitting permission request...');
         // Emit assistant text saying it will use the tool
-        session.emitTestMessage(_createAssistantTextMessage(
+        _emitTextEvent(
+          session: session,
           sessionId: sdkSessionId,
           text: 'I\'ll run that command for you.',
-        ));
+        );
 
         // Emit the tool use message
-        final toolUseId = 'toolu_${_generateUuid()}';
-        session.emitTestMessage(_createAssistantToolUseMessage(
+        final toolUseId = 'toolu_${_generateEventId()}';
+        _emitToolInvocationEvent(
+          session: session,
           sessionId: sdkSessionId,
           toolName: permTrigger.toolName,
           toolInput: permTrigger.toolInput,
           toolUseId: toolUseId,
-        ));
+        );
 
         // Emit permission request and wait for response
         final response = await session.emitTestPermissionRequest(
-          id: _generateUuid(),
+          id: _generateEventId(),
           toolName: permTrigger.toolName,
           toolInput: permTrigger.toolInput,
           toolUseId: toolUseId,
@@ -215,35 +217,39 @@ class MockBackendService extends BackendService {
         switch (response) {
           case PermissionAllowResponse():
             // Emit tool result
-            session.emitTestMessage(_createUserToolResultMessage(
+            _emitToolCompletionEvent(
+              session: session,
               sessionId: sdkSessionId,
               toolUseId: toolUseId,
               result: 'Command executed successfully',
-            ));
+            );
 
             // Emit success reply
-            session.emitTestMessage(_createAssistantTextMessage(
+            _emitTextEvent(
+              session: session,
               sessionId: sdkSessionId,
               text: permTrigger.replyOnAllow,
-            ));
+            );
 
             // Emit result message to signal completion
-            session.emitTestMessage(_createResultMessage(
+            _emitTurnCompleteEvent(
+              session: session,
               sessionId: sdkSessionId,
-            ));
+            );
 
           case PermissionDenyResponse(message: final message):
             // Permission denied - emit error
-            session.emitTestMessage(_createAssistantTextMessage(
+            _emitTextEvent(
+              session: session,
               sessionId: sdkSessionId,
               text: 'Permission denied: $message',
-            ));
+            );
 
-            session.emitTestMessage(_createResultMessage(
+            _emitTurnCompleteEvent(
+              session: session,
               sessionId: sdkSessionId,
-              subtype: 'error',
               isError: true,
-            ));
+            );
         }
         return;
       }
@@ -253,15 +259,17 @@ class MockBackendService extends BackendService {
         final replyText = config.replyText.replaceAll('{message}', message);
 
         // Emit assistant text response
-        session.emitTestMessage(_createAssistantTextMessage(
+        _emitTextEvent(
+          session: session,
           sessionId: sdkSessionId,
           text: replyText,
-        ));
+        );
 
         // Emit result message to signal completion
-        session.emitTestMessage(_createResultMessage(
+        _emitTurnCompleteEvent(
+          session: session,
           sessionId: sdkSessionId,
-        ));
+        );
       }
     };
 
@@ -269,10 +277,11 @@ class MockBackendService extends BackendService {
     nextSessionConfig = const MockResponseConfig();
 
     // Emit system init message
-    session.emitTestMessage(_createSystemInitMessage(
+    _emitSessionInitEvent(
+      session: session,
       sessionId: sdkSessionId,
       cwd: cwd,
-    ));
+    );
 
     // Handle the initial prompt - check for permission trigger or auto-reply
     // Schedule with a small delay to allow subscription setup in startSession()
@@ -301,15 +310,17 @@ class MockBackendService extends BackendService {
         final replyText = config.replyText.replaceAll('{message}', prompt);
 
         // Emit assistant text response
-        session.emitTestMessage(_createAssistantTextMessage(
+        _emitTextEvent(
+          session: session,
           sessionId: sdkSessionId,
           text: replyText,
-        ));
+        );
 
         // Emit result message to signal completion
-        session.emitTestMessage(_createResultMessage(
+        _emitTurnCompleteEvent(
+          session: session,
           sessionId: sdkSessionId,
-        ));
+        );
       }
     });
 
@@ -366,173 +377,108 @@ class MockBackendService extends BackendService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Message Factory Helpers
+  // Event Emitters
   // ═══════════════════════════════════════════════════════════════════════════
 
-  int _messageCounter = 0;
+  int _eventCounter = 0;
 
-  String _generateUuid() => 'mock-${_messageCounter++}';
+  String _generateEventId() => 'mock-evt-${_eventCounter++}';
 
-  SDKSystemMessage _createSystemInitMessage({
+  void _emitSessionInitEvent({
+    required TestSession session,
     required String sessionId,
     required String cwd,
   }) {
-    final uuid = _generateUuid();
-    return SDKSystemMessage(
-      subtype: 'init',
-      uuid: uuid,
+    session.emitTestEvent(SessionInitEvent(
+      id: _generateEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: const {},
       sessionId: sessionId,
       model: 'claude-sonnet-4-20250514',
-      permissionMode: 'default',
-      tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
       cwd: cwd,
-      rawJson: {
-        'type': 'system',
-        'subtype': 'init',
-        'session_id': sessionId,
-      },
-    );
+      availableTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
+      permissionMode: 'default',
+    ));
   }
 
-  SDKAssistantMessage _createAssistantTextMessage({
+  void _emitTextEvent({
+    required TestSession session,
     required String sessionId,
     required String text,
-    String? parentToolUseId,
+    String? parentCallId,
   }) {
-    final uuid = _generateUuid();
-    return SDKAssistantMessage(
-      uuid: uuid,
+    session.emitTestEvent(TextEvent(
+      id: _generateEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: const {},
       sessionId: sessionId,
-      parentToolUseId: parentToolUseId,
-      message: APIAssistantMessage(
-        role: 'assistant',
-        id: 'msg_$uuid',
-        content: [TextBlock(text: text)],
-        stopReason: 'end_turn',
-      ),
-      rawJson: {
-        'type': 'assistant',
-        'uuid': uuid,
-        'session_id': sessionId,
-        'message': {
-          'role': 'assistant',
-          'content': [
-            {'type': 'text', 'text': text}
-          ],
-        },
-      },
-    );
+      text: text,
+      kind: TextKind.text,
+      parentCallId: parentCallId,
+    ));
   }
 
-  SDKResultMessage _createResultMessage({
-    required String sessionId,
-    String subtype = 'success',
-    int durationMs = 1000,
-    int numTurns = 1,
-    bool isError = false,
-  }) {
-    final uuid = _generateUuid();
-    return SDKResultMessage(
-      subtype: subtype,
-      uuid: uuid,
-      sessionId: sessionId,
-      durationMs: durationMs,
-      durationApiMs: durationMs ~/ 2,
-      isError: isError,
-      numTurns: numTurns,
-      totalCostUsd: 0.001,
-      usage: const Usage(inputTokens: 100, outputTokens: 50),
-      rawJson: {
-        'type': 'result',
-        'subtype': subtype,
-        'uuid': uuid,
-        'session_id': sessionId,
-        'duration_ms': durationMs,
-        'is_error': isError,
-        'num_turns': numTurns,
-      },
-    );
-  }
-
-  SDKAssistantMessage _createAssistantToolUseMessage({
+  void _emitToolInvocationEvent({
+    required TestSession session,
     required String sessionId,
     required String toolName,
     required Map<String, dynamic> toolInput,
     required String toolUseId,
-    String? parentToolUseId,
+    String? parentCallId,
   }) {
-    final uuid = _generateUuid();
-    return SDKAssistantMessage(
-      uuid: uuid,
+    session.emitTestEvent(ToolInvocationEvent(
+      id: _generateEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: const {},
+      callId: toolUseId,
       sessionId: sessionId,
-      parentToolUseId: parentToolUseId,
-      message: APIAssistantMessage(
-        role: 'assistant',
-        id: 'msg_$uuid',
-        content: [
-          ToolUseBlock(
-            id: toolUseId,
-            name: toolName,
-            input: toolInput,
-          ),
-        ],
-        stopReason: null,
-      ),
-      rawJson: {
-        'type': 'assistant',
-        'uuid': uuid,
-        'session_id': sessionId,
-        'message': {
-          'role': 'assistant',
-          'content': [
-            {
-              'type': 'tool_use',
-              'id': toolUseId,
-              'name': toolName,
-              'input': toolInput,
-            }
-          ],
-        },
-      },
-    );
+      kind: ToolKind.fromToolName(toolName),
+      toolName: toolName,
+      input: toolInput,
+      parentCallId: parentCallId,
+    ));
   }
 
-  SDKUserMessage _createUserToolResultMessage({
+  void _emitToolCompletionEvent({
+    required TestSession session,
     required String sessionId,
     required String toolUseId,
-    required String result,
+    required dynamic result,
     bool isError = false,
   }) {
-    final uuid = _generateUuid();
-    return SDKUserMessage(
-      uuid: uuid,
+    session.emitTestEvent(ToolCompletionEvent(
+      id: _generateEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: const {},
+      callId: toolUseId,
       sessionId: sessionId,
-      message: APIUserMessage(
-        role: 'user',
-        content: [
-          ToolResultBlock(
-            toolUseId: toolUseId,
-            content: result,
-            isError: isError,
-          ),
-        ],
-      ),
-      rawJson: {
-        'type': 'user',
-        'uuid': uuid,
-        'session_id': sessionId,
-        'message': {
-          'role': 'user',
-          'content': [
-            {
-              'type': 'tool_result',
-              'tool_use_id': toolUseId,
-              'content': result,
-              'is_error': isError,
-            }
-          ],
-        },
-      },
-    );
+      status: isError ? ToolCallStatus.failed : ToolCallStatus.completed,
+      output: result,
+      isError: isError,
+    ));
+  }
+
+  void _emitTurnCompleteEvent({
+    required TestSession session,
+    required String sessionId,
+    bool isError = false,
+  }) {
+    session.emitTestEvent(TurnCompleteEvent(
+      id: _generateEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.claude,
+      raw: const {},
+      sessionId: sessionId,
+      isError: isError,
+      subtype: isError ? 'error' : 'success',
+      usage: const TokenUsage(inputTokens: 100, outputTokens: 50),
+      costUsd: 0.001,
+      durationMs: 1000,
+      numTurns: 1,
+    ));
   }
 }
