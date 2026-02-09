@@ -120,8 +120,18 @@ class SdkLogger {
   static final SdkLogger instance = SdkLogger._();
 
   bool _debugEnabled = false;
+  bool _excludeDeltas = true;
   File? _logFile;
   String? _logFilePath;
+
+  /// JSON-RPC method names that are streaming deltas.
+  /// When [excludeDeltas] is true, incoming messages with these methods
+  /// are not written to the trace file.
+  static const _deltaMethodSuffixes = [
+    '/delta',    // item/agentMessage/delta, item/plan/delta
+    'Delta',     // item/commandExecution/outputDelta
+    '_delta',    // codex/event/agent_message_content_delta
+  ];
 
   // Write queue to prevent concurrent write corruption
   final _writeQueue = <String>[];
@@ -139,6 +149,17 @@ class SdkLogger {
     if (value) {
       info('Debug logging enabled');
     }
+  }
+
+  /// Whether to exclude streaming delta messages from the trace file.
+  ///
+  /// When true (the default), high-frequency delta notifications
+  /// (e.g. `item/agentMessage/delta`) are not written to the trace file.
+  /// They are still emitted to the [logs] stream.
+  bool get excludeDeltas => _excludeDeltas;
+
+  set excludeDeltas(bool value) {
+    _excludeDeltas = value;
   }
 
   /// Stream of all log entries.
@@ -212,8 +233,6 @@ class SdkLogger {
   /// can display these messages.
   void trace(String tag, String message) {
     if (!_debugEnabled) return;
-    // Write to file log only — avoid print() which writes to stdout.
-    _queueWrite('[CCI:$tag] $message');
 
     final entry = LogEntry(
       level: LogLevel.debug,
@@ -299,8 +318,18 @@ class SdkLogger {
       _logsController.add(entry);
     }
 
+    // Skip file write for delta messages when excludeDeltas is enabled
+    if (_excludeDeltas && _isDeltaMessage(content)) return;
+
     // Write to file if enabled
     _queueWrite(entry.toJsonLine());
+  }
+
+  /// Returns true if the message is a streaming delta notification.
+  bool _isDeltaMessage(Map<String, dynamic> content) {
+    final method = content['method'] as String?;
+    if (method == null) return false;
+    return _deltaMethodSuffixes.any(method.endsWith);
   }
 
   /// Log a plain text message with direction.
@@ -343,7 +372,5 @@ class SdkLogger {
     if (!_logsController.isClosed) {
       _logsController.add(entry);
     }
-
-    _queueWrite(entry.toJsonLine());
   }
 }

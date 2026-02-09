@@ -435,6 +435,16 @@ class EventHandler {
         );
       }
 
+      // Update context tracker with current token counts
+      if (event.usage != null) {
+        final u = event.usage!;
+        chat.updateContextFromUsage({
+          'input_tokens': u.inputTokens,
+          'cache_creation_input_tokens': u.cacheCreationTokens ?? 0,
+          'cache_read_input_tokens': u.cacheReadTokens ?? 0,
+        });
+      }
+
       chat.setWorking(false);
 
       // Handle no-output result: if no assistant output was added during this

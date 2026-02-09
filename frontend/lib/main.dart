@@ -301,14 +301,24 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Enable SDK debug logging to file
     _initializeSdkLogging();
 
-    // Forward SDK trace/log entries into the app LogService so they appear
-    // in the log viewer. Only forward trace entries (tag stored in `text`)
-    // to avoid duplicating full message payloads.
+    // Forward SDK log entries into the app LogService so they appear
+    // in the log viewer. Only forward internal entries (trace, warnings, etc.)
+    // — raw message payloads (stdin/stdout/stderr) stay in the trace file only.
     _sdkLogSubscription = sdk.SdkLogger.instance.logs.listen((entry) {
-      if (entry.text != null && entry.direction == sdk.LogDirection.internal) {
-        // Trace entry: tag is in `text`, message is the log line
-        LogService.instance.trace('CCI:${entry.text}', entry.message);
-      }
+      if (entry.direction != sdk.LogDirection.internal) return;
+
+      final source = entry.text != null ? 'CCI:${entry.text}' : 'SDK';
+      final level = switch (entry.level) {
+        sdk.LogLevel.debug => LogLevel.debug,
+        sdk.LogLevel.info => LogLevel.info,
+        sdk.LogLevel.warning => LogLevel.warn,
+        sdk.LogLevel.error => LogLevel.error,
+      };
+      LogService.instance.log(
+        source: source,
+        level: level,
+        message: entry.message,
+      );
     });
 
     // Create or use injected BackendService
@@ -414,6 +424,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     final logPath = _expandPath(RuntimeConfig.instance.traceLogPath);
 
     sdk.SdkLogger.instance.debugEnabled = shouldLog;
+    sdk.SdkLogger.instance.excludeDeltas =
+        RuntimeConfig.instance.traceExcludeDeltas;
     if (shouldLog && logPath.isNotEmpty) {
       sdk.SdkLogger.instance.enableFileLogging(logPath);
     } else {
@@ -513,6 +525,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Enable debug mode and file logging based on RuntimeConfig
     final shouldLog = RuntimeConfig.instance.debugSdkLogging;
     sdk.SdkLogger.instance.debugEnabled = shouldLog;
+    sdk.SdkLogger.instance.excludeDeltas =
+        RuntimeConfig.instance.traceExcludeDeltas;
     if (shouldLog && logPath.isNotEmpty) {
       sdk.SdkLogger.instance.enableFileLogging(logPath);
     }

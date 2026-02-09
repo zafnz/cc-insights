@@ -115,6 +115,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to enable debug SDK logging.
   bool _debugSdkLogging = false;
 
+  /// Whether to exclude streaming delta messages from the trace log.
+  bool _traceExcludeDeltas = true;
+
   /// Path to the SDK trace log file.
   String _traceLogPath = '~/ccinsights.trace.jsonl';
 
@@ -408,6 +411,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether to exclude streaming delta messages from the trace log.
+  bool get traceExcludeDeltas => _traceExcludeDeltas;
+
+  set traceExcludeDeltas(bool value) {
+    if (_traceExcludeDeltas != value) {
+      _traceExcludeDeltas = value;
+      notifyListeners();
+    }
+  }
+
   /// Path to the SDK trace log file.
   String get traceLogPath => _traceLogPath;
 
@@ -523,6 +536,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._defaultPermissionMode = 'default';
     _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;
+    _instance._traceExcludeDeltas = true;
     _instance._traceLogPath = '~/ccinsights.trace.jsonl';
     _instance._loggingFilePath = '~/ccinsights.app.jsonl';
     _instance._loggingMinimumLevel = 'debug';

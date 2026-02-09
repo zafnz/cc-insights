@@ -362,6 +362,16 @@ class SettingsService extends ChangeNotifier {
         defaultValue: false,
       ),
       SettingDefinition(
+        key: 'developer.traceExcludeDeltas',
+        title: 'Exclude Streaming Deltas from Trace',
+        description:
+            'Exclude high-frequency streaming delta messages '
+            '(e.g. item/agentMessage/delta) from the trace log. '
+            'Dramatically reduces trace file size.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+      SettingDefinition(
         key: 'developer.traceLogPath',
         title: 'Trace Log Path',
         description:
@@ -619,6 +629,8 @@ class SettingsService extends ChangeNotifier {
         config.showRawMessages = value as bool;
       case 'developer.debugSdkLogging':
         config.debugSdkLogging = value as bool;
+      case 'developer.traceExcludeDeltas':
+        config.traceExcludeDeltas = value as bool;
       case 'developer.traceLogPath':
         config.traceLogPath = value as String;
       case 'developer.markdownBackend':

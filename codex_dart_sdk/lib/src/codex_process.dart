@@ -133,6 +133,7 @@ class CodexProcess {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
+          SdkLogger.instance.logStderr(line);
           _logsController.add(line);
           _logEntriesController.add(LogEntry(
             level: LogLevel.debug,

@@ -1,119 +1,274 @@
 # Logging System
 
-This document describes the comprehensive logging system for debugging the backend.
+CC-Insights has two separate logging systems serving distinct purposes: a **trace log** for raw backend protocol messages, and an **application log** for everything else.
 
-## Architecture
+## Overview
 
-### Dart SDK
+```mermaid
+graph TB
+    subgraph Backends
+        CLI[Claude CliProcess]
+        CODEX[Codex JsonRpcClient]
+        CODEX_STDERR[Codex CodexProcess stderr]
+    end
 
-**CLI Process** (`claude_dart_sdk/lib/src/cli_process.dart`):
-- Captures all stderr from the Claude CLI process
-- Exposes stderr as a `Stream<String>` via `AgentBackend.logs`
-- Writes logs to `~/tmp/claude-agent-insights/dart-sdk-*.log`
-- Prints all CLI logs to Flutter console with `[backend]` prefix
+    subgraph "SdkLogger singleton"
+        direction TB
+        LI[logIncoming]
+        LO[logOutgoing]
+        LS[logStderr]
+        TR[trace]
+        LOG["_log: debug/info/warning/error"]
+    end
 
-### Flutter App
+    TRACE["~/ccinsights.trace.jsonl\nraw protocol messages only"]
 
-**BackendService** (`flutter_app/lib/services/backend_service.dart`):
-- Exposes `logs` stream and `logFilePath` from the Dart SDK
-- Makes logs accessible throughout the app
+    BRIDGE["main.dart bridge\nSdkLogger.logs listener"]
 
-**LogViewer Widget** (`flutter_app/lib/widgets/log_viewer.dart`):
-- Real-time log display with auto-scroll
-- Color coding for errors (red) and warnings (orange)
-- Copy log file path to clipboard
-- Open log file directory in Finder
-- Clear logs button
-- Access via the document icon in the top-right of the app
+    subgraph "LogService singleton"
+        direction TB
+        LS_LOG[log]
+        BUFFER["In-memory ring buffer\n10,000 entries"]
+        APP_FILE["~/ccinsights.app.jsonl"]
+        UI["Log Viewer UI\nrate-limited notifications"]
+    end
 
-## Where Logs Go
+    CLI -- "stdin JSON" --> LO
+    CLI -- "stdout JSON" --> LI
+    CLI -- "stderr lines" --> LS
+    CODEX -- "stdin JSON-RPC" --> LO
+    CODEX -- "stdout JSON-RPC" --> LI
+    CODEX_STDERR -- "stderr lines" --> LS
 
-### 1. **Console Output** (stdout/stderr of the app)
-All backend logs are printed to the Flutter app's console with the `[backend]` prefix. When you run the app with `flutter run -d macos`, you'll see logs in the terminal.
+    LI -- "_queueWrite" --> TRACE
+    LO -- "_queueWrite" --> TRACE
+    LS -- "_queueWrite" --> TRACE
 
-Example:
+    CLI -- "_t helper" --> TR
+    LOG -. "stream only" .-> BRIDGE
+    TR -. "stream only" .-> BRIDGE
+
+    BRIDGE --> LS_LOG
+    LS_LOG --> BUFFER
+    LS_LOG --> APP_FILE
+    BUFFER --> UI
 ```
-[backend] [2024-01-22T10:30:45.123Z] [INFO] Backend process starting {"pid":12345}
-[backend] [2024-01-22T10:30:45.234Z] [INFO] Backend process ready {"logFile":"/tmp/claude-agent-insights/backend-2024-01-22T10-30-45.log"}
+
+## Two Log Files
+
+| File | Default Path | Contents | Format |
+|------|-------------|----------|--------|
+| **Trace log** | `~/ccinsights.trace.jsonl` | Raw JSON messages between backends and their CLI subprocesses | JSONL (one JSON object per line) |
+| **App log** | `~/ccinsights.app.jsonl` | Application-level events: diagnostics, warnings, errors, state changes | JSONL (one JSON object per line) |
+
+### Trace Log
+
+Contains **only** raw protocol messages — the exact JSON exchanged over stdin/stdout with backend CLIs, plus stderr output. This is the primary debugging tool for protocol-level issues.
+
+Every line is a valid JSON object with this structure:
+
+```jsonc
+// Incoming/outgoing message (stdin/stdout)
+{"timestamp":"...","level":"debug","direction":"stdout","content":{/* raw CLI JSON */}}
+
+// Stderr line
+{"timestamp":"...","level":"debug","direction":"stderr","text":"..."}
 ```
 
-### 2. **Log Files** (persistent)
-Logs are also written to files for debugging later:
-- Backend logs: `/tmp/claude-agent-insights/backend-<timestamp>.log`
-- Dart SDK logs: `/tmp/claude-agent-insights/dart-sdk-<timestamp>.log`
+The `direction` field indicates:
+- `stdin` — message sent TO the CLI
+- `stdout` — message received FROM the CLI
+- `stderr` — stderr output from the CLI process
 
-To find the log file path:
-1. Click the document icon in the app's title bar
-2. The log file path is shown at the top
-3. Click "Copy" to copy the path or "Open Folder" to view in Finder
+### App Log
 
-### 3. **In-App Log Viewer**
-Click the document icon (📄) in the top-right of the app to open the log viewer. This shows:
-- Real-time log stream
-- Auto-scroll to latest logs
-- Color-coded errors and warnings
-- Search/filter capabilities
-- Links to open log files
+Contains structured application-level log entries:
 
-## Log Levels
+```jsonc
+{"timestamp":"...","level":"info","source":"App","message":"CC Insights starting up"}
+{"timestamp":"...","level":"warn","source":"SDK","message":"systemPrompt is ignored by Codex backend"}
+{"timestamp":"...","level":"debug","source":"CCI:ChatState","message":"sendMessage: hello (chat=chat-123, images=0)"}
+```
 
-### Backend
-- **DEBUG**: Message parsing, SDK message types, callback details
-- **INFO**: Session lifecycle, major operations, successful completions
-- **WARN**: Unknown messages, session not found, timeouts
-- **ERROR**: Failures, exceptions with stack traces
+## Components
 
-### Changing Log Level
-Set the `DEBUG` environment variable to enable debug logging:
+### SdkLogger (`agent_sdk_core/lib/src/sdk_logger.dart`)
+
+A singleton that serves as the central hub for all SDK-level logging. It has two output channels:
+
+1. **File output** (trace log) — only for raw protocol messages
+2. **Stream output** (`logs`) — for all entries, consumed by the frontend bridge
+
+```mermaid
+graph LR
+    subgraph "SdkLogger Methods"
+        direction TB
+        A["logIncoming(json)"]
+        B["logOutgoing(json)"]
+        C["logStderr(line)"]
+        D["trace(tag, msg)"]
+        E["debug/info/warning/error(msg)"]
+    end
+
+    subgraph "Output Channels"
+        FILE["Trace file\n_queueWrite"]
+        STREAM["logs stream\nStreamController"]
+    end
+
+    A -- "writes to file" --> FILE
+    B -- "writes to file" --> FILE
+    C -- "writes to file" --> FILE
+    D -. "stream only" .-> STREAM
+    E -. "stream only" .-> STREAM
+    A -- "also emits" --> STREAM
+    B -- "also emits" --> STREAM
+    C -- "also emits" --> STREAM
+```
+
+**Key design rule:** Only `logIncoming`, `logOutgoing`, and `logStderr` write to the trace file. Internal messages (`trace`, `debug`, `info`, `warning`, `error`) emit to the `logs` stream only, where they are picked up by the frontend bridge and routed to `LogService`.
+
+#### Write Queue
+
+File writes use a queue to prevent corruption from concurrent calls:
+
+```dart
+void _queueWrite(String line) {
+  _writeQueue.add(line);
+  _processWriteQueue();  // drains queue sequentially
+}
+```
+
+Since Dart is single-threaded, the `_isWriting` flag acts as a cooperative mutex — if a write is in progress, new entries queue up and the active writer drains them all.
+
+#### Enabling
+
+SdkLogger requires **both** `debugEnabled = true` and a file path to write:
+
+```mermaid
+graph TD
+    CALL["logIncoming / logOutgoing / logStderr"]
+    CHECK{debugEnabled?}
+    ENTRY["Create LogEntry"]
+    STREAM["Emit to logs stream"]
+    FILECHECK{"_logFile != null?"}
+    WRITE["_queueWrite(entry.toJsonLine())"]
+    DROP["(no-op)"]
+
+    CALL --> CHECK
+    CHECK -- "false" --> DROP
+    CHECK -- "true" --> ENTRY
+    ENTRY --> STREAM
+    ENTRY --> FILECHECK
+    FILECHECK -- "yes" --> WRITE
+    FILECHECK -- "no" --> DROP
+```
+
+### LogService (`frontend/lib/services/log_service.dart`)
+
+The application-level logging singleton. Manages:
+
+- **In-memory ring buffer** (10,000 entries) for the log viewer UI
+- **File output** to `~/ccinsights.app.jsonl` (with configurable minimum level)
+- **Rate-limited notifications** (max 10/sec) to `ChangeNotifier` listeners
+
+Log levels (ordered by severity):
+`trace` < `debug` < `info` < `notice` < `warn` < `error`
+
+### Frontend Bridge (`frontend/lib/main.dart`)
+
+Connects `SdkLogger` to `LogService` by listening to the `SdkLogger.logs` stream and forwarding internal entries:
+
+```dart
+SdkLogger.instance.logs.listen((entry) {
+  if (entry.direction != LogDirection.internal) return;
+  // Map SDK log levels to LogService levels and forward
+  LogService.instance.log(source: ..., level: ..., message: entry.message);
+});
+```
+
+Only `internal` direction entries are forwarded. Raw protocol messages (`stdin`/`stdout`/`stderr`) are already written to the trace file by `SdkLogger` and are not duplicated into the app log.
+
+## Backend Integration
+
+Both backends route their protocol I/O through `SdkLogger`:
+
+### Claude CLI Backend
+
+`CliProcess` (`claude_dart_sdk/lib/src/cli_process.dart`) calls:
+- `SdkLogger.instance.logIncoming(json)` — on each parsed stdout JSON line
+- `SdkLogger.instance.logOutgoing(message)` — on each stdin send
+- `SdkLogger.instance.logStderr(line)` — on each stderr line
+
+### Codex Backend
+
+`JsonRpcClient` (`codex_dart_sdk/lib/src/json_rpc.dart`) calls:
+- `SdkLogger.instance.logIncoming(json)` — on each parsed JSON-RPC response/notification
+- `SdkLogger.instance.logOutgoing(message)` — on each JSON-RPC request/notification sent
+
+`CodexProcess` (`codex_dart_sdk/lib/src/codex_process.dart`) calls:
+- `SdkLogger.instance.logStderr(line)` — on each stderr line
+
+The Codex backend also has a separate edge log (`CODEX_RPC_LOG_FILE` env var) that predates the unified trace log. The `SdkLogger` integration is the canonical path.
+
+## Configuration
+
+All logging settings are in **Settings > Developer**:
+
+| Setting | RuntimeConfig Key | Default | Description |
+|---------|------------------|---------|-------------|
+| Debug SDK Logging | `developer.debugSdkLogging` | `false` | Enables trace file writing and diagnostic messages |
+| Exclude Streaming Deltas | `developer.traceExcludeDeltas` | `true` | Exclude high-frequency delta messages from trace file |
+| Trace Log Path | `developer.traceLogPath` | `~/ccinsights.trace.jsonl` | Path to the trace log file |
+| App Log Path | `logging.filePath` | `~/ccinsights.app.jsonl` | Path to the application log file |
+| Minimum Log Level | `logging.minimumLevel` | `debug` | Minimum level for app log file output |
+
+Environment variables (override settings):
+- `CLAUDE_SDK_DEBUG=true` — enable SdkLogger debug mode
+- `CLAUDE_SDK_LOG_FILE=/path` — set trace log path
+
+### Delta Filtering
+
+The Codex backend sends high-frequency streaming delta notifications (one per token). These can make a brief conversation produce thousands of trace log lines. By default, delta messages are **excluded** from the trace file.
+
+Filtered method patterns (any method ending with these suffixes):
+- `*/delta` — e.g. `item/agentMessage/delta`, `item/plan/delta`
+- `*Delta` — e.g. `item/commandExecution/outputDelta`, `item/reasoning/summaryTextDelta`
+- `*_delta` — e.g. `codex/event/agent_message_content_delta`, `codex/event/agent_message_delta`
+
+Delta messages are still emitted to the `SdkLogger.logs` stream (and therefore available in the app log viewer). Only the trace file write is skipped.
+
+To include deltas in the trace file, set **Exclude Streaming Deltas** to `false` in Settings > Developer.
+
+## Debugging Tips
+
+### Watching the trace log live
+
 ```bash
-DEBUG=true flutter run -d macos
+tail -f ~/ccinsights.trace.jsonl
 ```
 
-Or set environment variable `LOG_LEVEL=debug` before starting the app.
+### Filtering by direction
 
-## Examples
+```bash
+# Only outgoing messages (what we send to CLIs)
+grep '"direction":"stdin"' ~/ccinsights.trace.jsonl | jq .
 
-### Debugging Session Creation
-Look for these log entries:
-```
-[INFO] Creating session {"sessionId":"...","cwd":"...","promptLength":123}
-[DEBUG] Starting SDK query {"sessionId":"..."}
-[INFO] Session created successfully {"sessionId":"...","totalSessions":1}
-[INFO] Processing SDK messages {"sessionId":"..."}
-```
+# Only incoming messages (what CLIs send back)
+grep '"direction":"stdout"' ~/ccinsights.trace.jsonl | jq .
 
-### Debugging Errors
-Errors include full context:
-```
-[ERROR] Failed to create session {"sessionId":"...","error":"..."}
-[ERROR] SDK error during message processing {"sessionId":"...","error":"...","stack":"..."}
+# Only stderr
+grep '"direction":"stderr"' ~/ccinsights.trace.jsonl | jq .
 ```
 
-### Debugging Permissions
+### Extracting raw protocol content
+
+```bash
+# Pretty-print the raw JSON content of each message
+jq '.content // .text' ~/ccinsights.trace.jsonl
 ```
-[INFO] Requesting permission {"sessionId":"...","callbackId":"...","toolName":"Read"}
-[INFO] Permission callback resolved {"sessionId":"...","callbackId":"...","behavior":"allow"}
+
+### Watching app-level events
+
+```bash
+tail -f ~/ccinsights.app.jsonl | jq .
 ```
-
-## Tips
-
-1. **Enable debug logging** for detailed message tracing during development
-2. **Use the in-app log viewer** for real-time debugging while the app is running
-3. **Check log files** after crashes or for historical debugging
-4. **Filter logs** by searching for session IDs to trace specific conversations
-5. **Look for ERROR entries** first when debugging issues
-
-## Troubleshooting
-
-### No logs appearing?
-- Check that the backend is running (green indicator in title bar)
-- Verify the log file path exists
-- Try restarting the app
-
-### Log files too large?
-- Log files are created per session (new file each time app starts)
-- Manually delete old files from `/tmp/claude-agent-insights/`
-- Consider adding log rotation if needed
-
-### Missing debug logs?
-- Ensure `DEBUG=true` is set when running the app

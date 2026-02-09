@@ -128,6 +128,7 @@ class JsonRpcClient {
         .replaceAll('\u2028', r'\u2028')
         .replaceAll('\u2029', r'\u2029');
     _logEdge('sdk-stdin', message);
+    SdkLogger.instance.logOutgoing(message);
     _protocolLogEntries.add(LogEntry(
       level: LogLevel.debug,
       message: 'SEND',
@@ -157,6 +158,7 @@ class JsonRpcClient {
     }
 
     _logEdge('sdk-stdout', json);
+    SdkLogger.instance.logIncoming(json);
     _protocolLogEntries.add(LogEntry(
       level: LogLevel.debug,
       message: 'RECV',
