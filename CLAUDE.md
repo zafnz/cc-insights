@@ -83,24 +83,33 @@ Project: CC-Insights
 
 ```
 cc-insights/
+├── agent_sdk_core/                   # Shared SDK types and interfaces
+│   ├── lib/
+│   │   ├── agent_sdk_core.dart       # Main export
+│   │   └── src/
+│   │       ├── backend_interface.dart # AgentSession/AgentBackend interfaces
+│   │       ├── transport/            # Transport abstraction layer
+│   │       │   ├── event_transport.dart  # EventTransport interface
+│   │       │   └── in_process_transport.dart # In-process implementation
+│   │       └── types/                # Shared type definitions
+│   │           ├── backend_commands.dart  # BackendCommand sealed hierarchy
+│   │           ├── callbacks.dart
+│   │           ├── content_blocks.dart
+│   │           ├── control_messages.dart
+│   │           ├── insights_events.dart
+│   │           ├── session_options.dart
+│   │           └── usage.dart
+│
 ├── claude_dart_sdk/                  # Dart SDK for Claude CLI
 │   ├── lib/
-│   │   ├── claude_sdk.dart           # Main export
+│   │   ├── claude_sdk.dart           # Main export (re-exports agent_sdk_core)
 │   │   └── src/
 │   │       ├── cli_process.dart      # CLI subprocess management
 │   │       ├── cli_session.dart      # CLI session implementation
 │   │       ├── cli_backend.dart      # CLI backend implementation
 │   │       ├── backend_factory.dart  # Backend type selection
-│   │       ├── backend_interface.dart # Abstract backend interface
-│   │       ├── protocol.dart         # Protocol (stdin/stdout JSON)
 │   │       ├── sdk_logger.dart       # SDK logging
-│   │       └── types/                # Type definitions
-│   │           ├── sdk_messages.dart
-│   │           ├── control_messages.dart
-│   │           ├── callbacks.dart
-│   │           ├── content_blocks.dart
-│   │           ├── session_options.dart
-│   │           └── usage.dart
+│   │       └── types/                # Re-export shims for agent_sdk_core types
 │   └── docs/                         # SDK-specific documentation
 │
 ├── frontend/                         # Flutter desktop app
@@ -123,11 +132,11 @@ cc-insights/
 │   │   │   └── theme_state.dart
 │   │   ├── services/                 # Business logic
 │   │   │   ├── backend_service.dart  # SDK integration
+│   │   │   ├── event_handler.dart    # InsightsEvent processing
 │   │   │   ├── git_service.dart
 │   │   │   ├── worktree_service.dart
 │   │   │   ├── persistence_service.dart
-│   │   │   ├── settings_service.dart
-│   │   │   └── sdk_message_handler.dart
+│   │   │   └── settings_service.dart
 │   │   ├── screens/                  # Full-screen views
 │   │   │   ├── main_screen.dart
 │   │   │   ├── welcome_screen.dart
@@ -197,12 +206,18 @@ Quick reference to SDK documentation in `docs/anthropic-agent-cli-sdk/`:
 
 ## Message Flow
 
-The Dart SDK communicates directly with the Claude CLI using stream-json format:
+The frontend communicates with backend sessions through an `EventTransport` abstraction layer. Currently, `InProcessTransport` wraps in-process `AgentSession` objects. The same interface will support remote backends (WebSocket, Docker) in the future.
 
 ```
-Claude CLI ← → CliProcess ← → CliSession ← → Chat model → UI
-              (stdin/stdout)   (SDK messages)
+Claude CLI ← → CliProcess ← → CliSession ← → InProcessTransport ← → ChatState → UI
+              (stdin/stdout)   (InsightsEvents)  (EventTransport)      (BackendCommands)
 ```
+
+**Transport layer:**
+- `EventTransport` interface sits between ChatState and AgentSession
+- `InProcessTransport` wraps in-process sessions (current implementation)
+- Commands (`SendMessageCommand`, `InterruptCommand`, etc.) replace direct session method calls
+- `BackendService.createTransport()` creates the transport for a session
 
 **Initialization:**
 1. `CliProcess` spawns Claude CLI with `--output-format stream-json --input-format stream-json`
@@ -213,13 +228,14 @@ Claude CLI ← → CliProcess ← → CliSession ← → Chat model → UI
 
 **Message flow:**
 ```
-UI → Chat.sendMessage() → CliSession.send() →
-  stdin (JSON lines) → Claude CLI → Claude API
+UI → Chat.sendMessage() → transport.send(SendMessageCommand) →
+  InProcessTransport → session.send() → stdin → Claude CLI → Claude API
 ```
 
 **Permission requests:**
 ```
 Claude CLI → callback.request (can_use_tool) → CliSession.permissionRequests →
+  InProcessTransport.permissionRequests → ChatState →
   UI shows permission dialog → User approves/denies →
   callback.response → Claude CLI
 ```

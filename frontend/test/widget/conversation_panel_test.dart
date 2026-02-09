@@ -152,6 +152,28 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     );
   }
 
+  @override
+  Future<sdk.EventTransport> createTransport({
+    required sdk.BackendType type,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    final session = await createSessionForBackend(
+      type: type,
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
+    return sdk.InProcessTransport(
+      session: session,
+      capabilities: capabilitiesFor(type),
+    );
+  }
+
   void reset() {
     createSessionCalls.clear();
     sessionToReturn = null;

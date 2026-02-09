@@ -211,14 +211,20 @@ class ChatState extends ChangeNotifier {
 
   /// The SDK session for this chat.
   ///
-  /// Null when no session is active. This is the abstract [AgentSession]
-  /// interface which works with both the direct CLI and Codex backends.
+  /// Null when no session is active. Kept as a reference for test
+  /// compatibility via [setSession]. Production code uses [_transport].
   sdk.AgentSession? _session;
 
-  /// Subscription to the session's events stream (for EventHandler).
+  /// The transport wrapping the session.
+  ///
+  /// Null when no session is active. This is the primary interface for
+  /// sending commands and receiving events.
+  sdk.EventTransport? _transport;
+
+  /// Subscription to the transport's events stream (for EventHandler).
   StreamSubscription<sdk.InsightsEvent>? _eventSubscription;
 
-  /// Subscription to the session's permission request stream.
+  /// Subscription to the transport's permission request stream.
   StreamSubscription<sdk.PermissionRequest>? _permissionSubscription;
 
   /// Queue of pending permission requests.
@@ -433,7 +439,8 @@ class ChatState extends ChangeNotifier {
   ChatData get data => _data;
 
   /// Whether there is an active SDK session.
-  bool get hasActiveSession => _session != null || _testHasActiveSession;
+  bool get hasActiveSession =>
+      _transport != null || _session != null || _testHasActiveSession;
 
   /// Whether the chat is waiting for a permission response from the user.
   bool get isWaitingForPermission => _pendingPermissions.isNotEmpty;
@@ -583,8 +590,14 @@ class ChatState extends ChangeNotifier {
     if (_model != model) {
       _model = model;
       _scheduleMetaSave();
-      // Update the model on the active session if one exists
-      _session?.setModel(model.id.isEmpty ? null : model.id);
+      // Update the model on the active transport if one exists
+      if (_transport != null) {
+        final sessionId = _transport!.sessionId ?? '';
+        _transport!.send(sdk.SetModelCommand(
+          sessionId: sessionId,
+          model: model.id.isEmpty ? 'default' : model.id,
+        ));
+      }
       notifyListeners();
     }
   }
@@ -599,8 +612,12 @@ class ChatState extends ChangeNotifier {
     if (_permissionMode != mode) {
       _permissionMode = mode;
       _scheduleMetaSave();
-      if (_capabilities.supportsPermissionModeChange) {
-        _session?.setPermissionMode(_sdkPermissionMode.value);
+      if (_capabilities.supportsPermissionModeChange && _transport != null) {
+        final sessionId = _transport!.sessionId ?? '';
+        _transport!.send(sdk.SetPermissionModeCommand(
+          sessionId: sessionId,
+          mode: _sdkPermissionMode.value,
+        ));
       }
       notifyListeners();
     }
@@ -618,8 +635,12 @@ class ChatState extends ChangeNotifier {
     if (_reasoningEffort != effort) {
       _reasoningEffort = effort;
       _scheduleMetaSave();
-      if (_capabilities.supportsReasoningEffort) {
-        _session?.setReasoningEffort(effort?.value);
+      if (_capabilities.supportsReasoningEffort && _transport != null) {
+        final sessionId = _transport!.sessionId ?? '';
+        _transport!.send(sdk.SetReasoningEffortCommand(
+          sessionId: sessionId,
+          effort: effort?.value ?? 'default',
+        ));
       }
       notifyListeners();
     }
@@ -833,7 +854,7 @@ class ChatState extends ChangeNotifier {
     _t('ChatState', 'lastSessionId: $_lastSessionId');
     _t('ChatState', 'backendReady: ${backend.isReady}');
 
-    if (_session != null) {
+    if (_transport != null || _session != null) {
       _t('ChatState', 'ERROR: Session already active');
       throw StateError('Session already active');
     }
@@ -869,10 +890,10 @@ class ChatState extends ChangeNotifier {
       ];
     }
 
-    // Create session with current settings, including resume if available
-    _t('ChatState', 'Calling backend.createSessionForBackend...');
+    // Create transport with current settings, including resume if available
+    _t('ChatState', 'Calling backend.createTransport...');
     final sessionStopwatch = Stopwatch()..start();
-    _session = await backend.createSessionForBackend(
+    _transport = await backend.createTransport(
       type: model.backend,
       prompt: prompt,
       cwd: worktreeRoot,
@@ -890,18 +911,17 @@ class ChatState extends ChangeNotifier {
       content: content,
     );
 
-    _t('ChatState', 'Session created in ${sessionStopwatch.elapsedMilliseconds}ms');
+    _t('ChatState', 'Transport created in ${sessionStopwatch.elapsedMilliseconds}ms');
 
-    // Capture capabilities from the backend so mid-session calls
-    // can be guarded without re-querying the backend service.
-    _capabilities = backend.capabilitiesFor(model.backend);
+    // Capture capabilities from the transport (set during creation).
+    _capabilities = _transport!.capabilities ?? const sdk.BackendCapabilities();
 
     _markStarted();
 
     // Store the new session ID for future resume.
     // Use resolvedSessionId which returns the SDK's session ID if available.
-    final session = _session!;
-    final newSessionId = session.resolvedSessionId ?? session.sessionId;
+    final transport = _transport!;
+    final newSessionId = transport.resolvedSessionId ?? transport.sessionId;
     if (newSessionId != null && newSessionId != _lastSessionId) {
       developer.log(
         'Session created with ID: $newSessionId',
@@ -924,8 +944,8 @@ class ChatState extends ChangeNotifier {
       ));
     }
 
-    // Subscribe to events stream for EventHandler
-    _eventSubscription = _session!.events.listen(
+    // Subscribe to transport events stream for EventHandler
+    _eventSubscription = _transport!.events.listen(
       (event) {
         eventHandler.handleEvent(this, event);
       },
@@ -939,9 +959,9 @@ class ChatState extends ChangeNotifier {
       },
     );
 
-    // Subscribe to permission requests
+    // Subscribe to transport permission requests
     _t('ChatState', 'Subscribing to permission requests...');
-    _permissionSubscription = _session!.permissionRequests.listen(
+    _permissionSubscription = _transport!.permissionRequests.listen(
       (req) {
         _t('ChatState', 'Permission request: tool=${req.toolName} (chat=${_data.id})');
         setPendingPermission(req);
@@ -971,7 +991,7 @@ class ChatState extends ChangeNotifier {
     DisplayFormat displayFormat = DisplayFormat.plain,
   }) async {
     _t('ChatState', 'sendMessage: ${text.length > 80 ? '${text.substring(0, 80)}...' : text} (chat=${_data.id}, images=${images.length})');
-    if (_session == null) {
+    if (_transport == null && _session == null) {
       _t('ChatState', 'ERROR: sendMessage called with no active session');
       throw StateError('No active session');
     }
@@ -987,22 +1007,12 @@ class ChatState extends ChangeNotifier {
     // Mark as working
     setWorking(true);
 
-    // Send to SDK - use content blocks if images are attached
-    if (images.isNotEmpty) {
-      final content = <sdk.ContentBlock>[
-        if (text.trim().isNotEmpty) sdk.TextBlock(text: text),
-        ...images.map((img) => sdk.ImageBlock(
-              source: sdk.ImageSource(
-                type: 'base64',
-                mediaType: img.mediaType,
-                data: img.base64,
-              ),
-            )),
-      ];
-      await _session!.sendWithContent(content);
-    } else {
-      await _session!.send(text);
-    }
+    // Send via transport
+    final sessionId = _transport?.sessionId ?? '';
+    await _transport!.send(sdk.SendMessageCommand(
+      sessionId: sessionId,
+      text: text,
+    ));
   }
 
   /// Stops the current session.
@@ -1010,11 +1020,19 @@ class ChatState extends ChangeNotifier {
   /// Cancels stream subscriptions, kills the session, and clears
   /// session-related state. Active agents are also cleared.
   Future<void> stopSession() async {
-    _t('ChatState', 'stopSession (chat=${_data.id}, hasSession=${_session != null})');
+    _t('ChatState', 'stopSession (chat=${_data.id}, hasSession=${_transport != null || _session != null})');
     await _permissionSubscription?.cancel();
     await _eventSubscription?.cancel();
-    await _session?.kill();
+    // Kill via transport if available, fall back to direct session kill
+    if (_transport != null) {
+      final sessionId = _transport!.sessionId ?? '';
+      await _transport!.send(sdk.KillCommand(sessionId: sessionId));
+      await _transport!.dispose();
+    } else {
+      await _session?.kill();
+    }
 
+    _transport = null;
     _session = null;
     _eventSubscription = null;
     _permissionSubscription = null;
@@ -1038,8 +1056,11 @@ class ChatState extends ChangeNotifier {
 
     developer.log('Interrupting session', name: 'ChatState');
 
-    // Only call SDK interrupt if we have a real session
-    if (_session != null) {
+    // Interrupt via transport if available, fall back to direct session
+    if (_transport != null) {
+      final sessionId = _transport!.sessionId ?? '';
+      await _transport!.send(sdk.InterruptCommand(sessionId: sessionId));
+    } else if (_session != null) {
       await _session!.interrupt();
     }
 
@@ -1285,6 +1306,8 @@ class ChatState extends ChangeNotifier {
       name: 'ChatState',
     );
 
+    _transport?.dispose();
+    _transport = null;
     _session = null;
     _isWorking = false;
     _isCompacting = false;
@@ -1321,6 +1344,16 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets the transport for this chat.
+  ///
+  /// This is a low-level method for testing. Prefer [startSession] for
+  /// creating sessions in production code.
+  @visibleForTesting
+  void setTransport(sdk.EventTransport? transport) {
+    _transport = transport;
+    notifyListeners();
+  }
+
   /// Marks the chat as having an active session for testing purposes.
   ///
   /// This is used in tests where we need to simulate an active session
@@ -1350,6 +1383,8 @@ class ChatState extends ChangeNotifier {
   /// Call this when the session ends (e.g., after `/clear` command).
   /// Agents are discarded but conversations persist.
   void clearSession() {
+    _transport?.dispose();
+    _transport = null;
     _session = null;
     _testHasActiveSession = false;
     _isWorking = false;
@@ -1706,7 +1741,10 @@ class ChatState extends ChangeNotifier {
     // Cancel stream subscriptions.
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();
-    // Kill the session if active.
+    // Dispose the transport (which handles session cleanup).
+    _transport?.dispose();
+    _transport = null;
+    // Kill the session if active (fallback for test sessions without transport).
     _session?.kill();
     _session = null;
     _testHasActiveSession = false;

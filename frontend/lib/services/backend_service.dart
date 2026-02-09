@@ -247,6 +247,31 @@ class BackendService extends ChangeNotifier {
     }
   }
 
+  /// Creates an [EventTransport] wrapping an in-process session.
+  ///
+  /// This is the primary entry point for the transport-based flow.
+  /// It creates a session via [createSessionForBackend] and wraps it in
+  /// an [InProcessTransport].
+  Future<EventTransport> createTransport({
+    required BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    final session = await createSessionForBackend(
+      type: type,
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+      executablePath: executablePath,
+    );
+    final caps = capabilitiesFor(type);
+    return InProcessTransport(session: session, capabilities: caps);
+  }
+
   /// Creates a session for a specific backend type.
   Future<AgentSession> createSessionForBackend({
     required BackendType type,

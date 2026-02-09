@@ -58,7 +58,7 @@ void main() {
       // Access interface members
       expect(session.sessionId, equals('test-123'));
       expect(session.isActive, isTrue);
-      expect(session.messages, isA<Stream<SDKMessage>>());
+      expect(session.events, isA<Stream<InsightsEvent>>());
       expect(session.permissionRequests, isA<Stream<PermissionRequest>>());
       expect(session.hookRequests, isA<Stream<HookRequest>>());
     });
@@ -69,7 +69,7 @@ void main() {
       // Properties
       expect(session.sessionId, isA<String>());
       expect(session.isActive, isA<bool>());
-      expect(session.messages, isA<Stream<SDKMessage>>());
+      expect(session.events, isA<Stream<InsightsEvent>>());
       expect(session.permissionRequests, isA<Stream<PermissionRequest>>());
       expect(session.hookRequests, isA<Stream<HookRequest>>());
 
@@ -182,20 +182,22 @@ void main() {
     test('session streams emit correct types', () async {
       final session = MockAgentSession();
 
-      // Test messages stream
-      final messagesReceived = <SDKMessage>[];
-      session.messages.listen(messagesReceived.add);
+      // Test events stream
+      final eventsReceived = <InsightsEvent>[];
+      session.events.listen(eventsReceived.add);
 
-      session.emitMessage(SDKUnknownMessage(
-        rawType: 'test',
-        uuid: 'test-uuid',
+      session.emitEvent(TextEvent(
+        id: 'test-id',
+        timestamp: DateTime.now(),
+        provider: BackendProvider.claude,
         sessionId: 'test',
-        raw: {},
+        text: 'Hello',
+        kind: TextKind.text,
       ));
       await Future.delayed(Duration.zero);
 
-      expect(messagesReceived, hasLength(1));
-      expect(messagesReceived.first, isA<SDKMessage>());
+      expect(eventsReceived, hasLength(1));
+      expect(eventsReceived.first, isA<InsightsEvent>());
     });
 
     test('TestSession can be used as AgentSession', () async {
@@ -332,7 +334,6 @@ class MockAgentSession implements AgentSession {
   MockAgentSession({String? sessionId})
       : sessionId = sessionId ?? 'mock-session';
 
-  final _messagesController = StreamController<SDKMessage>.broadcast();
   final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
@@ -348,9 +349,6 @@ class MockAgentSession implements AgentSession {
 
   @override
   bool get isActive => !_disposed;
-
-  @override
-  Stream<SDKMessage> get messages => _messagesController.stream;
 
   @override
   Stream<InsightsEvent> get events => _eventsController.stream;
@@ -393,7 +391,6 @@ class MockAgentSession implements AgentSession {
   Future<void> kill() async {
     if (_disposed) return;
     _disposed = true;
-    await _messagesController.close();
     await _eventsController.close();
     await _permissionRequestsController.close();
     await _hookRequestsController.close();
@@ -408,9 +405,9 @@ class MockAgentSession implements AgentSession {
   @override
   Future<void> setReasoningEffort(String? effort) async {}
 
-  /// Emit a message for testing.
-  void emitMessage(SDKMessage message) {
+  /// Emit an event for testing.
+  void emitEvent(InsightsEvent event) {
     if (_disposed) return;
-    _messagesController.add(message);
+    _eventsController.add(event);
   }
 }

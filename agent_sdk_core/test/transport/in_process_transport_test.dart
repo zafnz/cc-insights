@@ -335,12 +335,8 @@ void main() {
         final receivedPermissions = <PermissionRequest>[];
         transport.permissionRequests.listen(receivedPermissions.add);
 
-        final request = session.emitPermissionRequest(id: 'req-50');
+        session.emitPermissionRequest(id: 'req-50');
         await Future<void>.delayed(Duration.zero);
-
-        final responseCompleter = request;
-        // We need to capture the response from the completer
-        // Since PermissionRequest uses internal completer, we track via allow
         await transport.send(PermissionResponseCommand(
           requestId: 'req-50',
           allowed: true,

@@ -9,16 +9,16 @@ import 'types/insights_events.dart';
 
 /// A test-only session for use in widget and integration tests.
 ///
-/// This class implements [AgentSession] and provides controllable message
+/// This class implements [AgentSession] and provides controllable event
 /// streams for testing without a real backend process.
 ///
-/// Test sessions can receive messages via [emitTestMessage] and track
+/// Test sessions can receive events via [emitTestEvent] and track
 /// sent messages via [testSentMessages].
 ///
 /// Example:
 /// ```dart
 /// final session = TestSession(sessionId: 'test-123');
-/// session.emitTestMessage(SDKAssistantMessage(...));
+/// session.emitTestEvent(TextEvent(...));
 /// ```
 class TestSession implements AgentSession {
   /// Creates a test session that is not connected to a real backend.

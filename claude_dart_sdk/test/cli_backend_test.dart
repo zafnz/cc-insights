@@ -239,10 +239,10 @@ void main() {
     });
 
     group('session streams', () {
-      test('session has messages stream', () async {
+      test('session has events stream', () async {
         final session = await helper.createMockSession();
 
-        expect(session.messages, isA<Stream<SDKMessage>>());
+        expect(session.events, isA<Stream<InsightsEvent>>());
       });
 
       test('session has permissionRequests stream', () async {
@@ -257,10 +257,10 @@ void main() {
         expect(session.hookRequests, isA<Stream<HookRequest>>());
       });
 
-      test('messages stream receives SDK messages', () async {
+      test('events stream receives InsightsEvents', () async {
         final session = await helper.createMockSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         helper.emitSdkMessage(session.sessionId, {
           'type': 'assistant',
@@ -275,8 +275,8 @@ void main() {
         });
         await Future.delayed(Duration.zero);
 
-        expect(messages, hasLength(1));
-        expect(messages[0], isA<SDKAssistantMessage>());
+        expect(events, isNotEmpty);
+        expect(events.first, isA<TextEvent>());
       });
     });
 
@@ -498,14 +498,14 @@ void main() {
         expect(helper.backend.sessions, hasLength(1));
       });
 
-      test('each session receives only its messages', () async {
+      test('each session receives only its events', () async {
         final session1 = await helper.createMockSession(sessionId: 'sess-1');
         final session2 = await helper.createMockSession(sessionId: 'sess-2');
 
-        final messages1 = <SDKMessage>[];
-        final messages2 = <SDKMessage>[];
-        session1.messages.listen(messages1.add);
-        session2.messages.listen(messages2.add);
+        final events1 = <InsightsEvent>[];
+        final events2 = <InsightsEvent>[];
+        session1.events.listen(events1.add);
+        session2.events.listen(events2.add);
 
         // Emit message for session 1 only
         helper.emitSdkMessage('sess-1', {
@@ -521,8 +521,8 @@ void main() {
         });
         await Future.delayed(Duration.zero);
 
-        expect(messages1, hasLength(1));
-        expect(messages2, isEmpty);
+        expect(events1, isNotEmpty);
+        expect(events2, isEmpty);
       });
     });
 
@@ -819,11 +819,16 @@ class _MockAgentSession implements AgentSession {
   final _MockCliSessionData _mockData;
   final void Function() _onKill;
 
-  final _messagesController = StreamController<SDKMessage>.broadcast();
   final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<PermissionRequest>.broadcast();
   final _hookRequestsController = StreamController<HookRequest>.broadcast();
+
+  int _eventIdCounter = 0;
+  String _nextEventId() {
+    _eventIdCounter++;
+    return 'evt-mock-$_eventIdCounter';
+  }
 
   bool _disposed = false;
 
@@ -835,9 +840,6 @@ class _MockAgentSession implements AgentSession {
 
   @override
   bool get isActive => !_disposed;
-
-  @override
-  Stream<SDKMessage> get messages => _messagesController.stream;
 
   @override
   Stream<InsightsEvent> get events => _eventsController.stream;
@@ -870,8 +872,34 @@ class _MockAgentSession implements AgentSession {
     if (type == 'sdk.message') {
       final payload = json['payload'] as Map<String, dynamic>?;
       if (payload != null) {
-        final sdkMessage = SDKMessage.fromJson(payload);
-        _messagesController.add(sdkMessage);
+        // Convert to InsightsEvents based on the payload type
+        final payloadType = payload['type'] as String?;
+        if (payloadType == 'assistant') {
+          final message = payload['message'] as Map<String, dynamic>?;
+          final content = message?['content'] as List?;
+          if (content != null) {
+            for (final block in content) {
+              if (block is Map<String, dynamic> && block['type'] == 'text') {
+                _eventsController.add(TextEvent(
+                  id: _nextEventId(),
+                  timestamp: DateTime.now(),
+                  provider: BackendProvider.claude,
+                  sessionId: payload['session_id'] as String? ?? sessionId,
+                  text: block['text'] as String? ?? '',
+                  kind: TextKind.text,
+                ));
+              }
+            }
+          }
+        } else if (payloadType == 'result') {
+          _eventsController.add(TurnCompleteEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            sessionId: payload['session_id'] as String? ?? sessionId,
+            isError: payload['is_error'] as bool? ?? false,
+          ));
+        }
       }
     } else if (type == 'callback.request') {
       final payload = json['payload'] as Map<String, dynamic>?;
@@ -944,7 +972,6 @@ class _MockAgentSession implements AgentSession {
     _mockData.kill();
     _onKill();
 
-    await _messagesController.close();
     await _eventsController.close();
     await _permissionRequestsController.close();
     await _hookRequestsController.close();

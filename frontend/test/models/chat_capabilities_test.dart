@@ -88,6 +88,24 @@ class _FakeBackendService extends ChangeNotifier implements BackendService {
   }) async {
     return _FakeSession();
   }
+
+  @override
+  Future<sdk.EventTransport> createTransport({
+    required sdk.BackendType type,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    final session = await createSessionForBackend(
+      type: type, prompt: prompt, cwd: cwd, options: options, content: content,
+    );
+    return sdk.InProcessTransport(
+      session: session,
+      capabilities: capabilitiesFor(type),
+    );
+  }
 }
 
 /// Fake session that records method calls and can be configured to throw.

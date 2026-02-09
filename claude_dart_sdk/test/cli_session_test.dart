@@ -118,8 +118,8 @@ void main() {
 
         // Assert
         expect(session.sessionId, equals('sess-12345'));
-        expect(session.systemInit, isNotNull);
-        expect(session.systemInit.subtype, equals('init'));
+        expect(session.systemInitData, isNotNull);
+        expect(session.systemInitData!['subtype'], equals('init'));
 
         await session.dispose();
       });
@@ -181,11 +181,11 @@ void main() {
     });
 
     group('message routing', () {
-      test('routes SDK messages to messages stream', () async {
+      test('routes SDK messages to events stream as InsightsEvents', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         // Act - emit an assistant message
         helper.emitSdkMessage({
@@ -202,10 +202,10 @@ void main() {
         await Future.delayed(Duration.zero);
 
         // Assert
-        expect(messages, hasLength(1));
-        expect(messages[0], isA<SDKAssistantMessage>());
-        final assistantMsg = messages[0] as SDKAssistantMessage;
-        expect(assistantMsg.uuid, equals('msg-1'));
+        expect(events, hasLength(1));
+        expect(events[0], isA<TextEvent>());
+        final textEvent = events[0] as TextEvent;
+        expect(textEvent.text, equals('Hello!'));
 
         await session.dispose();
       });
@@ -271,37 +271,41 @@ void main() {
         await session.dispose();
       });
 
-      test('routes user messages to messages stream', () async {
+      test('routes user messages to events stream', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
-        // Act
+        // Act - emit a user message with tool_result content
         helper.emitSdkMessage({
           'type': 'user',
           'session_id': 'sess-123',
           'message': {
             'role': 'user',
             'content': [
-              {'type': 'text', 'text': 'User message'}
+              {
+                'type': 'tool_result',
+                'tool_use_id': 'tool-1',
+                'content': 'result text',
+              }
             ],
           },
         });
         await Future.delayed(Duration.zero);
 
-        // Assert
-        expect(messages, hasLength(1));
-        expect(messages[0], isA<SDKUserMessage>());
+        // Assert - user messages with tool_result produce ToolCompletionEvents
+        expect(events, hasLength(1));
+        expect(events[0], isA<ToolCompletionEvent>());
 
         await session.dispose();
       });
 
-      test('routes result messages to messages stream', () async {
+      test('routes result messages to events stream as TurnCompleteEvent', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         // Act
         helper.emitSdkMessage({
@@ -318,20 +322,20 @@ void main() {
         await Future.delayed(Duration.zero);
 
         // Assert
-        expect(messages, hasLength(1));
-        expect(messages[0], isA<SDKResultMessage>());
-        final result = messages[0] as SDKResultMessage;
+        expect(events, hasLength(1));
+        expect(events[0], isA<TurnCompleteEvent>());
+        final result = events[0] as TurnCompleteEvent;
         expect(result.result, equals('Task completed'));
         expect(result.numTurns, equals(3));
 
         await session.dispose();
       });
 
-      test('routes stream events to messages stream', () async {
+      test('routes stream events to events stream as StreamDeltaEvent', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         // Act
         helper.emitSdkMessage({
@@ -346,9 +350,9 @@ void main() {
         await Future.delayed(Duration.zero);
 
         // Assert
-        expect(messages, hasLength(1));
-        expect(messages[0], isA<SDKStreamEvent>());
-        final streamEvent = messages[0] as SDKStreamEvent;
+        expect(events, hasLength(1));
+        expect(events[0], isA<StreamDeltaEvent>());
+        final streamEvent = events[0] as StreamDeltaEvent;
         expect(streamEvent.textDelta, equals('Hello'));
 
         await session.dispose();
@@ -357,15 +361,15 @@ void main() {
       test('ignores session.created after initialization', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         // Act - emit another session.created (should be ignored)
         helper.emitSessionCreated(requestId: 'late-req');
         await Future.delayed(Duration.zero);
 
-        // Assert - no messages should be emitted
-        expect(messages, isEmpty);
+        // Assert - no events should be emitted
+        expect(events, isEmpty);
 
         await session.dispose();
       });
@@ -641,10 +645,10 @@ void main() {
       test('kill closes streams', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        var messagesDone = false;
+        var eventsDone = false;
         var permissionsDone = false;
 
-        session.messages.listen((_) {}, onDone: () => messagesDone = true);
+        session.events.listen((_) {}, onDone: () => eventsDone = true);
         session.permissionRequests.listen((_) {},
             onDone: () => permissionsDone = true);
 
@@ -653,7 +657,7 @@ void main() {
         await Future.delayed(Duration.zero);
 
         // Assert
-        expect(messagesDone, isTrue);
+        expect(eventsDone, isTrue);
         expect(permissionsDone, isTrue);
       });
 
@@ -669,8 +673,8 @@ void main() {
       test('dispose cleans up all resources', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        var messagesDone = false;
-        session.messages.listen((_) {}, onDone: () => messagesDone = true);
+        var eventsDone = false;
+        session.events.listen((_) {}, onDone: () => eventsDone = true);
 
         // Act
         await session.dispose();
@@ -678,7 +682,7 @@ void main() {
 
         // Assert
         expect(session.isActive, isFalse);
-        expect(messagesDone, isTrue);
+        expect(eventsDone, isTrue);
       });
 
       test('dispose is idempotent', () async {
@@ -733,25 +737,25 @@ void main() {
       test('handles malformed SDK messages gracefully', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         // Act - emit a message with missing type
         helper.emitRawStdout('{"invalid": "message", "no_type": true}\n');
         await Future.delayed(Duration.zero);
 
-        // Assert - should not crash, message may be parsed as unknown
+        // Assert - should not crash, unknown messages are ignored
         // The important thing is the session is still functional
         expect(session.isActive, isTrue);
 
         await session.dispose();
       });
 
-      test('does not emit messages after dispose', () async {
+      test('does not emit events after dispose', () async {
         // Arrange
         final session = await helper.createInitializedSession();
-        final messages = <SDKMessage>[];
-        session.messages.listen(messages.add);
+        final events = <InsightsEvent>[];
+        session.events.listen(events.add);
 
         // Act
         await session.dispose();
@@ -761,13 +765,15 @@ void main() {
           'session_id': 'sess-123',
           'message': {
             'role': 'assistant',
-            'content': [],
+            'content': [
+              {'type': 'text', 'text': 'Late message'}
+            ],
           },
         });
         await Future.delayed(Duration.zero);
 
         // Assert
-        expect(messages, isEmpty);
+        expect(events, isEmpty);
       });
 
       test('does not emit permission requests after dispose', () async {
@@ -1106,7 +1112,7 @@ typedef VoidCallback = void Function();
 /// CliSession extension for testing that allows injecting a mock process.
 class CliSessionForTesting {
   /// Create a CliSession with a mock process for testing.
-  static Future<CliSession> createWithProcess({
+  static Future<CliSessionForTestingImpl> createWithProcess({
     required Process process,
     required String cwd,
     required String prompt,
@@ -1134,7 +1140,7 @@ class CliSessionForTesting {
 
       // Wait for session.created response
       String? sessionId;
-      SDKSystemMessage? systemInit;
+      Map<String, dynamic>? systemInitData;
 
       await for (final json in cliProcess.messages.timeout(timeout)) {
         final messageType = parseCliMessageType(json);
@@ -1151,14 +1157,14 @@ class CliSessionForTesting {
             if (type == 'system') {
               final subtype = payload['subtype'] as String?;
               if (subtype == 'init') {
-                systemInit = SDKSystemMessage.fromJson(payload);
+                systemInitData = payload;
               }
             }
           }
         }
 
         // Check if initialization is complete
-        if (sessionId != null && systemInit != null) {
+        if (sessionId != null && systemInitData != null) {
           break;
         }
       }
@@ -1166,14 +1172,14 @@ class CliSessionForTesting {
       if (sessionId == null) {
         throw StateError('Session creation timed out: no session.created');
       }
-      if (systemInit == null) {
+      if (systemInitData == null) {
         throw StateError('Session creation timed out: no system init');
       }
 
       return CliSessionForTestingImpl(
         process: cliProcess,
         sessionId: sessionId,
-        systemInit: systemInit,
+        systemInitData: systemInitData,
       );
     } catch (e) {
       await cliProcess.dispose();
@@ -1218,7 +1224,7 @@ class CliSessionForTestingImpl implements CliSession {
   CliSessionForTestingImpl({
     required CliProcessForTesting process,
     required this.sessionId,
-    required this.systemInit,
+    this.systemInitData,
   }) : _process = process {
     _setupMessageRouting();
   }
@@ -1226,18 +1232,21 @@ class CliSessionForTestingImpl implements CliSession {
   final CliProcessForTesting _process;
   @override
   final String sessionId;
-  @override
-  final SDKSystemMessage systemInit;
 
-  final _messagesController = StreamController<SDKMessage>.broadcast();
+  /// Raw system init data for test verification.
+  final Map<String, dynamic>? systemInitData;
+
   final _eventsController = StreamController<InsightsEvent>.broadcast();
   final _permissionRequestsController =
       StreamController<CliPermissionRequest>.broadcast();
 
-  bool _disposed = false;
+  int _eventIdCounter = 0;
+  String _nextEventId() {
+    _eventIdCounter++;
+    return 'evt-test-$_eventIdCounter';
+  }
 
-  @override
-  Stream<SDKMessage> get messages => _messagesController.stream;
+  bool _disposed = false;
 
   @override
   Stream<InsightsEvent> get events => _eventsController.stream;
@@ -1258,7 +1267,7 @@ class CliSessionForTestingImpl implements CliSession {
       _handleMessage,
       onError: (Object error) {
         if (!_disposed) {
-          _messagesController.addError(error);
+          _eventsController.addError(error);
         }
       },
       onDone: () {
@@ -1293,19 +1302,133 @@ class CliSessionForTestingImpl implements CliSession {
       case CliMessageType.sdkMessage:
         final payload = json['payload'] as Map<String, dynamic>?;
         if (payload != null) {
-          final sdkMessage = SDKMessage.fromJson(payload);
-          _messagesController.add(sdkMessage);
+          final events = _convertToInsightsEvents(payload);
+          for (final event in events) {
+            _eventsController.add(event);
+          }
         }
 
       case CliMessageType.sessionCreated:
         break;
 
       case CliMessageType.unknown:
-        try {
-          final sdkMessage = SDKMessage.fromJson(json);
-          _messagesController.add(sdkMessage);
-        } catch (_) {}
+        // Unknown message types are ignored in the new events model
+        break;
     }
+  }
+
+  /// Convert SDK JSON payload into InsightsEvent objects.
+  List<InsightsEvent> _convertToInsightsEvents(Map<String, dynamic> payload) {
+    final type = payload['type'] as String?;
+    final events = <InsightsEvent>[];
+
+    switch (type) {
+      case 'assistant':
+        final message = payload['message'] as Map<String, dynamic>?;
+        final content = message?['content'] as List?;
+        if (content != null) {
+          for (final block in content) {
+            if (block is Map<String, dynamic>) {
+              final blockType = block['type'] as String?;
+              if (blockType == 'text') {
+                events.add(TextEvent(
+                  id: _nextEventId(),
+                  timestamp: DateTime.now(),
+                  provider: BackendProvider.claude,
+                  sessionId: payload['session_id'] as String? ?? sessionId,
+                  text: block['text'] as String? ?? '',
+                  kind: TextKind.text,
+                ));
+              } else if (blockType == 'tool_use') {
+                events.add(ToolInvocationEvent(
+                  id: _nextEventId(),
+                  timestamp: DateTime.now(),
+                  provider: BackendProvider.claude,
+                  callId: block['id'] as String? ?? _nextEventId(),
+                  sessionId: payload['session_id'] as String? ?? sessionId,
+                  kind: ToolKind.fromToolName(block['name'] as String? ?? ''),
+                  toolName: block['name'] as String? ?? '',
+                  input: block['input'] as Map<String, dynamic>? ?? {},
+                ));
+              }
+            }
+          }
+        }
+
+      case 'user':
+        // User messages with tool_result content
+        final message = payload['message'] as Map<String, dynamic>?;
+        final content = message?['content'] as List?;
+        if (content != null) {
+          for (final block in content) {
+            if (block is Map<String, dynamic> && block['type'] == 'tool_result') {
+              events.add(ToolCompletionEvent(
+                id: _nextEventId(),
+                timestamp: DateTime.now(),
+                provider: BackendProvider.claude,
+                callId: block['tool_use_id'] as String? ?? _nextEventId(),
+                sessionId: payload['session_id'] as String? ?? sessionId,
+                status: (block['is_error'] as bool? ?? false)
+                    ? ToolCallStatus.failed
+                    : ToolCallStatus.completed,
+                output: block['content'],
+                isError: block['is_error'] as bool? ?? false,
+              ));
+            }
+          }
+        }
+
+      case 'result':
+        events.add(TurnCompleteEvent(
+          id: _nextEventId(),
+          timestamp: DateTime.now(),
+          provider: BackendProvider.claude,
+          sessionId: payload['session_id'] as String? ?? sessionId,
+          isError: payload['is_error'] as bool? ?? false,
+          subtype: payload['subtype'] as String?,
+          result: payload['result'] as String?,
+          numTurns: payload['num_turns'] as int?,
+          durationMs: payload['duration_ms'] as int?,
+          durationApiMs: payload['duration_api_ms'] as int?,
+        ));
+
+      case 'stream_event':
+        final event = payload['event'] as Map<String, dynamic>?;
+        if (event != null) {
+          final eventType = event['type'] as String?;
+          if (eventType == 'content_block_delta') {
+            final delta = event['delta'] as Map<String, dynamic>?;
+            final deltaType = delta?['type'] as String?;
+            if (deltaType == 'text_delta') {
+              events.add(StreamDeltaEvent(
+                id: _nextEventId(),
+                timestamp: DateTime.now(),
+                provider: BackendProvider.claude,
+                sessionId: payload['session_id'] as String? ?? sessionId,
+                kind: StreamDeltaKind.text,
+                textDelta: delta?['text'] as String?,
+              ));
+            }
+          }
+        }
+
+      case 'system':
+        final subtype = payload['subtype'] as String?;
+        if (subtype == 'init') {
+          events.add(SessionInitEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            sessionId: payload['session_id'] as String? ?? sessionId,
+            model: payload['model'] as String?,
+            cwd: payload['cwd'] as String?,
+            availableTools: (payload['tools'] as List?)?.cast<String>(),
+            permissionMode: payload['permissionMode'] as String?,
+          ));
+        }
+    }
+
+    return events;
   }
 
   @override
@@ -1369,7 +1492,6 @@ class CliSessionForTestingImpl implements CliSession {
   void _dispose() {
     if (_disposed) return;
     _disposed = true;
-    _messagesController.close();
     _eventsController.close();
     _permissionRequestsController.close();
   }

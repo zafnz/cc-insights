@@ -9,17 +9,13 @@ import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:claude_sdk/claude_sdk.dart'
     show
-        APIAssistantMessage,
         ContentBlock,
         HookRequest,
         PermissionDenyResponse,
         PermissionRequest,
         PermissionResponse,
-        SDKAssistantMessage,
-        SDKMessage,
         SessionOptions,
-        TestSession,
-        TextBlock;
+        TestSession;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_helpers.dart';
@@ -76,6 +72,28 @@ class FakeBackendService extends BackendService {
       cwd: cwd,
       options: options,
       content: content,
+    );
+  }
+
+  @override
+  Future<sdk.EventTransport> createTransport({
+    required sdk.BackendType type,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    String? executablePath,
+  }) async {
+    final session = await createSessionForBackend(
+      type: type,
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+    );
+    return sdk.InProcessTransport(
+      session: session,
+      capabilities: capabilitiesFor(type),
     );
   }
 }

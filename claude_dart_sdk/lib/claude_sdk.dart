@@ -29,7 +29,12 @@ export 'src/single_request.dart';
 // Logging
 export 'src/sdk_logger.dart';
 
+// Transport layer
+export 'src/transport/event_transport.dart';
+export 'src/transport/in_process_transport.dart';
+
 // Types
+export 'src/types/backend_commands.dart';
 export 'src/types/backend_provider.dart';
 export 'src/types/callbacks.dart';
 export 'src/types/content_blocks.dart';

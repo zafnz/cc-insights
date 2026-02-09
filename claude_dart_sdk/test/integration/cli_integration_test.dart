@@ -41,7 +41,7 @@ void main() {
       });
 
       test(
-        'initializes session and receives system init',
+        'initializes session and receives system init event',
         () async {
           // Arrange & Act
           final session = await CliSession.create(
@@ -57,11 +57,26 @@ void main() {
           try {
             // Assert - session was created successfully
             expect(session.sessionId, isNotEmpty);
-            expect(session.systemInit, isNotNull);
-            expect(session.systemInit.subtype, equals('init'));
-            expect(session.systemInit.tools, isNotNull);
-            expect(session.systemInit.tools, isNotEmpty);
             expect(session.isActive, isTrue);
+
+            // Verify we receive a SessionInitEvent via the events stream
+            final events = <InsightsEvent>[];
+            final eventsSub = session.events.listen(events.add);
+
+            // Wait for events to arrive
+            await session.events
+                .firstWhere((e) => e is TurnCompleteEvent)
+                .timeout(Duration(seconds: 45), onTimeout: () {
+              throw TimeoutException('No TurnCompleteEvent received');
+            });
+
+            await eventsSub.cancel();
+
+            // Should have received a SessionInitEvent
+            final initEvents = events.whereType<SessionInitEvent>().toList();
+            expect(initEvents, isNotEmpty);
+            expect(initEvents.first.availableTools, isNotNull);
+            expect(initEvents.first.availableTools, isNotEmpty);
           } finally {
             await session.dispose();
           }
@@ -70,7 +85,7 @@ void main() {
       );
 
       test(
-        'sends message and receives response',
+        'sends message and receives response via events stream',
         () async {
           // Arrange
           final session = await CliSession.create(
@@ -84,14 +99,14 @@ void main() {
           );
 
           try {
-            // Act - collect messages until result
-            final messages = <SDKMessage>[];
-            SDKResultMessage? result;
+            // Act - collect events until TurnCompleteEvent
+            final events = <InsightsEvent>[];
+            TurnCompleteEvent? result;
 
-            await for (final message in session.messages) {
-              messages.add(message);
-              if (message is SDKResultMessage) {
-                result = message;
+            await for (final event in session.events) {
+              events.add(event);
+              if (event is TurnCompleteEvent) {
+                result = event;
                 break;
               }
             }
@@ -101,15 +116,13 @@ void main() {
             expect(result!.isError, isFalse);
             expect(result.numTurns, greaterThanOrEqualTo(1));
 
-            // Should have received an assistant message
-            final assistantMessages =
-                messages.whereType<SDKAssistantMessage>().toList();
-            expect(assistantMessages, isNotEmpty);
+            // Should have received TextEvents from the assistant
+            final textEvents = events.whereType<TextEvent>().toList();
+            expect(textEvents, isNotEmpty);
 
             // The assistant should have responded with text
-            final content = assistantMessages.first.message.content;
-            expect(content, isNotEmpty);
-            expect(content.first, isA<TextBlock>());
+            final responseText = textEvents.map((e) => e.text).join();
+            expect(responseText, isNotEmpty);
           } finally {
             await session.dispose();
           }
@@ -145,21 +158,21 @@ void main() {
             });
 
             // Act - wait for permission request or result
-            final messages = <SDKMessage>[];
-            SDKResultMessage? result;
+            final events = <InsightsEvent>[];
+            TurnCompleteEvent? result;
 
-            // Race between permission request and messages
-            final messagesSub = session.messages.listen((message) {
-              messages.add(message);
-              if (message is SDKResultMessage) {
-                result = message;
+            // Race between permission request and events
+            final eventsSub = session.events.listen((event) {
+              events.add(event);
+              if (event is TurnCompleteEvent) {
+                result = event;
               }
             });
 
             // Wait for either a permission request or completion
             await Future.any([
               permissionCompleter.future,
-              session.messages.firstWhere((m) => m is SDKResultMessage),
+              session.events.firstWhere((e) => e is TurnCompleteEvent),
             ]).timeout(
               Duration(seconds: 45),
               onTimeout: () => null,
@@ -167,10 +180,11 @@ void main() {
 
             // If we got a permission request, wait for the result after allowing
             if (permissionRequest != null) {
-              await session.messages.firstWhere((m) => m is SDKResultMessage);
+              await session.events
+                  .firstWhere((e) => e is TurnCompleteEvent);
             }
 
-            await messagesSub.cancel();
+            await eventsSub.cancel();
 
             // Assert - if there was a permission request
             if (permissionRequest != null) {
@@ -179,7 +193,9 @@ void main() {
             }
 
             // Either way, we should have a result
-            expect(result ?? messages.whereType<SDKResultMessage>().firstOrNull,
+            expect(
+                result ??
+                    events.whereType<TurnCompleteEvent>().firstOrNull,
                 isNotNull);
           } finally {
             await session.dispose();
@@ -229,17 +245,17 @@ void main() {
               }
             });
 
-            // Act - collect messages until result
-            final messages = <SDKMessage>[];
-            SDKResultMessage? result;
+            // Act - collect events until result
+            final events = <InsightsEvent>[];
+            TurnCompleteEvent? result;
 
-            await for (final message in session.messages.timeout(
+            await for (final event in session.events.timeout(
               Duration(seconds: 45),
               onTimeout: (sink) => sink.close(),
             )) {
-              messages.add(message);
-              if (message is SDKResultMessage) {
-                result = message;
+              events.add(event);
+              if (event is TurnCompleteEvent) {
+                result = event;
                 break;
               }
             }
@@ -288,17 +304,17 @@ void main() {
               }
             });
 
-            // Act - collect messages until result
-            final messages = <SDKMessage>[];
-            SDKResultMessage? result;
+            // Act - collect events until result
+            final events = <InsightsEvent>[];
+            TurnCompleteEvent? result;
 
-            await for (final message in session.messages.timeout(
+            await for (final event in session.events.timeout(
               Duration(seconds: 45),
               onTimeout: (sink) => sink.close(),
             )) {
-              messages.add(message);
-              if (message is SDKResultMessage) {
-                result = message;
+              events.add(event);
+              if (event is TurnCompleteEvent) {
+                result = event;
                 break;
               }
             }
@@ -313,7 +329,8 @@ void main() {
               // Check for permission denial in the result
               if (result!.permissionDenials != null &&
                   result.permissionDenials!.isNotEmpty) {
-                expect(result.permissionDenials!.first.toolName, equals('Bash'));
+                expect(
+                    result.permissionDenials!.first.toolName, equals('Bash'));
               }
             }
           } finally {
@@ -339,10 +356,10 @@ void main() {
 
           try {
             // Wait for first turn to complete
-            SDKResultMessage? firstResult;
-            await for (final message in session.messages) {
-              if (message is SDKResultMessage) {
-                firstResult = message;
+            TurnCompleteEvent? firstResult;
+            await for (final event in session.events) {
+              if (event is TurnCompleteEvent) {
+                firstResult = event;
                 break;
               }
             }
@@ -354,16 +371,16 @@ void main() {
             await session.send('What number did I ask you to remember?');
 
             // Collect follow-up response
-            final followUpMessages = <SDKMessage>[];
-            SDKResultMessage? followUpResult;
+            final followUpEvents = <InsightsEvent>[];
+            TurnCompleteEvent? followUpResult;
 
-            await for (final message in session.messages.timeout(
+            await for (final event in session.events.timeout(
               Duration(seconds: 45),
               onTimeout: (sink) => sink.close(),
             )) {
-              followUpMessages.add(message);
-              if (message is SDKResultMessage) {
-                followUpResult = message;
+              followUpEvents.add(event);
+              if (event is TurnCompleteEvent) {
+                followUpResult = event;
                 break;
               }
             }
@@ -372,16 +389,12 @@ void main() {
             expect(followUpResult, isNotNull);
 
             // The assistant should have remembered the number
-            final assistantMessages =
-                followUpMessages.whereType<SDKAssistantMessage>().toList();
-            expect(assistantMessages, isNotEmpty);
+            final textEvents =
+                followUpEvents.whereType<TextEvent>().toList();
+            expect(textEvents, isNotEmpty);
 
             // Check that the response contains "42"
-            final responseText = assistantMessages
-                .expand((m) => m.message.content)
-                .whereType<TextBlock>()
-                .map((t) => t.text)
-                .join(' ');
+            final responseText = textEvents.map((e) => e.text).join(' ');
 
             expect(responseText.toLowerCase(), contains('42'));
           } finally {
@@ -406,28 +419,28 @@ void main() {
           );
 
           try {
-            // Act - collect all messages including stream events
-            final messages = <SDKMessage>[];
-            final streamEvents = <SDKStreamEvent>[];
+            // Act - collect all events including stream deltas
+            final events = <InsightsEvent>[];
+            final streamEvents = <StreamDeltaEvent>[];
 
-            await for (final message in session.messages.timeout(
+            await for (final event in session.events.timeout(
               Duration(seconds: 45),
               onTimeout: (sink) => sink.close(),
             )) {
-              messages.add(message);
-              if (message is SDKStreamEvent) {
-                streamEvents.add(message);
+              events.add(event);
+              if (event is StreamDeltaEvent) {
+                streamEvents.add(event);
               }
-              if (message is SDKResultMessage) {
+              if (event is TurnCompleteEvent) {
                 break;
               }
             }
 
             // Assert - we should have received stream events for partial text
             // Note: The CLI may or may not send stream events depending on config
-            expect(messages, isNotEmpty);
+            expect(events, isNotEmpty);
             expect(
-              messages.whereType<SDKResultMessage>().firstOrNull,
+              events.whereType<TurnCompleteEvent>().firstOrNull,
               isNotNull,
             );
 
@@ -461,15 +474,15 @@ void main() {
           );
 
           try {
-            // Start listening for messages
-            var messageCount = 0;
+            // Start listening for events
+            var eventCount = 0;
             var interrupted = false;
 
-            // Listen and count messages
-            final sub = session.messages.listen((message) {
-              messageCount++;
-              // After a few messages, interrupt
-              if (messageCount >= 3 && !interrupted) {
+            // Listen and count events
+            final sub = session.events.listen((event) {
+              eventCount++;
+              // After a few events, interrupt
+              if (eventCount >= 3 && !interrupted) {
                 interrupted = true;
                 session.interrupt();
               }
@@ -485,8 +498,8 @@ void main() {
 
             // Assert - session should no longer be active after interrupt completes
             // Note: The actual behavior depends on CLI implementation
-            // At minimum, we should have received some messages
-            expect(messageCount, greaterThan(0));
+            // At minimum, we should have received some events
+            expect(eventCount, greaterThan(0));
           } finally {
             await session.dispose();
           }
@@ -524,7 +537,7 @@ void main() {
       );
 
       test(
-        'emits InsightsEvents on events stream (Task 2c)',
+        'emits InsightsEvents on events stream',
         () async {
           // Arrange
           final session = await CliSession.create(
@@ -538,36 +551,30 @@ void main() {
           );
 
           try {
-            // Act - collect both SDKMessages and InsightsEvents
-            final messages = <SDKMessage>[];
+            // Act - collect InsightsEvents
             final events = <InsightsEvent>[];
-            SDKResultMessage? result;
+            TurnCompleteEvent? result;
 
-            // Listen to both streams
-            final eventsSub = session.events.listen(events.add);
-
-            await for (final message in session.messages.timeout(
+            await for (final event in session.events.timeout(
               Duration(seconds: 45),
               onTimeout: (sink) => sink.close(),
             )) {
-              messages.add(message);
-              if (message is SDKResultMessage) {
-                result = message;
+              events.add(event);
+              if (event is TurnCompleteEvent) {
+                result = event;
                 break;
               }
             }
 
-            // Give events time to be emitted
-            await Future.delayed(Duration(milliseconds: 500));
-            await eventsSub.cancel();
-
             // Assert - verify we received InsightsEvents
             expect(result, isNotNull, reason: 'Should have received a result');
-            expect(events, isNotEmpty, reason: 'Should have received InsightsEvents');
+            expect(events, isNotEmpty,
+                reason: 'Should have received InsightsEvents');
 
             // Verify we got a SessionInitEvent (from initialization)
             final initEvents = events.whereType<SessionInitEvent>().toList();
-            expect(initEvents, isNotEmpty, reason: 'Should have SessionInitEvent');
+            expect(initEvents, isNotEmpty,
+                reason: 'Should have SessionInitEvent');
             final initEvent = initEvents.first;
             expect(initEvent.sessionId, isNotEmpty);
             expect(initEvent.model, isNotEmpty);
@@ -575,11 +582,14 @@ void main() {
 
             // Verify we got TextEvents (from assistant response)
             final textEvents = events.whereType<TextEvent>().toList();
-            expect(textEvents, isNotEmpty, reason: 'Should have TextEvents from assistant');
+            expect(textEvents, isNotEmpty,
+                reason: 'Should have TextEvents from assistant');
 
             // Verify we got a TurnCompleteEvent (from result)
-            final completeEvents = events.whereType<TurnCompleteEvent>().toList();
-            expect(completeEvents, isNotEmpty, reason: 'Should have TurnCompleteEvent');
+            final completeEvents =
+                events.whereType<TurnCompleteEvent>().toList();
+            expect(completeEvents, isNotEmpty,
+                reason: 'Should have TurnCompleteEvent');
             final completeEvent = completeEvents.first;
             expect(completeEvent.isError, isFalse);
             expect(completeEvent.usage, isNotNull);
@@ -590,7 +600,7 @@ void main() {
             expect(initEvent.provider, equals(BackendProvider.claude));
             expect(completeEvent.provider, equals(BackendProvider.claude));
 
-            print('✓ InsightsEvents verification:');
+            print('InsightsEvents verification:');
             print('  - ${initEvents.length} SessionInitEvent(s)');
             print('  - ${textEvents.length} TextEvent(s)');
             print('  - ${completeEvents.length} TurnCompleteEvent(s)');
