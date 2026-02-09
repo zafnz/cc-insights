@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
@@ -177,6 +178,7 @@ class _FakeTestSession implements TestSession {
 Widget createTestAppWithProviders({
   BackendService? backendService,
   SdkMessageHandler? messageHandler,
+  EventHandler? eventHandler,
   ProjectState? project,
   Widget? child,
 }) {
@@ -188,11 +190,13 @@ Widget createTestAppWithProviders({
   );
   final testBackend = backendService ?? FakeBackendService();
   final testHandler = messageHandler ?? SdkMessageHandler();
+  final testEventHandler = eventHandler ?? EventHandler();
 
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<BackendService>.value(value: testBackend),
       Provider<SdkMessageHandler>.value(value: testHandler),
+      Provider<EventHandler>.value(value: testEventHandler),
       ChangeNotifierProvider<ProjectState>.value(value: testProject),
       ChangeNotifierProxyProvider<ProjectState, SelectionState>(
         create: (context) => SelectionState(context.read<ProjectState>()),

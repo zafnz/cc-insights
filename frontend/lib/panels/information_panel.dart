@@ -10,6 +10,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/ask_ai_service.dart';
 import '../services/backend_service.dart';
+import '../services/event_handler.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
 import '../services/log_service.dart';
@@ -464,6 +465,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final project = context.read<ProjectState>();
     final backend = context.read<BackendService>();
     final messageHandler = context.read<SdkMessageHandler>();
+    final eventHandler = context.read<EventHandler>();
     final restoreService = context.read<ProjectRestoreService>();
     final wt = selection.selectedWorktree;
     if (wt == null) return;
@@ -531,6 +533,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       await chat.startSession(
         backend: backend,
         messageHandler: messageHandler,
+        eventHandler: eventHandler,
         prompt: preamble,
       );
     } catch (e) {

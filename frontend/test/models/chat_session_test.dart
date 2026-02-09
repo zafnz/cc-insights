@@ -4,6 +4,7 @@ import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/conversation.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
@@ -263,8 +264,14 @@ SDKMessage createFakeAssistantMessage({
 
 void main() {
   final resources = TestResources();
+  late EventHandler eventHandler;
+
+  setUp(() {
+    eventHandler = EventHandler();
+  });
 
   tearDown(() async {
+    eventHandler.dispose();
     await resources.disposeAll();
   });
 
@@ -310,6 +317,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello Claude',
         );
 
@@ -336,6 +344,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -355,6 +364,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'First session',
         );
 
@@ -363,6 +373,7 @@ void main() {
           state.startSession(
             backend: backend,
             messageHandler: handler,
+            eventHandler: eventHandler,
             prompt: 'Second session',
           ),
         ).throws<StateError>();
@@ -386,6 +397,7 @@ void main() {
           state.startSession(
             backend: backend,
             messageHandler: handler,
+            eventHandler: eventHandler,
             prompt: 'Hello',
           ),
         ).throws<StateError>();
@@ -406,6 +418,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -431,6 +444,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Initial',
         );
 
@@ -473,6 +487,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -497,6 +512,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -527,6 +543,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -679,6 +696,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -712,6 +730,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -748,6 +767,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
@@ -778,6 +798,7 @@ void main() {
         await state.startSession(
           backend: backend,
           messageHandler: handler,
+          eventHandler: eventHandler,
           prompt: 'Hello',
         );
 

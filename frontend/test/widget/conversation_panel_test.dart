@@ -7,6 +7,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
+import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
@@ -329,12 +330,14 @@ void main() {
     late FakeBackendService fakeBackend;
     late FakeCliAvailabilityService fakeCliAvailability;
     late FakeSdkMessageHandler fakeMessageHandler;
+    late EventHandler fakeEventHandler;
     late ChatState testChat;
 
     setUp(() {
       fakeBackend = FakeBackendService();
       fakeCliAvailability = FakeCliAvailabilityService();
       fakeMessageHandler = FakeSdkMessageHandler();
+      fakeEventHandler = EventHandler();
 
       // Create a chat for testing (NOT tracked separately - owned by worktree)
       testChat = ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path');
@@ -372,6 +375,7 @@ void main() {
 
     tearDown(() async {
       fakeMessageHandler.dispose();
+      fakeEventHandler.dispose();
       await resources.disposeAll();
     });
 
@@ -386,6 +390,7 @@ void main() {
               value: fakeCliAvailability,
             ),
             Provider<SdkMessageHandler>.value(value: fakeMessageHandler),
+            Provider<EventHandler>.value(value: fakeEventHandler),
             ChangeNotifierProvider(create: (_) => ThemeState()),
           ],
           child: const Scaffold(

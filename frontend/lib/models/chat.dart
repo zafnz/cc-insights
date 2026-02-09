@@ -10,6 +10,7 @@ import '../services/notification_service.dart';
 import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
 import '../services/runtime_config.dart';
+import '../services/event_handler.dart';
 import '../services/sdk_message_handler.dart';
 import 'agent.dart';
 import 'chat_model.dart';
@@ -217,6 +218,9 @@ class ChatState extends ChangeNotifier {
 
   /// Subscription to the session's message stream.
   StreamSubscription<sdk.SDKMessage>? _messageSubscription;
+
+  /// Subscription to the session's events stream (for EventHandler).
+  StreamSubscription<sdk.InsightsEvent>? _eventSubscription;
 
   /// Subscription to the session's permission request stream.
   StreamSubscription<sdk.PermissionRequest>? _permissionSubscription;
@@ -807,9 +811,10 @@ class ChatState extends ChangeNotifier {
 
   /// Starts a new SDK session for this chat.
   ///
-  /// Creates a session via [BackendService] and subscribes to message and
-  /// permission request streams. The [messageHandler] is used to route
-  /// incoming messages to the appropriate conversation.
+  /// Creates a session via [BackendService] and subscribes to message,
+  /// event, and permission request streams. The [messageHandler] is used to
+  /// route incoming messages to the appropriate conversation. The
+  /// [eventHandler] consumes the typed events stream in parallel.
   ///
   /// If [lastSessionId] is set, attempts to resume that session instead of
   /// creating a fresh one. This allows conversations to continue across app
@@ -820,6 +825,7 @@ class ChatState extends ChangeNotifier {
   Future<void> startSession({
     required BackendService backend,
     required SdkMessageHandler messageHandler,
+    required EventHandler eventHandler,
     required String prompt,
     List<AttachedImage> images = const [],
   }) async {
@@ -954,6 +960,17 @@ class ChatState extends ChangeNotifier {
       },
     );
 
+    // Subscribe to events stream for EventHandler
+    _eventSubscription = _session!.events.listen(
+      (event) {
+        eventHandler.handleEvent(this, event);
+      },
+      onError: (error) {
+        // Errors already handled by message stream subscription
+        _t('ChatState', 'Event stream ERROR: $error');
+      },
+    );
+
     // Subscribe to permission requests
     _t('ChatState', 'Subscribing to permission requests...');
     _permissionSubscription = _session!.permissionRequests.listen(
@@ -1028,10 +1045,12 @@ class ChatState extends ChangeNotifier {
     _t('ChatState', 'stopSession (chat=${_data.id}, hasSession=${_session != null})');
     await _messageSubscription?.cancel();
     await _permissionSubscription?.cancel();
+    await _eventSubscription?.cancel();
     await _session?.kill();
 
     _session = null;
     _messageSubscription = null;
+    _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();
@@ -1120,7 +1139,7 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the working state.
   ///
-  /// Called by [SdkMessageHandler] when starting/stopping work.
+  /// Called by [SdkMessageHandler] or [EventHandler] when starting/stopping work.
   /// When [working] is true, records the current time as [_workingStartTime].
   /// When [working] is false, calculates elapsed time and adds it to
   /// [_timingStats], then clears [_workingStartTime].
@@ -1141,7 +1160,7 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the compacting state.
   ///
-  /// Called by [SdkMessageHandler] when receiving system status messages
+  /// Called by [SdkMessageHandler] or [EventHandler] when receiving system status messages
   /// for context compaction. The UI can use [isCompacting] to show a
   /// different indicator during compaction.
   void setCompacting(bool compacting) {
@@ -1305,6 +1324,7 @@ class ChatState extends ChangeNotifier {
     _isCompacting = false;
     _workingStartTime = null;
     _messageSubscription = null;
+    _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();
@@ -1372,7 +1392,9 @@ class ChatState extends ChangeNotifier {
     _workingStartTime = null;
     _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
+    _eventSubscription?.cancel();
     _messageSubscription = null;
+    _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();
@@ -1592,16 +1614,16 @@ class ChatState extends ChangeNotifier {
 
   /// Persists a streaming entry that has been finalized.
   ///
-  /// Called by [SdkMessageHandler] when the complete assistant message
-  /// arrives and finalizes a previously streaming entry. Only persists
-  /// entries belonging to the primary conversation.
+  /// Called by [SdkMessageHandler] or [EventHandler] when the complete
+  /// assistant message arrives and finalizes a previously streaming entry.
+  /// Only persists entries belonging to the primary conversation.
   void persistStreamingEntry(OutputEntry entry) {
     _persistEntry(entry);
   }
 
   /// Persists a tool result to the chat's JSONL file.
   ///
-  /// This is called by [SdkMessageHandler] when a tool result arrives.
+  /// This is called by [SdkMessageHandler] or [EventHandler] when a tool result arrives.
   /// The result is stored as a separate [ToolResultEntry] which will be
   /// merged with the corresponding [ToolUseOutputEntry] when the history
   /// is loaded.
@@ -1706,8 +1728,8 @@ class ChatState extends ChangeNotifier {
 
   /// Notifies listeners that the state has changed.
   ///
-  /// This is exposed for use by [SdkMessageHandler] when updating
-  /// entries in-place (e.g., tool result pairing).
+  /// This is exposed for use by [SdkMessageHandler] and [EventHandler]
+  /// when updating entries in-place (e.g., tool result pairing).
   // ignore: unnecessary_override - purposely exposed for external use
   @override
   void notifyListeners() {
@@ -1721,11 +1743,13 @@ class ChatState extends ChangeNotifier {
     // Cancel stream subscriptions.
     _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
+    _eventSubscription?.cancel();
     // Kill the session if active.
     _session?.kill();
     _session = null;
     _testHasActiveSession = false;
     _messageSubscription = null;
+    _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();

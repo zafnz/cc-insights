@@ -33,6 +33,7 @@ import 'services/runtime_config.dart';
 import 'services/project_config_service.dart';
 import 'services/settings_service.dart';
 import 'services/script_execution_service.dart';
+import 'services/event_handler.dart';
 import 'services/sdk_message_handler.dart';
 import 'services/worktree_watcher_service.dart';
 import 'services/menu_action_service.dart';
@@ -156,7 +157,15 @@ class CCInsightsApp extends StatefulWidget {
   /// Optional SdkMessageHandler instance for dependency injection in tests.
   final SdkMessageHandler? messageHandler;
 
-  const CCInsightsApp({super.key, this.backendService, this.messageHandler});
+  /// Optional EventHandler instance for dependency injection in tests.
+  final EventHandler? eventHandler;
+
+  const CCInsightsApp({
+    super.key,
+    this.backendService,
+    this.messageHandler,
+    this.eventHandler,
+  });
 
   @override
   State<CCInsightsApp> createState() => _CCInsightsAppState();
@@ -169,6 +178,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// The SDK message handler - created once in initState.
   SdkMessageHandler? _handler;
+
+  /// The event handler for typed InsightsEvent consumption.
+  EventHandler? _eventHandler;
 
   /// The project restore service - shared for persistence operations.
   ProjectRestoreService? _restoreService;
@@ -367,6 +379,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Pass askAiService for auto-generating chat titles
     _handler =
         widget.messageHandler ?? SdkMessageHandler(askAiService: _askAiService);
+
+    // Create or use injected EventHandler
+    _eventHandler =
+        widget.eventHandler ?? EventHandler(askAiService: _askAiService);
 
     // Initialize project (sync for mock, async for CLI launch)
     // If showing welcome screen, defer project loading until user selects one
@@ -582,6 +598,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     }
     if (widget.messageHandler == null) {
       _handler?.dispose();
+    }
+    if (widget.eventHandler == null) {
+      _eventHandler?.dispose();
     }
     super.dispose();
   }
@@ -935,6 +954,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<BackendService>.value(value: _backend!),
         // SDK message handler (stateless - shared across all chats)
         Provider<SdkMessageHandler>.value(value: _handler!),
+        // Event handler for typed InsightsEvent consumption
+        Provider<EventHandler>.value(value: _eventHandler!),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
         // Git service for git operations (stateless)

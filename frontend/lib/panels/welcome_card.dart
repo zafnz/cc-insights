@@ -11,6 +11,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/backend_service.dart';
 import '../services/cli_availability_service.dart';
+import '../services/event_handler.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
 import '../services/sdk_message_handler.dart';
@@ -198,6 +199,7 @@ class WelcomeCard extends StatelessWidget {
     final project = context.read<ProjectState>();
     final backend = context.read<BackendService>();
     final messageHandler = context.read<SdkMessageHandler>();
+    final eventHandler = context.read<EventHandler>();
     final restoreService = context.read<ProjectRestoreService>();
 
     // Determine the chat name based on AI label setting
@@ -259,13 +261,14 @@ class WelcomeCard extends StatelessWidget {
     chat.addEntry(userEntry);
 
     // Generate a better title for the chat (fire-and-forget)
-    messageHandler.generateChatTitle(chat, text);
+    eventHandler.generateChatTitle(chat, text);
 
     // Start session with the first message (including images if attached)
     try {
       await chat.startSession(
         backend: backend,
         messageHandler: messageHandler,
+        eventHandler: eventHandler,
         prompt: text,
         images: images,
       );
