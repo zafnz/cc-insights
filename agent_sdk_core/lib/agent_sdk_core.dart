@@ -12,5 +12,7 @@ export 'src/types/errors.dart';
 export 'src/types/insights_events.dart';
 export 'src/types/permission_suggestion.dart';
 export 'src/types/session_options.dart';
+export 'src/transport/event_transport.dart';
+export 'src/transport/in_process_transport.dart';
 export 'src/types/tool_kind.dart';
 export 'src/types/usage.dart';
