@@ -151,6 +151,12 @@ class McpServerStatus {
           : null,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'status': status.toJsonString(),
+        if (serverInfo != null) 'serverInfo': serverInfo!.toJson(),
+      };
 }
 
 /// MCP server connection status.
@@ -173,6 +179,12 @@ enum McpStatus {
         return McpStatus.pending;
     }
   }
+
+  /// Wire-format string (matches [fromString] input).
+  String toJsonString() => switch (this) {
+        McpStatus.needsAuth => 'needs-auth',
+        _ => name,
+      };
 }
 
 /// MCP server info.
@@ -191,6 +203,11 @@ class McpServerInfo {
       version: json['version'] as String? ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'version': version,
+      };
 }
 
 /// Account information.

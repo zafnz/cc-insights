@@ -3,6 +3,7 @@ library agent_sdk_core;
 
 export 'src/backend_interface.dart';
 export 'src/sdk_logger.dart';
+export 'src/types/backend_commands.dart';
 export 'src/types/backend_provider.dart';
 export 'src/types/callbacks.dart';
 export 'src/types/content_blocks.dart';
