@@ -615,6 +615,69 @@ void main() {
         expect(event.modelUsage?.containsKey('gpt-5.2-codex'), isTrue);
         expect(event.modelUsage?['gpt-5.2-codex']?.contextWindow, 128000);
       });
+
+      test('includes lastStepUsage in extensions from last token usage', () async {
+        session.injectNotification(JsonRpcNotification(
+          method: 'thread/tokenUsage/updated',
+          params: {
+            'threadId': 'test-thread',
+            'tokenUsage': {
+              'total': {
+                'inputTokens': 29074,
+                'outputTokens': 494,
+                'cachedInputTokens': 18816,
+              },
+              'last': {
+                'inputTokens': 14788,
+                'outputTokens': 434,
+                'cachedInputTokens': 14208,
+              },
+              'modelContextWindow': 258400,
+            },
+          },
+        ));
+
+        session.injectNotification(JsonRpcNotification(
+          method: 'turn/completed',
+          params: {
+            'threadId': 'test-thread',
+          },
+        ));
+        await waitForEvents();
+        expect(capturedEvents, hasLength(1));
+        final event = capturedEvents.first as TurnCompleteEvent;
+        final lastStep = event.extensions?['lastStepUsage'] as Map<String, dynamic>?;
+        expect(lastStep, isNotNull);
+        expect(lastStep!['input_tokens'], 14788);
+        expect(lastStep['cache_read_input_tokens'], 14208);
+        expect(lastStep['cache_creation_input_tokens'], 0);
+      });
+
+      test('omits lastStepUsage when no last token usage available', () async {
+        session.injectNotification(JsonRpcNotification(
+          method: 'thread/tokenUsage/updated',
+          params: {
+            'threadId': 'test-thread',
+            'tokenUsage': {
+              'total': {
+                'inputTokens': 5000,
+                'outputTokens': 1500,
+              },
+            },
+          },
+        ));
+
+        session.injectNotification(JsonRpcNotification(
+          method: 'turn/completed',
+          params: {
+            'threadId': 'test-thread',
+          },
+        ));
+        await waitForEvents();
+        expect(capturedEvents, hasLength(1));
+        final event = capturedEvents.first as TurnCompleteEvent;
+        expect(event.extensions, isNull);
+      });
     });
 
     group('PermissionRequestEvent', () {

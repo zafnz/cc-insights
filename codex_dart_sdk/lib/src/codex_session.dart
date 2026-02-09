@@ -539,6 +539,20 @@ class CodexSession implements AgentSession {
       };
     }
 
+    // Build lastStepUsage from the per-API-call "last" field for context tracking.
+    // Uses Claude-compatible field names so ContextTracker.updateFromUsage works.
+    final lastUsage = _latestTokenUsage?['last'] as Map<String, dynamic>?;
+    final lastInput = (lastUsage?['inputTokens'] as num?)?.toInt() ?? 0;
+    final lastCached = (lastUsage?['cachedInputTokens'] as num?)?.toInt() ?? 0;
+    Map<String, dynamic>? lastStepUsage;
+    if (lastInput > 0) {
+      lastStepUsage = {
+        'input_tokens': lastInput,
+        'cache_read_input_tokens': lastCached,
+        'cache_creation_input_tokens': 0,
+      };
+    }
+
     _eventsController.add(TurnCompleteEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -553,6 +567,9 @@ class CodexSession implements AgentSession {
         cacheReadTokens: cachedInput > 0 ? cachedInput : null,
       ),
       modelUsage: modelUsage,
+      extensions: lastStepUsage != null
+          ? {'lastStepUsage': lastStepUsage}
+          : null,
     ));
   }
 
