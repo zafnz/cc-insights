@@ -6,7 +6,6 @@ import 'backend_interface.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/insights_events.dart';
-import 'types/sdk_messages.dart';
 
 /// A test-only session for use in widget and integration tests.
 ///

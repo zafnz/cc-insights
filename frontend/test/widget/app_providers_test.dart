@@ -109,7 +109,6 @@ class _FakeTestSession implements TestSession {
   String? get resolvedSessionId => sdkSessionId ?? sessionId;
 
   @override
-  Stream<SDKMessage> get messages => const Stream.empty();
 
   @override
   Stream<InsightsEvent> get events => const Stream.empty();
@@ -152,7 +151,6 @@ class _FakeTestSession implements TestSession {
   Future<void> Function(String message)? onTestSend;
 
   @override
-  void emitTestMessage(SDKMessage message) {}
 
   @override
   void emitTestEvent(InsightsEvent event) {}

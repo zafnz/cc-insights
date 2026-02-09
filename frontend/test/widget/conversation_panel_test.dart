@@ -174,7 +174,6 @@ class _CreateSessionCall {
 
 /// Minimal fake TestSession for testing.
 class FakeTestSession implements sdk.TestSession {
-  final _messagesController = StreamController<sdk.SDKMessage>.broadcast();
   final _eventsController = StreamController<sdk.InsightsEvent>.broadcast();
   final _permissionsController =
       StreamController<sdk.PermissionRequest>.broadcast();
@@ -191,9 +190,6 @@ class FakeTestSession implements sdk.TestSession {
 
   @override
   String? get resolvedSessionId => sdkSessionId ?? sessionId;
-
-  @override
-  Stream<sdk.SDKMessage> get messages => _messagesController.stream;
 
   @override
   Stream<sdk.InsightsEvent> get events => _eventsController.stream;
@@ -239,11 +235,6 @@ class FakeTestSession implements sdk.TestSession {
   Future<void> Function(String message)? onTestSend;
 
   @override
-  void emitTestMessage(sdk.SDKMessage message) {
-    _messagesController.add(message);
-  }
-
-  @override
   void emitTestEvent(sdk.InsightsEvent event) {
     _eventsController.add(event);
   }
@@ -258,7 +249,6 @@ class FakeTestSession implements sdk.TestSession {
       sdk.PermissionDenyResponse(message: 'Test deny');
 
   void dispose() {
-    _messagesController.close();
     _eventsController.close();
     _permissionsController.close();
     _hooksController.close();

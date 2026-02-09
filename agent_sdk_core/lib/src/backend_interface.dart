@@ -7,7 +7,6 @@ import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
 import 'types/errors.dart';
 import 'types/insights_events.dart';
-import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 import 'types/usage.dart';
 

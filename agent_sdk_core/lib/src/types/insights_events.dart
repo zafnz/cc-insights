@@ -2,9 +2,36 @@ import 'package:meta/meta.dart';
 
 import 'backend_provider.dart';
 import 'content_blocks.dart';
-import 'sdk_messages.dart' show PermissionDenial;
 import 'tool_kind.dart';
 import 'usage.dart';
+
+// ---------------------------------------------------------------------------
+// Supporting types
+// ---------------------------------------------------------------------------
+
+/// Represents a permission denial in a turn result.
+///
+/// Records when the agent requested permission to use a tool but the user
+/// denied that permission.
+class PermissionDenial {
+  const PermissionDenial({
+    required this.toolName,
+    required this.toolUseId,
+    required this.toolInput,
+  });
+
+  factory PermissionDenial.fromJson(Map<String, dynamic> json) {
+    return PermissionDenial(
+      toolName: json['tool_name'] as String? ?? '',
+      toolUseId: json['tool_use_id'] as String? ?? '',
+      toolInput: json['tool_input'] as Map<String, dynamic>? ?? {},
+    );
+  }
+
+  final String toolName;
+  final String toolUseId;
+  final Map<String, dynamic> toolInput;
+}
 
 // ---------------------------------------------------------------------------
 // Supporting enums

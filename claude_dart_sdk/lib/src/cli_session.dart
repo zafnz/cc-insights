@@ -7,7 +7,6 @@ import 'types/content_blocks.dart';
 import 'types/control_messages.dart';
 import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
-import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 import 'types/tool_kind.dart';
 import 'types/usage.dart';
@@ -27,7 +26,6 @@ class CliSession {
   CliSession._({
     required CliProcess process,
     required this.sessionId,
-    required this.systemInit,
     Map<String, dynamic>? controlResponseData,
   })  : _process = process,
         _controlResponseData = controlResponseData {
@@ -36,7 +34,6 @@ class CliSession {
 
   final CliProcess _process;
   final String sessionId;
-  final SDKSystemMessage systemInit;
   /// Data from the control_response received during initialization.
   /// Merged into SessionInitEvent when system/init arrives.
   final Map<String, dynamic>? _controlResponseData;
@@ -800,7 +797,7 @@ class CliSession {
       // Step 3: Wait for control_response and system init
       _t('CliSession', 'Step 3: Waiting for control_response AND system init (timeout=${timeout.inSeconds}s)...');
       String? sessionId;
-      SDKSystemMessage? systemInit;
+      bool systemInitReceived = false;
       bool controlResponseReceived = false;
       Map<String, dynamic>? controlResponseData;
       int messagesReceived = 0;
@@ -823,7 +820,7 @@ class CliSession {
           final sysSubtype = json['subtype'] as String?;
           if (sysSubtype == 'init') {
             sessionId = json['session_id'] as String?;
-            systemInit = SDKSystemMessage.fromJson(json);
+            systemInitReceived = true;
             _t('CliSession', 'Step 3: system init received, sessionId=$sessionId');
             SdkLogger.instance.debug('Received system init',
                 sessionId: sessionId);
@@ -835,7 +832,7 @@ class CliSession {
         }
 
         // We have everything we need
-        if (controlResponseReceived && sessionId != null && systemInit != null) {
+        if (controlResponseReceived && sessionId != null && systemInitReceived) {
           _t('CliSession', 'Step 3: Both handshake messages received!');
           break;
         }
@@ -852,7 +849,7 @@ class CliSession {
         SdkLogger.instance.error('Session creation timed out: no control_response');
         throw StateError('Session creation timed out: no control_response');
       }
-      if (sessionId == null || systemInit == null) {
+      if (sessionId == null || !systemInitReceived) {
         _t('CliSession', 'TIMEOUT: No system init after ${stopwatch.elapsedMilliseconds}ms ($messagesReceived messages received)');
         SdkLogger.instance.error('Session creation timed out: no system init');
         throw StateError('Session creation timed out: no system init');
@@ -866,7 +863,6 @@ class CliSession {
       return CliSession._(
         process: process,
         sessionId: sessionId,
-        systemInit: systemInit,
         controlResponseData: controlResponseData,
       );
     } catch (e) {

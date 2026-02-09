@@ -150,7 +150,6 @@ class FakeAgentSession implements AgentSession {
   String? get resolvedSessionId => 'fake-sdk-session-id';
 
   @override
-  Stream<SDKMessage> get messages => const Stream.empty();
 
   @override
   Stream<InsightsEvent> get events => const Stream.empty();

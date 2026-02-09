@@ -104,7 +104,6 @@ class _FakeSession implements sdk.AgentSession {
   bool get isActive => true;
 
   @override
-  Stream<sdk.SDKMessage> get messages => const Stream.empty();
 
   @override
   Stream<sdk.InsightsEvent> get events => const Stream.empty();

@@ -9,7 +9,6 @@ import 'types/content_blocks.dart';
 import 'types/errors.dart';
 import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
-import 'types/sdk_messages.dart';
 import 'types/session_options.dart';
 
 /// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
