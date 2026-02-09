@@ -435,14 +435,15 @@ class EventHandler {
         );
       }
 
-      // Update context tracker with current token counts
-      if (event.usage != null) {
-        final u = event.usage!;
-        chat.updateContextFromUsage({
-          'input_tokens': u.inputTokens,
-          'cache_creation_input_tokens': u.cacheCreationTokens ?? 0,
-          'cache_read_input_tokens': u.cacheReadTokens ?? 0,
-        });
+      // Update context tracker with the last step's per-API-call usage.
+      // The result message's `usage` is cumulative across all steps in a turn,
+      // which inflates the context count. Instead, we use `lastStepUsage`
+      // from extensions — the usage from the final assistant message, which
+      // reflects the actual context window size.
+      final lastStepUsage =
+          event.extensions?['lastStepUsage'] as Map<String, dynamic>?;
+      if (lastStepUsage != null) {
+        chat.updateContextFromUsage(lastStepUsage);
       }
 
       chat.setWorking(false);

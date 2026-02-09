@@ -40,6 +40,15 @@ class CliSession {
 
   int _eventIdCounter = 0;
 
+  /// Per-step usage from the most recent assistant message in the current turn.
+  ///
+  /// Each assistant message contains `message.usage` with per-API-call token
+  /// counts. We stash the last one so that `_convertResult()` can attach it
+  /// to [TurnCompleteEvent] via extensions. This gives the frontend the
+  /// actual context window size at the end of the turn, rather than the
+  /// cumulative usage across all steps.
+  Map<String, dynamic>? _lastAssistantUsage;
+
   /// Generate a unique event ID for this session.
   String _nextEventId() {
     _eventIdCounter++;
@@ -335,6 +344,14 @@ class CliSession {
     final model = message?['model'] as String?;
     final content = message?['content'] as List?;
 
+    // Stash per-step usage from this assistant message. Each assistant message
+    // carries usage for a single API call (step). The last one in a turn
+    // reflects the actual context window size.
+    final messageUsage = message?['usage'] as Map<String, dynamic>?;
+    if (messageUsage != null) {
+      _lastAssistantUsage = messageUsage;
+    }
+
     if (content == null || content.isEmpty) return [];
 
     final events = <InsightsEvent>[];
@@ -551,12 +568,22 @@ class CliSession {
           .toList();
     }
 
+    // Attach the last assistant message's per-step usage as an extension.
+    // This is the actual context window size at the end of the turn,
+    // as opposed to `usage` which is cumulative across all steps.
+    final extensions = <String, dynamic>{};
+    if (_lastAssistantUsage != null) {
+      extensions['lastStepUsage'] = Map<String, dynamic>.from(_lastAssistantUsage!);
+      _lastAssistantUsage = null; // Reset for next turn
+    }
+
     return [
       TurnCompleteEvent(
         id: _nextEventId(),
         timestamp: DateTime.now(),
         provider: BackendProvider.claude,
         raw: json,
+        extensions: extensions.isNotEmpty ? extensions : null,
         sessionId: sid,
         isError: json['is_error'] as bool? ?? false,
         subtype: json['subtype'] as String?,

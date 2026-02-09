@@ -10,7 +10,8 @@
       "Bash(./init.sh)",
       "Read(//Users/zaf/projects/cc-insights/.claude/agent-memory/flutter-engineer/**)",
       "Bash(./frontend/run-flutter-test.sh:*)",
-      "Bash(./run-flutter-test.sh:*)"
+      "Bash(./run-flutter-test.sh:*)",
+      "Bash(dart test:*)"
     ]
   }
 }

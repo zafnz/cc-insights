@@ -53,7 +53,7 @@ void main() {
         check(tracker.currentTokens).equals(5000);
       });
 
-      test('updates current tokens including cache_creation_input_tokens', () {
+      test('includes cache_creation_input_tokens in context count', () {
         // Arrange
         final tracker = resources.track(ContextTracker());
         final usage = {
@@ -64,7 +64,7 @@ void main() {
         // Act
         tracker.updateFromUsage(usage);
 
-        // Assert
+        // Assert - all token fields are part of the prompt size
         check(tracker.currentTokens).equals(6000);
       });
 
@@ -83,7 +83,7 @@ void main() {
         check(tracker.currentTokens).equals(7000);
       });
 
-      test('updates current tokens with all fields combined', () {
+      test('sums all three token fields for total prompt size', () {
         // Arrange
         final tracker = resources.track(ContextTracker());
         final usage = {
@@ -95,7 +95,7 @@ void main() {
         // Act
         tracker.updateFromUsage(usage);
 
-        // Assert
+        // Assert - all three fields sum to total prompt size (5000 + 1000 + 2000 = 8000)
         check(tracker.currentTokens).equals(8000);
       });
 
@@ -273,6 +273,81 @@ void main() {
 
         // Act & Assert (150000 / 100000 = 150%)
         check(tracker.percentUsed).equals(150.0);
+      });
+    });
+
+    group('updateAutocompactBuffer', () {
+      test('starts with null autocompactBufferPercent', () {
+        // Arrange
+        final tracker = resources.track(ContextTracker());
+
+        // Assert
+        check(tracker.autocompactBufferPercent).isNull();
+      });
+
+      test('sets autocompact buffer when valid value provided', () {
+        // Arrange
+        final tracker = resources.track(ContextTracker());
+
+        // Act
+        tracker.updateAutocompactBuffer(22.5);
+
+        // Assert
+        check(tracker.autocompactBufferPercent).equals(22.5);
+      });
+
+      test('clears autocompact buffer when null provided', () {
+        // Arrange
+        final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
+        check(tracker.autocompactBufferPercent).equals(22.5); // verify setup
+
+        // Act
+        tracker.updateAutocompactBuffer(null);
+
+        // Assert
+        check(tracker.autocompactBufferPercent).isNull();
+      });
+
+      test('notifies listeners when value changes', () {
+        // Arrange
+        final tracker = resources.track(ContextTracker());
+        var notified = false;
+        tracker.addListener(() => notified = true);
+
+        // Act
+        tracker.updateAutocompactBuffer(22.5);
+
+        // Assert
+        check(notified).isTrue();
+      });
+
+      test('does not notify listeners when value is unchanged', () {
+        // Arrange
+        final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
+        var notifyCount = 0;
+        tracker.addListener(() => notifyCount++);
+
+        // Act
+        tracker.updateAutocompactBuffer(22.5);
+
+        // Assert
+        check(notifyCount).equals(0);
+      });
+
+      test('notifies listeners when changing from value to null', () {
+        // Arrange
+        final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
+        var notified = false;
+        tracker.addListener(() => notified = true);
+
+        // Act
+        tracker.updateAutocompactBuffer(null);
+
+        // Assert
+        check(notified).isTrue();
       });
     });
 

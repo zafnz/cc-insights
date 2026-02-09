@@ -918,6 +918,14 @@ class ChatState extends ChangeNotifier {
 
     _markStarted();
 
+    // Set autocompact buffer based on backend type.
+    // Claude uses a 22.5% buffer; Codex buffer is unknown.
+    if (model.backend == sdk.BackendType.directCli) {
+      _contextTracker.updateAutocompactBuffer(22.5);
+    } else {
+      _contextTracker.updateAutocompactBuffer(null);
+    }
+
     // Store the new session ID for future resume.
     // Use resolvedSessionId which returns the SDK's session ID if available.
     final transport = _transport!;
@@ -1577,6 +1585,7 @@ class ChatState extends ChangeNotifier {
       'cache_read_input_tokens': 0,
     });
     _contextTracker.updateMaxTokens(context.maxTokens);
+    _contextTracker.updateAutocompactBuffer(context.autocompactBufferPercent);
 
     // Set both current and base values from persisted state.
     // The base values are used when a new session provides cumulative data -
@@ -1678,6 +1687,7 @@ class ChatState extends ChangeNotifier {
         context: ContextInfo(
           currentTokens: _contextTracker.currentTokens,
           maxTokens: _contextTracker.maxTokens,
+          autocompactBufferPercent: _contextTracker.autocompactBufferPercent,
         ),
         usage: _cumulativeUsage,
         modelUsage: _modelUsage,

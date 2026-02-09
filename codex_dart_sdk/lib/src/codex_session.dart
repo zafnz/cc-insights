@@ -55,6 +55,8 @@ class CodexSession implements AgentSession {
   Set<String> get tempImagePaths => _tempImagePaths;
 
   Map<String, dynamic>? _latestTokenUsage;
+  int? _modelContextWindow;
+  String? _modelName;
   String? _modelOverride;
   String? _currentTurnId;
   String? _effortOverride;
@@ -313,6 +315,8 @@ class CodexSession implements AgentSession {
     final id = thread?['id'] as String?;
     if (id != threadId) return;
 
+    _modelName = thread?['model'] as String?;
+
     _eventsController.add(SessionInitEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -338,6 +342,13 @@ class CodexSession implements AgentSession {
     final id = params['threadId'] as String?;
     if (id != threadId) return;
     _latestTokenUsage = params['tokenUsage'] as Map<String, dynamic>?;
+
+    // modelContextWindow is a sibling of total/last in tokenUsage
+    final contextWindow =
+        (_latestTokenUsage?['modelContextWindow'] as num?)?.toInt();
+    if (contextWindow != null && contextWindow > 0) {
+      _modelContextWindow = contextWindow;
+    }
   }
 
   void _handleItemStarted(Map<String, dynamic> params) {
@@ -514,6 +525,20 @@ class CodexSession implements AgentSession {
     final outputTokens = (usage?['outputTokens'] as num?)?.toInt() ?? 0;
     final cachedInput = (usage?['cachedInputTokens'] as num?)?.toInt() ?? 0;
 
+    // Build modelUsage to surface context window to the frontend.
+    Map<String, ModelTokenUsage>? modelUsage;
+    if (_modelContextWindow != null) {
+      final modelKey = _modelName ?? 'codex';
+      modelUsage = {
+        modelKey: ModelTokenUsage(
+          inputTokens: inputTokens,
+          outputTokens: outputTokens,
+          cacheReadTokens: cachedInput > 0 ? cachedInput : null,
+          contextWindow: _modelContextWindow,
+        ),
+      };
+    }
+
     _eventsController.add(TurnCompleteEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -527,9 +552,7 @@ class CodexSession implements AgentSession {
         outputTokens: outputTokens,
         cacheReadTokens: cachedInput > 0 ? cachedInput : null,
       ),
-      // Codex doesn't provide these:
-      // costUsd, durationMs, durationApiMs, numTurns,
-      // modelUsage, permissionDenials, errors, result
+      modelUsage: modelUsage,
     ));
   }
 

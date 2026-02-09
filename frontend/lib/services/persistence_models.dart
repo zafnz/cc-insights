@@ -15,25 +15,38 @@ class ContextInfo {
   /// Maximum token capacity of the context window.
   final int maxTokens;
 
+  /// Autocompact buffer percentage, if known.
+  ///
+  /// For Claude chats this is 22.5%. Null for backends where
+  /// the autocompact behavior is unknown (e.g., Codex).
+  final double? autocompactBufferPercent;
+
   /// Creates a [ContextInfo] instance.
   const ContextInfo({
     required this.currentTokens,
     required this.maxTokens,
+    this.autocompactBufferPercent,
   });
 
   /// Creates a [ContextInfo] with default values.
   const ContextInfo.empty()
       : currentTokens = 0,
-        maxTokens = 200000;
+        maxTokens = 200000,
+        autocompactBufferPercent = null;
 
   /// Creates a copy with the given fields replaced.
   ContextInfo copyWith({
     int? currentTokens,
     int? maxTokens,
+    double? autocompactBufferPercent,
+    bool clearAutocompactBuffer = false,
   }) {
     return ContextInfo(
       currentTokens: currentTokens ?? this.currentTokens,
       maxTokens: maxTokens ?? this.maxTokens,
+      autocompactBufferPercent: clearAutocompactBuffer
+          ? null
+          : (autocompactBufferPercent ?? this.autocompactBufferPercent),
     );
   }
 
@@ -42,6 +55,8 @@ class ContextInfo {
     return {
       'currentTokens': currentTokens,
       'maxTokens': maxTokens,
+      if (autocompactBufferPercent != null)
+        'autocompactBufferPercent': autocompactBufferPercent,
     };
   }
 
@@ -50,6 +65,8 @@ class ContextInfo {
     return ContextInfo(
       currentTokens: json['currentTokens'] as int? ?? 0,
       maxTokens: json['maxTokens'] as int? ?? 200000,
+      autocompactBufferPercent:
+          (json['autocompactBufferPercent'] as num?)?.toDouble(),
     );
   }
 
@@ -58,15 +75,18 @@ class ContextInfo {
     if (identical(this, other)) return true;
     return other is ContextInfo &&
         other.currentTokens == currentTokens &&
-        other.maxTokens == maxTokens;
+        other.maxTokens == maxTokens &&
+        other.autocompactBufferPercent == autocompactBufferPercent;
   }
 
   @override
-  int get hashCode => Object.hash(currentTokens, maxTokens);
+  int get hashCode =>
+      Object.hash(currentTokens, maxTokens, autocompactBufferPercent);
 
   @override
   String toString() {
-    return 'ContextInfo(currentTokens: $currentTokens, maxTokens: $maxTokens)';
+    return 'ContextInfo(currentTokens: $currentTokens, maxTokens: $maxTokens, '
+        'autocompactBufferPercent: $autocompactBufferPercent)';
   }
 }
 

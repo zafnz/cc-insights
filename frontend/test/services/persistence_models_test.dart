@@ -12,15 +12,34 @@ void main() {
 
       check(context.currentTokens).equals(0);
       check(context.maxTokens).equals(200000);
+      check(context.autocompactBufferPercent).isNull();
     });
 
     test('copyWith preserves unchanged fields', () {
-      const original = ContextInfo(currentTokens: 5000, maxTokens: 100000);
+      const original = ContextInfo(
+        currentTokens: 5000,
+        maxTokens: 100000,
+        autocompactBufferPercent: 22.5,
+      );
 
       final modified = original.copyWith(currentTokens: 10000);
 
       check(modified.currentTokens).equals(10000);
       check(modified.maxTokens).equals(100000);
+      check(modified.autocompactBufferPercent).equals(22.5);
+    });
+
+    test('copyWith can clear autocompactBufferPercent', () {
+      const original = ContextInfo(
+        currentTokens: 5000,
+        maxTokens: 100000,
+        autocompactBufferPercent: 22.5,
+      );
+
+      final modified = original.copyWith(clearAutocompactBuffer: true);
+
+      check(modified.autocompactBufferPercent).isNull();
+      check(modified.currentTokens).equals(5000);
     });
 
     test('toJson produces correct structure', () {
@@ -30,6 +49,19 @@ void main() {
 
       check(json['currentTokens']).equals(50000);
       check(json['maxTokens']).equals(200000);
+      check(json.containsKey('autocompactBufferPercent')).isFalse();
+    });
+
+    test('toJson includes autocompactBufferPercent when set', () {
+      const context = ContextInfo(
+        currentTokens: 50000,
+        maxTokens: 200000,
+        autocompactBufferPercent: 22.5,
+      );
+
+      final json = context.toJson();
+
+      check(json['autocompactBufferPercent']).equals(22.5);
     });
 
     test('fromJson restores correctly', () {
@@ -39,6 +71,19 @@ void main() {
 
       check(context.currentTokens).equals(25000);
       check(context.maxTokens).equals(128000);
+      check(context.autocompactBufferPercent).isNull();
+    });
+
+    test('fromJson restores autocompactBufferPercent', () {
+      final json = {
+        'currentTokens': 25000,
+        'maxTokens': 258400,
+        'autocompactBufferPercent': 22.5,
+      };
+
+      final context = ContextInfo.fromJson(json);
+
+      check(context.autocompactBufferPercent).equals(22.5);
     });
 
     test('fromJson uses defaults for missing fields', () {
@@ -48,6 +93,7 @@ void main() {
 
       check(context.currentTokens).equals(0);
       check(context.maxTokens).equals(200000);
+      check(context.autocompactBufferPercent).isNull();
     });
 
     test('round-trip preserves data', () {
@@ -61,10 +107,43 @@ void main() {
       check(restored).equals(original);
     });
 
+    test('round-trip preserves autocompactBufferPercent', () {
+      const original = ContextInfo(
+        currentTokens: 75000,
+        maxTokens: 258400,
+        autocompactBufferPercent: 22.5,
+      );
+
+      final json = jsonEncode(original.toJson());
+      final restored = ContextInfo.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+
+      check(restored).equals(original);
+    });
+
     test('equality works correctly', () {
       const a = ContextInfo(currentTokens: 1000, maxTokens: 2000);
       const b = ContextInfo(currentTokens: 1000, maxTokens: 2000);
       const c = ContextInfo(currentTokens: 1001, maxTokens: 2000);
+
+      check(a == b).isTrue();
+      check(a.hashCode).equals(b.hashCode);
+      check(a == c).isFalse();
+    });
+
+    test('equality considers autocompactBufferPercent', () {
+      const a = ContextInfo(
+        currentTokens: 1000,
+        maxTokens: 2000,
+        autocompactBufferPercent: 22.5,
+      );
+      const b = ContextInfo(
+        currentTokens: 1000,
+        maxTokens: 2000,
+        autocompactBufferPercent: 22.5,
+      );
+      const c = ContextInfo(currentTokens: 1000, maxTokens: 2000);
 
       check(a == b).isTrue();
       check(a.hashCode).equals(b.hashCode);

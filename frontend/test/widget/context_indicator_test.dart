@@ -140,6 +140,7 @@ void main() {
       testWidgets('shows green when < 75% of autocompact threshold',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // Autocompact threshold is 77.5%
         // 75% of 77.5% = 58.125%
         // So usage below 58.125% should be green
@@ -160,6 +161,7 @@ void main() {
       testWidgets('shows amber when 75-90% of autocompact threshold',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // Autocompact threshold is 77.5%
         // 75% of 77.5% = 58.125%
         // 90% of 77.5% = 69.75%
@@ -181,6 +183,7 @@ void main() {
       testWidgets('shows orange when 90-100% of autocompact threshold',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // Autocompact threshold is 77.5%
         // 90% of 77.5% = 69.75%
         // So usage between 69.75% and 77.5% should be orange
@@ -200,6 +203,7 @@ void main() {
 
       testWidgets('shows red when >= autocompact threshold', (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // Use 80% = 160000 tokens (above 77.5% threshold)
         tracker.updateFromUsage({'input_tokens': 160000});
 
@@ -230,6 +234,7 @@ void main() {
       testWidgets('shows warning icon when approaching threshold (orange)',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // 72% usage (effective 92.9% - triggers orange + warning)
         tracker.updateFromUsage({'input_tokens': 144000});
 
@@ -242,6 +247,7 @@ void main() {
 
       testWidgets('shows warning icon when at threshold (red)', (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // 80% usage (above 77.5% threshold)
         tracker.updateFromUsage({'input_tokens': 160000});
 
@@ -255,6 +261,7 @@ void main() {
       testWidgets('warning icon has the same color as progress bar',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         tracker.updateFromUsage({'input_tokens': 160000}); // 80% - red
 
         await tester.pumpWidget(createTestApp(tracker));
@@ -304,6 +311,7 @@ void main() {
 
       testWidgets('updates color when crossing threshold', (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         tracker.updateFromUsage({'input_tokens': 50000}); // 25% - green
 
         await tester.pumpWidget(createTestApp(tracker));
@@ -393,6 +401,7 @@ void main() {
 
       testWidgets('tooltip shows autocompact buffer', (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         tracker.updateFromUsage({'input_tokens': 50000});
 
         await tester.pumpWidget(createTestApp(tracker));
@@ -423,6 +432,7 @@ void main() {
       testWidgets('tooltip shows warning when approaching threshold',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // 70% usage (90% of 77.5% = 69.75%, so 70% triggers warning message)
         tracker.updateFromUsage({'input_tokens': 140000});
 
@@ -439,6 +449,7 @@ void main() {
       testWidgets('tooltip does not show warning when usage is low',
           (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         tracker.updateFromUsage({'input_tokens': 50000}); // 25%
 
         await tester.pumpWidget(createTestApp(tracker));
@@ -537,7 +548,8 @@ void main() {
 
       testWidgets('handles cache tokens in usage', (tester) async {
         final tracker = resources.track(ContextTracker());
-        // Total should be 10000 + 5000 + 3000 = 18000
+        // Context = input_tokens + cache_creation + cache_read
+        //         = 10000 + 5000 + 3000 = 18000
         tracker.updateFromUsage({
           'input_tokens': 10000,
           'cache_creation_input_tokens': 5000,
@@ -553,6 +565,7 @@ void main() {
 
       testWidgets('negative free space shows with minus sign', (tester) async {
         final tracker = resources.track(ContextTracker());
+        tracker.updateAutocompactBuffer(22.5);
         // At 90% usage, free space is 10% of 200k = 20k
         // Autocompact buffer is 22.5% of 200k = 45k
         // Free space before autocompact = 20k - 45k = -25k
@@ -567,6 +580,116 @@ void main() {
 
         // Free space should show as negative
         check(fullText).contains('-');
+      });
+    });
+
+    group('Codex mode (no autocompact buffer)', () {
+      testWidgets('shows green when usage < 60% without autocompact buffer',
+          (tester) async {
+        final tracker = resources.track(ContextTracker());
+        // No buffer set - should use Codex-style thresholds
+        // 50% usage = 100000 tokens (< 60%)
+        tracker.updateFromUsage({'input_tokens': 100000});
+
+        await tester.pumpWidget(createTestApp(tracker));
+        await safePumpAndSettle(tester);
+
+        final progressIndicator = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator),
+        );
+        final animation =
+            progressIndicator.valueColor as AlwaysStoppedAnimation<Color>;
+        check(animation.value).equals(Colors.green);
+      });
+
+      testWidgets('shows amber when usage 60-75% without autocompact buffer',
+          (tester) async {
+        final tracker = resources.track(ContextTracker());
+        // No buffer set - should use Codex-style thresholds
+        // 65% usage = 130000 tokens (60% < usage < 75%)
+        tracker.updateFromUsage({'input_tokens': 130000});
+
+        await tester.pumpWidget(createTestApp(tracker));
+        await safePumpAndSettle(tester);
+
+        final progressIndicator = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator),
+        );
+        final animation =
+            progressIndicator.valueColor as AlwaysStoppedAnimation<Color>;
+        check(animation.value).equals(Colors.amber);
+      });
+
+      testWidgets('shows orange when usage 75-90% without autocompact buffer',
+          (tester) async {
+        final tracker = resources.track(ContextTracker());
+        // No buffer set - should use Codex-style thresholds
+        // 80% usage = 160000 tokens (75% < usage < 90%)
+        tracker.updateFromUsage({'input_tokens': 160000});
+
+        await tester.pumpWidget(createTestApp(tracker));
+        await safePumpAndSettle(tester);
+
+        final progressIndicator = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator),
+        );
+        final animation =
+            progressIndicator.valueColor as AlwaysStoppedAnimation<Color>;
+        check(animation.value).equals(Colors.orange);
+      });
+
+      testWidgets('shows red when usage >= 90% without autocompact buffer',
+          (tester) async {
+        final tracker = resources.track(ContextTracker());
+        // No buffer set - should use Codex-style thresholds
+        // 95% usage = 190000 tokens (>= 90%)
+        tracker.updateFromUsage({'input_tokens': 190000});
+
+        await tester.pumpWidget(createTestApp(tracker));
+        await safePumpAndSettle(tester);
+
+        final progressIndicator = tester.widget<LinearProgressIndicator>(
+          find.byType(LinearProgressIndicator),
+        );
+        final animation =
+            progressIndicator.valueColor as AlwaysStoppedAnimation<Color>;
+        check(animation.value).equals(Colors.red);
+      });
+
+      testWidgets('tooltip does not show autocompact info without buffer',
+          (tester) async {
+        final tracker = resources.track(ContextTracker());
+        // No buffer set
+        tracker.updateFromUsage({'input_tokens': 100000});
+
+        await tester.pumpWidget(createTestApp(tracker));
+        await safePumpAndSettle(tester);
+
+        final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+        final richMessage = tooltip.richMessage as TextSpan;
+        final fullText = _extractTextFromSpan(richMessage);
+
+        // Should not contain autocompact info
+        check(fullText.contains('Autocompact:')).equals(false);
+      });
+
+      testWidgets(
+          'tooltip does not show approaching threshold warning without buffer',
+          (tester) async {
+        final tracker = resources.track(ContextTracker());
+        // No buffer set, high usage (85%)
+        tracker.updateFromUsage({'input_tokens': 170000});
+
+        await tester.pumpWidget(createTestApp(tracker));
+        await safePumpAndSettle(tester);
+
+        final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
+        final richMessage = tooltip.richMessage as TextSpan;
+        final fullText = _extractTextFromSpan(richMessage);
+
+        // Should not show threshold warning since there's no known threshold
+        check(fullText.contains('Approaching autocompact threshold'))
+            .equals(false);
       });
     });
   });

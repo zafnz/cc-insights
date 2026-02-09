@@ -510,6 +510,111 @@ void main() {
         expect(event.usage?.outputTokens, 0);
         expect(event.usage?.cacheReadTokens, isNull);
       });
+
+      test('emits TurnCompleteEvent with modelUsage when modelContextWindow is present', () async {
+        // First, update token usage with modelContextWindow (sibling of total)
+        session.injectNotification(JsonRpcNotification(
+          method: 'thread/tokenUsage/updated',
+          params: {
+            'threadId': 'test-thread',
+            'tokenUsage': {
+              'total': {
+                'inputTokens': 5000,
+                'outputTokens': 1500,
+                'cachedInputTokens': 3000,
+              },
+              'modelContextWindow': 258400,
+            },
+          },
+        ));
+
+        // Then complete the turn
+        session.injectNotification(JsonRpcNotification(
+          method: 'turn/completed',
+          params: {
+            'threadId': 'test-thread',
+          },
+        ));
+        await waitForEvents();
+        expect(capturedEvents, hasLength(1));
+        final event = capturedEvents.first as TurnCompleteEvent;
+        expect(event.modelUsage, isNotNull);
+        expect(event.modelUsage, hasLength(1));
+        expect(event.modelUsage?.values.first.contextWindow, 258400);
+      });
+
+      test('emits TurnCompleteEvent without modelUsage when no modelContextWindow', () async {
+        // Update token usage WITHOUT modelContextWindow
+        session.injectNotification(JsonRpcNotification(
+          method: 'thread/tokenUsage/updated',
+          params: {
+            'threadId': 'test-thread',
+            'tokenUsage': {
+              'total': {
+                'inputTokens': 5000,
+                'outputTokens': 1500,
+                'cachedInputTokens': 3000,
+              },
+            },
+          },
+        ));
+
+        // Complete the turn
+        session.injectNotification(JsonRpcNotification(
+          method: 'turn/completed',
+          params: {
+            'threadId': 'test-thread',
+          },
+        ));
+        await waitForEvents();
+        expect(capturedEvents, hasLength(1));
+        final event = capturedEvents.first as TurnCompleteEvent;
+        expect(event.modelUsage, isNull);
+      });
+
+      test('uses model name from thread/started as modelUsage key', () async {
+        // First, start thread with specific model
+        session.injectNotification(JsonRpcNotification(
+          method: 'thread/started',
+          params: {
+            'thread': {
+              'id': 'test-thread',
+              'model': 'gpt-5.2-codex',
+            },
+          },
+        ));
+
+        // Then update token usage with modelContextWindow (sibling of total)
+        session.injectNotification(JsonRpcNotification(
+          method: 'thread/tokenUsage/updated',
+          params: {
+            'threadId': 'test-thread',
+            'tokenUsage': {
+              'total': {
+                'inputTokens': 2000,
+                'outputTokens': 800,
+              },
+              'modelContextWindow': 128000,
+            },
+          },
+        ));
+
+        // Complete the turn
+        session.injectNotification(JsonRpcNotification(
+          method: 'turn/completed',
+          params: {
+            'threadId': 'test-thread',
+          },
+        ));
+        await waitForEvents();
+        // Filter out the SessionInitEvent from thread/started
+        final turnCompleteEvents = capturedEvents.whereType<TurnCompleteEvent>().toList();
+        expect(turnCompleteEvents, hasLength(1));
+        final event = turnCompleteEvents.first;
+        expect(event.modelUsage, isNotNull);
+        expect(event.modelUsage?.containsKey('gpt-5.2-codex'), isTrue);
+        expect(event.modelUsage?['gpt-5.2-codex']?.contextWindow, 128000);
+      });
     });
 
     group('PermissionRequestEvent', () {

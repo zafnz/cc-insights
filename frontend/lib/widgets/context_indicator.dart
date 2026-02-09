@@ -19,25 +19,15 @@ String formatTokens(int tokens) {
 
 /// Displays context window usage with a progress bar and detailed tooltip.
 ///
-/// Claude Code reserves approximately 22.5% of the context window as an
-/// autocompact buffer. This means compaction triggers when usage reaches
-/// approximately 77.5% of total context.
+/// When the tracker has an [ContextTracker.autocompactBufferPercent] set
+/// (e.g., 22.5% for Claude), color thresholds are relative to the
+/// autocompact trigger point and the tooltip shows buffer details.
 ///
-/// Color coding based on effective usage (relative to autocompact threshold):
-/// - Green: < 75% of autocompact threshold
-/// - Amber: 75-90% of autocompact threshold
-/// - Orange: 90-100% of autocompact threshold
-/// - Red: >= autocompact threshold
+/// When the buffer is null (e.g., Codex), simpler thresholds against
+/// raw usage percentage are used and autocompact info is omitted.
 class ContextIndicator extends StatelessWidget {
   /// The context tracker to display usage for.
   final ContextTracker tracker;
-
-  /// Autocompact buffer percentage (Claude Code reserves this for compaction).
-  static const double autocompactBufferPercent = 22.5;
-
-  /// Threshold at which autocompact triggers (~77.5%).
-  static const double autocompactThreshold =
-      100.0 - autocompactBufferPercent;
 
   /// Creates a context indicator widget.
   const ContextIndicator({super.key, required this.tracker});
@@ -54,26 +44,38 @@ class ContextIndicator extends StatelessWidget {
     final currentTokens = tracker.currentTokens;
     final maxTokens = tracker.maxTokens;
     final percent = tracker.percentUsed;
+    final bufferPercent = tracker.autocompactBufferPercent;
 
-    // Calculate effective usage (how close to autocompact threshold)
-    final effectivePercent = (percent / autocompactThreshold) * 100;
+    // Calculate values based on whether we know the autocompact buffer.
+    final double effectivePercent;
+    final double? autocompactThreshold;
+    final int? autocompactBuffer;
 
-    // Calculate remaining space before autocompact
-    final autocompactBuffer =
-        (maxTokens * autocompactBufferPercent / 100).round();
+    if (bufferPercent != null) {
+      autocompactThreshold = 100.0 - bufferPercent;
+      effectivePercent = (percent / autocompactThreshold) * 100;
+      autocompactBuffer = (maxTokens * bufferPercent / 100).round();
+    } else {
+      autocompactThreshold = null;
+      effectivePercent = percent;
+      autocompactBuffer = null;
+    }
+
+    // Free space: remaining before autocompact (if known), else total remaining.
     final remainingTokens = maxTokens - currentTokens;
-    final freeSpace = remainingTokens - autocompactBuffer;
+    final freeSpace = autocompactBuffer != null
+        ? remainingTokens - autocompactBuffer
+        : remainingTokens;
     final freeSpaceStr = freeSpace >= 0
         ? formatTokens(freeSpace)
         : '-${formatTokens(freeSpace.abs())}';
 
-    // Color based on effective usage (relative to autocompact threshold)
     final (barColor, showWarning) = _getColorAndWarning(
       percent: percent,
       effectivePercent: effectivePercent,
+      autocompactThreshold: autocompactThreshold,
     );
 
-    // Calculate percentages for tooltip
     final freeSpacePercent =
         maxTokens > 0 ? (freeSpace / maxTokens) * 100 : 0.0;
 
@@ -93,12 +95,14 @@ class ContextIndicator extends StatelessWidget {
             text: 'Free Space: $freeSpaceStr '
                 '(${freeSpacePercent.toStringAsFixed(1)}%)\n',
           ),
-          TextSpan(
-            text: 'Autocompact: ${formatTokens(autocompactBuffer)} '
-                '(${autocompactBufferPercent.toStringAsFixed(1)}%)\n',
-          ),
+          if (autocompactBuffer != null)
+            TextSpan(
+              text: 'Autocompact: ${formatTokens(autocompactBuffer)} '
+                  '(${bufferPercent!.toStringAsFixed(1)}%)\n',
+            ),
           TextSpan(text: 'Max Context: ${formatTokens(maxTokens)}'),
-          if (percent >= autocompactThreshold * 0.9)
+          if (autocompactThreshold != null &&
+              percent >= autocompactThreshold * 0.9)
             const TextSpan(text: '\n\nApproaching autocompact threshold'),
         ],
       ),
@@ -153,18 +157,36 @@ class ContextIndicator extends StatelessWidget {
   }
 
   /// Returns the bar color and whether to show a warning indicator.
+  ///
+  /// When [autocompactThreshold] is set, colors are relative to that threshold.
+  /// When null, simpler thresholds against raw [percent] are used.
   (Color, bool) _getColorAndWarning({
     required double percent,
     required double effectivePercent,
+    required double? autocompactThreshold,
   }) {
-    if (percent >= autocompactThreshold) {
-      return (Colors.red, true);
-    } else if (effectivePercent > 90) {
-      return (Colors.orange, true);
-    } else if (effectivePercent > 75) {
-      return (Colors.amber, false);
+    if (autocompactThreshold != null) {
+      // Claude-style: color relative to autocompact threshold
+      if (percent >= autocompactThreshold) {
+        return (Colors.red, true);
+      } else if (effectivePercent > 90) {
+        return (Colors.orange, true);
+      } else if (effectivePercent > 75) {
+        return (Colors.amber, false);
+      } else {
+        return (Colors.green, false);
+      }
     } else {
-      return (Colors.green, false);
+      // No known autocompact: simpler thresholds against raw usage
+      if (percent >= 90) {
+        return (Colors.red, true);
+      } else if (percent >= 75) {
+        return (Colors.orange, true);
+      } else if (percent >= 60) {
+        return (Colors.amber, false);
+      } else {
+        return (Colors.green, false);
+      }
     }
   }
 }
