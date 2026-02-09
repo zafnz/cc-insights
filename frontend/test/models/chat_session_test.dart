@@ -5,7 +5,6 @@ import 'package:cc_insights_v2/models/conversation.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
-import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:claude_sdk/claude_sdk.dart'
@@ -199,24 +198,6 @@ class FakeTestSession implements TestSession {
   }
 }
 
-/// Fake implementation of [SdkMessageHandler] for testing.
-class FakeSdkMessageHandler extends SdkMessageHandler {
-  final List<Map<String, dynamic>> handledMessages = [];
-  ChatState? lastChatState;
-
-  @override
-  void handleMessage(ChatState chat, Map<String, dynamic> rawMessage) {
-    lastChatState = chat;
-    handledMessages.add(rawMessage);
-  }
-
-  @override
-  void clear() {
-    handledMessages.clear();
-    lastChatState = null;
-  }
-}
-
 /// Creates a fake [PermissionRequest] for testing.
 PermissionRequest createFakePermissionRequest({
   String id = 'perm-1',
@@ -311,12 +292,10 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         // Act
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello Claude',
         );
@@ -336,14 +315,12 @@ void main() {
         );
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
-        final handler = FakeSdkMessageHandler();
         var notified = false;
         state.addListener(() => notified = true);
 
         // Act
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -359,11 +336,9 @@ void main() {
         );
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'First session',
         );
@@ -372,8 +347,7 @@ void main() {
         await check(
           state.startSession(
             backend: backend,
-            messageHandler: handler,
-            eventHandler: eventHandler,
+              eventHandler: eventHandler,
             prompt: 'Second session',
           ),
         ).throws<StateError>();
@@ -390,14 +364,12 @@ void main() {
         final state = resources.track(ChatState(chatData));
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
-        final handler = FakeSdkMessageHandler();
 
         // Act & Assert
         await check(
           state.startSession(
             backend: backend,
-            messageHandler: handler,
-            eventHandler: eventHandler,
+              eventHandler: eventHandler,
             prompt: 'Hello',
           ),
         ).throws<StateError>();
@@ -412,12 +384,10 @@ void main() {
         state.setPermissionMode(PermissionMode.acceptEdits);
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
-        final handler = FakeSdkMessageHandler();
 
         // Act
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -439,11 +409,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Initial',
         );
@@ -482,11 +450,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -507,11 +473,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -538,11 +502,9 @@ void main() {
         );
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -691,11 +653,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -725,11 +685,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -762,11 +720,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
@@ -778,9 +734,8 @@ void main() {
         // Give the stream time to process
         await Future<void>.delayed(Duration.zero);
 
-        // Assert
-        check(handler.handledMessages).isNotEmpty();
-        check(handler.lastChatState).equals(state);
+        // The message subscription is removed, EventHandler processes events instead
+        // No assertions needed here as this test was for the old message handler
       });
     });
 
@@ -793,11 +748,9 @@ void main() {
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
-        final handler = FakeSdkMessageHandler();
 
         await state.startSession(
           backend: backend,
-          messageHandler: handler,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );

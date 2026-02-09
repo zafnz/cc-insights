@@ -12,7 +12,6 @@ import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../services/backend_service.dart';
 import '../services/event_handler.dart';
-import '../services/sdk_message_handler.dart';
 import '../state/selection_state.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/insights_widgets.dart';
@@ -574,7 +573,6 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     // 4. Start new session with plan as prompt
     final backend = context.read<BackendService>();
-    final messageHandler = context.read<SdkMessageHandler>();
     final eventHandler = context.read<EventHandler>();
 
     final prompt =
@@ -591,7 +589,6 @@ class _ConversationPanelState extends State<ConversationPanel>
     try {
       await chat.startSession(
         backend: backend,
-        messageHandler: messageHandler,
         eventHandler: eventHandler,
         prompt: prompt,
       );
@@ -690,7 +687,6 @@ class _ConversationPanelState extends State<ConversationPanel>
     chat.draftText = '';
 
     final backend = context.read<BackendService>();
-    final messageHandler = context.read<SdkMessageHandler>();
     final eventHandler = context.read<EventHandler>();
 
     if (!chat.hasActiveSession) {
@@ -711,7 +707,6 @@ class _ConversationPanelState extends State<ConversationPanel>
       try {
         await chat.startSession(
           backend: backend,
-          messageHandler: messageHandler,
           eventHandler: eventHandler,
           prompt: text,
           images: images,

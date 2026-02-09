@@ -11,7 +11,6 @@ import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
 import '../services/runtime_config.dart';
 import '../services/event_handler.dart';
-import '../services/sdk_message_handler.dart';
 import 'agent.dart';
 import 'chat_model.dart';
 import 'context_tracker.dart';
@@ -215,9 +214,6 @@ class ChatState extends ChangeNotifier {
   /// Null when no session is active. This is the abstract [AgentSession]
   /// interface which works with both the direct CLI and Codex backends.
   sdk.AgentSession? _session;
-
-  /// Subscription to the session's message stream.
-  StreamSubscription<sdk.SDKMessage>? _messageSubscription;
 
   /// Subscription to the session's events stream (for EventHandler).
   StreamSubscription<sdk.InsightsEvent>? _eventSubscription;
@@ -811,10 +807,9 @@ class ChatState extends ChangeNotifier {
 
   /// Starts a new SDK session for this chat.
   ///
-  /// Creates a session via [BackendService] and subscribes to message,
-  /// event, and permission request streams. The [messageHandler] is used to
-  /// route incoming messages to the appropriate conversation. The
-  /// [eventHandler] consumes the typed events stream in parallel.
+  /// Creates a session via [BackendService] and subscribes to event and
+  /// permission request streams. The [eventHandler] consumes the typed
+  /// events stream.
   ///
   /// If [lastSessionId] is set, attempts to resume that session instead of
   /// creating a fresh one. This allows conversations to continue across app
@@ -824,7 +819,6 @@ class ChatState extends ChangeNotifier {
   /// Throws [StateError] if the chat has no worktree root.
   Future<void> startSession({
     required BackendService backend,
-    required SdkMessageHandler messageHandler,
     required EventHandler eventHandler,
     required String prompt,
     List<AttachedImage> images = const [],
@@ -930,36 +924,6 @@ class ChatState extends ChangeNotifier {
       ));
     }
 
-    // Subscribe to message stream - handler takes ChatState as parameter
-    _t('ChatState', 'Subscribing to message stream...');
-    _messageSubscription = _session!.messages.listen(
-      (msg) {
-        final type = msg.rawJson?['type'] as String? ?? '?';
-        final subtype = msg.rawJson?['subtype'] as String? ?? '';
-        _t('ChatState:msg', 'type=$type${subtype.isNotEmpty ? ' subtype=$subtype' : ''} (chat=${_data.id})');
-        // Update session ID if it changes during the session
-        final msgSessionId = msg.sessionId;
-        if (msgSessionId.isNotEmpty && msgSessionId != _lastSessionId) {
-          _t('ChatState', 'Session ID updated from message: $msgSessionId');
-          developer.log(
-            'Session ID updated from message: $msgSessionId',
-            name: 'ChatState',
-          );
-          _lastSessionId = msgSessionId;
-          _persistSessionId(msgSessionId);
-        }
-        messageHandler.handleMessage(this, msg.rawJson ?? {});
-      },
-      onError: (error) {
-        _t('ChatState', 'Message stream ERROR: $error');
-        _handleError(error);
-      },
-      onDone: () {
-        _t('ChatState', 'Message stream DONE (chat=${_data.id})');
-        _handleSessionEnd();
-      },
-    );
-
     // Subscribe to events stream for EventHandler
     _eventSubscription = _session!.events.listen(
       (event) {
@@ -1043,13 +1007,11 @@ class ChatState extends ChangeNotifier {
   /// session-related state. Active agents are also cleared.
   Future<void> stopSession() async {
     _t('ChatState', 'stopSession (chat=${_data.id}, hasSession=${_session != null})');
-    await _messageSubscription?.cancel();
     await _permissionSubscription?.cancel();
     await _eventSubscription?.cancel();
     await _session?.kill();
 
     _session = null;
-    _messageSubscription = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1139,7 +1101,7 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the working state.
   ///
-  /// Called by [SdkMessageHandler] or [EventHandler] when starting/stopping work.
+  /// Called by [EventHandler] when starting/stopping work.
   /// When [working] is true, records the current time as [_workingStartTime].
   /// When [working] is false, calculates elapsed time and adds it to
   /// [_timingStats], then clears [_workingStartTime].
@@ -1160,7 +1122,7 @@ class ChatState extends ChangeNotifier {
 
   /// Sets the compacting state.
   ///
-  /// Called by [SdkMessageHandler] or [EventHandler] when receiving system status messages
+  /// Called by [EventHandler] when receiving system status messages
   /// for context compaction. The UI can use [isCompacting] to show a
   /// different indicator during compaction.
   void setCompacting(bool compacting) {
@@ -1323,7 +1285,6 @@ class ChatState extends ChangeNotifier {
     _isWorking = false;
     _isCompacting = false;
     _workingStartTime = null;
-    _messageSubscription = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1390,10 +1351,8 @@ class ChatState extends ChangeNotifier {
     _isWorking = false;
     _isCompacting = false;
     _workingStartTime = null;
-    _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();
-    _messageSubscription = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1614,7 +1573,7 @@ class ChatState extends ChangeNotifier {
 
   /// Persists a streaming entry that has been finalized.
   ///
-  /// Called by [SdkMessageHandler] or [EventHandler] when the complete
+  /// Called by [EventHandler] when the complete
   /// assistant message arrives and finalizes a previously streaming entry.
   /// Only persists entries belonging to the primary conversation.
   void persistStreamingEntry(OutputEntry entry) {
@@ -1623,7 +1582,7 @@ class ChatState extends ChangeNotifier {
 
   /// Persists a tool result to the chat's JSONL file.
   ///
-  /// This is called by [SdkMessageHandler] or [EventHandler] when a tool result arrives.
+  /// This is called by [EventHandler] when a tool result arrives.
   /// The result is stored as a separate [ToolResultEntry] which will be
   /// merged with the corresponding [ToolUseOutputEntry] when the history
   /// is loaded.
@@ -1728,7 +1687,7 @@ class ChatState extends ChangeNotifier {
 
   /// Notifies listeners that the state has changed.
   ///
-  /// This is exposed for use by [SdkMessageHandler] and [EventHandler]
+  /// This is exposed for use by [EventHandler]
   /// when updating entries in-place (e.g., tool result pairing).
   // ignore: unnecessary_override - purposely exposed for external use
   @override
@@ -1741,14 +1700,12 @@ class ChatState extends ChangeNotifier {
     // Cancel any pending meta save.
     _metaSaveTimer?.cancel();
     // Cancel stream subscriptions.
-    _messageSubscription?.cancel();
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();
     // Kill the session if active.
     _session?.kill();
     _session = null;
     _testHasActiveSession = false;
-    _messageSubscription = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();

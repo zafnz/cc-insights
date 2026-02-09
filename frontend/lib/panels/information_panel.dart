@@ -17,7 +17,6 @@ import '../services/log_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
-import '../services/sdk_message_handler.dart';
 import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/base_selector_dialog.dart';
@@ -464,7 +463,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final selection = context.read<SelectionState>();
     final project = context.read<ProjectState>();
     final backend = context.read<BackendService>();
-    final messageHandler = context.read<SdkMessageHandler>();
     final eventHandler = context.read<EventHandler>();
     final restoreService = context.read<ProjectRestoreService>();
     final wt = selection.selectedWorktree;
@@ -532,7 +530,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     try {
       await chat.startSession(
         backend: backend,
-        messageHandler: messageHandler,
         eventHandler: eventHandler,
         prompt: preamble,
       );

@@ -690,7 +690,7 @@ void main() {
     });
 
     group('_handleSessionInit', () {
-      test('no-op (matches SdkMessageHandler behavior)', () {
+      test('no-op', () {
         handler.handleEvent(chat, makeSessionInit(
           model: 'claude-sonnet-4-5',
         ));

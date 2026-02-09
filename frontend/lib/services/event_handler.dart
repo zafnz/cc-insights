@@ -338,7 +338,7 @@ class EventHandler {
   }
 
   void _handleSessionInit(ChatState chat, SessionInitEvent event) {
-    // No-op - matches current SdkMessageHandler behavior for system:init
+    // No-op - system initialization is handled elsewhere
   }
 
   void _handleSessionStatus(ChatState chat, SessionStatusEvent event) {

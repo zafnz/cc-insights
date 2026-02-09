@@ -8,7 +8,6 @@ import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
-import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
@@ -266,35 +265,6 @@ class FakeTestSession implements sdk.TestSession {
   }
 }
 
-/// Fake SdkMessageHandler that tracks calls but doesn't do anything.
-class FakeSdkMessageHandler extends SdkMessageHandler {
-  final List<_HandleMessageCall> handleMessageCalls = [];
-
-  @override
-  void handleMessage(ChatState chat, Map<String, dynamic> rawMessage) {
-    handleMessageCalls.add(_HandleMessageCall(
-      chat: chat,
-      rawMessage: rawMessage,
-    ));
-    // Don't call super to avoid side effects
-  }
-
-  void reset() {
-    handleMessageCalls.clear();
-    clear();
-  }
-}
-
-class _HandleMessageCall {
-  _HandleMessageCall({
-    required this.chat,
-    required this.rawMessage,
-  });
-
-  final ChatState chat;
-  final Map<String, dynamic> rawMessage;
-}
-
 // =============================================================================
 // TEST HELPERS
 // =============================================================================
@@ -329,14 +299,12 @@ void main() {
     late SelectionState selectionState;
     late FakeBackendService fakeBackend;
     late FakeCliAvailabilityService fakeCliAvailability;
-    late FakeSdkMessageHandler fakeMessageHandler;
     late EventHandler fakeEventHandler;
     late ChatState testChat;
 
     setUp(() {
       fakeBackend = FakeBackendService();
       fakeCliAvailability = FakeCliAvailabilityService();
-      fakeMessageHandler = FakeSdkMessageHandler();
       fakeEventHandler = EventHandler();
 
       // Create a chat for testing (NOT tracked separately - owned by worktree)
@@ -374,7 +342,6 @@ void main() {
     });
 
     tearDown(() async {
-      fakeMessageHandler.dispose();
       fakeEventHandler.dispose();
       await resources.disposeAll();
     });
@@ -389,7 +356,6 @@ void main() {
             ChangeNotifierProvider<CliAvailabilityService>.value(
               value: fakeCliAvailability,
             ),
-            Provider<SdkMessageHandler>.value(value: fakeMessageHandler),
             Provider<EventHandler>.value(value: fakeEventHandler),
             ChangeNotifierProvider(create: (_) => ThemeState()),
           ],

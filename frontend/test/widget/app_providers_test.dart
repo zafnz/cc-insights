@@ -4,7 +4,6 @@ import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
-import 'package:cc_insights_v2/services/sdk_message_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:claude_sdk/claude_sdk.dart';
@@ -177,7 +176,6 @@ class _FakeTestSession implements TestSession {
 /// Use this to test that widgets can correctly access providers.
 Widget createTestAppWithProviders({
   BackendService? backendService,
-  SdkMessageHandler? messageHandler,
   EventHandler? eventHandler,
   ProjectState? project,
   Widget? child,
@@ -189,13 +187,11 @@ Widget createTestAppWithProviders({
     watchFilesystem: false,
   );
   final testBackend = backendService ?? FakeBackendService();
-  final testHandler = messageHandler ?? SdkMessageHandler();
   final testEventHandler = eventHandler ?? EventHandler();
 
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<BackendService>.value(value: testBackend),
-      Provider<SdkMessageHandler>.value(value: testHandler),
       Provider<EventHandler>.value(value: testEventHandler),
       ChangeNotifierProvider<ProjectState>.value(value: testProject),
       ChangeNotifierProxyProvider<ProjectState, SelectionState>(
@@ -218,7 +214,6 @@ class _ProviderTestWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     // Try to access all providers - will throw if not available
     final backend = context.watch<BackendService>();
-    final handler = context.read<SdkMessageHandler>();
     final project = context.watch<ProjectState>();
     final selection = context.watch<SelectionState>();
 
@@ -226,7 +221,6 @@ class _ProviderTestWidget extends StatelessWidget {
       body: Column(
         children: [
           Text('Backend: ${backend.isReady ? "ready" : "not ready"}'),
-          Text('Handler: ${handler.hashCode}'),
           Text('Project: ${project.data.name}'),
           Text('Selection: ${selection.hashCode}'),
         ],
@@ -251,7 +245,6 @@ class _DeepChildWidget extends StatelessWidget {
                   builder: (innerContext) {
                     // Access providers from deeply nested context
                     final backend = innerContext.watch<BackendService>();
-                    final handler = innerContext.read<SdkMessageHandler>();
 
                     return Column(
                       mainAxisSize: MainAxisSize.min,
@@ -259,7 +252,6 @@ class _DeepChildWidget extends StatelessWidget {
                         Text(
                           'Deep Backend: ${backend.isReady ? "ready" : "not ready"}',
                         ),
-                        Text('Deep Handler: ${handler.hashCode}'),
                       ],
                     );
                   },
@@ -369,109 +361,15 @@ void main() {
       });
     });
 
-    group('SdkMessageHandler provider', () {
-      testWidgets('SdkMessageHandler is provided and accessible',
-          (tester) async {
-        final handler = SdkMessageHandler();
-
-        await tester.pumpWidget(
-          createTestAppWithProviders(messageHandler: handler),
-        );
-
-        // Widget should render without errors
-        expect(find.textContaining('Handler:'), findsOneWidget);
-      });
-
-      testWidgets('SdkMessageHandler can be accessed via Provider.of',
-          (tester) async {
-        final handler = SdkMessageHandler();
-
-        SdkMessageHandler? capturedHandler;
-
-        await tester.pumpWidget(
-          createTestAppWithProviders(
-            messageHandler: handler,
-            child: Builder(
-              builder: (context) {
-                capturedHandler =
-                    Provider.of<SdkMessageHandler>(context, listen: false);
-                return const Text('Test');
-              },
-            ),
-          ),
-        );
-
-        expect(capturedHandler, isNotNull);
-        expect(capturedHandler, same(handler));
-      });
-
-      testWidgets('SdkMessageHandler can be accessed via context.read',
-          (tester) async {
-        final handler = SdkMessageHandler();
-
-        SdkMessageHandler? capturedHandler;
-
-        await tester.pumpWidget(
-          createTestAppWithProviders(
-            messageHandler: handler,
-            child: Builder(
-              builder: (context) {
-                capturedHandler = context.read<SdkMessageHandler>();
-                return const Text('Test');
-              },
-            ),
-          ),
-        );
-
-        expect(capturedHandler, isNotNull);
-        expect(capturedHandler, same(handler));
-      });
-
-      testWidgets('Same SdkMessageHandler instance is shared', (tester) async {
-        final handler = SdkMessageHandler();
-        SdkMessageHandler? firstCapture;
-        SdkMessageHandler? secondCapture;
-
-        await tester.pumpWidget(
-          createTestAppWithProviders(
-            messageHandler: handler,
-            child: Column(
-              children: [
-                Builder(
-                  builder: (context) {
-                    firstCapture = context.read<SdkMessageHandler>();
-                    return const Text('First');
-                  },
-                ),
-                Builder(
-                  builder: (context) {
-                    secondCapture = context.read<SdkMessageHandler>();
-                    return const Text('Second');
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-
-        expect(firstCapture, isNotNull);
-        expect(secondCapture, isNotNull);
-        expect(firstCapture, same(secondCapture));
-        expect(firstCapture, same(handler));
-      });
-    });
-
     group('Provider accessibility from child widgets', () {
       testWidgets('Providers are accessible from deeply nested widgets',
           (tester) async {
         final fakeBackend = FakeBackendService();
         resources.track(fakeBackend);
-        final handler = SdkMessageHandler();
 
         await tester.pumpWidget(
           createTestAppWithProviders(
             backendService: fakeBackend,
-            messageHandler: handler,
             child: const _DeepChildWidget(),
           ),
         );
@@ -522,75 +420,26 @@ void main() {
         expect(find.byType(MaterialApp), findsOneWidget);
       });
 
-      testWidgets('CCInsightsApp accepts injected SdkMessageHandler',
-          (tester) async {
-        final fakeBackend = FakeBackendService();
-        resources.track(fakeBackend);
-        final handler = SdkMessageHandler();
-
-        await tester.pumpWidget(
-          CCInsightsApp(
-            backendService: fakeBackend,
-            messageHandler: handler,
-          ),
-        );
-        await safePumpAndSettle(tester);
-
-        // App should render without errors
-        expect(find.byType(MaterialApp), findsOneWidget);
-      });
-
-      testWidgets(
-          'Injected services are accessible from app widget tree',
-          (tester) async {
-        final fakeBackend = FakeBackendService();
-        resources.track(fakeBackend);
-        final handler = SdkMessageHandler();
-
-        BackendService? capturedBackend;
-        SdkMessageHandler? capturedHandler;
-
-        await tester.pumpWidget(
-          CCInsightsApp(
-            backendService: fakeBackend,
-            messageHandler: handler,
-          ),
-        );
-        await safePumpAndSettle(tester);
-
-        // Navigate to find the widget tree and capture providers
-        final context = tester.element(find.byType(MaterialApp));
-        capturedBackend = Provider.of<BackendService>(context, listen: false);
-        capturedHandler =
-            Provider.of<SdkMessageHandler>(context, listen: false);
-
-        expect(capturedBackend, same(fakeBackend));
-        expect(capturedHandler, same(handler));
-      });
     });
 
     group('Provider order and dependencies', () {
-      testWidgets('All four providers are accessible together', (tester) async {
+      testWidgets('All providers are accessible together', (tester) async {
         final fakeBackend = FakeBackendService();
         resources.track(fakeBackend);
-        final handler = SdkMessageHandler();
         final project = MockDataFactory.createMockProject();
         resources.track(project);
 
         BackendService? backend;
-        SdkMessageHandler? sdkHandler;
         ProjectState? projectState;
         SelectionState? selection;
 
         await tester.pumpWidget(
           createTestAppWithProviders(
             backendService: fakeBackend,
-            messageHandler: handler,
             project: project,
             child: Builder(
               builder: (context) {
                 backend = context.read<BackendService>();
-                sdkHandler = context.read<SdkMessageHandler>();
                 projectState = context.read<ProjectState>();
                 selection = context.read<SelectionState>();
                 return const Text('All Providers');
@@ -600,12 +449,10 @@ void main() {
         );
 
         expect(backend, isNotNull);
-        expect(sdkHandler, isNotNull);
         expect(projectState, isNotNull);
         expect(selection, isNotNull);
 
         expect(backend, same(fakeBackend));
-        expect(sdkHandler, same(handler));
         expect(projectState, same(project));
       });
 

@@ -14,7 +14,6 @@ import '../services/cli_availability_service.dart';
 import '../services/event_handler.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
-import '../services/sdk_message_handler.dart';
 import '../state/selection_state.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/message_input.dart';
@@ -198,7 +197,6 @@ class WelcomeCard extends StatelessWidget {
 
     final project = context.read<ProjectState>();
     final backend = context.read<BackendService>();
-    final messageHandler = context.read<SdkMessageHandler>();
     final eventHandler = context.read<EventHandler>();
     final restoreService = context.read<ProjectRestoreService>();
 
@@ -267,7 +265,6 @@ class WelcomeCard extends StatelessWidget {
     try {
       await chat.startSession(
         backend: backend,
-        messageHandler: messageHandler,
         eventHandler: eventHandler,
         prompt: text,
         images: images,
