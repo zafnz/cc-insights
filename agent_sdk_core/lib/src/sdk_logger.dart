@@ -372,5 +372,7 @@ class SdkLogger {
     if (!_logsController.isClosed) {
       _logsController.add(entry);
     }
+
+    _queueWrite(entry.toJsonLine());
   }
 }
