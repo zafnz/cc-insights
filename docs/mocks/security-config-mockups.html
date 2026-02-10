@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Configuration Mockups — CC-Insights</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    /* Material 3 deep purple seed - dark mode derived palette */
+    --surface: #141218;
+    --surface-container: #211f26;
+    --surface-container-highest: #36343b;
+    --surface-container-high: #2b2930;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --tertiary: #efb8c8;
+    --error: #f2b8b5;
+    --error-container: #8c1d18;
+
+    /* Semantic colors */
+    --green: #4caf50;
+    --orange: #ff9800;
+    --blue: #2196f3;
+    --red: #f44336;
+    --yellow: #ffeb3b;
+
+    /* Font */
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: #0e0c11;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 48px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  /* ===== Section Labels ===== */
+  .section-title {
+    width: 100%;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--on-surface);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary);
+    margin-bottom: -16px;
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    margin-top: -12px;
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .variant-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  /* ===== Conversation Header Bar ===== */
+  .header-bar {
+    background: var(--surface-container-high);
+    border: 1px solid rgba(73, 69, 79, 0.3);
+    border-radius: 4px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 700px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* ===== Compact Dropdown ===== */
+  .compact-dropdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .compact-dropdown:hover {
+    background: rgba(208, 188, 255, 0.12);
+  }
+
+  .compact-dropdown .dd-value {
+    font-size: 11px;
+    color: var(--on-surface);
+  }
+
+  .compact-dropdown .dd-arrow {
+    font-size: 16px;
+    color: var(--on-surface-variant);
+  }
+
+  .compact-dropdown.disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .compact-dropdown.disabled:hover {
+    background: transparent;
+  }
+
+  /* ===== Security Config Group ===== */
+  .security-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px;
+    border-radius: 6px;
+    border: 1px solid rgba(73, 69, 79, 0.4);
+    background: rgba(20, 18, 24, 0.5);
+  }
+
+  .security-group .sg-icon {
+    font-size: 14px;
+    color: var(--on-surface-variant);
+    padding: 2px 4px;
+  }
+
+  .security-group .sg-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(73, 69, 79, 0.4);
+  }
+
+  .security-group .compact-dropdown {
+    border-radius: 4px;
+  }
+
+  /* ===== Security Badge ===== */
+  .security-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .security-badge.safe {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+  }
+
+  .security-badge.caution {
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--orange);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+  }
+
+  .security-badge.danger {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+  }
+
+  .security-badge .material-icons {
+    font-size: 12px;
+  }
+
+  /* ===== Context & Cost Indicators (header right) ===== */
+  .indicator {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .indicator .material-icons {
+    font-size: 14px;
+  }
+
+  .indicator .bar {
+    width: 60px;
+    height: 4px;
+    background: rgba(73, 69, 79, 0.4);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .indicator .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
+
+  .indicator .bar-fill.low { background: var(--green); width: 25%; }
+  .indicator .bar-fill.mid { background: var(--orange); width: 60%; }
+  .indicator .bar-fill.high { background: var(--red); width: 90%; }
+
+  /* ===== Permission Dialog ===== */
+  .dialog-overlay {
+    position: relative;
+    width: 480px;
+    border-radius: 12px;
+    background: var(--surface-container);
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--surface-container-high);
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .dialog-header .material-icons {
+    font-size: 18px;
+    color: var(--orange);
+  }
+
+  .dialog-header .dialog-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--on-surface);
+    flex: 1;
+  }
+
+  .dialog-header .backend-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--outline-variant);
+    color: var(--on-surface-variant);
+  }
+
+  .dialog-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dialog-tool-label {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+  }
+
+  .dialog-code-block {
+    background: var(--surface);
+    border: 1px solid var(--outline-variant);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--on-surface);
+  }
+
+  .dialog-code-block .prompt {
+    color: var(--primary);
+  }
+
+  .dialog-code-block .path {
+    color: var(--on-surface-variant);
+    font-size: 10px;
+    display: block;
+    margin-top: 4px;
+  }
+
+  .dialog-info-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--on-surface-variant);
+  }
+
+  .dialog-info-row .material-icons {
+    font-size: 14px;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .dialog-btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+    font-family: var(--font-system);
+  }
+
+  .dialog-btn.deny {
+    background: transparent;
+    color: var(--error);
+    border: 1px solid rgba(242, 184, 181, 0.3);
+  }
+
+  .dialog-btn.deny:hover {
+    background: rgba(244, 67, 54, 0.1);
+  }
+
+  .dialog-btn.cancel-turn {
+    background: transparent;
+    color: var(--on-surface-variant);
+    border: 1px solid var(--outline-variant);
+  }
+
+  .dialog-btn.allow {
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+  }
+
+  .dialog-btn.allow:hover {
+    background: rgba(79, 55, 139, 0.9);
+  }
+
+  /* ===== Settings Panel ===== */
+  .settings-panel {
+    width: 400px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--surface-container-highest);
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .settings-header .material-icons {
+    font-size: 18px;
+    color: var(--primary);
+  }
+
+  .settings-header .settings-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--on-surface);
+  }
+
+  .settings-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-section-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.02em;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .settings-label {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    width: 120px;
+    flex-shrink: 0;
+  }
+
+  .settings-value {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .settings-select {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--outline-variant);
+    background: var(--surface-container-high);
+    color: var(--on-surface);
+    font-size: 12px;
+    font-family: var(--font-system);
+    cursor: pointer;
+    min-width: 160px;
+  }
+
+  .settings-toggle {
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--outline-variant);
+    position: relative;
+    cursor: pointer;
+  }
+
+  .settings-toggle.on {
+    background: var(--primary-container);
+  }
+
+  .settings-toggle::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--on-surface);
+    top: 2px;
+    left: 2px;
+    transition: left 0.15s;
+  }
+
+  .settings-toggle.on::after {
+    left: 18px;
+    background: var(--primary);
+  }
+
+  .settings-hint {
+    font-size: 10px;
+    color: rgba(202, 196, 208, 0.6);
+    padding-left: 132px;
+    margin-top: -4px;
+  }
+
+  .settings-divider {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.4);
+    margin: 4px 0;
+  }
+
+  .locked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(73, 69, 79, 0.3);
+  }
+
+  .locked-badge .material-icons {
+    font-size: 10px;
+  }
+
+  /* ===== Popup Menu (dropdown open state) ===== */
+  .popup-menu {
+    position: absolute;
+    background: var(--surface-container-high);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+  }
+
+  .popup-item {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--on-surface);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.1s;
+  }
+
+  .popup-item:hover {
+    background: rgba(208, 188, 255, 0.08);
+  }
+
+  .popup-item.selected {
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .popup-item .item-desc {
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    margin-left: auto;
+  }
+
+  .popup-item .material-icons {
+    font-size: 14px;
+  }
+
+  .popup-separator {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.4);
+    margin: 4px 0;
+  }
+
+  /* ===== Annotations ===== */
+  .annotation {
+    position: relative;
+    display: inline-block;
+  }
+
+  .annotation-label {
+    position: absolute;
+    font-size: 9px;
+    color: var(--primary);
+    white-space: nowrap;
+    top: -16px;
+    left: 0;
+  }
+
+  .callout {
+    font-size: 11px;
+    color: rgba(208, 188, 255, 0.6);
+    font-style: italic;
+    padding: 4px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- SECTION 1: Conversation Header — Claude Backend                     -->
+<!-- ================================================================== -->
+
+<div class="section-title">1. Conversation Header — Claude Backend</div>
+<p class="section-subtitle">Single "Permissions" dropdown — same as current behavior.</p>
+
+<div class="variant-label">Active session with accept-edits mode</div>
+<div class="header-bar">
+  <div class="header-left">
+    <div class="compact-dropdown disabled">
+      <span class="dd-value">Claude</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+    <div class="compact-dropdown">
+      <span class="dd-value">Sonnet 4.5</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+    <div class="compact-dropdown">
+      <span class="dd-value" style="color: var(--primary); font-weight: 600;">Accept Edits</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="indicator">
+      <span class="material-icons">memory</span>
+      <div class="bar"><div class="bar-fill mid"></div></div>
+      <span>62%</span>
+    </div>
+    <div class="indicator">
+      <span class="material-icons">payments</span>
+      <span>$0.42</span>
+    </div>
+  </div>
+</div>
+
+<div class="callout">Claude keeps a single permissions dropdown with modes: Default, Accept Edits, Plan Only, Bypass All.</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 2: Conversation Header — Codex Backend                      -->
+<!-- ================================================================== -->
+
+<div class="section-title">2. Conversation Header — Codex Backend</div>
+<p class="section-subtitle">Two-axis security: Sandbox mode + Approval policy, grouped together with a shield icon.</p>
+
+<div class="variant-label">Pre-session — sandbox and approval dropdowns side by side</div>
+<div class="header-bar">
+  <div class="header-left">
+    <div class="compact-dropdown disabled">
+      <span class="dd-value">Codex</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+    <div class="compact-dropdown">
+      <span class="dd-value">o3</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+
+    <!-- Security config group -->
+    <div class="security-group">
+      <span class="sg-icon material-icons">shield</span>
+      <div class="compact-dropdown">
+        <span class="dd-value">Workspace Write</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+      <div class="sg-divider"></div>
+      <div class="compact-dropdown">
+        <span class="dd-value">Ask: On Request</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+    </div>
+
+    <div class="compact-dropdown">
+      <span class="dd-value">Reasoning: High</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="indicator">
+      <span class="material-icons">memory</span>
+      <div class="bar"><div class="bar-fill low"></div></div>
+      <span>0%</span>
+    </div>
+  </div>
+</div>
+
+<div class="variant-label">Active session — security badge summarizes effective policy</div>
+<div class="header-bar">
+  <div class="header-left">
+    <div class="compact-dropdown disabled">
+      <span class="dd-value">Codex</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+    <div class="compact-dropdown">
+      <span class="dd-value">o3</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+
+    <div class="security-group">
+      <span class="sg-icon material-icons">shield</span>
+      <div class="compact-dropdown">
+        <span class="dd-value">Workspace Write</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+      <div class="sg-divider"></div>
+      <div class="compact-dropdown">
+        <span class="dd-value">Ask: On Request</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+    </div>
+
+    <div class="compact-dropdown">
+      <span class="dd-value">Reasoning: High</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="security-badge safe">
+      <span class="material-icons">verified_user</span>
+      Sandboxed
+    </div>
+    <div class="indicator">
+      <span class="material-icons">memory</span>
+      <div class="bar"><div class="bar-fill mid"></div></div>
+      <span>45%</span>
+    </div>
+  </div>
+</div>
+
+<div class="variant-label">Danger state — full access sandbox, no approvals</div>
+<div class="header-bar">
+  <div class="header-left">
+    <div class="compact-dropdown disabled">
+      <span class="dd-value">Codex</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+    <div class="compact-dropdown">
+      <span class="dd-value">o3</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+
+    <div class="security-group" style="border-color: rgba(244, 67, 54, 0.4);">
+      <span class="sg-icon material-icons" style="color: var(--red);">shield</span>
+      <div class="compact-dropdown">
+        <span class="dd-value" style="color: var(--red); font-weight: 600;">Full Access</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+      <div class="sg-divider"></div>
+      <div class="compact-dropdown">
+        <span class="dd-value" style="color: var(--red); font-weight: 600;">Ask: Never</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+    </div>
+
+    <div class="compact-dropdown">
+      <span class="dd-value">Reasoning: High</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="security-badge danger">
+      <span class="material-icons">warning</span>
+      Unrestricted
+    </div>
+    <div class="indicator">
+      <span class="material-icons">memory</span>
+      <div class="bar"><div class="bar-fill mid"></div></div>
+      <span>45%</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 3: Sandbox Dropdown — Open State                            -->
+<!-- ================================================================== -->
+
+<div class="section-title">3. Sandbox Mode Dropdown — Open</div>
+<p class="section-subtitle">Shows available sandbox modes with descriptions. Locked options show admin badge.</p>
+
+<div class="variant-row">
+  <div style="position: relative; display: inline-block;">
+    <div class="security-group" style="border-color: var(--primary);">
+      <span class="sg-icon material-icons">shield</span>
+      <div class="compact-dropdown" style="background: rgba(208, 188, 255, 0.12);">
+        <span class="dd-value">Workspace Write</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+      <div class="sg-divider"></div>
+      <div class="compact-dropdown">
+        <span class="dd-value">Ask: On Request</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+    </div>
+    <div class="popup-menu" style="top: 30px; left: 28px;">
+      <div class="popup-item">
+        <span class="material-icons" style="color: var(--green);">visibility</span>
+        Read Only
+        <span class="item-desc">No edits, no commands</span>
+      </div>
+      <div class="popup-item selected">
+        <span class="material-icons" style="color: var(--orange);">edit_note</span>
+        Workspace Write
+        <span class="item-desc">Edits + commands in workspace</span>
+      </div>
+      <div class="popup-item">
+        <span class="material-icons" style="color: var(--red);">lock_open</span>
+        Full Access
+        <span class="item-desc">No restrictions (dangerous)</span>
+      </div>
+      <div class="popup-separator"></div>
+      <div class="popup-item" style="color: var(--on-surface-variant);">
+        <span class="material-icons" style="font-size: 14px;">tune</span>
+        Workspace settings...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 4: Approval Policy Dropdown — Open State                    -->
+<!-- ================================================================== -->
+
+<div class="section-title">4. Approval Policy Dropdown — Open</div>
+<p class="section-subtitle">Controls when user consent is required.</p>
+
+<div class="variant-row">
+  <div style="position: relative; display: inline-block;">
+    <div class="security-group" style="border-color: var(--primary);">
+      <span class="sg-icon material-icons">shield</span>
+      <div class="compact-dropdown">
+        <span class="dd-value">Workspace Write</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+      <div class="sg-divider"></div>
+      <div class="compact-dropdown" style="background: rgba(208, 188, 255, 0.12);">
+        <span class="dd-value">Ask: On Request</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+    </div>
+    <div class="popup-menu" style="top: 30px; left: 220px;">
+      <div class="popup-item">
+        <span class="material-icons" style="color: var(--blue);">gpp_good</span>
+        Untrusted
+        <span class="item-desc">Prompt before commands</span>
+      </div>
+      <div class="popup-item selected">
+        <span class="material-icons" style="color: var(--orange);">approval</span>
+        On Request
+        <span class="item-desc">Prompt for outside workspace</span>
+      </div>
+      <div class="popup-item">
+        <span class="material-icons" style="color: var(--on-surface-variant);">replay</span>
+        On Failure
+        <span class="item-desc">Only prompt on failure</span>
+      </div>
+      <div class="popup-item" style="color: var(--red);">
+        <span class="material-icons">dangerous</span>
+        Never
+        <span class="item-desc">Skip all prompts</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 5: Workspace Write Settings Popover                         -->
+<!-- ================================================================== -->
+
+<div class="section-title">5. Workspace Write Settings</div>
+<p class="section-subtitle">Fine-grained workspace-write configuration. Accessed via "Workspace settings..." in sandbox dropdown.</p>
+
+<div class="settings-panel">
+  <div class="settings-header">
+    <span class="material-icons">tune</span>
+    <span class="settings-title">Workspace Write Settings</span>
+  </div>
+  <div class="settings-body">
+    <div class="settings-section">
+      <div class="settings-section-label">Network</div>
+      <div class="settings-row">
+        <span class="settings-label">Network access</span>
+        <div class="settings-value">
+          <div class="settings-toggle"></div>
+          <span style="font-size: 11px; color: var(--on-surface-variant);">Disabled</span>
+        </div>
+      </div>
+      <div class="settings-hint">Allow commands to access the network</div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Temp directories</div>
+      <div class="settings-row">
+        <span class="settings-label">Exclude /tmp</span>
+        <div class="settings-value">
+          <div class="settings-toggle"></div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Exclude $TMPDIR</span>
+        <div class="settings-value">
+          <div class="settings-toggle"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Additional writable paths</div>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--on-surface); flex: 1;">/Users/zaf/.config/myapp</span>
+          <span class="material-icons" style="font-size: 14px; color: var(--on-surface-variant); cursor: pointer;">close</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--on-surface-variant); flex: 1; border-bottom: 1px dashed var(--outline-variant); padding: 2px 0;">Add path...</span>
+          <span class="material-icons" style="font-size: 14px; color: var(--primary); cursor: pointer;">add</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Web search</div>
+      <div class="settings-row">
+        <span class="settings-label">Search mode</span>
+        <div class="settings-value">
+          <select class="settings-select">
+            <option>Cached (default)</option>
+            <option>Live</option>
+            <option selected>Disabled</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 6: Permission Dialog — Codex                                -->
+<!-- ================================================================== -->
+
+<div class="section-title">6. Permission Dialog — Codex Backend</div>
+<p class="section-subtitle">Simplified dialog: accept/decline/cancel, with command actions and reason displayed when available.</p>
+
+<div class="variant-label">Command execution approval with reason</div>
+<div class="dialog-overlay">
+  <div class="dialog-header">
+    <span class="material-icons">security</span>
+    <span class="dialog-title">Command Approval</span>
+    <span class="backend-badge">Codex</span>
+  </div>
+  <div class="dialog-body">
+    <span class="dialog-tool-label">Bash wants to execute:</span>
+    <div class="dialog-code-block">
+      <span class="prompt">$</span> npm test -- --coverage
+      <span class="path">in /Users/zaf/projects/cc-insights</span>
+    </div>
+    <div class="dialog-info-row">
+      <span class="material-icons">info_outline</span>
+      <span>Actions: <b>read</b>, <b>search</b></span>
+    </div>
+    <div class="dialog-info-row">
+      <span class="material-icons">chat_bubble_outline</span>
+      <span style="font-style: italic;">Running tests to verify the changes compile correctly.</span>
+    </div>
+  </div>
+  <div class="dialog-actions">
+    <button class="dialog-btn cancel-turn">Cancel Turn</button>
+    <button class="dialog-btn deny">Decline</button>
+    <button class="dialog-btn allow">Accept</button>
+  </div>
+</div>
+
+<div style="height: 16px;"></div>
+
+<div class="variant-label">File change approval</div>
+<div class="dialog-overlay">
+  <div class="dialog-header">
+    <span class="material-icons">security</span>
+    <span class="dialog-title">File Change Approval</span>
+    <span class="backend-badge">Codex</span>
+  </div>
+  <div class="dialog-body">
+    <span class="dialog-tool-label">Codex wants to write files under:</span>
+    <div class="dialog-code-block">
+      <span class="prompt" style="color: var(--orange);">&#9998;</span> /Users/zaf/projects/cc-insights/frontend/lib/
+    </div>
+  </div>
+  <div class="dialog-actions">
+    <button class="dialog-btn cancel-turn">Cancel Turn</button>
+    <button class="dialog-btn deny">Decline</button>
+    <button class="dialog-btn allow">Accept</button>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 7: Permission Dialog — Claude (unchanged)                   -->
+<!-- ================================================================== -->
+
+<div class="section-title">7. Permission Dialog — Claude Backend</div>
+<p class="section-subtitle">Existing rich dialog with suggestions, blocked path, and input modification — unchanged.</p>
+
+<div class="dialog-overlay" style="width: 520px;">
+  <div class="dialog-header">
+    <span class="material-icons">security</span>
+    <span class="dialog-title">Permission Request</span>
+    <span class="backend-badge">Claude</span>
+  </div>
+  <div class="dialog-body">
+    <span class="dialog-tool-label">Bash wants to execute:</span>
+    <div class="dialog-code-block">
+      <span class="prompt">$</span> rm -rf node_modules && npm install
+      <span class="path">in /Users/zaf/projects/cc-insights</span>
+    </div>
+    <div class="dialog-info-row">
+      <span class="material-icons" style="color: var(--orange);">folder_off</span>
+      <span>Blocked path: <span style="font-family: var(--font-mono); font-size: 11px;">/Users/zaf/projects/cc-insights/node_modules</span></span>
+    </div>
+
+    <!-- Suggestions -->
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 8px; background: rgba(73, 69, 79, 0.15); border-radius: 6px;">
+      <div style="font-size: 11px; color: var(--on-surface-variant);">Suggestions:</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 12px; border: 1px solid var(--outline-variant); font-size: 10px; color: var(--on-surface); cursor: pointer;">
+          <span class="material-icons" style="font-size: 12px; color: var(--green);">check_circle</span>
+          Allow Bash in project
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 12px; border: 1px solid var(--outline-variant); font-size: 10px; color: var(--on-surface); cursor: pointer;">
+          <span class="material-icons" style="font-size: 12px; color: var(--blue);">folder</span>
+          Allow writes in /cc-insights
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 12px; border: 1px solid rgba(208, 188, 255, 0.3); font-size: 10px; color: var(--primary); cursor: pointer;">
+          <span class="material-icons" style="font-size: 12px;">tune</span>
+          Accept Edits mode
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-actions">
+    <button class="dialog-btn deny">Deny</button>
+    <button class="dialog-btn allow">Allow</button>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 8: Enterprise Locked State                                   -->
+<!-- ================================================================== -->
+
+<div class="section-title">8. Enterprise Locked State</div>
+<p class="section-subtitle">When admin requirements restrict options, disabled items show a lock badge and tooltip.</p>
+
+<div class="variant-label">Sandbox dropdown with "Full Access" locked by admin</div>
+<div class="variant-row">
+  <div style="position: relative; display: inline-block;">
+    <div class="security-group" style="border-color: var(--primary);">
+      <span class="sg-icon material-icons">shield</span>
+      <div class="compact-dropdown" style="background: rgba(208, 188, 255, 0.12);">
+        <span class="dd-value">Workspace Write</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+      <div class="sg-divider"></div>
+      <div class="compact-dropdown">
+        <span class="dd-value">Ask: On Request</span>
+        <span class="dd-arrow material-icons">arrow_drop_down</span>
+      </div>
+    </div>
+    <div class="popup-menu" style="top: 30px; left: 28px;">
+      <div class="popup-item">
+        <span class="material-icons" style="color: var(--green);">visibility</span>
+        Read Only
+      </div>
+      <div class="popup-item selected">
+        <span class="material-icons" style="color: var(--orange);">edit_note</span>
+        Workspace Write
+      </div>
+      <div class="popup-item" style="opacity: 0.35; cursor: default;">
+        <span class="material-icons" style="color: var(--red);">lock_open</span>
+        Full Access
+        <span class="locked-badge">
+          <span class="material-icons">lock</span>
+          Admin
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 9: Narrow Width — Collapsed Security Group                   -->
+<!-- ================================================================== -->
+
+<div class="section-title">9. Narrow Width Behavior</div>
+<p class="section-subtitle">At narrow widths, security group collapses to a single icon + badge.</p>
+
+<div class="variant-label">Collapsed header (< 500px)</div>
+<div class="header-bar" style="min-width: 400px; max-width: 460px;">
+  <div class="header-left">
+    <div class="compact-dropdown disabled">
+      <span class="dd-value">Codex</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+    <div class="compact-dropdown">
+      <span class="dd-value">o3</span>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+
+    <!-- Collapsed: just shield icon + badge -->
+    <div class="compact-dropdown" style="gap: 4px;" title="Workspace Write / Ask: On Request">
+      <span class="material-icons" style="font-size: 16px; color: var(--on-surface-variant);">shield</span>
+      <div class="security-badge safe" style="padding: 1px 6px; font-size: 9px;">
+        <span>WS + Ask</span>
+      </div>
+      <span class="dd-arrow material-icons">arrow_drop_down</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="indicator">
+      <span class="material-icons">memory</span>
+      <span>45%</span>
+    </div>
+  </div>
+</div>
+
+<div class="callout">Clicking the collapsed security icon opens the full Workspace Write Settings panel (Section 5).</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 10: Security State Change Notification                      -->
+<!-- ================================================================== -->
+
+<div class="section-title">10. Security Change Notification</div>
+<p class="section-subtitle">When security settings change mid-session, a toast notification appears briefly.</p>
+
+<div style="position: relative; width: 400px; height: 60px;">
+  <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 8px;
+    background: var(--surface-container-highest); border: 1px solid var(--outline-variant);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); white-space: nowrap;">
+    <span class="material-icons" style="font-size: 16px; color: var(--orange);">shield</span>
+    <span style="font-size: 12px; color: var(--on-surface);">Sandbox changed to <b>Read Only</b></span>
+  </div>
+</div>
+
+<div style="position: relative; width: 400px; height: 60px;">
+  <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 8px;
+    background: var(--surface-container-highest); border: 1px solid rgba(244, 67, 54, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); white-space: nowrap;">
+    <span class="material-icons" style="font-size: 16px; color: var(--red);">warning</span>
+    <span style="font-size: 12px; color: var(--on-surface);">Approval policy set to <b style="color: var(--red);">Never</b> — all actions auto-approved</span>
+  </div>
+</div>
+
+</body>
+</html>
