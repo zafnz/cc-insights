@@ -12,6 +12,9 @@ class CostIndicator extends StatelessWidget {
   /// The aggregated usage information to display.
   final UsageInfo usage;
 
+  /// Display label for the current agent (e.g. Claude, Codex).
+  final String agentLabel;
+
   /// Per-model usage breakdown for the tooltip.
   ///
   /// When provided and non-empty, the tooltip will include a section
@@ -21,15 +24,22 @@ class CostIndicator extends StatelessWidget {
   /// Timing statistics for the tooltip.
   ///
   /// When provided and non-zero, the tooltip will include a section
-  /// showing how long Claude worked and how long the user took to respond.
+  /// showing how long the agent worked and how long the user took to respond.
   final TimingStats? timingStats;
+
+  /// Whether to display cost values in the compact view and tooltip.
+  ///
+  /// Set to false when the backend doesn't provide cost data.
+  final bool showCost;
 
   /// Creates a [CostIndicator] widget.
   const CostIndicator({
     super.key,
     required this.usage,
+    required this.agentLabel,
     this.modelUsage = const [],
     this.timingStats,
+    this.showCost = true,
   });
 
   @override
@@ -61,11 +71,13 @@ class CostIndicator extends StatelessWidget {
               _formatTokenCount(usage.totalTokens),
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
-            const SizedBox(width: 8),
-            Text(
-              '\$${_formatCost(usage.costUsd)}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
+            if (showCost) ...[
+              const SizedBox(width: 8),
+              Text(
+                '\$${_formatCost(usage.costUsd)}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
           ],
         ),
       ),
@@ -85,11 +97,14 @@ class CostIndicator extends StatelessWidget {
       TextSpan(
         text: 'Cache creation: ${_formatNumber(usage.cacheCreationTokens)}\n',
       ),
-      TextSpan(
+    ];
+
+    if (showCost) {
+      children.add(TextSpan(
         text: '\nTotal cost: \$${_formatCost(usage.costUsd)}',
         style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
-    ];
+      ));
+    }
 
     // Add per-model breakdown if available
     if (modelUsage.isNotEmpty) {
@@ -108,9 +123,11 @@ class CostIndicator extends StatelessWidget {
           text: 'Cache: ${_formatNumber(model.cacheReadTokens)} read, '
               '${_formatNumber(model.cacheCreationTokens)} created\n',
         ));
-        children.add(TextSpan(
-          text: 'Cost: \$${_formatCost(model.costUsd)}\n',
-        ));
+        if (showCost) {
+          children.add(TextSpan(
+            text: 'Cost: \$${_formatCost(model.costUsd)}\n',
+          ));
+        }
       }
     }
 
@@ -124,12 +141,12 @@ class CostIndicator extends StatelessWidget {
         style: TextStyle(fontWeight: FontWeight.bold),
       ));
       children.add(TextSpan(
-        text: 'Claude worked: '
+        text: '$agentLabel worked: '
             '${TimingStats.formatDuration(timing.claudeWorkingDuration)}'
             ' (${timing.claudeWorkCount}x)\n',
       ));
       children.add(TextSpan(
-        text: 'Claude waited for you: '
+        text: '$agentLabel waited for you: '
             '${TimingStats.formatDuration(timing.userResponseDuration)}'
             ' (${timing.userResponseCount}x)\n',
       ));
