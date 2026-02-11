@@ -170,18 +170,14 @@ class CliSession {
               'MCP message handling failed: $e',
               sessionId: sessionId,
             );
-            _process.send({
-              'type': 'control_response',
-              'request_id': requestId,
-              'response': {
-                'jsonrpc': '2.0',
-                'id': request?['message']?['id'],
-                'error': {
-                  'code': -32603,
-                  'message': 'Internal error: $e',
-                },
+            _process.send(_mcpControlResponse(requestId, {
+              'jsonrpc': '2.0',
+              'id': request?['message']?['id'],
+              'error': {
+                'code': -32603,
+                'message': 'Internal error: $e',
               },
-            });
+            }));
           });
         }
 
@@ -237,29 +233,102 @@ class CliSession {
     if (serverName != InternalToolRegistry.serverName ||
         message == null ||
         _registry == null) {
-      _process.send({
-        'type': 'control_response',
-        'request_id': requestId,
-        'response': {
-          'jsonrpc': '2.0',
-          'id': message?['id'],
-          'error': {
-            'code': -32601,
-            'message': 'Unknown server: $serverName',
-          },
+      _process.send(_mcpControlResponse(requestId, {
+        'jsonrpc': '2.0',
+        'id': message?['id'],
+        'error': {
+          'code': -32601,
+          'message': 'Unknown server: $serverName',
         },
-      });
+      }));
       return;
     }
 
     final response = await _registry!.handleMcpMessage(message);
-    if (response == null) return; // Notification, no response needed
 
-    _process.send({
+    // Always send a control_response — even for JSON-RPC notifications
+    // (which return null from the registry). The CLI's outer protocol
+    // wraps every MCP message as a control_request that expects a
+    // control_response, regardless of the inner JSON-RPC semantics.
+    _process.send(_mcpControlResponse(
+      requestId,
+      response ?? {'jsonrpc': '2.0', 'result': {}},
+    ));
+  }
+
+  /// Build a control_response envelope for an MCP message.
+  ///
+  /// The CLI expects the same envelope format as other control responses:
+  /// `{type: control_response, response: {subtype: success, request_id, response: {mcp_response: ...}}}`
+  static Map<String, dynamic> _mcpControlResponse(
+    String requestId,
+    Map<String, dynamic> mcpResponse,
+  ) {
+    return {
       'type': 'control_response',
-      'request_id': requestId,
-      'response': response,
-    });
+      'response': {
+        'subtype': 'success',
+        'request_id': requestId,
+        'response': {
+          'mcp_response': mcpResponse,
+        },
+      },
+    };
+  }
+
+  /// Handle an MCP message during session creation (before the session exists).
+  ///
+  /// The CLI sends MCP discovery messages (initialize, tools/list, etc.)
+  /// during the handshake and blocks until they are answered. This static
+  /// helper handles them using the raw [CliProcess] and [InternalToolRegistry].
+  static Future<void> _handleMcpMessageDuringHandshake(
+    CliProcess process,
+    Map<String, dynamic> json,
+    InternalToolRegistry? registry,
+  ) async {
+    final requestId = json['request_id'] as String? ?? '';
+    final request = json['request'] as Map<String, dynamic>?;
+    if (request == null) return;
+
+    final serverName = request['server_name'] as String?;
+    final message =
+        (request['message'] as Map<dynamic, dynamic>?)
+            ?.cast<String, dynamic>();
+
+    if (serverName != InternalToolRegistry.serverName ||
+        message == null ||
+        registry == null) {
+      process.send(_mcpControlResponse(requestId, {
+        'jsonrpc': '2.0',
+        'id': message?['id'],
+        'error': {
+          'code': -32601,
+          'message': 'Unknown server: $serverName',
+        },
+      }));
+      return;
+    }
+
+    try {
+      final response = await registry.handleMcpMessage(message);
+
+      // Always send a control_response — see _handleMcpMessage for rationale.
+      process.send(_mcpControlResponse(
+        requestId,
+        response ?? {'jsonrpc': '2.0', 'result': {}},
+      ));
+      _t('CliSession', 'Step 3: MCP response sent for ${message['method']}');
+    } catch (e) {
+      _t('CliSession', 'Step 3: MCP handling error: $e');
+      process.send(_mcpControlResponse(requestId, {
+        'jsonrpc': '2.0',
+        'id': message['id'],
+        'error': {
+          'code': -32603,
+          'message': 'Internal error: $e',
+        },
+      }));
+    }
   }
 
   /// Convert a CLI JSON message into InsightsEvent objects.
@@ -940,53 +1009,94 @@ class CliSession {
       _t('CliSession', 'Step 2: User message sent (${stopwatch.elapsedMilliseconds}ms)');
 
       // Step 3: Wait for control_response and system init
+      //
+      // The CLI may send MCP messages (initialize, tools/list, etc.) during
+      // this phase. These MUST be answered inline — the CLI blocks on MCP
+      // setup and won't send system/init until it's complete. Other
+      // non-handshake messages are buffered for replay after the session's
+      // permanent listener is attached.
+      //
+      // We use a manual subscription + queue instead of `await for` because
+      // the broadcast stream drops events while the loop body is suspended
+      // in an `await`. The queue ensures no messages are lost while we're
+      // handling async MCP requests.
       _t('CliSession', 'Step 3: Waiting for control_response AND system init (timeout=${timeout.inSeconds}s)...');
       String? sessionId;
       bool systemInitReceived = false;
       bool controlResponseReceived = false;
       Map<String, dynamic>? controlResponseData;
       int messagesReceived = 0;
+      final bufferedMessages = <Map<String, dynamic>>[];
 
-      await for (final json in process.messages.timeout(timeout)) {
-        messagesReceived++;
-        final type = json['type'] as String?;
-        final subtype = json['subtype'] as String? ??
-            (json['request'] as Map<String, dynamic>?)?['subtype'] as String?;
-        _t('CliSession', 'Step 3: Message #$messagesReceived: type=$type'
-            '${subtype != null ? ' subtype=$subtype' : ''}'
-            ' (${stopwatch.elapsedMilliseconds}ms)');
+      // Use a non-broadcast StreamController as a buffer so that messages
+      // arriving while we `await` MCP handlers are queued, not dropped.
+      final inbox = StreamController<Map<String, dynamic>>();
+      final sub = process.messages.listen(
+        inbox.add,
+        onError: inbox.addError,
+        onDone: inbox.close,
+      );
 
-        if (type == 'control_response') {
-          controlResponseReceived = true;
-          controlResponseData = json['response'] as Map<String, dynamic>?;
-          _t('CliSession', 'Step 3: control_response received');
-          SdkLogger.instance.debug('Received control_response');
-        } else if (type == 'system') {
-          final sysSubtype = json['subtype'] as String?;
-          if (sysSubtype == 'init') {
-            sessionId = json['session_id'] as String?;
-            systemInitReceived = true;
-            _t('CliSession', 'Step 3: system init received, sessionId=$sessionId');
-            SdkLogger.instance.debug('Received system init',
-                sessionId: sessionId);
+      try {
+        await for (final json in inbox.stream.timeout(timeout)) {
+          messagesReceived++;
+          final type = json['type'] as String?;
+          final subtype = json['subtype'] as String? ??
+              (json['request'] as Map<String, dynamic>?)?['subtype']
+                  as String?;
+          _t('CliSession', 'Step 3: Message #$messagesReceived: type=$type'
+              '${subtype != null ? ' subtype=$subtype' : ''}'
+              ' (${stopwatch.elapsedMilliseconds}ms)');
+
+          if (type == 'control_response') {
+            controlResponseReceived = true;
+            controlResponseData =
+                json['response'] as Map<String, dynamic>?;
+            _t('CliSession', 'Step 3: control_response received');
+            SdkLogger.instance.debug('Received control_response');
+          } else if (type == 'system') {
+            final sysSubtype = json['subtype'] as String?;
+            if (sysSubtype == 'init') {
+              sessionId = json['session_id'] as String?;
+              systemInitReceived = true;
+              _t('CliSession',
+                  'Step 3: system init received, sessionId=$sessionId');
+              SdkLogger.instance.debug('Received system init',
+                  sessionId: sessionId);
+            } else {
+              _t('CliSession', 'Step 3: system/$sysSubtype buffered');
+              bufferedMessages.add(json);
+            }
+          } else if (type == 'control_request' &&
+              subtype == 'mcp_message') {
+            // MCP messages arrive during init — the CLI blocks until
+            // these are answered. The inbox buffers subsequent messages
+            // so nothing is lost during the await.
+            await _handleMcpMessageDuringHandshake(
+                process, json, registry);
           } else {
-            _t('CliSession', 'Step 3: system message with subtype=$sysSubtype (not "init", ignoring for handshake)');
+            _t('CliSession', 'Step 3: Buffering $type message');
+            bufferedMessages.add(json);
           }
-        } else {
-          _t('CliSession', 'Step 3: (not a handshake message, continuing wait)');
-        }
 
-        // We have everything we need
-        if (controlResponseReceived && sessionId != null && systemInitReceived) {
-          _t('CliSession', 'Step 3: Both handshake messages received!');
-          break;
-        }
+          // Check if we have everything we need
+          if (controlResponseReceived &&
+              sessionId != null &&
+              systemInitReceived) {
+            _t('CliSession', 'Step 3: Both handshake messages received!');
+            break;
+          }
 
-        // Log what we're still waiting for
-        final waiting = <String>[];
-        if (!controlResponseReceived) waiting.add('control_response');
-        if (sessionId == null) waiting.add('system init');
-        _t('CliSession', 'Step 3: Still waiting for: ${waiting.join(', ')}');
+          // Log what we're still waiting for
+          final waiting = <String>[];
+          if (!controlResponseReceived) waiting.add('control_response');
+          if (sessionId == null) waiting.add('system init');
+          _t('CliSession',
+              'Step 3: Still waiting for: ${waiting.join(', ')}');
+        }
+      } finally {
+        await sub.cancel();
+        await inbox.close();
       }
 
       if (!controlResponseReceived) {
@@ -1002,15 +1112,25 @@ class CliSession {
 
       _t('CliSession', '========== SESSION CREATED (${stopwatch.elapsedMilliseconds}ms) ==========');
       _t('CliSession', 'sessionId: $sessionId');
+      if (bufferedMessages.isNotEmpty) {
+        _t('CliSession', 'Replaying ${bufferedMessages.length} buffered messages');
+      }
       SdkLogger.instance.info('Session created successfully',
           sessionId: sessionId);
 
-      return CliSession._(
+      final session = CliSession._(
         process: process,
         sessionId: sessionId,
         controlResponseData: controlResponseData,
         registry: registry,
       );
+
+      // Replay any messages that arrived during the handshake
+      for (final msg in bufferedMessages) {
+        session._handleMessage(msg);
+      }
+
+      return session;
     } catch (e) {
       // Clean up on error
       _t('CliSession', '========== SESSION CREATE FAILED (${stopwatch.elapsedMilliseconds}ms) ==========');

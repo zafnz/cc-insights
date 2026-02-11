@@ -49,16 +49,13 @@ void main() {
         await _pumpEventLoop();
 
         // Verify the response was sent
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        final responses = helper.controlResponses;
         expect(responses, hasLength(1));
 
-        final response = responses[0];
-        expect(response['request_id'], equals('req-001'));
+        final envelope = responses[0];
+        _expectMcpEnvelope(envelope, requestId: 'req-001');
 
-        final mcpResponse =
-            response['response'] as Map<String, dynamic>;
+        final mcpResponse = _extractMcpResponse(envelope);
         expect(mcpResponse['jsonrpc'], equals('2.0'));
         expect(mcpResponse['id'], equals(1));
 
@@ -106,16 +103,11 @@ void main() {
         // Handler is async, give it time to complete
         await _pumpEventLoop(times: 5);
 
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        final responses = helper.controlResponses;
         expect(responses, hasLength(1));
 
-        final response = responses[0];
-        expect(response['request_id'], equals('req-002'));
-
-        final mcpResponse =
-            response['response'] as Map<String, dynamic>;
+        _expectMcpEnvelope(responses[0], requestId: 'req-002');
+        final mcpResponse = _extractMcpResponse(responses[0]);
         expect(mcpResponse['id'], equals(2));
 
         final result = mcpResponse['result'] as Map<String, dynamic>;
@@ -154,13 +146,10 @@ void main() {
         );
         await _pumpEventLoop(times: 5);
 
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        final responses = helper.controlResponses;
         expect(responses, hasLength(1));
 
-        final mcpResponse =
-            responses[0]['response'] as Map<String, dynamic>;
+        final mcpResponse = _extractMcpResponse(responses[0]);
         expect(mcpResponse['id'], equals(3));
 
         final result = mcpResponse['result'] as Map<String, dynamic>;
@@ -195,16 +184,11 @@ void main() {
         );
         await _pumpEventLoop();
 
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        final responses = helper.controlResponses;
         expect(responses, hasLength(1));
 
-        final response = responses[0];
-        expect(response['request_id'], equals('req-004'));
-
-        final mcpResponse =
-            response['response'] as Map<String, dynamic>;
+        _expectMcpEnvelope(responses[0], requestId: 'req-004');
+        final mcpResponse = _extractMcpResponse(responses[0]);
         expect(mcpResponse['id'], equals(4));
         expect(mcpResponse['error'], isNotNull);
 
@@ -231,20 +215,17 @@ void main() {
         );
         await _pumpEventLoop();
 
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        final responses = helper.controlResponses;
         expect(responses, hasLength(1));
 
-        final mcpResponse =
-            responses[0]['response'] as Map<String, dynamic>;
+        final mcpResponse = _extractMcpResponse(responses[0]);
         expect(mcpResponse['error'], isNotNull);
         expect(mcpResponse['error']['code'], equals(-32601));
 
         await session.dispose();
       });
 
-      test('notification (no id) does not send response', () async {
+      test('notification sends empty control_response', () async {
         final registry = InternalToolRegistry();
         final session = helper.createSession(registry: registry);
 
@@ -258,11 +239,11 @@ void main() {
         );
         await _pumpEventLoop();
 
-        // No response should be sent for notifications
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
-        expect(responses, isEmpty);
+        // The CLI wraps every MCP message as a control_request, so we must
+        // always send a control_response — even for JSON-RPC notifications.
+        final responses = helper.controlResponses;
+        expect(responses, hasLength(1));
+        _expectMcpEnvelope(responses[0], requestId: 'req-006');
 
         await session.dispose();
       });
@@ -283,13 +264,10 @@ void main() {
         );
         await _pumpEventLoop();
 
-        final responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        final responses = helper.controlResponses;
         expect(responses, hasLength(1));
 
-        final mcpResponse =
-            responses[0]['response'] as Map<String, dynamic>;
+        final mcpResponse = _extractMcpResponse(responses[0]);
         expect(mcpResponse['id'], equals('string-id-42'));
 
         await session.dispose();
@@ -350,33 +328,79 @@ void main() {
         await _pumpEventLoop(times: 3);
 
         // Should have one response so far
-        var responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        var responses = helper.controlResponses;
         expect(responses, hasLength(1));
-        expect(responses[0]['request_id'], equals('req-fast'));
-        final fastResponse =
-            responses[0]['response'] as Map<String, dynamic>;
-        expect(fastResponse['id'], equals(11));
+
+        final fastEnvelope = responses[0];
+        _expectMcpEnvelope(fastEnvelope, requestId: 'req-fast');
+        final fastMcpResponse = _extractMcpResponse(fastEnvelope);
+        expect(fastMcpResponse['id'], equals(11));
 
         // Now complete the slow one
         completer1.complete(InternalToolResult.text('slow done'));
         await _pumpEventLoop(times: 3);
 
-        responses = helper.stdinMessages
-            .where((m) => m['type'] == 'control_response')
-            .toList();
+        responses = helper.controlResponses;
         expect(responses, hasLength(2));
 
         // Find the slow response
-        final slowResponse = responses
-            .firstWhere((r) => r['request_id'] == 'req-slow');
-        final slowMcpResponse =
-            slowResponse['response'] as Map<String, dynamic>;
+        final slowEnvelope = responses
+            .firstWhere((r) => _envelopeRequestId(r) == 'req-slow');
+        final slowMcpResponse = _extractMcpResponse(slowEnvelope);
         expect(slowMcpResponse['id'], equals(10));
         final slowResult =
             slowMcpResponse['result'] as Map<String, dynamic>;
         expect(slowResult['content'][0]['text'], equals('slow done'));
+
+        await session.dispose();
+      });
+    });
+
+    group('control_response envelope format', () {
+      test('MCP response uses same envelope as permission responses',
+          () async {
+        final registry = InternalToolRegistry();
+        registry.register(InternalToolDefinition(
+          name: 'test_tool',
+          description: 'Test',
+          inputSchema: {'type': 'object', 'properties': {}},
+          handler: (input) async => InternalToolResult.text('ok'),
+        ));
+
+        final session = helper.createSession(registry: registry);
+
+        helper.emitControlRequest(
+          requestId: 'req-envelope',
+          serverName: 'cci',
+          mcpMessage: {
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'tools/list',
+            'params': {},
+          },
+        );
+        await _pumpEventLoop();
+
+        final responses = helper.controlResponses;
+        expect(responses, hasLength(1));
+
+        final envelope = responses[0];
+        // Top-level: just 'type' and 'response'
+        expect(envelope['type'], equals('control_response'));
+        expect(envelope.containsKey('request_id'), isFalse,
+            reason: 'request_id belongs inside response, not at top level');
+
+        // Inner response: subtype, request_id, response
+        final inner = envelope['response'] as Map<String, dynamic>;
+        expect(inner['subtype'], equals('success'));
+        expect(inner['request_id'], equals('req-envelope'));
+
+        // MCP response is wrapped in mcp_response key
+        final responseData = inner['response'] as Map<String, dynamic>;
+        expect(responseData.containsKey('mcp_response'), isTrue);
+        final mcpResponse =
+            responseData['mcp_response'] as Map<String, dynamic>;
+        expect(mcpResponse['jsonrpc'], equals('2.0'));
 
         await session.dispose();
       });
@@ -437,6 +461,34 @@ Future<void> _pumpEventLoop({int times = 1}) async {
   }
 }
 
+/// Verify that an MCP control_response has the correct envelope structure:
+/// `{type: control_response, response: {subtype: success, request_id: ..., response: {mcp_response: ...}}}`
+void _expectMcpEnvelope(
+  Map<String, dynamic> envelope, {
+  required String requestId,
+}) {
+  expect(envelope['type'], equals('control_response'));
+  final inner = envelope['response'] as Map<String, dynamic>;
+  expect(inner['subtype'], equals('success'));
+  expect(inner['request_id'], equals(requestId));
+  expect(inner['response'], isA<Map<String, dynamic>>());
+  final responseData = inner['response'] as Map<String, dynamic>;
+  expect(responseData.containsKey('mcp_response'), isTrue);
+}
+
+/// Extract the inner JSON-RPC MCP response from a control_response envelope.
+Map<String, dynamic> _extractMcpResponse(Map<String, dynamic> envelope) {
+  final inner = envelope['response'] as Map<String, dynamic>;
+  final responseData = inner['response'] as Map<String, dynamic>;
+  return responseData['mcp_response'] as Map<String, dynamic>;
+}
+
+/// Extract the request_id from the control_response envelope.
+String _envelopeRequestId(Map<String, dynamic> envelope) {
+  final inner = envelope['response'] as Map<String, dynamic>;
+  return inner['request_id'] as String;
+}
+
 /// Helper for creating CliSession instances with MCP registry for testing.
 class _McpTestHelper {
   final _stdoutController = StreamController<List<int>>.broadcast();
@@ -446,6 +498,10 @@ class _McpTestHelper {
   final _sessions = <CliSession>[];
 
   List<Map<String, dynamic>> get stdinMessages => _stdinMessages;
+
+  /// Get only control_response messages from stdin.
+  List<Map<String, dynamic>> get controlResponses =>
+      _stdinMessages.where((m) => m['type'] == 'control_response').toList();
 
   /// Create a CliSession with registry using the @visibleForTesting factory.
   CliSession createSession({InternalToolRegistry? registry}) {

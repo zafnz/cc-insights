@@ -61,8 +61,12 @@ class InternalToolRegistry {
 
     switch (method) {
       case 'initialize':
+        // Echo back the client's requested protocol version per MCP spec:
+        // "If the server supports the requested protocol version, it MUST
+        // respond with the same version."
+        final clientVersion = params['protocolVersion'] as String? ?? '2024-11-05';
         return _jsonRpcResult(id, {
-          'protocolVersion': '2024-11-05',
+          'protocolVersion': clientVersion,
           'serverInfo': {'name': serverName, 'version': '1.0.0'},
           'capabilities': {
             'tools': {'listChanged': false},

@@ -87,26 +87,31 @@ After initialization, the CLI discovers what tools each SDK server provides by s
 ```json
 {
   "type": "control_response",
-  "request_id": "req-001",
   "response": {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {
-      "tools": [
-        {
-          "name": "create_ticket",
-          "description": "Create a ticket on the project board",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "title": { "type": "string", "description": "Ticket title" },
-              "description": { "type": "string", "description": "Ticket description" },
-              "kind": { "type": "string", "enum": ["bug", "feature", "task"] }
-            },
-            "required": ["title", "description", "kind"]
-          }
+    "subtype": "success",
+    "request_id": "req-001",
+    "response": {
+      "mcp_response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "tools": [
+            {
+              "name": "create_ticket",
+              "description": "Create a ticket on the project board",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "description": "Ticket title" },
+                  "description": { "type": "string", "description": "Ticket description" },
+                  "kind": { "type": "string", "enum": ["bug", "feature", "task"] }
+                },
+                "required": ["title", "description", "kind"]
+              }
+            }
+          ]
         }
-      ]
+      }
     }
   }
 }
@@ -147,17 +152,22 @@ When the model decides to use an SDK MCP tool, the CLI sends a `tools/call` mess
 ```json
 {
   "type": "control_response",
-  "request_id": "req-002",
   "response": {
-    "jsonrpc": "2.0",
-    "id": 2,
-    "result": {
-      "content": [
-        {
-          "type": "text",
-          "text": "Ticket 'Fix login bug' created successfully (ID: TKT-42)"
+    "subtype": "success",
+    "request_id": "req-002",
+    "response": {
+      "mcp_response": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Ticket 'Fix login bug' created successfully (ID: TKT-42)"
+            }
+          ]
         }
-      ]
+      }
     }
   }
 }
@@ -172,18 +182,23 @@ If the tool handler fails:
 ```json
 {
   "type": "control_response",
-  "request_id": "req-002",
   "response": {
-    "jsonrpc": "2.0",
-    "id": 2,
-    "result": {
-      "content": [
-        {
-          "type": "text",
-          "text": "Error: Invalid ticket kind 'enhancement'. Must be one of: bug, feature, task"
+    "subtype": "success",
+    "request_id": "req-002",
+    "response": {
+      "mcp_response": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: Invalid ticket kind 'enhancement'. Must be one of: bug, feature, task"
+            }
+          ],
+          "isError": true
         }
-      ],
-      "isError": true
+      }
     }
   }
 }
@@ -194,13 +209,18 @@ For JSON-RPC level errors (unknown method, invalid params):
 ```json
 {
   "type": "control_response",
-  "request_id": "req-002",
   "response": {
-    "jsonrpc": "2.0",
-    "id": 2,
-    "error": {
-      "code": -32601,
-      "message": "Unknown method: tools/unknown"
+    "subtype": "success",
+    "request_id": "req-002",
+    "response": {
+      "mcp_response": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "error": {
+          "code": -32601,
+          "message": "Unknown method: tools/unknown"
+        }
+      }
     }
   }
 }

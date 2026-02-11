@@ -87,11 +87,14 @@ void main() {
     });
 
     group('handleMcpMessage - initialize', () {
-      test('returns server info and capabilities with int id', () async {
+      test('returns server info and echoes client protocol version', () async {
         final message = {
           'jsonrpc': '2.0',
           'id': 1,
           'method': 'initialize',
+          'params': {
+            'protocolVersion': '2025-11-25',
+          },
         };
 
         final response = await registry.handleMcpMessage(message);
@@ -100,7 +103,7 @@ void main() {
           'jsonrpc': '2.0',
           'id': 1,
           'result': {
-            'protocolVersion': '2024-11-05',
+            'protocolVersion': '2025-11-25',
             'serverInfo': {
               'name': InternalToolRegistry.serverName,
               'version': '1.0.0',
@@ -112,7 +115,7 @@ void main() {
         });
       });
 
-      test('returns server info and capabilities with string id', () async {
+      test('defaults to 2024-11-05 when no version provided', () async {
         final message = {
           'jsonrpc': '2.0',
           'id': 'init-123',
