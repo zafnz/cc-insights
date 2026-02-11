@@ -40,6 +40,9 @@ tools/_real_claude
 
 _real_claude
 
+# Claude agent memory
+.claude/agent-memory/
+
 # CC-Insights config (user-specific)
 .ccinsights/
 
