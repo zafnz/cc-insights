@@ -82,10 +82,12 @@ class _TicketDetailContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _HeaderSection(ticket: ticket),
           const SizedBox(height: 16),
@@ -117,6 +119,7 @@ class _TicketDetailContent extends StatelessWidget {
             _CostSection(costStats: ticket.costStats!),
           ],
         ],
+      ),
       ),
     );
   }
