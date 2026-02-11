@@ -63,6 +63,7 @@ class FakeCodexBackend implements CodexBackend {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     throw UnimplementedError('Not needed in tests');
   }

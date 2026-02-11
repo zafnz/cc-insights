@@ -186,6 +186,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     if (_disposed) {
       throw const BackendProcessError('Backend has been disposed');
@@ -206,6 +207,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
         threadId: threadResult.threadId,
         serverModel: threadResult.model,
         serverReasoningEffort: threadResult.reasoningEffort,
+        registry: registry,
       );
       _sessions[threadResult.threadId] = session;
 

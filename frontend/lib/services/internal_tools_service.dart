@@ -1,0 +1,213 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:claude_sdk/claude_sdk.dart';
+import 'package:flutter/foundation.dart';
+
+import '../models/ticket.dart';
+import '../state/ticket_board_state.dart';
+
+/// Service that manages internal MCP tools for CC-Insights.
+///
+/// Owns the [InternalToolRegistry] and registers application-level tools
+/// that agent backends can invoke via the MCP protocol.
+class InternalToolsService extends ChangeNotifier {
+  final InternalToolRegistry _registry = InternalToolRegistry();
+
+  /// The tool registry to pass to backend sessions.
+  InternalToolRegistry get registry => _registry;
+
+  /// Maximum number of ticket proposals allowed in a single create_ticket call.
+  static const int maxProposalCount = 50;
+
+  /// Register the create_ticket tool with the given ticket board.
+  ///
+  /// The tool handler parses ticket proposals from the input,
+  /// stages them in the board for user review, and waits for
+  /// the review to complete via a Completer.
+  void registerTicketTools(TicketBoardState board) {
+    _registry.register(InternalToolDefinition(
+      name: 'create_ticket',
+      description:
+          'Create one or more tickets on the project board. '
+          'Each ticket has a title, description, kind '
+          '(feature/bugfix/research/question/test/docs/chore), '
+          'optional priority, effort, category, tags, '
+          'and dependency indices.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'tickets': {
+            'type': 'array',
+            'description': 'Array of ticket proposals to create',
+            'items': {
+              'type': 'object',
+              'properties': {
+                'title': {
+                  'type': 'string',
+                  'description': 'Short title describing the ticket',
+                },
+                'description': {
+                  'type': 'string',
+                  'description': 'Detailed description of the work',
+                },
+                'kind': {
+                  'type': 'string',
+                  'enum': [
+                    'feature',
+                    'bugfix',
+                    'research',
+                    'question',
+                    'test',
+                    'docs',
+                    'chore',
+                  ],
+                  'description': 'Type of work',
+                },
+                'priority': {
+                  'type': 'string',
+                  'enum': ['critical', 'high', 'medium', 'low'],
+                  'description': 'Priority level (defaults to medium)',
+                },
+                'effort': {
+                  'type': 'string',
+                  'enum': ['small', 'medium', 'large'],
+                  'description': 'Estimated effort (defaults to medium)',
+                },
+                'category': {
+                  'type': 'string',
+                  'description': 'Optional category for grouping',
+                },
+                'tags': {
+                  'type': 'array',
+                  'items': {'type': 'string'},
+                  'description': 'Tags for categorization',
+                },
+                'dependsOnIndices': {
+                  'type': 'array',
+                  'items': {'type': 'integer'},
+                  'description':
+                      'Indices of tickets in this array that '
+                      'this ticket depends on',
+                },
+              },
+              'required': ['title', 'description', 'kind'],
+            },
+          },
+        },
+        'required': ['tickets'],
+      },
+      handler: (input) => _handleCreateTicket(board, input),
+    ));
+  }
+
+  /// Unregister ticket tools (e.g., when board changes).
+  void unregisterTicketTools() {
+    _registry.unregister('create_ticket');
+  }
+
+  Future<InternalToolResult> _handleCreateTicket(
+    TicketBoardState board,
+    Map<String, dynamic> input,
+  ) async {
+    // Parse tickets array
+    final ticketsInput = input['tickets'];
+    if (ticketsInput == null || ticketsInput is! List) {
+      return InternalToolResult.error(
+        'Missing or invalid "tickets" field. '
+        'Expected an array of ticket objects.',
+      );
+    }
+
+    if (ticketsInput.isEmpty) {
+      return InternalToolResult.error('Empty tickets array.');
+    }
+
+    if (ticketsInput.length > maxProposalCount) {
+      return InternalToolResult.error(
+        'Too many proposals '
+        '(${ticketsInput.length} > $maxProposalCount).',
+      );
+    }
+
+    // Parse proposals
+    final proposals = <TicketProposal>[];
+    for (var i = 0; i < ticketsInput.length; i++) {
+      final json = ticketsInput[i];
+      if (json is! Map<String, dynamic>) {
+        return InternalToolResult.error(
+          'Ticket at index $i is not a valid object.',
+        );
+      }
+
+      final title = json['title'] as String?;
+      final description = json['description'] as String?;
+      final kind = json['kind'] as String?;
+
+      if (title == null || title.isEmpty) {
+        return InternalToolResult.error(
+          'Ticket at index $i missing required "title" field.',
+        );
+      }
+      if (description == null) {
+        return InternalToolResult.error(
+          'Ticket at index $i missing required "description" field.',
+        );
+      }
+      if (kind == null || kind.isEmpty) {
+        return InternalToolResult.error(
+          'Ticket at index $i missing required "kind" field.',
+        );
+      }
+
+      try {
+        proposals.add(TicketProposal.fromJson(json));
+      } catch (e) {
+        return InternalToolResult.error(
+          'Failed to parse ticket at index $i: $e',
+        );
+      }
+    }
+
+    // Use a Completer to wait for the user's review decision
+    final completer = Completer<InternalToolResult>();
+
+    // Wire up the callback
+    board.onBulkReviewComplete = ({
+      required int approvedCount,
+      required int rejectedCount,
+    }) {
+      final total = approvedCount + rejectedCount;
+      final String resultText;
+      if (approvedCount == 0) {
+        resultText =
+            'All $total ticket proposals were rejected by the user.';
+      } else if (rejectedCount == 0) {
+        resultText =
+            'All $approvedCount ticket proposals were approved '
+            'and created.';
+      } else {
+        resultText =
+            '$approvedCount of $total ticket proposals were approved '
+            'and created. $rejectedCount were rejected.';
+      }
+
+      completer.complete(InternalToolResult.text(resultText));
+      board.onBulkReviewComplete = null;
+    };
+
+    // Stage proposals
+    board.proposeBulk(
+      proposals,
+      sourceChatId: 'mcp-tool',
+      sourceChatName: 'Agent',
+    );
+
+    developer.log(
+      'create_ticket: staged ${proposals.length} proposals for bulk review',
+      name: 'InternalToolsService',
+    );
+
+    return completer.future;
+  }
+}

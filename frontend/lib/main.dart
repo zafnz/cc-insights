@@ -35,6 +35,7 @@ import 'services/settings_service.dart';
 import 'services/script_execution_service.dart';
 import 'services/codex_pricing_service.dart';
 import 'services/event_handler.dart';
+import 'services/internal_tools_service.dart';
 import 'services/worktree_watcher_service.dart';
 import 'services/menu_action_service.dart';
 import 'state/file_manager_state.dart';
@@ -176,6 +177,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// The event handler for typed InsightsEvent consumption.
   EventHandler? _eventHandler;
+
+  /// The internal tools service for MCP tool registration.
+  InternalToolsService? _internalToolsService;
 
   /// The project restore service - shared for persistence operations.
   ProjectRestoreService? _restoreService;
@@ -388,6 +392,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Listen for changes to debug SDK logging setting
     RuntimeConfig.instance.addListener(_onRuntimeConfigChanged);
+
+    // Create the internal tools service for MCP tool registration
+    _internalToolsService = InternalToolsService();
 
     // Create or use injected EventHandler
     _eventHandler =
@@ -976,6 +983,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<BackendService>.value(value: _backend!),
         // Event handler for typed InsightsEvent consumption
         Provider<EventHandler>.value(value: _eventHandler!),
+        // Internal tools service for MCP tool registration
+        ChangeNotifierProvider<InternalToolsService>.value(
+          value: _internalToolsService!,
+        ),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
         // Git service for git operations (stateless)
@@ -1060,8 +1071,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
               projectId,
               persistence: context.read<PersistenceService>(),
             );
-            // Wire up the event handler for create_tickets interception
+            // Wire up the event handler for ticket status transitions
             context.read<EventHandler>().ticketBoard = ticketBoardState;
+            // Register internal MCP tools with the ticket board
+            context.read<InternalToolsService>().registerTicketTools(
+              ticketBoardState,
+            );
             // Load tickets asynchronously (fire-and-forget)
             ticketBoardState.load();
             return ticketBoardState;
@@ -1075,8 +1090,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
               projectId,
               persistence: context.read<PersistenceService>(),
             );
-            // Wire up the event handler for create_tickets interception
+            // Wire up the event handler for ticket status transitions
             context.read<EventHandler>().ticketBoard = ticketBoardState;
+            // Register internal MCP tools with the ticket board
+            context.read<InternalToolsService>().registerTicketTools(
+              ticketBoardState,
+            );
             ticketBoardState.load();
             return ticketBoardState;
           },

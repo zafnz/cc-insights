@@ -3,6 +3,7 @@ import 'dart:async';
 import 'backend_interface.dart';
 import 'cli_process.dart';
 import 'cli_session.dart';
+import 'internal_tool_registry.dart';
 import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
@@ -87,6 +88,7 @@ class ClaudeCliBackend implements AgentBackend {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     _t('ClaudeCliBackend', 'createSession called');
     _t('ClaudeCliBackend', '  cwd: $cwd');
@@ -117,6 +119,7 @@ class ClaudeCliBackend implements AgentBackend {
         prompt: prompt,
         options: options,
         content: content,
+        registry: registry,
         processConfig: _executablePath != null
             ? CliProcessConfig(
                 executablePath: _executablePath,

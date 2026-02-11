@@ -763,6 +763,7 @@ class _MockableCliBackend implements AgentBackend {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     throw UnsupportedError('Use createMockSession instead');
   }

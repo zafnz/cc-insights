@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import 'cli_process.dart';
+import 'internal_tool_registry.dart';
 import 'sdk_logger.dart';
 import 'types/backend_provider.dart';
 import 'types/content_blocks.dart';
@@ -26,9 +29,25 @@ class CliSession {
     required CliProcess process,
     required this.sessionId,
     Map<String, dynamic>? controlResponseData,
+    InternalToolRegistry? registry,
   })  : _process = process,
-        _controlResponseData = controlResponseData {
+        _controlResponseData = controlResponseData,
+        _registry = registry {
     _setupMessageRouting();
+  }
+
+  /// Create a CliSession for testing, bypassing the initialization flow.
+  @visibleForTesting
+  static CliSession createForTesting({
+    required CliProcess process,
+    required String sessionId,
+    InternalToolRegistry? registry,
+  }) {
+    return CliSession._(
+      process: process,
+      sessionId: sessionId,
+      registry: registry,
+    );
   }
 
   final CliProcess _process;
@@ -36,6 +55,7 @@ class CliSession {
   /// Data from the control_response received during initialization.
   /// Merged into SessionInitEvent when system/init arrives.
   final Map<String, dynamic>? _controlResponseData;
+  final InternalToolRegistry? _registry;
 
   int _eventIdCounter = 0;
 
@@ -144,6 +164,25 @@ class CliSession {
             blockedPath: blockedPath,
           );
           _permissionRequestsController.add(permRequest);
+        } else if (subtype == 'mcp_message') {
+          _handleMcpMessage(requestId, request!).catchError((Object e) {
+            SdkLogger.instance.error(
+              'MCP message handling failed: $e',
+              sessionId: sessionId,
+            );
+            _process.send({
+              'type': 'control_response',
+              'request_id': requestId,
+              'response': {
+                'jsonrpc': '2.0',
+                'id': request?['message']?['id'],
+                'error': {
+                  'code': -32603,
+                  'message': 'Internal error: $e',
+                },
+              },
+            });
+          });
         }
 
       case 'control_response':
@@ -178,6 +217,49 @@ class CliSession {
         data: {'error': e.toString(), 'type': json['type']},
       );
     }
+  }
+
+  /// Handle an MCP message routed from the CLI.
+  ///
+  /// The CLI sends MCP messages as control_requests with subtype
+  /// 'mcp_message'. This method extracts the JSON-RPC message, routes it
+  /// to the [InternalToolRegistry], and sends the response back as a
+  /// control_response.
+  Future<void> _handleMcpMessage(
+    String requestId,
+    Map<String, dynamic> request,
+  ) async {
+    final serverName = request['server_name'] as String?;
+    final message =
+        (request['message'] as Map<dynamic, dynamic>?)
+            ?.cast<String, dynamic>();
+
+    if (serverName != InternalToolRegistry.serverName ||
+        message == null ||
+        _registry == null) {
+      _process.send({
+        'type': 'control_response',
+        'request_id': requestId,
+        'response': {
+          'jsonrpc': '2.0',
+          'id': message?['id'],
+          'error': {
+            'code': -32601,
+            'message': 'Unknown server: $serverName',
+          },
+        },
+      });
+      return;
+    }
+
+    final response = await _registry!.handleMcpMessage(message);
+    if (response == null) return; // Notification, no response needed
+
+    _process.send({
+      'type': 'control_response',
+      'request_id': requestId,
+      'response': response,
+    });
   }
 
   /// Convert a CLI JSON message into InsightsEvent objects.
@@ -774,6 +856,7 @@ class CliSession {
     CliProcessConfig? processConfig,
     List<ContentBlock>? content,
     Duration timeout = const Duration(seconds: 60),
+    InternalToolRegistry? registry,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -829,6 +912,8 @@ class CliSession {
           if (options?.includePartialMessages == true)
             'include_partial_messages': true,
           'mcp_servers': options?.mcpServers ?? {},
+          if (registry != null && registry.isNotEmpty)
+            'sdkMcpServers': [InternalToolRegistry.serverName],
           'agents': {},
           'hooks': {},
         },
@@ -924,6 +1009,7 @@ class CliSession {
         process: process,
         sessionId: sessionId,
         controlResponseData: controlResponseData,
+        registry: registry,
       );
     } catch (e) {
       // Clean up on error

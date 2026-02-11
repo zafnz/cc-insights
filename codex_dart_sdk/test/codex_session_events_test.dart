@@ -644,8 +644,10 @@ void main() {
           },
         ));
         await waitForEvents();
-        expect(capturedEvents, hasLength(1));
-        final event = capturedEvents.first as TurnCompleteEvent;
+        // Filter out the UsageUpdateEvent from thread/tokenUsage/updated
+        final turnCompleteEvents = capturedEvents.whereType<TurnCompleteEvent>().toList();
+        expect(turnCompleteEvents, hasLength(1));
+        final event = turnCompleteEvents.first;
         final lastStep = event.extensions?['lastStepUsage'] as Map<String, dynamic>?;
         expect(lastStep, isNotNull);
         expect(lastStep!['input_tokens'], 14788);

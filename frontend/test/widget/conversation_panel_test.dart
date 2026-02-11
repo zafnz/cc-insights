@@ -7,6 +7,7 @@ import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
+import 'package:cc_insights_v2/services/internal_tools_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
@@ -121,6 +122,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     required String cwd,
     sdk.SessionOptions? options,
     List<sdk.ContentBlock>? content,
+    sdk.InternalToolRegistry? registry,
   }) async {
     createSessionCalls.add(_CreateSessionCall(
       prompt: prompt,
@@ -143,12 +145,14 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     sdk.SessionOptions? options,
     List<sdk.ContentBlock>? content,
     String? executablePath,
+    sdk.InternalToolRegistry? registry,
   }) async {
     return createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
   }
 
@@ -160,6 +164,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     sdk.SessionOptions? options,
     List<sdk.ContentBlock>? content,
     String? executablePath,
+    sdk.InternalToolRegistry? registry,
   }) async {
     final session = await createSessionForBackend(
       type: type,
@@ -167,6 +172,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
     return sdk.InProcessTransport(
       session: session,
@@ -390,6 +396,9 @@ void main() {
               value: fakeCliAvailability,
             ),
             Provider<EventHandler>.value(value: fakeEventHandler),
+            ChangeNotifierProvider<InternalToolsService>(
+              create: (_) => InternalToolsService(),
+            ),
             ChangeNotifierProvider(create: (_) => ThemeState()),
           ],
           child: const Scaffold(

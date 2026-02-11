@@ -155,6 +155,7 @@ class MockBackendService extends BackendService {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     if (_disposed) {
       throw StateError('MockBackendService has been disposed');
@@ -335,12 +336,14 @@ class MockBackendService extends BackendService {
     SessionOptions? options,
     List<ContentBlock>? content,
     String? executablePath,
+    InternalToolRegistry? registry,
   }) async {
     return createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 
+import 'internal_tool_registry.dart';
 import 'sdk_logger.dart';
 import 'types/callbacks.dart';
 import 'types/content_blocks.dart';
@@ -109,11 +110,13 @@ abstract class AgentBackend {
   /// [cwd] - The working directory for the session.
   /// [options] - Optional session configuration.
   /// [content] - Optional content blocks (for multi-modal input).
+  /// [registry] - Optional internal tool registry for custom tools.
   Future<AgentSession> createSession({
     required String prompt,
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   });
 
   /// List of active sessions.

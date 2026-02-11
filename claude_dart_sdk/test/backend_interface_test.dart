@@ -302,6 +302,7 @@ class MockAgentBackend implements AgentBackend {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     if (_disposed) {
       throw StateError('Backend has been disposed');

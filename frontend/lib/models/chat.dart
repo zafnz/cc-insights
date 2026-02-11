@@ -11,6 +11,7 @@ import '../services/persistence_models.dart';
 import '../services/persistence_service.dart';
 import '../services/runtime_config.dart';
 import '../services/event_handler.dart';
+import '../services/internal_tools_service.dart';
 import 'agent.dart';
 import 'chat_model.dart';
 import 'context_tracker.dart';
@@ -1033,6 +1034,7 @@ class ChatState extends ChangeNotifier {
     required EventHandler eventHandler,
     required String prompt,
     List<AttachedImage> images = const [],
+    InternalToolsService? internalToolsService,
   }) async {
     _t('ChatState', '========== startSession ==========');
     _t('ChatState', 'chatId: ${_data.id}');
@@ -1104,6 +1106,7 @@ class ChatState extends ChangeNotifier {
         includePartialMessages: RuntimeConfig.instance.streamOfThought,
       ),
       content: content,
+      registry: internalToolsService?.registry,
     );
 
     _t('ChatState', 'Transport created in ${sessionStopwatch.elapsedMilliseconds}ms');

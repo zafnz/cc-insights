@@ -12,6 +12,7 @@ import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../services/backend_service.dart';
 import '../services/event_handler.dart';
+import '../services/internal_tools_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/message_input.dart';
@@ -581,6 +582,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     if (!mounted) return;
     final backend = context.read<BackendService>();
     final eventHandler = context.read<EventHandler>();
+    final internalTools = context.read<InternalToolsService>();
 
     final prompt =
         'The user has approved your plan and wants you to execute it '
@@ -598,6 +600,7 @@ class _ConversationPanelState extends State<ConversationPanel>
         backend: backend,
         eventHandler: eventHandler,
         prompt: prompt,
+        internalToolsService: internalTools,
       );
     } catch (e) {
       chat.addEntry(TextOutputEntry(
@@ -695,6 +698,7 @@ class _ConversationPanelState extends State<ConversationPanel>
 
     final backend = context.read<BackendService>();
     final eventHandler = context.read<EventHandler>();
+    final internalTools = context.read<InternalToolsService>();
 
     if (!chat.hasActiveSession) {
       // First message - start a new session with the prompt
@@ -717,6 +721,7 @@ class _ConversationPanelState extends State<ConversationPanel>
           eventHandler: eventHandler,
           prompt: text,
           images: images,
+          internalToolsService: internalTools,
         );
       } catch (e) {
         // Show error in conversation

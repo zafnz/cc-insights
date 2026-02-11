@@ -15,10 +15,12 @@ class CodexSession implements AgentSession {
     required this.threadId,
     String? serverModel,
     String? serverReasoningEffort,
+    InternalToolRegistry? registry,
   })  : _process = process,
         _isTestSession = false,
         _serverModel = serverModel,
-        _serverReasoningEffort = serverReasoningEffort {
+        _serverReasoningEffort = serverReasoningEffort,
+        _registry = registry {
     _setupStreams();
   }
 
@@ -27,16 +29,24 @@ class CodexSession implements AgentSession {
     required this.threadId,
     String? serverModel,
     String? serverReasoningEffort,
+    InternalToolRegistry? registry,
   })  : _process = null,
         _isTestSession = true,
         _serverModel = serverModel,
-        _serverReasoningEffort = serverReasoningEffort;
+        _serverReasoningEffort = serverReasoningEffort,
+        _registry = registry;
 
   final CodexProcess? _process;
   final bool _isTestSession;
 
   /// Thread ID from Codex.
   final String threadId;
+
+  /// Internal tool registry for application-provided tools.
+  final InternalToolRegistry? _registry;
+
+  // TODO: Advertise registry tools to Codex via thread config
+  // TODO: Intercept tool calls matching registry and route to handlers
 
   @override
   String get sessionId => threadId;

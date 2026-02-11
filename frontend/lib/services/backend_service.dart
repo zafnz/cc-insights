@@ -303,6 +303,7 @@ class BackendService extends ChangeNotifier {
     SessionOptions? options,
     List<ContentBlock>? content,
     String? executablePath,
+    InternalToolRegistry? registry,
   }) async {
     final session = await createSessionForBackend(
       type: type,
@@ -311,6 +312,7 @@ class BackendService extends ChangeNotifier {
       options: options,
       content: content,
       executablePath: executablePath,
+      registry: registry,
     );
     final caps = capabilitiesFor(type);
     return InProcessTransport(session: session, capabilities: caps);
@@ -324,6 +326,7 @@ class BackendService extends ChangeNotifier {
     SessionOptions? options,
     List<ContentBlock>? content,
     String? executablePath,
+    InternalToolRegistry? registry,
   }) async {
     final effectivePath = executablePath ?? _resolveExecutablePath(type);
     _t('BackendService', 'createSessionForBackend type=${type.name} cwd=$cwd');
@@ -339,6 +342,7 @@ class BackendService extends ChangeNotifier {
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
     _t('BackendService', 'Session created: ${session.sessionId}');
     return session;
@@ -354,6 +358,7 @@ class BackendService extends ChangeNotifier {
   /// - [options]: Optional session configuration (model, permission mode, etc.).
   /// - [content]: Optional content blocks (text + images) for the initial message.
   ///   If provided, this takes precedence over [prompt].
+  /// - [registry]: Optional internal tool registry for custom tools.
   ///
   /// Throws [StateError] if the backend is not started.
   Future<AgentSession> createSession({
@@ -361,6 +366,7 @@ class BackendService extends ChangeNotifier {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     _t('BackendService', 'createSession (default backend) cwd=$cwd');
     final backendType = _backendType;
@@ -379,6 +385,7 @@ class BackendService extends ChangeNotifier {
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
   }
 

@@ -11,6 +11,7 @@ import 'package:claude_sdk/claude_sdk.dart'
     show
         ContentBlock,
         HookRequest,
+        InternalToolRegistry,
         PermissionDenyResponse,
         PermissionRequest,
         PermissionResponse,
@@ -42,6 +43,7 @@ class FakeBackendService extends BackendService {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     if (shouldThrow) {
       throw Exception(errorMessage);
@@ -66,12 +68,14 @@ class FakeBackendService extends BackendService {
     SessionOptions? options,
     List<ContentBlock>? content,
     String? executablePath,
+    InternalToolRegistry? registry,
   }) async {
     return createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
   }
 
@@ -83,6 +87,7 @@ class FakeBackendService extends BackendService {
     SessionOptions? options,
     List<ContentBlock>? content,
     String? executablePath,
+    InternalToolRegistry? registry,
   }) async {
     final session = await createSessionForBackend(
       type: type,
@@ -90,6 +95,7 @@ class FakeBackendService extends BackendService {
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
     return sdk.InProcessTransport(
       session: session,

@@ -13,6 +13,7 @@ import '../models/worktree.dart';
 import '../services/backend_service.dart';
 import '../services/cli_availability_service.dart';
 import '../services/event_handler.dart';
+import '../services/internal_tools_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
 import '../state/selection_state.dart';
@@ -223,6 +224,7 @@ class WelcomeCard extends StatelessWidget {
     final project = context.read<ProjectState>();
     final backend = context.read<BackendService>();
     final eventHandler = context.read<EventHandler>();
+    final internalTools = context.read<InternalToolsService>();
     final restoreService = context.read<ProjectRestoreService>();
 
     // Determine the chat name based on AI label setting
@@ -293,6 +295,7 @@ class WelcomeCard extends StatelessWidget {
         eventHandler: eventHandler,
         prompt: text,
         images: images,
+        internalToolsService: internalTools,
       );
     } catch (e) {
       // Show error in conversation

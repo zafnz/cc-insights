@@ -33,6 +33,9 @@ export 'src/sdk_logger.dart';
 export 'src/transport/event_transport.dart';
 export 'src/transport/in_process_transport.dart';
 
+// Internal tool registry
+export 'src/internal_tool_registry.dart';
+
 // Types
 export 'src/types/backend_commands.dart';
 export 'src/types/backend_provider.dart';
@@ -41,6 +44,7 @@ export 'src/types/content_blocks.dart';
 export 'src/types/control_messages.dart';
 export 'src/types/errors.dart';
 export 'src/types/insights_events.dart';
+export 'src/types/internal_tools.dart';
 export 'src/types/permission_suggestion.dart';
 export 'src/types/security_config.dart';
 export 'src/types/session_options.dart';

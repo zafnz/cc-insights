@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:meta/meta.dart';
+
 import 'sdk_logger.dart';
 import 'types/session_options.dart';
 
@@ -93,6 +95,15 @@ class CliProcess {
   })  : _process = process,
         _config = config {
     _setupStreams();
+  }
+
+  /// Create a CliProcess for testing with a mock Process.
+  @visibleForTesting
+  factory CliProcess.forTesting({required Process process}) {
+    return CliProcess._(
+      process: process,
+      config: const CliProcessConfig(cwd: '/test'),
+    );
   }
 
   final Process _process;

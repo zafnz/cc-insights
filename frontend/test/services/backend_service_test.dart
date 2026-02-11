@@ -71,6 +71,7 @@ class FakeAgentBackend implements AgentBackend {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) async {
     if (createSessionDelay != null) {
       await Future<void>.delayed(createSessionDelay!);
@@ -685,6 +686,7 @@ class _TestableBackendService extends BackendService {
     required String cwd,
     SessionOptions? options,
     List<ContentBlock>? content,
+    InternalToolRegistry? registry,
   }) {
     if (_backendState == null) {
       throw StateError('Backend not started. Call start() first.');
@@ -694,6 +696,7 @@ class _TestableBackendService extends BackendService {
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
   }
 
@@ -705,12 +708,14 @@ class _TestableBackendService extends BackendService {
     SessionOptions? options,
     List<ContentBlock>? content,
     String? executablePath,
+    InternalToolRegistry? registry,
   }) async {
     return createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
       content: content,
+      registry: registry,
     );
   }
 

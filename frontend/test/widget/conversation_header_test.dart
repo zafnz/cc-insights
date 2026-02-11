@@ -108,6 +108,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     required String cwd,
     sdk.SessionOptions? options,
     List<sdk.ContentBlock>? content,
+    sdk.InternalToolRegistry? registry,
   }) async {
     throw UnimplementedError();
   }
@@ -120,6 +121,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     sdk.SessionOptions? options,
     List<sdk.ContentBlock>? content,
     String? executablePath,
+    sdk.InternalToolRegistry? registry,
   }) async {
     throw UnimplementedError();
   }
@@ -132,6 +134,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     sdk.SessionOptions? options,
     List<sdk.ContentBlock>? content,
     String? executablePath,
+    sdk.InternalToolRegistry? registry,
   }) async {
     throw UnimplementedError();
   }
