@@ -542,7 +542,7 @@ void main() {
         expect(event.modelUsage?.values.first.contextWindow, 258400);
       });
 
-      test('emits TurnCompleteEvent without modelUsage when no modelContextWindow', () async {
+      test('emits TurnCompleteEvent with null contextWindow when no modelContextWindow', () async {
         // Update token usage WITHOUT modelContextWindow
         session.injectNotification(JsonRpcNotification(
           method: 'thread/tokenUsage/updated',
@@ -568,7 +568,8 @@ void main() {
         await waitForEvents();
         expect(capturedEvents, hasLength(1));
         final event = capturedEvents.first as TurnCompleteEvent;
-        expect(event.modelUsage, isNull);
+        expect(event.modelUsage, isNotNull);
+        expect(event.modelUsage?.values.first.contextWindow, isNull);
       });
 
       test('uses model name from thread/started as modelUsage key', () async {

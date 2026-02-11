@@ -512,19 +512,17 @@ class CodexSession implements AgentSession {
     final outputTokens = (usage?['outputTokens'] as num?)?.toInt() ?? 0;
     final cachedInput = (usage?['cachedInputTokens'] as num?)?.toInt() ?? 0;
 
-    // Build modelUsage to surface context window to the frontend.
-    Map<String, ModelTokenUsage>? modelUsage;
-    if (_modelContextWindow != null) {
-      final modelKey = _modelName ?? 'codex';
-      modelUsage = {
-        modelKey: ModelTokenUsage(
-          inputTokens: inputTokens,
-          outputTokens: outputTokens,
-          cacheReadTokens: cachedInput > 0 ? cachedInput : null,
-          contextWindow: _modelContextWindow,
-        ),
-      };
-    }
+    // Build modelUsage so the frontend can identify the model for cost
+    // calculation and context tracking.
+    final modelKey = _modelName ?? 'codex';
+    final modelUsage = <String, ModelTokenUsage>{
+      modelKey: ModelTokenUsage(
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+        cacheReadTokens: cachedInput > 0 ? cachedInput : null,
+        contextWindow: _modelContextWindow,
+      ),
+    };
 
     // Build lastStepUsage from the per-API-call "last" field for context tracking.
     // Uses Claude-compatible field names so ContextTracker.updateFromUsage works.

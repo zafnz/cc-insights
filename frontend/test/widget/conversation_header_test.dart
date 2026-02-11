@@ -281,8 +281,13 @@ void main() {
       check(initialConfig.sandboxMode).equals(sdk.CodexSandboxMode.workspaceWrite);
       check(initialConfig.approvalPolicy).equals(sdk.CodexApprovalPolicy.onRequest);
 
-      // Tap the sandbox mode dropdown
-      await tester.tap(find.byKey(SecurityConfigGroupKeys.sandboxDropdown));
+      // Open the sandbox popup menu programmatically - a Tooltip overlay from
+      // ContextIndicator intercepts taps on the PopupMenuButton in this layout.
+      final popupButton = tester.widget<PopupMenuButton>(
+        find.byKey(SecurityConfigGroupKeys.sandboxDropdown),
+      );
+      (tester.state(find.byWidget(popupButton)) as PopupMenuButtonState)
+          .showButtonMenu();
       await safePumpAndSettle(tester);
 
       // Select "Read Only"

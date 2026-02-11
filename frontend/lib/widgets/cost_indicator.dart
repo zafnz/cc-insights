@@ -74,7 +74,7 @@ class CostIndicator extends StatelessWidget {
             if (showCost) ...[
               const SizedBox(width: 8),
               Text(
-                '\$${_formatCost(usage.costUsd)}',
+                '${agentLabel == 'Codex' ? '~' : ''}\$${_formatCost(usage.costUsd)}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
@@ -100,8 +100,10 @@ class CostIndicator extends StatelessWidget {
     ];
 
     if (showCost) {
+      final costLabel =
+          agentLabel == 'Codex' ? 'Estimated cost' : 'Total cost';
       children.add(TextSpan(
-        text: '\nTotal cost: \$${_formatCost(usage.costUsd)}',
+        text: '\n$costLabel: \$${_formatCost(usage.costUsd)}',
         style: const TextStyle(fontWeight: FontWeight.bold),
       ));
     }
@@ -124,8 +126,9 @@ class CostIndicator extends StatelessWidget {
               '${_formatNumber(model.cacheCreationTokens)} created\n',
         ));
         if (showCost) {
+          final prefix = agentLabel == 'Codex' ? '~' : '';
           children.add(TextSpan(
-            text: 'Cost: \$${_formatCost(model.costUsd)}\n',
+            text: 'Cost: $prefix\$${_formatCost(model.costUsd)}\n',
           ));
         }
       }

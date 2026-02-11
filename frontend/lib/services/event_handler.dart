@@ -428,39 +428,28 @@ class EventHandler {
 
     // Calculate cost from pricing table for Codex (which doesn't report cost)
     double totalCostUsd = event.costUsd ?? 0.0;
-    if (totalCostUsd == 0.0 && event.provider == BackendProvider.codex) {
-      if (modelUsageList != null) {
-        modelUsageList = modelUsageList.map((m) {
-          final pricing = lookupCodexPricing(m.modelName);
-          if (pricing == null) return m;
-          final cost = pricing.calculateCost(
-            inputTokens: m.inputTokens,
-            cachedInputTokens: m.cacheReadTokens,
-            outputTokens: m.outputTokens,
-          );
-          return ModelUsageInfo(
-            modelName: m.modelName,
-            inputTokens: m.inputTokens,
-            outputTokens: m.outputTokens,
-            cacheReadTokens: m.cacheReadTokens,
-            cacheCreationTokens: m.cacheCreationTokens,
-            costUsd: cost,
-            contextWindow: m.contextWindow,
-          );
-        }).toList();
-        totalCostUsd = modelUsageList.fold(0.0, (sum, m) => sum + m.costUsd);
-      } else if (usageInfo != null) {
-        // No per-model breakdown but we have aggregate usage - try the model
-        // name from the chat or fall back to a generic lookup.
-        final pricing = lookupCodexPricing('codex');
-        if (pricing != null) {
-          totalCostUsd = pricing.calculateCost(
-            inputTokens: usageInfo.inputTokens,
-            cachedInputTokens: usageInfo.cacheReadTokens,
-            outputTokens: usageInfo.outputTokens,
-          );
-        }
-      }
+    if (totalCostUsd == 0.0 &&
+        event.provider == BackendProvider.codex &&
+        modelUsageList != null) {
+      modelUsageList = modelUsageList.map((m) {
+        final pricing = lookupCodexPricing(m.modelName);
+        if (pricing == null) return m;
+        final cost = pricing.calculateCost(
+          inputTokens: m.inputTokens,
+          cachedInputTokens: m.cacheReadTokens,
+          outputTokens: m.outputTokens,
+        );
+        return ModelUsageInfo(
+          modelName: m.modelName,
+          inputTokens: m.inputTokens,
+          outputTokens: m.outputTokens,
+          cacheReadTokens: m.cacheReadTokens,
+          cacheCreationTokens: m.cacheCreationTokens,
+          costUsd: cost,
+          contextWindow: m.contextWindow,
+        );
+      }).toList();
+      totalCostUsd = modelUsageList.fold(0.0, (sum, m) => sum + m.costUsd);
       if (usageInfo != null && totalCostUsd > 0.0) {
         usageInfo = usageInfo.copyWith(costUsd: totalCostUsd);
       }
