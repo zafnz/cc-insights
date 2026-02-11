@@ -1,6 +1,8 @@
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
+import 'setting_definition.dart';
+
 /// Model definition for a chat session.
 @immutable
 class ChatModel {
@@ -102,5 +104,56 @@ class ChatModelCatalog {
       if (match.isNotEmpty) return match.first;
     }
     return models.first;
+  }
+
+  /// Resolves a composite setting value (e.g. `"claude:opus"`,
+  /// `"codex:gpt-5.2"`, `"last_used"`) to a [ChatModel].
+  ///
+  /// For `"last_used"` or unrecognised values, falls back to the first
+  /// model of [fallbackBackend] (defaults to [BackendType.directCli]).
+  static ChatModel defaultFromComposite(
+    String composite, {
+    BackendType fallbackBackend = BackendType.directCli,
+  }) {
+    final parsed = parseCompositeModel(composite);
+    if (parsed != null) {
+      return defaultForBackend(parsed.$1, parsed.$2);
+    }
+    return defaultForBackend(fallbackBackend, null);
+  }
+
+  /// Returns all available models as composite setting options.
+  ///
+  /// Format: `"last_used"`, `"claude:<id>"`, or `"codex:<id>"`.
+  static List<SettingOption> allModelOptions() {
+    final options = <SettingOption>[
+      const SettingOption(value: 'last_used', label: 'Last used'),
+    ];
+    for (final m in claudeModels) {
+      options.add(SettingOption(
+        value: 'claude:${m.id}',
+        label: 'Claude: ${m.label}',
+      ));
+    }
+    for (final m in codexModels) {
+      final label =
+          m.id.isEmpty ? 'Codex: Default (server)' : 'Codex: ${m.label}';
+      options.add(SettingOption(value: 'codex:${m.id}', label: label));
+    }
+    return options;
+  }
+
+  /// Parses a composite model value into backend type and model ID.
+  ///
+  /// Returns `null` for `"last_used"` or unrecognised values.
+  static (BackendType, String?)? parseCompositeModel(String value) {
+    if (value == 'last_used') return null;
+    final colon = value.indexOf(':');
+    if (colon < 0) return null;
+    final prefix = value.substring(0, colon);
+    final modelId = value.substring(colon + 1);
+    final backend =
+        prefix == 'codex' ? BackendType.codex : BackendType.directCli;
+    return (backend, modelId.isEmpty ? null : modelId);
   }
 }

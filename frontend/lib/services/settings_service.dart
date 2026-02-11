@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/material.dart';
 
+import '../models/chat_model.dart';
 import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
 import 'persistence_service.dart';
@@ -244,31 +245,17 @@ class SettingsService extends ChangeNotifier {
         placeholder: '/usr/local/bin/codex',
       ),
       SettingDefinition(
-        key: 'session.defaultBackend',
-        title: 'Default Backend',
-        description:
-            'Choose the default backend for new chats. '
-            '`Claude` uses the Claude CLI. `Codex` uses the Codex app-server.',
-        type: SettingType.dropdown,
-        defaultValue: 'direct',
-        options: [
-          SettingOption(value: 'direct', label: 'Claude'),
-          SettingOption(value: 'codex', label: 'Codex'),
-        ],
-      ),
-      SettingDefinition(
         key: 'session.defaultModel',
         title: 'Default Model',
         description:
-            'The Claude model to use for new chat sessions. '
-            '`Opus` is the most capable, `Sonnet` balances speed '
-            'and capability, `Haiku` is the fastest.',
+            'The default backend and model for new chat sessions. '
+            '`Last used` remembers your previous choice.',
         type: SettingType.dropdown,
-        defaultValue: 'opus',
+        defaultValue: 'last_used',
+        // Options are built dynamically in the settings screen
+        // because Codex models are loaded at runtime.
         options: [
-          SettingOption(value: 'haiku', label: 'Haiku'),
-          SettingOption(value: 'sonnet', label: 'Sonnet'),
-          SettingOption(value: 'opus', label: 'Opus'),
+          SettingOption(value: 'last_used', label: 'Last used'),
         ],
       ),
       SettingDefinition(
@@ -615,8 +602,14 @@ class SettingsService extends ChangeNotifier {
       case 'session.codexCliPath':
         config.codexCliPath = value as String;
       case 'session.defaultModel':
-        config.defaultModel = value as String;
+        final composite = value as String;
+        config.defaultModel = composite;
+        final parsed = ChatModelCatalog.parseCompositeModel(composite);
+        if (parsed != null) {
+          config.defaultBackend = parsed.$1;
+        }
       case 'session.defaultBackend':
+        // Legacy: kept for loading old config files.
         final backend =
             BackendFactory.parseType(value as String?) ??
                 BackendType.directCli;
@@ -646,6 +639,9 @@ class SettingsService extends ChangeNotifier {
 
   /// Syncs all settings to RuntimeConfig using current or default values.
   void _syncAllToRuntimeConfig() {
+    // Migrate legacy separate backend/model settings to composite format.
+    _migrateLegacyModelSetting();
+
     for (final category in categories) {
       for (final setting in category.settings) {
         final value = _values.containsKey(setting.key)
@@ -654,6 +650,38 @@ class SettingsService extends ChangeNotifier {
         _syncToRuntimeConfig(setting.key, value);
       }
     }
+
+    // Sync the legacy backend key only when the model is "last_used"
+    // (i.e. no backend is encoded in the composite value). Otherwise
+    // the composite value already set defaultBackend above and the
+    // stale legacy key would overwrite it.
+    if (_values.containsKey('session.defaultBackend')) {
+      final model = _values['session.defaultModel'] ?? 'last_used';
+      if (model == 'last_used') {
+        _syncToRuntimeConfig(
+          'session.defaultBackend',
+          _values['session.defaultBackend'],
+        );
+      }
+    }
+  }
+
+  /// Converts old separate `session.defaultBackend` + `session.defaultModel`
+  /// values into the new composite `session.defaultModel` format and
+  /// removes the now-redundant `session.defaultBackend` key.
+  void _migrateLegacyModelSetting() {
+    final model = _values['session.defaultModel'];
+    if (model is! String) return;
+    // Already in composite format or "last_used" — nothing to migrate.
+    if (model == 'last_used' || model.contains(':')) return;
+
+    // Old format: model is a bare ID like 'opus', 'sonnet', 'haiku',
+    // or a Codex model ID like 'gpt-5.2'.
+    final backend = _values['session.defaultBackend'] as String? ?? 'direct';
+    final prefix = backend == 'codex' ? 'codex' : 'claude';
+    _values['session.defaultModel'] = '$prefix:$model';
+    // Remove the legacy key so it doesn't interfere on future loads.
+    _values.remove('session.defaultBackend');
   }
 
   // ---------------------------------------------------------------------------

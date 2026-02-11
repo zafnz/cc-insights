@@ -100,8 +100,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to delete the local branch when deleting a worktree.
   bool _deleteBranchWithWorktree = true;
 
-  /// Default Claude model for new chats.
-  String _defaultModel = 'opus';
+  /// Default model for new chats (composite value, e.g. 'last_used',
+  /// 'claude:opus', 'codex:gpt-5.2').
+  String _defaultModel = 'last_used';
 
   /// Default backend for new chats.
   BackendType _defaultBackend = BackendType.directCli;
@@ -361,7 +362,7 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
-  /// Default Claude model for new chats.
+  /// Default model for new chats (composite value).
   String get defaultModel => _defaultModel;
 
   set defaultModel(String value) {
@@ -531,7 +532,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._desktopNotifications = true;
     _instance._archiveChats = false;
     _instance._deleteBranchWithWorktree = true;
-    _instance._defaultModel = 'opus';
+    _instance._defaultModel = 'last_used';
     _instance._defaultBackend = BackendType.directCli;
     _instance._defaultPermissionMode = 'default';
     _instance._streamOfThought = true;

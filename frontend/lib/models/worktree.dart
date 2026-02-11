@@ -212,13 +212,9 @@ class WorktreeState extends ChangeNotifier {
   /// in-progress messages on worktrees that don't have a chat yet.
   String _welcomeDraftText = '';
 
-  /// Model selected in the welcome screen before any chat is created.
-  ///
-  /// Initialized from [RuntimeConfig.instance.defaultModel].
-  ChatModel _welcomeModel = ChatModelCatalog.defaultForBackend(
-    RuntimeConfig.instance.defaultBackend,
-    RuntimeConfig.instance.defaultModel,
-  );
+  /// Model explicitly chosen by the user in the welcome screen, or `null`
+  /// when the user hasn't overridden the global default yet.
+  ChatModel? _welcomeModelOverride;
 
   /// Permission mode selected in the welcome screen before chat creation.
   ///
@@ -266,10 +262,18 @@ class WorktreeState extends ChangeNotifier {
   set welcomeDraftText(String value) => _welcomeDraftText = value;
 
   /// Model selection for the welcome screen.
-  ChatModel get welcomeModel => _welcomeModel;
+  ///
+  /// Returns the user's explicit override if set, otherwise resolves
+  /// the global default from [RuntimeConfig].
+  ChatModel get welcomeModel =>
+      _welcomeModelOverride ??
+      ChatModelCatalog.defaultFromComposite(
+        RuntimeConfig.instance.defaultModel,
+        fallbackBackend: RuntimeConfig.instance.defaultBackend,
+      );
   set welcomeModel(ChatModel value) {
-    if (_welcomeModel == value) return;
-    _welcomeModel = value;
+    if (_welcomeModelOverride == value) return;
+    _welcomeModelOverride = value;
     notifyListeners();
   }
 

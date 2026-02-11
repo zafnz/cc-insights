@@ -36,9 +36,9 @@ class WelcomeCard extends StatelessWidget {
     final selection = context.watch<SelectionState>();
     final backendService = context.watch<BackendService>();
     final worktree = selection.selectedWorktree;
-    final defaultModel = ChatModelCatalog.defaultForBackend(
-      RuntimeConfig.instance.defaultBackend,
+    final defaultModel = ChatModelCatalog.defaultFromComposite(
       RuntimeConfig.instance.defaultModel,
+      fallbackBackend: RuntimeConfig.instance.defaultBackend,
     );
     final defaultPermissionMode = PermissionMode.fromApiName(
       RuntimeConfig.instance.defaultPermissionMode,
@@ -80,10 +80,13 @@ class WelcomeCard extends StatelessWidget {
       children: [
         // Header with model/permission selectors
         if (worktree == null)
-          buildHeader()
+          ListenableBuilder(
+            listenable: RuntimeConfig.instance,
+            builder: (context, _) => buildHeader(),
+          )
         else
           ListenableBuilder(
-            listenable: worktree,
+            listenable: Listenable.merge([worktree, RuntimeConfig.instance]),
             builder: (context, _) => buildHeader(),
           ),
         Expanded(

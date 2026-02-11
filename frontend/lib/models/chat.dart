@@ -265,9 +265,9 @@ class ChatState extends ChangeNotifier {
   String? _selectedConversationId;
 
   /// The selected model for this chat.
-  ChatModel _model = ChatModelCatalog.defaultForBackend(
-    RuntimeConfig.instance.defaultBackend,
+  ChatModel _model = ChatModelCatalog.defaultFromComposite(
     RuntimeConfig.instance.defaultModel,
+    fallbackBackend: RuntimeConfig.instance.defaultBackend,
   );
 
   /// The permission mode for this chat.

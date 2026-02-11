@@ -249,18 +249,12 @@ class _SettingsContent extends StatelessWidget {
       return;
     }
 
-    if (definition.key == 'session.defaultBackend') {
-      final backendType = ChatModelCatalog.backendFromValue(value as String?);
-      unawaited(backendService.start(type: backendType));
-
+    if (definition.key == 'session.defaultModel') {
       unawaited(settings.setValue(definition.key, value));
-
-      final models = ChatModelCatalog.forBackend(backendType);
-      final currentModel = settings.getValue<String>('session.defaultModel');
-      final hasMatch = models.any((model) => model.id == currentModel);
-      if (!hasMatch && models.isNotEmpty) {
-        final fallback = ChatModelCatalog.defaultForBackend(backendType, null);
-        unawaited(settings.setValue('session.defaultModel', fallback.id));
+      final parsed =
+          ChatModelCatalog.parseCompositeModel(value as String);
+      if (parsed != null) {
+        unawaited(backendService.start(type: parsed.$1));
       }
       return;
     }
@@ -396,26 +390,6 @@ class _SettingsContent extends StatelessWidget {
     var value = settings.getValue(definition.key);
     var isLoading = false;
 
-    // Filter Default Backend options when codex is unavailable
-    if (definition.key == 'session.defaultBackend') {
-      final cliAvailability = context.watch<CliAvailabilityService>();
-      if (!cliAvailability.codexAvailable) {
-        effectiveDefinition = SettingDefinition(
-          key: definition.key,
-          title: definition.title,
-          description:
-              '${definition.description} (Codex CLI not found)',
-          type: definition.type,
-          defaultValue: definition.defaultValue,
-          options: const [
-            SettingOption(value: 'direct', label: 'Claude'),
-          ],
-        );
-        // Force value to 'direct' if codex was previously selected
-        if (value == 'codex') value = 'direct';
-      }
-    }
-
     // CLI path settings get a file picker button
     if (definition.key == 'session.claudeCliPath' ||
         definition.key == 'session.codexCliPath') {
@@ -450,32 +424,16 @@ class _SettingsContent extends StatelessWidget {
     }
 
     if (definition.key == 'session.defaultModel') {
-      final backendValue = settings.getValue<String>('session.defaultBackend');
-      final backend = ChatModelCatalog.backendFromValue(backendValue);
-      isLoading = backend == BackendType.codex &&
-          backendService.isModelListLoadingFor(backend);
-      final options = ChatModelCatalog.forBackend(backend)
-          .map(
-            (model) => SettingOption(
-              value: model.id,
-              label: model.label,
-            ),
-          )
-          .toList();
+      isLoading = backendService.isModelListLoadingFor(BackendType.codex);
+      final options = ChatModelCatalog.allModelOptions();
 
       final currentValue = value as String;
       value = _ensureDropdownValue(currentValue, options);
 
-      final description = backendValue == 'codex'
-          ? 'The model to use for new Codex chat sessions. '
-              'Defaults to the server choice.'
-              '${isLoading ? ' Loading models...' : ''}'
-          : definition.description;
-
       effectiveDefinition = SettingDefinition(
         key: definition.key,
         title: definition.title,
-        description: description,
+        description: definition.description,
         type: definition.type,
         defaultValue: definition.defaultValue,
         options: options,

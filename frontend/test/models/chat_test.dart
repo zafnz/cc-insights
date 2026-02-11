@@ -64,16 +64,17 @@ void main() {
     });
 
     test('uses RuntimeConfig defaults', () {
-      // RuntimeConfig defaults: model='opus', permissionMode='default'
+      // RuntimeConfig defaults: model='last_used', permissionMode='default'
+      // 'last_used' falls back to the first model for the default backend.
       final chat = ChatState(
         ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
       );
-      check(chat.model).equals(ChatModelCatalog.claudeModels.last);
+      check(chat.model).equals(ChatModelCatalog.claudeModels.first);
       check(chat.permissionMode).equals(PermissionMode.defaultMode);
     });
 
     test('picks up non-default RuntimeConfig values', () {
-      RuntimeConfig.instance.defaultModel = 'haiku';
+      RuntimeConfig.instance.defaultModel = 'claude:haiku';
       RuntimeConfig.instance.defaultPermissionMode = 'acceptEdits';
 
       final chat = ChatState(
