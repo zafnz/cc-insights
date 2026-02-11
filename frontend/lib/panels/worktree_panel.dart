@@ -47,18 +47,9 @@ class _WorktreePanelState extends State<WorktreePanel> {
       title: 'Worktrees',
       icon: Icons.account_tree,
       trailing: hasHiddenWorktrees
-          ? Tooltip(
-              message: _showHidden ? 'Hide hidden worktrees' : 'Show hidden worktrees',
-              child: GestureDetector(
-                onTap: () => setState(() => _showHidden = !_showHidden),
-                child: Icon(
-                  _showHidden ? Icons.visibility : Icons.visibility_off,
-                  size: 14,
-                  color: _showHidden
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
-              ),
+          ? _HiddenToggle(
+              showHidden: _showHidden,
+              onChanged: (value) => setState(() => _showHidden = value),
             )
           : null,
       contextMenuItems: [
@@ -86,6 +77,112 @@ class _WorktreePanelState extends State<WorktreePanel> {
         ),
       ],
       child: _WorktreeListContent(showHidden: _showHidden),
+    );
+  }
+}
+
+/// Compact "hidden [s|h]" toggle for the worktree panel header.
+class _HiddenToggle extends StatelessWidget {
+  const _HiddenToggle({
+    required this.showHidden,
+    required this.onChanged,
+  });
+
+  final bool showHidden;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final activeColor = colorScheme.primary;
+    final inactiveColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.6);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'hidden',
+          style: TextStyle(
+            fontSize: 10,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: 3),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: colorScheme.outline.withValues(alpha: 0.3),
+              width: 0.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ToggleOption(
+                label: 's',
+                isActive: showHidden,
+                activeColor: activeColor,
+                inactiveColor: inactiveColor,
+                onTap: () => onChanged(true),
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(3),
+                ),
+              ),
+              _ToggleOption(
+                label: 'h',
+                isActive: !showHidden,
+                activeColor: activeColor,
+                inactiveColor: inactiveColor,
+                onTap: () => onChanged(false),
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(3),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToggleOption extends StatelessWidget {
+  const _ToggleOption({
+    required this.label,
+    required this.isActive,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onTap,
+    required this.borderRadius,
+  });
+
+  final String label;
+  final bool isActive;
+  final Color activeColor;
+  final Color inactiveColor;
+  final VoidCallback onTap;
+  final BorderRadius borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor.withValues(alpha: 0.15) : null,
+          borderRadius: borderRadius,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            color: isActive ? activeColor : inactiveColor,
+          ),
+        ),
+      ),
     );
   }
 }
