@@ -242,8 +242,8 @@ class MyClass {
         find.byType(CodeHighlightView),
       );
 
-      expect(highlighter.textStyle?.fontSize, equals(13.0));
-      expect(highlighter.textStyle?.fontFamily, equals('JetBrains Mono'));
+      expect(highlighter.textStyle.fontSize, equals(13.0));
+      expect(highlighter.textStyle.fontFamily, equals('JetBrains Mono'));
     });
 
     testWidgets('uses light theme for light mode', (tester) async {

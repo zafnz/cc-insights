@@ -292,7 +292,7 @@ void main() {
     });
 
     testWidgets('handles null binary content', (tester) async {
-      final file = FileContent(
+      const file = FileContent(
         path: '/test/file.bin',
         type: FileContentType.binary,
         data: null,

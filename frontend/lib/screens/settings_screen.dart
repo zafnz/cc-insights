@@ -911,7 +911,7 @@ class _ColorPickerInputState extends State<_ColorPickerInput> {
 
   void _applyHex() {
     if (_previewColor != null) {
-      widget.onChanged(_previewColor!.value);
+      widget.onChanged(_previewColor!.toARGB32());
       setState(() => _showHexInput = false);
     }
   }
@@ -953,9 +953,9 @@ class _ColorPickerInputState extends State<_ColorPickerInput> {
                 tooltip: preset.label,
                 isSelected:
                     widget.value != 0 &&
-                    preset.color.value == widget.value,
+                    preset.color.toARGB32() == widget.value,
                 onTap: () {
-                  widget.onChanged(preset.color.value);
+                  widget.onChanged(preset.color.toARGB32());
                   setState(() => _showHexInput = false);
                 },
               ),
@@ -1069,7 +1069,7 @@ class _ColorPickerInputState extends State<_ColorPickerInput> {
   bool _isCustomColor(Color color) {
     if (widget.value == 0) return false;
     return ThemePresetColor.values
-        .every((p) => p.color.value != color.value);
+        .every((p) => p.color.toARGB32() != color.toARGB32());
   }
 }
 

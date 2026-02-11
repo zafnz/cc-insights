@@ -1,12 +1,10 @@
 import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendProvider;
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/fonts.dart';
-import '../services/runtime_config.dart';
 import 'markdown_style_helper.dart';
 
 // =============================================================================
@@ -29,7 +27,7 @@ class PermissionDialogKeys {
   /// The Deny button.
   static const denyButton = Key('permission_dialog_deny');
 
-  /// The header showing "Permission Required: <tool>".
+  /// The header showing "Permission Required: `<tool>`".
   static const header = Key('permission_dialog_header');
 
   /// The content area showing tool-specific details.
@@ -778,7 +776,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
             description,
             style: textStyle(
               fontSize: PermissionFontSizes.description,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -1258,14 +1256,12 @@ class _ScrollableCodeBox extends StatefulWidget {
   final String content;
   final int lineCount;
   final Color backgroundColor;
-  final double maxHeight;
+  final double maxHeight = 300;
 
   const _ScrollableCodeBox({
-    super.key,
     required this.content,
     required this.lineCount,
     required this.backgroundColor,
-    this.maxHeight = 120,
   });
 
   @override
@@ -1345,7 +1341,7 @@ class _ScrollableCodeBoxState extends State<_ScrollableCodeBox> {
                   end: Alignment.bottomCenter,
                   colors: [
                     widget.backgroundColor,
-                    widget.backgroundColor.withOpacity(0),
+                    widget.backgroundColor.withValues(alpha: 0),
                   ],
                 ),
               ),
@@ -1368,7 +1364,7 @@ class _ScrollableCodeBoxState extends State<_ScrollableCodeBox> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    widget.backgroundColor.withOpacity(0),
+                    widget.backgroundColor.withValues(alpha: 0),
                     widget.backgroundColor,
                   ],
                 ),
@@ -1385,14 +1381,14 @@ class _ScrollableCodeBoxState extends State<_ScrollableCodeBox> {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(3),
               border: Border.all(
-                color: Theme.of(context).dividerColor.withOpacity(0.5),
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
               ),
             ),
             child: Text(
               '${widget.lineCount} lines',
               style: textStyle(
                 fontSize: PermissionFontSizes.smallBadge,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ),
@@ -1444,12 +1440,12 @@ class _PlanButton extends StatelessWidget {
       ],
     );
 
-    final buttonStyle = ButtonStyle(
+    const buttonStyle = ButtonStyle(
       padding: WidgetStatePropertyAll(
-        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
       visualDensity: VisualDensity.compact,
-      minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+      minimumSize: WidgetStatePropertyAll(Size(0, 32)),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
 

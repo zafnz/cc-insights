@@ -42,9 +42,6 @@ class WelcomeCard extends StatelessWidget {
       RuntimeConfig.instance.defaultModel,
       fallbackBackend: RuntimeConfig.instance.defaultBackend,
     );
-    final defaultPermissionMode = PermissionMode.fromApiName(
-      RuntimeConfig.instance.defaultPermissionMode,
-    );
 
     Widget buildHeader() {
       final model = worktree?.welcomeModel ?? defaultModel;

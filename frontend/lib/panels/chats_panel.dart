@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../models/chat.dart';
 import '../models/project.dart';
-import '../models/worktree.dart';
 import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/settings_service.dart';
@@ -205,14 +204,14 @@ class _ChatsListContentState extends State<_ChatsListContent> {
       return GestureDetector(
         onSecondaryTapUp: (details) =>
             _showBodyContextMenu(context, details.globalPosition),
-        child: Column(
+        child: const Column(
           children: [
-            const Expanded(
+            Expanded(
               child: _EmptyChatsPlaceholder(
                 message: 'No chats in this worktree',
               ),
             ),
-            const NewChatCard(),
+            NewChatCard(),
           ],
         ),
       );
@@ -605,7 +604,7 @@ class ChatStatusIndicator extends StatelessWidget {
     // Priority order: permission > working > unread > idle
     if (chat.isWaitingForPermission) {
       // Orange bell for pending permission
-      return Icon(
+      return const Icon(
         Icons.notifications_active,
         size: size + 4,
         color: Colors.orange,

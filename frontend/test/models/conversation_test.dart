@@ -8,7 +8,7 @@ void main() {
     group('isPrimary', () {
       test('returns true when label is null', () {
         // Arrange
-        final conversation = ConversationData.primary(id: 'conv-1');
+        const conversation = ConversationData.primary(id: 'conv-1');
 
         // Act & Assert
         check(conversation.isPrimary).isTrue();
@@ -17,7 +17,7 @@ void main() {
 
       test('returns false for subagent conversations', () {
         // Arrange
-        final conversation = ConversationData.subagent(
+        const conversation = ConversationData.subagent(
           id: 'conv-2',
           label: 'Explore',
           taskDescription: 'Find all test files',
@@ -32,7 +32,7 @@ void main() {
     group('primary() factory', () {
       test('creates empty primary conversation', () {
         // Arrange & Act
-        final conversation = ConversationData.primary(id: 'conv-primary');
+        const conversation = ConversationData.primary(id: 'conv-primary');
 
         // Assert
         check(conversation.id).equals('conv-primary');
@@ -46,7 +46,7 @@ void main() {
     group('subagent() factory', () {
       test('creates subagent conversation with label', () {
         // Arrange & Act
-        final conversation = ConversationData.subagent(
+        const conversation = ConversationData.subagent(
           id: 'conv-subagent',
           label: 'Plan',
           taskDescription: 'Create implementation plan',
@@ -64,7 +64,7 @@ void main() {
 
       test('creates subagent conversation without task description', () {
         // Arrange & Act
-        final conversation = ConversationData.subagent(
+        const conversation = ConversationData.subagent(
           id: 'conv-subagent',
           label: 'Research',
         );
@@ -78,7 +78,7 @@ void main() {
     group('copyWith()', () {
       test('preserves unchanged fields', () {
         // Arrange
-        final original = ConversationData.primary(id: 'conv-1');
+        const original = ConversationData.primary(id: 'conv-1');
 
         // Act
         final modified = original.copyWith(
@@ -93,7 +93,7 @@ void main() {
 
       test('updates totalUsage', () {
         // Arrange
-        final original = ConversationData.primary(id: 'conv-1');
+        const original = ConversationData.primary(id: 'conv-1');
         const newUsage = UsageInfo(
           inputTokens: 100,
           outputTokens: 50,
@@ -113,7 +113,7 @@ void main() {
 
       test('updates entries list', () {
         // Arrange
-        final original = ConversationData.primary(id: 'conv-1');
+        const original = ConversationData.primary(id: 'conv-1');
         final entries = [
           UserInputEntry(timestamp: DateTime.now(), text: 'First'),
           TextOutputEntry(
@@ -134,7 +134,7 @@ void main() {
 
       test('can change label for subagent', () {
         // Arrange
-        final original = ConversationData.subagent(
+        const original = ConversationData.subagent(
           id: 'conv-1',
           label: 'Original',
         );
@@ -150,8 +150,8 @@ void main() {
     group('equality', () {
       test('equals returns true for identical values', () {
         // Arrange
-        final conv1 = ConversationData.primary(id: 'conv-1');
-        final conv2 = ConversationData.primary(id: 'conv-1');
+        const conv1 = ConversationData.primary(id: 'conv-1');
+        const conv2 = ConversationData.primary(id: 'conv-1');
 
         // Act & Assert
         check(conv1 == conv2).isTrue();
@@ -160,8 +160,8 @@ void main() {
 
       test('equals returns false for different IDs', () {
         // Arrange
-        final conv1 = ConversationData.primary(id: 'conv-1');
-        final conv2 = ConversationData.primary(id: 'conv-2');
+        const conv1 = ConversationData.primary(id: 'conv-1');
+        const conv2 = ConversationData.primary(id: 'conv-2');
 
         // Act & Assert
         check(conv1 == conv2).isFalse();
@@ -169,8 +169,8 @@ void main() {
 
       test('equals returns false for different labels', () {
         // Arrange
-        final conv1 = ConversationData.subagent(id: 'conv-1', label: 'A');
-        final conv2 = ConversationData.subagent(id: 'conv-1', label: 'B');
+        const conv1 = ConversationData.subagent(id: 'conv-1', label: 'A');
+        const conv2 = ConversationData.subagent(id: 'conv-1', label: 'B');
 
         // Act & Assert
         check(conv1 == conv2).isFalse();
@@ -180,7 +180,7 @@ void main() {
     group('toString()', () {
       test('includes key information', () {
         // Arrange
-        final conversation = ConversationData.subagent(
+        const conversation = ConversationData.subagent(
           id: 'conv-123',
           label: 'Test',
           taskDescription: 'Task',

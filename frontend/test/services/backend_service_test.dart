@@ -5,7 +5,6 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../test_helpers.dart';
 
 // =============================================================================
 // FAKE AGENT BACKEND
@@ -19,7 +18,7 @@ class FakeAgentBackend implements AgentBackend {
   FakeAgentBackend();
 
   /// Sessions that have been created via [createSession].
-  final List<_FakeSessionRequest> createdSessions = [];
+  final List<_FakeSessionRequest> createdSessions = []; // ignore: library_private_types_in_public_api
 
   /// If set, [createSession] will throw this error.
   Object? createSessionError;
@@ -58,7 +57,6 @@ class FakeAgentBackend implements AgentBackend {
   @override
   Stream<LogEntry> get logEntries => _logEntriesController.stream;
 
-  @override
   String? get logFilePath => '/tmp/fake-backend.log';
 
   @override
@@ -367,7 +365,7 @@ void main() {
 
         await service.start();
 
-        final options = SessionOptions(
+        const options = SessionOptions(
           model: 'claude-sonnet-4-5-20250514',
           permissionMode: PermissionMode.acceptEdits,
         );

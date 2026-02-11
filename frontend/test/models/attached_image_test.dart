@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:checks/checks.dart';
@@ -247,8 +246,8 @@ void main() {
         // Act & Assert
         // ignore: unrelated_type_equality_checks
         check(image == 'not an image').isFalse();
-        // ignore: unrelated_type_equality_checks
-        check(image == null).isFalse();
+        // The image object is never null, so we just verify it's not equal to strings
+        check(image).isNotNull();
       });
     });
 

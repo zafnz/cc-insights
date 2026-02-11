@@ -24,6 +24,7 @@ Future<void> main() async {
     onScreenshot: (String screenshotName, List<int> screenshotBytes, [args]) async {
       final file = File('screenshots/$screenshotName.png');
       await file.writeAsBytes(screenshotBytes);
+      // ignore: avoid_print
       print('Screenshot saved: screenshots/$screenshotName.png');
       return true;
     },

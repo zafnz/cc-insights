@@ -1,7 +1,5 @@
-import 'dart:async';
 
 import 'package:cc_insights_v2/models/file_content.dart';
-import 'package:cc_insights_v2/models/file_tree_node.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';

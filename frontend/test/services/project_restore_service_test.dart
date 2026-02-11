@@ -67,14 +67,14 @@ void main() {
               id: projectId,
               name: 'Test Project',
               worktrees: {
-                projectRoot: WorktreeInfo.primary(
+                projectRoot: const WorktreeInfo.primary(
                   name: 'main',
                   chats: [
-                    const ChatReference(
+                    ChatReference(
                       name: 'Chat 1',
                       chatId: 'chat-123',
                     ),
-                    const ChatReference(
+                    ChatReference(
                       name: 'Chat 2',
                       chatId: 'chat-456',
                     ),
@@ -410,7 +410,7 @@ class _TestPersistenceService extends PersistenceService {
     }
 
     final file = File('$_baseDir/projects.json');
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString(encoder.convert(index.toJson()));
   }
 
@@ -445,7 +445,7 @@ class _TestPersistenceService extends PersistenceService {
     }
 
     final path = '$dirPath/$chatId.meta.json';
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
     await File(path).writeAsString(encoder.convert(meta.toJson()));
   }
 

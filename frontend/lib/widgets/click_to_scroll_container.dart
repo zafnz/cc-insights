@@ -99,7 +99,7 @@ class _ClickToScrollContainerState extends State<ClickToScrollContainer> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ScrollPhysics activePhysics = const ClampingScrollPhysics();
+    const ScrollPhysics activePhysics = ClampingScrollPhysics();
 
     return TapRegion(
       onTapOutside: _isActive ? (_) => _deactivate() : null,

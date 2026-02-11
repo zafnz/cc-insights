@@ -227,6 +227,7 @@ void main() {
 
         // Convert the TextSpan to plain text for checking
         final buffer = StringBuffer();
+        // ignore: invalid_use_of_protected_member
         richMessage.computeToPlainText(buffer);
         final tooltipText = buffer.toString();
 
@@ -280,6 +281,7 @@ void main() {
 
         // Convert the TextSpan to plain text for checking
         final buffer = StringBuffer();
+        // ignore: invalid_use_of_protected_member
         richMessage.computeToPlainText(buffer);
         final tooltipText = buffer.toString();
 
@@ -307,6 +309,7 @@ void main() {
 
         // Convert the TextSpan to plain text for checking
         final buffer = StringBuffer();
+        // ignore: invalid_use_of_protected_member
         richMessage.computeToPlainText(buffer);
         final tooltipText = buffer.toString();
 
@@ -350,6 +353,7 @@ void main() {
 
         // Convert the TextSpan to plain text for checking
         final buffer = StringBuffer();
+        // ignore: invalid_use_of_protected_member
         richMessage.computeToPlainText(buffer);
         final tooltipText = buffer.toString();
 

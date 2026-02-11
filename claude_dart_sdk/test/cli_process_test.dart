@@ -538,7 +538,7 @@ void main() {
 
         // Act & Assert
         expect(
-          () => (cliProcess.stderrBuffer as List<String>).add('new'),
+          () => (cliProcess.stderrBuffer).add('new'),
           throwsUnsupportedError,
         );
 

@@ -32,7 +32,7 @@ class TaskResultWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Task section header
-          SectionDivider(label: 'Task'),
+          const SectionDivider(label: 'Task'),
           Padding(
             padding: const EdgeInsets.all(8),
             child: SelectableText(
@@ -46,7 +46,7 @@ class TaskResultWidget extends StatelessWidget {
           ),
           // Result section header
           if (resultText.isNotEmpty) ...[
-            SectionDivider(label: 'Result'),
+            const SectionDivider(label: 'Result'),
             Padding(
               padding: const EdgeInsets.all(8),
               child: SelectionArea(

@@ -68,7 +68,7 @@ class MockDataFactory {
     bool autoValidate = false,
   }) {
     final basePath = mockDataProjectPath;
-    final wtBasePath = '${basePath}-wt';
+    final wtBasePath = '$basePath-wt';
 
     // Create the primary worktree with 2 chats.
     final primaryWorktree = createMockWorktree(
@@ -382,7 +382,7 @@ class MockDataFactory {
         name: 'Add dark mode',
         worktreeRoot: worktreeRoot,
         createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
-        primaryConversation: ConversationData.primary(
+        primaryConversation: const ConversationData.primary(
           id: primaryConversationId,
         ),
         subagentConversations: const {},

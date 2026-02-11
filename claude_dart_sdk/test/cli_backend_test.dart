@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:test/test.dart';
@@ -589,7 +588,7 @@ class MockCliBackendHelper {
   late final _MockableCliBackend _backend;
   final _mockSessions = <String, _MockCliSessionData>{};
 
-  _MockableCliBackend get backend => _backend;
+  _MockableCliBackend get backend => _backend; // ignore: library_private_types_in_public_api
 
   /// Create a mock session that simulates CLI initialization.
   Future<AgentSession> createMockSession({

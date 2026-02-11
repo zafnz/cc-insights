@@ -27,7 +27,7 @@ void main() {
     askAiService = FakeAskAiService();
 
     // Default: commits available
-    final commitKey = '$testWorktreePath:$testMainBranch';
+    const commitKey = '$testWorktreePath:$testMainBranch';
     gitService.commitsAhead[commitKey] = testCommits;
     gitService.branches[testWorktreePath] = testBranch;
   });
@@ -113,7 +113,7 @@ void main() {
 
     testWidgets('auto-populates title from single commit message',
         (tester) async {
-      final commitKey = '$testWorktreePath:$testMainBranch';
+      const commitKey = '$testWorktreePath:$testMainBranch';
       gitService.commitsAhead[commitKey] = [
         (sha: 'abc1234', message: 'Add login form'),
       ];
@@ -280,7 +280,7 @@ void main() {
     testWidgets('Create PR button is disabled when title is empty',
         (tester) async {
       // Use no commits so title won't auto-populate
-      final commitKey = '$testWorktreePath:$testMainBranch';
+      const commitKey = '$testWorktreePath:$testMainBranch';
       gitService.commitsAhead[commitKey] = [];
 
       await openDialog(tester);
@@ -311,7 +311,7 @@ void main() {
 
     testWidgets('shows "No commits found" when no commits ahead',
         (tester) async {
-      final commitKey = '$testWorktreePath:$testMainBranch';
+      const commitKey = '$testWorktreePath:$testMainBranch';
       gitService.commitsAhead[commitKey] = [];
 
       await openDialog(tester);

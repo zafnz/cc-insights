@@ -9,11 +9,11 @@ void main() {
   group('ClickToScrollContainer', () {
     testWidgets('renders child content', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 100,
-              child: const Text('Test content'),
+              child: Text('Test content'),
             ),
           ),
         ),
@@ -27,11 +27,11 @@ void main() {
         (tester) async {
       // Create content taller than maxHeight
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 50,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 200,
                 child: Text('Tall content'),
               ),
@@ -48,11 +48,11 @@ void main() {
     testWidgets('does not show scroll indicator when content fits',
         (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 200,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 50,
                 child: Text('Short content'),
               ),
@@ -69,11 +69,11 @@ void main() {
     testWidgets('activates scrolling on tap when content exceeds maxHeight',
         (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 50,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 200,
                 child: Text('Tall content'),
               ),
@@ -96,11 +96,11 @@ void main() {
 
     testWidgets('deactivates on tap outside', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: Column(
               children: [
-                const SizedBox(
+                SizedBox(
                   height: 100,
                   width: double.infinity,
                   child: ColoredBox(
@@ -110,7 +110,7 @@ void main() {
                 ),
                 ClickToScrollContainer(
                   maxHeight: 50,
-                  child: const SizedBox(
+                  child: SizedBox(
                     height: 200,
                     child: Text('Tall content'),
                   ),
@@ -137,11 +137,11 @@ void main() {
 
     testWidgets('deactivates on Escape key', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 50,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 200,
                 child: Text('Tall content'),
               ),
@@ -167,11 +167,11 @@ void main() {
     testWidgets('uses NeverScrollableScrollPhysics when inactive',
         (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 50,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 200,
                 child: Text('Tall content'),
               ),
@@ -190,11 +190,11 @@ void main() {
     testWidgets('uses ClampingScrollPhysics when active',
         (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 50,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 200,
                 child: Text('Tall content'),
               ),
@@ -248,12 +248,12 @@ void main() {
 
     testWidgets('applies padding to content', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 100,
-              padding: const EdgeInsets.all(16),
-              child: const Text('Padded content'),
+              padding: EdgeInsets.all(16),
+              child: Text('Padded content'),
             ),
           ),
         ),
@@ -271,11 +271,11 @@ void main() {
 
     testWidgets('does not activate when content fits', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: ClickToScrollContainer(
               maxHeight: 200,
-              child: const SizedBox(
+              child: SizedBox(
                 height: 50,
                 child: Text('Short content'),
               ),
@@ -303,9 +303,9 @@ void main() {
             body: ListView(
               children: [
                 const SizedBox(height: 100, child: Text('Item 1')),
-                ClickToScrollContainer(
+                const ClickToScrollContainer(
                   maxHeight: 50,
-                  child: const SizedBox(
+                  child: SizedBox(
                     height: 200,
                     child: Text('Scrollable tool content'),
                   ),

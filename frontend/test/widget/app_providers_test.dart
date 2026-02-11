@@ -170,7 +170,7 @@ class _FakeTestSession implements TestSession {
     required Map<String, dynamic> toolInput,
     String? toolUseId,
   }) async =>
-      PermissionDenyResponse(message: 'Test deny');
+      const PermissionDenyResponse(message: 'Test deny');
 }
 
 // =============================================================================

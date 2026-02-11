@@ -194,7 +194,7 @@ $commitList''';
       if (!mounted) return;
 
       if (result != null && !result.isError) {
-        final rawMessage = result.result?.trim() ?? '';
+        final rawMessage = result.result.trim();
         final description = _extractDescription(rawMessage);
         if (description.isNotEmpty) {
           _cachedDescription = description;
@@ -459,9 +459,9 @@ $commitList''';
           child: TabBar(
             controller: _tabController,
             tabs: [
-              Tab(
+              const Tab(
                 key: CreatePrDialogKeys.customTab,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.edit, size: 16),
@@ -470,9 +470,9 @@ $commitList''';
                   ],
                 ),
               ),
-              Tab(
+              const Tab(
                 key: CreatePrDialogKeys.changelogTab,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.list, size: 16),
@@ -481,9 +481,9 @@ $commitList''';
                   ],
                 ),
               ),
-              Tab(
+              const Tab(
                 key: CreatePrDialogKeys.previewTab,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.preview, size: 16),

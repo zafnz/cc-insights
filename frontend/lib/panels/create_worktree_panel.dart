@@ -67,7 +67,6 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   String? _errorMessage;
   List<String>? _errorSuggestions;
   List<String> _availableBranches = [];
-  List<String> _existingWorktreeBranches = [];
 
   /// When non-null, shows a recovery prompt for this branch name.
   String? _recoverBranchName;
@@ -122,7 +121,6 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
       if (mounted) {
         setState(() {
           _availableBranches = available;
-          _existingWorktreeBranches = worktreeBranches.toList();
           _rootController.text = defaultRoot;
           _isLoading = false;
         });

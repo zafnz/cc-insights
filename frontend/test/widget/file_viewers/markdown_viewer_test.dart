@@ -324,7 +324,7 @@ void main() {
             brightness: Brightness.light,
           ),
         ),
-        home: Scaffold(
+        home: const Scaffold(
           body: MarkdownViewer(content: testContent),
         ),
       );
@@ -349,7 +349,7 @@ void main() {
             brightness: Brightness.light,
           ),
         ),
-        home: Scaffold(
+        home: const Scaffold(
           body: MarkdownViewer(content: testContent),
         ),
       );

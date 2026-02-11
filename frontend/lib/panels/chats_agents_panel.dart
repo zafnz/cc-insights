@@ -65,12 +65,12 @@ class _ChatsAgentsTreeContent extends StatelessWidget {
     final chats = selectedWorktree.chats;
 
     if (chats.isEmpty) {
-      return Column(
+      return const Column(
         children: [
-          const Expanded(
+          Expanded(
             child: EmptyPlaceholder(message: 'No chats in this worktree'),
           ),
-          const NewChatCard(),
+          NewChatCard(),
         ],
       );
     }

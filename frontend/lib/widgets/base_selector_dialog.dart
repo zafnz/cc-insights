@@ -158,8 +158,8 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
                 Radio<_BaseOption>(
                   key: BaseSelectorDialogKeys.customOption,
                   value: _BaseOption.custom,
-                  groupValue: _selected,
-                  onChanged: (value) {
+                  groupValue: _selected, // ignore: deprecated_member_use
+                  onChanged: (value) { // ignore: deprecated_member_use
                     if (value != null) setState(() => _selected = value);
                   },
                 ),
@@ -249,8 +249,8 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
             )
           : null,
       value: value,
-      groupValue: _selected,
-      onChanged: (v) {
+      groupValue: _selected, // ignore: deprecated_member_use
+      onChanged: (v) { // ignore: deprecated_member_use
         if (v != null) setState(() => _selected = v);
       },
       dense: true,

@@ -48,7 +48,7 @@ void main() {
           ChangeNotifierProvider<ProjectState>.value(value: project),
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
             create: (_) => selection,
-            update: (_, __, previous) => previous!,
+            update: (_, project, previous) => previous!,
           ),
           ChangeNotifierProvider<BackendService>.value(
             value: backendService,

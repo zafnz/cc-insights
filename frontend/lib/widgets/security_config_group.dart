@@ -179,6 +179,7 @@ class _SandboxModeDropdownState extends State<_SandboxModeDropdown> {
           onTap: () {
             // Show workspace settings panel
             Future.microtask(() {
+              if (!context.mounted) return;
               showWorkspaceSettingsPanel(
                 context: context,
                 options: widget.config.workspaceWriteOptions ??

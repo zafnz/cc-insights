@@ -79,7 +79,7 @@ class ProjectConfigService extends ChangeNotifier {
       }
 
       // Write with pretty formatting
-      final encoder = const JsonEncoder.withIndent('  ');
+      const encoder = JsonEncoder.withIndent('  ');
       final content = encoder.convert(config.toJson());
       await File(filePath).writeAsString(content);
 

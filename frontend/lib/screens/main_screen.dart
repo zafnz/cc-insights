@@ -41,10 +41,7 @@ class _MainScreenState extends State<MainScreen> {
   // Track panel merge state
   // These flags track which panels are merged together:
   // - _agentsMergedIntoChats: agents are nested under chats
-  // - _chatsMergedIntoWorktrees: chats (possibly with agents)
-  //   are nested under worktrees
   bool _agentsMergedIntoChats = false;
-  bool _chatsMergedIntoWorktrees = false;
 
   // Navigation rail selection
   // 0 = main view, 1 = file manager, others are panel toggles
@@ -375,6 +372,7 @@ class _MainScreenState extends State<MainScreen> {
     // Recover archived chats
     final projectRoot = project.data.repoRoot;
     final projectId = PersistenceService.generateProjectId(projectRoot);
+    if (!mounted) return;
     final persistenceService = context.read<PersistenceService>();
     final restoreService = ProjectRestoreService(persistence: persistenceService);
 
@@ -561,9 +559,7 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Merge chats panel into worktrees panel.
   void _mergeChatsIntoWorktrees() {
-    setState(() {
-      _chatsMergedIntoWorktrees = true;
-    });
+    setState(() {});
 
     // Determine if we're merging chats_agents or just chats
     final isChatsAgents = _controller.findPathById('chats_agents') != null;
@@ -645,9 +641,7 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Separate chats back out from the worktrees panel.
   void _separateChatsFromWorktrees() {
-    setState(() {
-      _chatsMergedIntoWorktrees = false;
-    });
+    setState(() {});
 
     // Find the combined panel (could be worktrees_chats or worktrees_chats_agents)
     final combinedPath =
@@ -718,11 +712,9 @@ class _MainScreenState extends State<MainScreen> {
         return (context) =>
             ChatsAgentsPanel(onSeparateAgents: _separateAgentsFromChats);
       case 'worktrees_chats':
-        _chatsMergedIntoWorktrees = true;
         return (context) =>
             WorktreesChatsPanel(onSeparateChats: _separateChatsFromWorktrees);
       case 'worktrees_chats_agents':
-        _chatsMergedIntoWorktrees = true;
         _agentsMergedIntoChats = true;
         return (context) => WorktreesChatsAgentsPanel(
               onSeparateChats: _separateChatsFromWorktrees,

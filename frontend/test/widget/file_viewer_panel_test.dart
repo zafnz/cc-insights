@@ -92,11 +92,11 @@ void main() {
             value: fileManagerState,
           ),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           home: Scaffold(
             body: DragHandleProvider(
-              dragHandle: const Icon(Icons.drag_indicator),
-              child: const FileViewerPanel(),
+              dragHandle: Icon(Icons.drag_indicator),
+              child: FileViewerPanel(),
             ),
           ),
         ),
@@ -574,7 +574,7 @@ void main() {
         // Create plaintext content with null textContent
         // (this shouldn't happen in normal use but we test it)
         state.setFileContent(
-          FileContent(
+          const FileContent(
             path: '/Users/test/my-project/test.txt',
             type: FileContentType.plaintext,
             data: null,
@@ -597,7 +597,7 @@ void main() {
 
         // Create dart content with null textContent
         state.setFileContent(
-          FileContent(
+          const FileContent(
             path: '/Users/test/my-project/main.dart',
             type: FileContentType.dart,
             data: null,
@@ -620,7 +620,7 @@ void main() {
 
         // Create json content with null textContent
         state.setFileContent(
-          FileContent(
+          const FileContent(
             path: '/Users/test/my-project/config.json',
             type: FileContentType.json,
             data: null,
@@ -644,7 +644,7 @@ void main() {
 
           // Create markdown content with null textContent
           state.setFileContent(
-            FileContent(
+            const FileContent(
               path: '/Users/test/my-project/README.md',
               type: FileContentType.markdown,
               data: null,

@@ -1209,9 +1209,7 @@ class CliSessionForTesting {
       model: options.model,
       permissionMode: options.permissionMode?.value,
       systemPrompt: systemPromptString,
-      mcpServers: options.mcpServers != null
-          ? options.mcpServers!.map((k, v) => MapEntry(k, v.toJson()))
-          : null,
+      mcpServers: options.mcpServers?.map((k, v) => MapEntry(k, v.toJson())),
       maxTurns: options.maxTurns,
       maxBudgetUsd: options.maxBudgetUsd,
       resume: options.resume,

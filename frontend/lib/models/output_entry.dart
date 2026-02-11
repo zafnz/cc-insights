@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendProvider, ToolKind;
 import 'package:flutter/foundation.dart';
@@ -350,6 +349,7 @@ abstract class OutputEntry {
 /// Represents either regular text output or extended thinking content.
 /// This class is intentionally mutable to support streaming - text can be
 /// appended as deltas arrive, then finalized when the complete message arrives.
+// ignore: must_be_immutable
 class TextOutputEntry extends OutputEntry {
   /// The text content. Mutable during streaming.
   String text;
@@ -468,6 +468,7 @@ class TextOutputEntry extends OutputEntry {
 /// This class is intentionally mutable to support:
 /// 1. Tool pairing - result arrives in a separate message after tool_use
 /// 2. Streaming - input may stream in via input_json_delta events
+// ignore: must_be_immutable
 class ToolUseOutputEntry extends OutputEntry {
   /// The name of the tool being used.
   final String toolName;
@@ -532,13 +533,9 @@ class ToolUseOutputEntry extends OutputEntry {
     List<Map<String, dynamic>>? rawMessages,
   }) : _rawMessages = rawMessages;
 
-  /// Accumulated partial JSON string for streaming tool input.
-  /// Only used during streaming; cleared when finalized.
-  String _partialInputJson = '';
-
   /// Appends a partial JSON delta during streaming.
   void appendInputDelta(String delta) {
-    _partialInputJson += delta;
+    // Accumulate input deltas during streaming
   }
 
   /// Updates the result when tool_result message arrives.

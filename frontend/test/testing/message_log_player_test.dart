@@ -291,14 +291,3 @@ not valid json
     });
   });
 }
-
-String _summarize(OutputEntry entry) {
-  return switch (entry) {
-    TextOutputEntry e => 'text(${e.contentType}): ${e.text.substring(0, e.text.length.clamp(0, 50))}...',
-    ToolUseOutputEntry e => 'tool: ${e.toolName}',
-    UserInputEntry e => 'user: ${e.text.substring(0, e.text.length.clamp(0, 50))}...',
-    ContextSummaryEntry _ => 'context_summary',
-    ContextClearedEntry _ => 'context_cleared',
-    _ => 'unknown',
-  };
-}

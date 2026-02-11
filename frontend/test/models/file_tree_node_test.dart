@@ -15,7 +15,7 @@ void main() {
     group('constructor', () {
       test('creates node with required fields', () {
         // Arrange & Act
-        final node = FileTreeNode(
+        const node = FileTreeNode(
           name: 'test.dart',
           path: '/path/to/test.dart',
           type: FileTreeNodeType.file,
@@ -434,7 +434,7 @@ void main() {
       });
 
       test('path with special characters is allowed', () {
-        final path = '/path/to/file with spaces & (symbols).dart';
+        const path = '/path/to/file with spaces & (symbols).dart';
         final node = FileTreeNode.file(
           name: 'file with spaces & (symbols).dart',
           path: path,
@@ -464,7 +464,7 @@ void main() {
       });
 
       test('null size and modified are handled correctly', () {
-        final node = FileTreeNode(
+        const node = FileTreeNode(
           name: 'test.dart',
           path: '/test.dart',
           type: FileTreeNodeType.file,

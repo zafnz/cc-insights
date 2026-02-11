@@ -1305,19 +1305,19 @@ class _LogEntryWidget extends StatelessWidget {
           ),
         );
       case LogEntryStatus.success:
-        return Icon(
+        return const Icon(
           Icons.check_circle,
           size: 16,
           color: Colors.green,
         );
       case LogEntryStatus.warning:
-        return Icon(
+        return const Icon(
           Icons.warning_amber,
           size: 16,
           color: Colors.orange,
         );
       case LogEntryStatus.error:
-        return Icon(
+        return const Icon(
           Icons.error,
           size: 16,
           color: Colors.red,

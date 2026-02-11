@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -91,6 +90,7 @@ Future<void> pumpUntilFound(
     () => finder.evaluate().isNotEmpty,
     timeout: timeout,
     step: step,
+    // ignore: deprecated_member_use
     debugLabel: debugLabel ?? 'waiting for ${finder.description}',
   );
 }
@@ -114,6 +114,7 @@ Future<void> pumpUntilGone(
     () => finder.evaluate().isEmpty,
     timeout: timeout,
     step: step,
+    // ignore: deprecated_member_use
     debugLabel: debugLabel ?? 'waiting for ${finder.description} to disappear',
   );
 }

@@ -34,7 +34,7 @@ void main() {
         entryCount,
         (i) => TextOutputEntry(
           timestamp: DateTime.now().subtract(Duration(minutes: entryCount - i)),
-          text: 'Message $i - ' + 'x' * 200, // Long enough to ensure scrolling
+          text: 'Message $i - ${'x' * 200}', // Long enough to ensure scrolling
           contentType: 'text',
         ),
       );
@@ -63,7 +63,7 @@ void main() {
         // Add a text entry
         entries.add(TextOutputEntry(
           timestamp: DateTime.now().subtract(Duration(minutes: entryCount - i)),
-          text: 'Text before tool $i - ' + 'x' * 100,
+          text: 'Text before tool $i - ${'x' * 100}',
           contentType: 'text',
         ));
 
@@ -75,7 +75,7 @@ void main() {
           toolKind: ToolKind.execute,
           toolUseId: 'tool-$i',
           toolInput: {'command': 'echo "test $i"', 'description': 'Test command $i'},
-        )..updateResult('Output for test $i\n' + 'y' * 50, false));
+        )..updateResult('Output for test $i\n${'y' * 50}', false));
       }
 
       return ChatState(
@@ -126,7 +126,6 @@ void main() {
     });
 
     Widget buildTestWidget({ChatState? overrideChat}) {
-      final testChat = overrideChat ?? chat;
       // Ensure chat is in worktree if overriding
       if (overrideChat != null &&
           !project.primaryWorktree.chats.contains(overrideChat)) {
@@ -143,12 +142,12 @@ void main() {
               value: fakeCliAvailability,
             ),
           ],
-          child: Scaffold(
+          child: const Scaffold(
             body: KeyboardFocusManager(
               child: SizedBox(
                 width: 600,
                 height: 800,
-                child: const ConversationPanel(),
+                child: ConversationPanel(),
               ),
             ),
           ),

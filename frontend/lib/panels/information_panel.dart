@@ -878,7 +878,6 @@ class _BaseSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     // Use house emoji for local, globe icon for remote
     final isLocal = !data.isRemoteBase;
@@ -886,7 +885,7 @@ class _BaseSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionLabel(label: 'Base'),
+        const _SectionLabel(label: 'Base'),
         const SizedBox(height: 4),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -989,7 +988,7 @@ class _UpstreamSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionLabel(label: 'Upstream'),
+        const _SectionLabel(label: 'Upstream'),
         const SizedBox(height: 4),
         if (data.upstreamBranch == null)
           Row(
@@ -1069,7 +1068,7 @@ class _PrimaryUpstreamSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionLabel(label: 'Upstream'),
+        const _SectionLabel(label: 'Upstream'),
         const SizedBox(height: 4),
         Row(
           children: [
@@ -1314,7 +1313,7 @@ class _ActionsSection extends StatelessWidget {
           const SizedBox(height: 12),
           const _SectionDivider(label: 'Pull Request'),
           const SizedBox(height: 8),
-          _CompactButton(
+          const _CompactButton(
             key: InformationPanelKeys.createPrButton,
             onPressed: null,
             label: 'Create PR (push required)',

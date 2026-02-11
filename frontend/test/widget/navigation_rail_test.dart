@@ -6,16 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('AppNavigationRail', () {
     testWidgets('renders project stats button at index 4', (tester) async {
-      int? selectedIndex;
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: AppNavigationRail(
               selectedIndex: 0,
-              onDestinationSelected: (index) {
-                selectedIndex = index;
-              },
+              onDestinationSelected: (index) {},
             ),
           ),
         ),

@@ -348,13 +348,6 @@ class ChatState extends ChangeNotifier {
   /// allowed or denied, the elapsed time is added to [_timingStats].
   final Map<String, DateTime> _permissionRequestTimes = {};
 
-  /// Base usage from previous sessions (for resume support).
-  ///
-  /// When a chat resumes from a previous session, we need to add the
-  /// previous session's final usage to the new session's cumulative values.
-  /// This is set by [restoreFromMeta] and cleared when a new session starts
-  /// without resuming.
-  UsageInfo _baseUsage = const UsageInfo.zero();
 
   /// Base per-model usage from previous sessions (for resume support).
   List<ModelUsageInfo> _baseModelUsage = [];
@@ -375,7 +368,7 @@ class ChatState extends ChangeNotifier {
   ///
   /// Preserved when switching between chats so users don't lose their
   /// in-progress messages.
-  String _draftText = '';
+  String draftText = '';
 
   /// The persistence service instance.
   ///
@@ -570,8 +563,7 @@ class ChatState extends ChangeNotifier {
   int get unreadCount => _unreadCount;
 
   /// Draft text being typed in the message input.
-  String get draftText => _draftText;
-  set draftText(String value) => _draftText = value;
+  /// Public field for direct access from UI.
 
   /// Sets the last session ID for this chat.
   ///
@@ -1749,7 +1741,6 @@ class ChatState extends ChangeNotifier {
     // The base values are used when a new session provides cumulative data -
     // we add the base to get the chat-wide total.
     _cumulativeUsage = usage;
-    _baseUsage = usage;
     _modelUsage = List.from(modelUsage);
     _baseModelUsage = List.from(modelUsage);
 

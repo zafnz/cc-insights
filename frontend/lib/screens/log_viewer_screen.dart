@@ -236,7 +236,6 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final sortedSources = sources.toList()..sort();
 
     return Container(
@@ -395,7 +394,7 @@ class _CompactDropdown<T> extends StatelessWidget {
     return SizedBox(
       height: 30,
       child: DropdownButtonFormField<T>(
-        value: value,
+        initialValue: value,
         items: items,
         onChanged: onChanged,
         isExpanded: true,

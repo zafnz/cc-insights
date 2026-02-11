@@ -811,7 +811,7 @@ void main() {
 
     group('_handleTurnComplete', () {
       test('updates cumulative usage for main agent', () {
-        final usage = const TokenUsage(
+        const usage = TokenUsage(
           inputTokens: 1000,
           outputTokens: 500,
           cacheReadTokens: 100,
@@ -931,7 +931,7 @@ void main() {
       });
 
       test('calculates cost for Codex events using pricing table', () {
-        final usage = const TokenUsage(
+        const usage = TokenUsage(
           inputTokens: 1000000,
           outputTokens: 100000,
           cacheReadTokens: 500000,
@@ -958,7 +958,7 @@ void main() {
       });
 
       test('does not override Claude cost with pricing table', () {
-        final usage = const TokenUsage(
+        const usage = TokenUsage(
           inputTokens: 1000,
           outputTokens: 500,
         );

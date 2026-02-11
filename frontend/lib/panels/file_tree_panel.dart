@@ -379,7 +379,6 @@ class _FileTreeItemState extends State<_FileTreeItem> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     // Select only what this item needs - file selection and this node's expanded state
     final selectedFilePath = context.select<FileManagerState, String?>(

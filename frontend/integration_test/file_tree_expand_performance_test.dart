@@ -7,7 +7,6 @@ import 'package:path/path.dart' as p;
 
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
-import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 

@@ -4,9 +4,7 @@ import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/cost_tracking.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/models/project.dart';
-import 'package:cc_insights_v2/models/timing_stats.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
-import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/stats_service.dart';
@@ -50,12 +48,12 @@ void main() {
     test('returns empty stats for empty project with no tracking data',
         () async {
       // Arrange
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -125,12 +123,12 @@ void main() {
       await persistence.appendCostTracking(projectId, entry2);
 
       // Create empty project
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -161,7 +159,7 @@ void main() {
 
     test('includes live chat data from project state', () async {
       // Arrange
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
@@ -195,7 +193,7 @@ void main() {
       );
 
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -252,7 +250,7 @@ void main() {
       await persistence.appendCostTracking(projectId, historicalEntry);
 
       // Create project with live chat
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
@@ -285,7 +283,7 @@ void main() {
       );
 
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -346,12 +344,12 @@ void main() {
       await persistence.appendCostTracking(projectId, entry1);
 
       // Create project with only live worktree
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -422,12 +420,12 @@ void main() {
       await persistence.appendCostTracking(projectId, codexEntry);
 
       // Create empty project
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -479,7 +477,7 @@ void main() {
       await persistence.appendCostTracking(projectId, historicalEntry);
 
       // Live chat
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
@@ -511,7 +509,7 @@ void main() {
       );
 
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project',
           isPrimary: true,
           branch: 'main',
@@ -587,7 +585,7 @@ void main() {
       await persistence.appendCostTracking(projectId, deleted2);
 
       // Live worktrees with chats
-      final projectData = ProjectData(
+      const projectData = ProjectData(
         name: 'Test Project',
         repoRoot: '/test/project',
       );
@@ -650,7 +648,7 @@ void main() {
       );
 
       final primaryWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project/zeta-live',
           isPrimary: true,
           branch: 'main',
@@ -658,7 +656,7 @@ void main() {
         chats: [zetaChat],
       );
       final linkedWorktree = WorktreeState(
-        WorktreeData(
+        const WorktreeData(
           worktreeRoot: '/test/project/alpha-live',
           isPrimary: false,
           branch: 'feature',

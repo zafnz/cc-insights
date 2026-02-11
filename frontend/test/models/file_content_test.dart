@@ -22,7 +22,7 @@ void main() {
     group('constructor', () {
       test('creates content with required fields', () {
         // Arrange & Act
-        final content = FileContent(
+        const content = FileContent(
           path: '/path/to/file.txt',
           type: FileContentType.plaintext,
         );
@@ -36,7 +36,7 @@ void main() {
 
       test('creates content with all fields', () {
         // Act
-        final content = FileContent(
+        const content = FileContent(
           path: '/path/to/file.txt',
           type: FileContentType.error,
           data: 'some data',
@@ -75,7 +75,7 @@ void main() {
       });
 
       test('handles multiline content', () {
-        final multiline = 'Line 1\nLine 2\nLine 3';
+        const multiline = 'Line 1\nLine 2\nLine 3';
         final content = FileContent.plaintext(
           path: '/multi.txt',
           content: multiline,

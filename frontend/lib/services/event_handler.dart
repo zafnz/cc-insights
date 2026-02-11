@@ -122,27 +122,27 @@ class EventHandler {
   /// The [event] is the typed event object from the protocol.
   void handleEvent(ChatState chat, InsightsEvent event) {
     switch (event) {
-      case ToolInvocationEvent e:
+      case final ToolInvocationEvent e:
         _handleToolInvocation(chat, e);
-      case ToolCompletionEvent e:
+      case final ToolCompletionEvent e:
         _handleToolCompletion(chat, e);
-      case TextEvent e:
+      case final TextEvent e:
         _handleText(chat, e);
-      case UserInputEvent e:
+      case final UserInputEvent e:
         _handleUserInput(chat, e);
-      case TurnCompleteEvent e:
+      case final TurnCompleteEvent e:
         _handleTurnComplete(chat, e);
-      case SessionInitEvent e:
+      case final SessionInitEvent e:
         _handleSessionInit(chat, e);
-      case SessionStatusEvent e:
+      case final SessionStatusEvent e:
         _handleSessionStatus(chat, e);
-      case ContextCompactionEvent e:
+      case final ContextCompactionEvent e:
         _handleCompaction(chat, e);
-      case SubagentSpawnEvent e:
+      case final SubagentSpawnEvent e:
         _handleSubagentSpawn(chat, e);
-      case SubagentCompleteEvent e:
+      case final SubagentCompleteEvent e:
         _handleSubagentComplete(chat, e);
-      case StreamDeltaEvent e:
+      case final StreamDeltaEvent e:
         _handleStreamDelta(chat, e);
       case UsageUpdateEvent e:
         _handleUsageUpdate(chat, e);
@@ -877,7 +877,7 @@ Automatic Chat Summary
 User's message:
 $userMessage''';
 
-      final result = await _askAiService!.ask(
+      final result = await _askAiService.ask(
         prompt: prompt,
         workingDirectory: workingDirectory,
         model: config.aiChatLabelModel,

@@ -600,10 +600,15 @@ void main() {
             expect(initEvent.provider, equals(BackendProvider.claude));
             expect(completeEvent.provider, equals(BackendProvider.claude));
 
+            // ignore: avoid_print
             print('InsightsEvents verification:');
+            // ignore: avoid_print
             print('  - ${initEvents.length} SessionInitEvent(s)');
+            // ignore: avoid_print
             print('  - ${textEvents.length} TextEvent(s)');
+            // ignore: avoid_print
             print('  - ${completeEvents.length} TurnCompleteEvent(s)');
+            // ignore: avoid_print
             print('  - Total: ${events.length} events emitted');
           } finally {
             await session.dispose();

@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../fakes/fake_ask_ai_service.dart';
 import '../fakes/fake_git_service.dart';
-import '../test_helpers.dart';
 
 void main() {
   late FakeGitService gitService;

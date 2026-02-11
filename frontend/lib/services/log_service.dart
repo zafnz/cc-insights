@@ -139,11 +139,8 @@ class LogService extends ChangeNotifier {
   String? _logFilePath;
 
   /// The current minimum log level for file output.
-  LogLevel _minimumLevel = LogLevel.debug;
-
-  LogLevel get minimumLevel => _minimumLevel;
-
-  set minimumLevel(LogLevel level) => _minimumLevel = level;
+  /// Public field for direct access.
+  LogLevel minimumLevel = LogLevel.debug;
 
   /// The current log file path, or null if file logging is disabled.
   String? get logFilePath => _logFilePath;
@@ -210,7 +207,7 @@ class LogService extends ChangeNotifier {
     _sources.add(source);
 
     // Write to disk if file logging is enabled and level meets threshold
-    if (level.meetsThreshold(_minimumLevel) && _sink != null) {
+    if (level.meetsThreshold(minimumLevel) && _sink != null) {
       _sink!.writeln(entry.toJsonLine());
     }
 

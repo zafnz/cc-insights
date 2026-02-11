@@ -205,7 +205,7 @@ $fileList''';
       if (!mounted) return;
 
       if (result != null && !result.isError) {
-        final rawMessage = result.result?.trim() ?? '';
+        final rawMessage = result.result.trim();
         // Extract message between ===BEGIN=== and ===END=== markers
         final message = _extractCommitMessage(rawMessage);
         if (message.isNotEmpty) {
@@ -957,9 +957,9 @@ $fileList''';
           child: TabBar(
             controller: _tabController,
             tabs: [
-              Tab(
+              const Tab(
                 key: CommitDialogKeys.editTab,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.edit, size: 16),
@@ -968,9 +968,9 @@ $fileList''';
                   ],
                 ),
               ),
-              Tab(
+              const Tab(
                 key: CommitDialogKeys.previewTab,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.preview, size: 16),

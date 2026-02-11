@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -541,7 +540,7 @@ class _ImagePreviewRow extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: images.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           return _ImagePreviewTile(
             image: images[index],
@@ -583,7 +582,7 @@ class _ImagePreviewTile extends StatelessWidget {
             child: Image.memory(
               image.data,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(
+              errorBuilder: (context, error, stackTrace) => Icon(
                 Icons.broken_image,
                 color: colorScheme.error,
               ),
@@ -635,7 +634,7 @@ class _ImageAttachButton extends StatelessWidget {
     return Tooltip(
       message: isAtMax
           ? 'Maximum $maxImages images'
-          : 'Attach images (${imageCount}/$maxImages)',
+          : 'Attach images ($imageCount/$maxImages)',
       child: Material(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),

@@ -8,7 +8,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:cc_insights_v2/main.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
-import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/click_to_scroll_container.dart';
 import 'package:cc_insights_v2/widgets/tool_card.dart';

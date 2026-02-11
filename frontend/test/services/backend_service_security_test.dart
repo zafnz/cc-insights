@@ -31,7 +31,7 @@ void main() {
     test('codexSecurityConfig returns config when Codex backend active',
         () async {
       // Arrange
-      final testConfig = const CodexSecurityConfig(
+      const testConfig = CodexSecurityConfig(
         sandboxMode: CodexSandboxMode.readOnly,
         approvalPolicy: CodexApprovalPolicy.untrusted,
       );
@@ -63,7 +63,7 @@ void main() {
         'codexSecurityCapabilities returns capabilities when Codex backend active',
         () async {
       // Arrange
-      final testCapabilities = const CodexSecurityCapabilities(
+      const testCapabilities = CodexSecurityCapabilities(
         allowedSandboxModes: [
           CodexSandboxMode.readOnly,
           CodexSandboxMode.workspaceWrite,

@@ -49,7 +49,7 @@ import 'widgets/dialog_observer.dart';
 bool useMockData = false;
 
 /// The original debugPrintSynchronously function, saved before we override it.
-final DebugPrintCallback _originalDebugPrint = debugPrintSynchronously;
+const DebugPrintCallback _originalDebugPrint = debugPrintSynchronously;
 
 /// Custom debugPrint that logs to LogService while also printing to stdout.
 ///
@@ -497,7 +497,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Validates the directory and determines if we need to show a prompt.
   Future<void> _validateDirectory(String path) async {
-    final gitService = const RealGitService();
+    const gitService = RealGitService();
     final gitInfo = await gitService.analyzeDirectory(path);
 
     if (!mounted) return;

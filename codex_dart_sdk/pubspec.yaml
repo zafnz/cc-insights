@@ -1,6 +1,7 @@
 name: codex_sdk
 description: Dart SDK for OpenAI Codex app-server
 version: 0.1.0
+publish_to: none
 
 environment:
   sdk: ^3.0.0

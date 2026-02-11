@@ -7,8 +7,8 @@ void main() {
   group('ThemeState', () {
     test('defaults to deepPurple and system mode', () {
       final state = ThemeState();
-      check(state.seedColor.value)
-          .equals(Colors.deepPurple.value);
+      check(state.seedColor.toARGB32())
+          .equals(Colors.deepPurple.toARGB32());
       check(state.themeMode).equals(ThemeMode.system);
     });
 
@@ -19,8 +19,8 @@ void main() {
 
       state.setSeedColor(Colors.blue);
 
-      check(state.seedColor.value)
-          .equals(Colors.blue.value);
+      check(state.seedColor.toARGB32())
+          .equals(Colors.blue.toARGB32());
       check(notified).isTrue();
     });
 
@@ -110,8 +110,8 @@ void main() {
         seedColor: Colors.red,
         themeMode: ThemeMode.dark,
       );
-      check(state.seedColor.value)
-          .equals(Colors.red.value);
+      check(state.seedColor.toARGB32())
+          .equals(Colors.red.toARGB32());
       check(state.themeMode).equals(ThemeMode.dark);
     });
   });

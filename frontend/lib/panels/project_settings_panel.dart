@@ -108,7 +108,6 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   late final ProjectConfigService _configService;
   late final PersistenceService _persistenceService;
   late final WorktreeRootCalculator _worktreeRootCalculator;
-  ProjectConfig _config = const ProjectConfig.empty();
   bool _isLoading = true;
   String? _errorMessage;
   String _selectedCategoryId = _categories.first.id;
@@ -172,7 +171,6 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
 
       if (mounted) {
         setState(() {
-          _config = config;
           _populateControllers(config);
           _calculatedWorktreeRoot = calculatedRoot;
           _defaultWorktreeRootController.text =
@@ -289,9 +287,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       await _configService.saveConfig(projectRoot, newConfig);
 
       if (mounted) {
-        setState(() {
-          _config = newConfig;
-        });
+        setState(() {});
       }
     } catch (e) {
       if (mounted) {

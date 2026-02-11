@@ -34,8 +34,8 @@ class _CompactDropdownState extends State<CompactDropdown> {
     final textColor =
         isEnabled ? colorScheme.onSurface : colorScheme.onSurfaceVariant;
     final iconColor = isEnabled
-        ? colorScheme.onSurface.withOpacity(0.7)
-        : colorScheme.onSurfaceVariant.withOpacity(0.7);
+        ? colorScheme.onSurface.withValues(alpha: 0.7)
+        : colorScheme.onSurfaceVariant.withValues(alpha: 0.7);
 
     return PopupMenuButton<String>(
       initialValue: widget.value,
@@ -46,7 +46,7 @@ class _CompactDropdownState extends State<CompactDropdown> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(6),
         side: BorderSide(
-          color: colorScheme.primary.withOpacity(0.5),
+          color: colorScheme.primary.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
@@ -83,9 +83,9 @@ class _CompactDropdownState extends State<CompactDropdown> {
           decoration: BoxDecoration(
             color: isEnabled
                 ? (isHovered
-                    ? colorScheme.primary.withOpacity(0.1)
+                    ? colorScheme.primary.withValues(alpha: 0.1)
                     : colorScheme.surfaceContainerHigh)
-                : colorScheme.surfaceContainerHigh.withOpacity(0.6),
+                : colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
@@ -107,7 +107,7 @@ class _CompactDropdownState extends State<CompactDropdown> {
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     valueColor: AlwaysStoppedAnimation(
-                      colorScheme.onSurface.withOpacity(0.7),
+                      colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
                   ),
                 ),

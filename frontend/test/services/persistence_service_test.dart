@@ -264,7 +264,7 @@ void main() {
               id: PersistenceService.generateProjectId(projectRoot),
               name: 'Test Project',
               worktrees: {
-                worktreePath: WorktreeInfo.primary(
+                worktreePath: const WorktreeInfo.primary(
                   name: 'main',
                   chats: [
                     ChatReference(
@@ -1000,12 +1000,12 @@ void main() {
       test('reads single entry correctly', () async {
         // Arrange
         const projectId = 'test-project';
-        final entry = CostTrackingEntry(
+        const entry = CostTrackingEntry(
           worktree: 'main',
           chatName: 'Test Chat',
           timestamp: '2024-01-15T10:30:00Z',
           modelUsage: [
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'claude-opus-4',
               inputTokens: 1000,
               outputTokens: 500,
@@ -1039,12 +1039,12 @@ void main() {
       test('reads multiple entries', () async {
         // Arrange
         const projectId = 'test-project';
-        final entry1 = CostTrackingEntry(
+        const entry1 = CostTrackingEntry(
           worktree: 'main',
           chatName: 'Chat 1',
           timestamp: '2024-01-15T10:00:00Z',
           modelUsage: [
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'claude-opus-4',
               inputTokens: 1000,
               outputTokens: 500,
@@ -1057,12 +1057,12 @@ void main() {
           backend: 'claude',
         );
 
-        final entry2 = CostTrackingEntry(
+        const entry2 = CostTrackingEntry(
           worktree: 'feature',
           chatName: 'Chat 2',
           timestamp: '2024-01-15T11:00:00Z',
           modelUsage: [
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'claude-sonnet-4',
               inputTokens: 2000,
               outputTokens: 1000,
@@ -1131,12 +1131,12 @@ void main() {
       test('preserves backend field from entries', () async {
         // Arrange
         const projectId = 'test-project';
-        final claudeEntry = CostTrackingEntry(
+        const claudeEntry = CostTrackingEntry(
           worktree: 'main',
           chatName: 'Claude Chat',
           timestamp: '2024-01-15T10:00:00Z',
           modelUsage: [
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'claude-opus-4',
               inputTokens: 1000,
               outputTokens: 500,
@@ -1149,12 +1149,12 @@ void main() {
           backend: 'claude',
         );
 
-        final codexEntry = CostTrackingEntry(
+        const codexEntry = CostTrackingEntry(
           worktree: 'feature',
           chatName: 'Codex Chat',
           timestamp: '2024-01-15T11:00:00Z',
           modelUsage: [
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'gpt-4',
               inputTokens: 2000,
               outputTokens: 1000,
@@ -1183,12 +1183,12 @@ void main() {
           () async {
         // Arrange
         const projectId = 'test-project';
-        final originalEntry = CostTrackingEntry(
+        const originalEntry = CostTrackingEntry(
           worktree: 'main',
           chatName: 'Round Trip Test',
           timestamp: '2024-01-15T10:30:45Z',
           modelUsage: [
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'claude-opus-4',
               inputTokens: 1234,
               outputTokens: 5678,
@@ -1197,7 +1197,7 @@ void main() {
               costUsd: 0.0987,
               contextWindow: 200000,
             ),
-            const ModelUsageInfo(
+            ModelUsageInfo(
               modelName: 'claude-sonnet-4',
               inputTokens: 500,
               outputTokens: 250,
@@ -1334,7 +1334,7 @@ class _TestPersistenceService extends PersistenceService {
     }
 
     final file = File('$_baseDir/projects.json');
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString(encoder.convert(index.toJson()));
   }
 

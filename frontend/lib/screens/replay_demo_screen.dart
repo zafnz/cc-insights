@@ -3,10 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/chat.dart';
 import '../panels/conversation_panel.dart';
 import '../state/selection_state.dart';
-import '../testing/message_log_player.dart';
 import '../testing/replay_conversation_provider.dart';
 
 /// A demo screen for replaying message logs and testing UI rendering.
@@ -319,9 +317,9 @@ class _PlaybackControls extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               // Step back (not implemented, placeholder)
-              IconButton.outlined(
+              const IconButton.outlined(
                 onPressed: null,
-                icon: const Icon(Icons.skip_previous),
+                icon: Icon(Icons.skip_previous),
                 tooltip: 'Step backward (not available)',
               ),
               const SizedBox(width: 8),

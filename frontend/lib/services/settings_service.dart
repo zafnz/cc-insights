@@ -558,7 +558,7 @@ class SettingsService extends ChangeNotifier {
         await dir.create(recursive: true);
       }
 
-      final encoder = const JsonEncoder.withIndent('  ');
+      const encoder = JsonEncoder.withIndent('  ');
       await file.writeAsString(encoder.convert(_values));
     } catch (e) {
       developer.log(

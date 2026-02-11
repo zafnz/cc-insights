@@ -8,13 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:cc_insights_v2/main.dart';
-import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
-import 'package:cc_insights_v2/widgets/tool_card.dart';
 
 /// Integration tests that run on actual devices/emulators with screenshot support.
 ///
@@ -210,7 +208,7 @@ void main() {
 
       // Drag the divider to the right to make sidebar wider
       final dragStart = Offset(dividerX, dividerY);
-      final dragDelta = const Offset(150, 0); // Drag 150px to the right
+      const dragDelta = Offset(150, 0); // Drag 150px to the right
 
       await tester.dragFrom(dragStart, dragDelta);
       await safePumpAndSettle(tester);
@@ -957,9 +955,9 @@ void main() {
       // Create mock backend with permission trigger configured
       final mockBackend = MockBackendService();
       await mockBackend.start();
-      mockBackend.nextSessionConfig = MockResponseConfig(
+      mockBackend.nextSessionConfig = const MockResponseConfig(
         autoReply: false, // Don't auto-reply - let permission trigger handle it
-        permissionTrigger: const PermissionTriggerConfig(
+        permissionTrigger: PermissionTriggerConfig(
           triggerPhrase: 'run ls -l /tmp',
           toolName: 'Bash',
           toolInput: {'command': 'ls -l /tmp'},
@@ -1061,9 +1059,9 @@ void main() {
       // Create mock backend with permission trigger configured
       final mockBackend = MockBackendService();
       await mockBackend.start();
-      mockBackend.nextSessionConfig = MockResponseConfig(
+      mockBackend.nextSessionConfig = const MockResponseConfig(
         autoReply: false,
-        permissionTrigger: const PermissionTriggerConfig(
+        permissionTrigger: PermissionTriggerConfig(
           triggerPhrase: 'run dangerous command',
           toolName: 'Bash',
           toolInput: {'command': 'cat /etc/passwd'},

@@ -1,7 +1,6 @@
 @Timeout(Duration(minutes: 2))
 library;
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:cc_insights_v2/models/file_content.dart';
@@ -759,7 +758,7 @@ void main() {
     group('File metadata', () {
       test('file nodes have correct size', () async {
         // Arrange
-        final content = 'This is exactly 30 characters!';
+        const content = 'This is exactly 30 characters!';
         await createFile('sized.txt', content);
 
         final project = createProjectState(tempDir.path);

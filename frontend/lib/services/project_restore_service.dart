@@ -346,7 +346,7 @@ class ProjectRestoreService {
       id: projectId,
       name: projectName,
       worktrees: {
-        projectRoot: WorktreeInfo.primary(name: 'main'),
+        projectRoot: const WorktreeInfo.primary(name: 'main'),
       },
     );
 

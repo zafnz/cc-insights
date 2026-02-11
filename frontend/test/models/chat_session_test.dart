@@ -182,7 +182,7 @@ class FakeTestSession implements TestSession {
     required Map<String, dynamic> toolInput,
     String? toolUseId,
   }) async =>
-      PermissionDenyResponse(message: 'Test deny');
+      const PermissionDenyResponse(message: 'Test deny');
 
   /// Emit an error to the events stream.
   void emitError(Object error) {
@@ -332,7 +332,7 @@ void main() {
 
       test('throws StateError when chat has no worktree root', () async {
         // Arrange - create chat data without worktreeRoot
-        final chatData = ChatData(
+        const chatData = ChatData(
           id: 'chat-1',
           name: 'Test',
           worktreeRoot: null,

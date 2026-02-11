@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:test/test.dart';

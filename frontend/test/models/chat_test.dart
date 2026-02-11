@@ -164,12 +164,12 @@ void main() {
 
       test('returns primary first followed by subagents', () {
         // Arrange
-        final primaryConv = ConversationData.primary(id: 'conv-primary');
-        final subagentConv1 = ConversationData.subagent(
+        const primaryConv = ConversationData.primary(id: 'conv-primary');
+        const subagentConv1 = ConversationData.subagent(
           id: 'conv-sub-1',
           label: 'Explore',
         );
-        final subagentConv2 = ConversationData.subagent(
+        const subagentConv2 = ConversationData.subagent(
           id: 'conv-sub-2',
           label: 'Plan',
         );
@@ -222,7 +222,7 @@ void main() {
       test('equals returns true for identical values', () {
         // Arrange
         final time = DateTime(2025, 1, 27);
-        final primaryConv = ConversationData.primary(id: 'conv-1');
+        const primaryConv = ConversationData.primary(id: 'conv-1');
         final chat1 = ChatData(
           id: 'chat-1',
           name: 'Chat',

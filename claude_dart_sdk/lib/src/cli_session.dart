@@ -4,7 +4,6 @@ import 'cli_process.dart';
 import 'sdk_logger.dart';
 import 'types/backend_provider.dart';
 import 'types/content_blocks.dart';
-import 'types/control_messages.dart';
 import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
 import 'types/session_options.dart';
@@ -1084,12 +1083,6 @@ class CliSession {
     SdkLogger.instance.info('Session disposed', sessionId: sessionId);
     _eventsController.close();
     _permissionRequestsController.close();
-  }
-
-  /// Send a callback response (for permission requests).
-  void _sendCallbackResponse(CallbackResponse response) {
-    if (_disposed) return;
-    _process.send(response.toJson());
   }
 
   static String _generateRequestId() {

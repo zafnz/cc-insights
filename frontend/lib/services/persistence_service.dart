@@ -170,7 +170,7 @@ class PersistenceService {
       }
 
       // Write new content with pretty formatting
-      final encoder = const JsonEncoder.withIndent('  ');
+      const encoder = JsonEncoder.withIndent('  ');
       final content = encoder.convert(index.toJson());
       await file.writeAsString(content);
 
@@ -234,7 +234,7 @@ class PersistenceService {
     try {
       await ensureDirectories(projectId);
 
-      final encoder = const JsonEncoder.withIndent('  ');
+      const encoder = JsonEncoder.withIndent('  ');
       final content = encoder.convert(meta.toJson());
       await File(path).writeAsString(content);
 

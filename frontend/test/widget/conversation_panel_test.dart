@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:cc_insights_v2/models/chat.dart';
-import 'package:cc_insights_v2/models/conversation.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
@@ -37,7 +36,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   Object? createSessionError;
 
   /// Records of createSession calls.
-  final List<_CreateSessionCall> createSessionCalls = [];
+  final List<_CreateSessionCall> createSessionCalls = []; // ignore: library_private_types_in_public_api
 
   /// Whether the backend is ready.
   bool _isReady = true;
@@ -281,7 +280,7 @@ class FakeTestSession implements sdk.TestSession {
     required Map<String, dynamic> toolInput,
     String? toolUseId,
   }) async =>
-      sdk.PermissionDenyResponse(message: 'Test deny');
+      const sdk.PermissionDenyResponse(message: 'Test deny');
 
   void dispose() {
     _eventsController.close();

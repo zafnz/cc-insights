@@ -46,19 +46,19 @@ class ThemeState extends ChangeNotifier {
   /// using a custom color.
   ThemePresetColor? get activePreset {
     for (final preset in ThemePresetColor.values) {
-      if (preset.color.value == _seedColor.value) return preset;
+      if (preset.color.toARGB32() == _seedColor.toARGB32()) return preset;
     }
     return null;
   }
 
   void setSeedColor(Color color) {
-    if (_seedColor.value == color.value) return;
+    if (_seedColor.toARGB32() == color.toARGB32()) return;
     _seedColor = color;
     notifyListeners();
   }
 
   void setInputTextColor(Color? color) {
-    if (_inputTextColor?.value == color?.value) return;
+    if (_inputTextColor?.toARGB32() == color?.toARGB32()) return;
     _inputTextColor = color;
     notifyListeners();
   }

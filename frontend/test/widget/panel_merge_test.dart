@@ -52,7 +52,7 @@ void main() {
           ChangeNotifierProvider<ProjectState>.value(value: project),
           ChangeNotifierProxyProvider<ProjectState, SelectionState>(
             create: (_) => selection,
-            update: (_, __, previous) => previous!,
+            update: (_, proj, previous) => previous!,
           ),
           Provider<GitService>.value(value: gitService),
           Provider<FileSystemService>.value(value: fakeFileSystem),
@@ -78,8 +78,8 @@ void main() {
             value: fakeCliAvailability,
           ),
         ],
-        child: MaterialApp(
-          home: const MainScreen(),
+        child: const MaterialApp(
+          home: MainScreen(),
         ),
       );
     }
@@ -279,11 +279,11 @@ void main() {
   group('PanelWrapper Widget', () {
     testWidgets('renders with title and icon', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: DragHandleProvider(
-              dragHandle: const Icon(Icons.drag_indicator),
-              child: const PanelWrapper(
+              dragHandle: Icon(Icons.drag_indicator),
+              child: PanelWrapper(
                 title: 'Test Panel',
                 icon: Icons.folder,
                 child: Text('Content'),
@@ -300,20 +300,20 @@ void main() {
 
     testWidgets('renders with context menu items', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: DragHandleProvider(
-              dragHandle: const Icon(Icons.drag_indicator),
+              dragHandle: Icon(Icons.drag_indicator),
               child: PanelWrapper(
                 title: 'Test Panel',
                 icon: Icons.folder,
                 contextMenuItems: [
                   PopupMenuItem<String>(
                     value: 'test',
-                    child: const Text('Test Action'),
+                    child: Text('Test Action'),
                   ),
                 ],
-                child: const Text('Content'),
+                child: Text('Content'),
               ),
             ),
           ),

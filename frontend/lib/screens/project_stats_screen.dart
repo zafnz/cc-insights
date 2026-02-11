@@ -983,14 +983,13 @@ class _TokenBreakdownSection extends StatelessWidget {
   final int outputTokens;
   final int cacheReadTokens;
   final int cacheCreationTokens;
-  final bool showLabel;
+  final bool showLabel = true;
 
   const _TokenBreakdownSection({
     required this.inputTokens,
     required this.outputTokens,
     required this.cacheReadTokens,
     required this.cacheCreationTokens,
-    this.showLabel = true,
   });
 
   @override
@@ -1276,7 +1275,7 @@ class _WorktreesTableState extends State<_WorktreesTable> {
           children: [
             _SortableTableHeader('Worktree',
                 sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
-            _TableHeader('Backend'),
+            const _TableHeader('Backend'),
             _SortableTableHeader('Chats',
                 align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
             _SortableTableHeader('Tokens',
@@ -1363,12 +1362,12 @@ class _WorktreeNameCell extends StatelessWidget {
                       color: const Color(0xFFF44336).withValues(alpha: 0.4),
                     ),
                   ),
-                  child: Text(
+                  child: const Text(
                     'deleted',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFFF44336),
+                      color: Color(0xFFF44336),
                     ),
                   ),
                 ),
@@ -1518,7 +1517,7 @@ class _ChatsTableState extends State<_ChatsTable> {
           children: [
             _SortableTableHeader('Chat',
                 sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
-            _TableHeader('Backend'),
+            const _TableHeader('Backend'),
             _SortableTableHeader('Tokens',
                 align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
             _SortableTableHeader('Cost',
@@ -1609,12 +1608,12 @@ class _ChatNameCell extends StatelessWidget {
                   color: const Color(0xFF4CAF50).withValues(alpha: 0.4),
                 ),
               ),
-              child: Text(
+              child: const Text(
                 'active',
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
-                  color: const Color(0xFF4CAF50),
+                  color: Color(0xFF4CAF50),
                 ),
               ),
             ),
@@ -1647,7 +1646,7 @@ class _ModelUsageTable extends StatelessWidget {
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
-        TableRow(
+        const TableRow(
           children: [
             _TableHeader('Model'),
             _TableHeader('Input', align: TextAlign.right),
@@ -1746,12 +1745,12 @@ class _ChatDetailsTable extends StatelessWidget {
                           color: const Color(0xFF4CAF50).withValues(alpha: 0.4),
                         ),
                       ),
-                      child: Text(
+                      child: const Text(
                         'active',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
-                          color: const Color(0xFF4CAF50),
+                          color: Color(0xFF4CAF50),
                         ),
                       ),
                     )

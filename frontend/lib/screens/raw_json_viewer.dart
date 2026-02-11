@@ -40,7 +40,7 @@ class RawJsonViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
 
     return Scaffold(
       appBar: AppBar(

@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
@@ -508,11 +507,10 @@ void main() {
 class _FakeProjectRestoreService extends ProjectRestoreService {
   final List<_LoadChatHistoryCall> loadChatHistoryCalls = [];
   final bool shouldThrowOnLoad;
-  final int entriesToLoad;
+  final int entriesToLoad = 0;
 
   _FakeProjectRestoreService({
     this.shouldThrowOnLoad = false,
-    this.entriesToLoad = 0,
   });
 
   @override

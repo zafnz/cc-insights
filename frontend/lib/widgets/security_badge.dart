@@ -25,7 +25,6 @@ class SecurityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final (label, color, icon) = _getBadgeInfo();
 
     return Container(

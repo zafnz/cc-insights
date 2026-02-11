@@ -30,7 +30,7 @@ void main() {
         entryCount,
         (i) => TextOutputEntry(
           timestamp: DateTime.now().subtract(Duration(minutes: entryCount - i)),
-          text: 'Message $i - ' + 'x' * 100, // Make messages long enough to scroll
+          text: 'Message $i - ${'x' * 100}', // Make messages long enough to scroll
           contentType: 'text',
         ),
       );

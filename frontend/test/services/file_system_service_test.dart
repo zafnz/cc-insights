@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cc_insights_v2/models/file_content.dart';
-import 'package:cc_insights_v2/models/file_tree_node.dart';
 import 'package:cc_insights_v2/services/file_system_service.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,8 +31,8 @@ void main() {
     });
 
     test('creates exception with message, path, and osError', () {
-      final osError = OSError('Permission denied', 13);
-      final exception = FileSystemException(
+      const osError = OSError('Permission denied', 13);
+      const exception = FileSystemException(
         'Cannot read',
         path: '/secure/file',
         osError: osError,
@@ -289,7 +288,7 @@ void main() {
       });
 
       test('includes file size and modified time', () async {
-        final content = 'Hello, World!';
+        const content = 'Hello, World!';
         final filePath = '${tempDir.path}/test.txt';
         await File(filePath).writeAsString(content);
 

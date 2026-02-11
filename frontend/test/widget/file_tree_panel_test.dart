@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:cc_insights_v2/models/file_tree_node.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/file_tree_panel.dart';
@@ -74,11 +73,11 @@ void main() {
             value: fileManagerState,
           ),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           home: Scaffold(
             body: DragHandleProvider(
-              dragHandle: const Icon(Icons.drag_indicator),
-              child: const FileTreePanel(),
+              dragHandle: Icon(Icons.drag_indicator),
+              child: FileTreePanel(),
             ),
           ),
         ),
@@ -1507,23 +1506,4 @@ void main() {
       );
     });
   });
-}
-
-/// Helper function to find a node by path in the file tree.
-///
-/// Recursively searches through the tree to find a node with the given path.
-/// Returns null if not found.
-FileTreeNode? _findNodeByPath(FileTreeNode node, String targetPath) {
-  if (node.path == targetPath) {
-    return node;
-  }
-
-  for (final child in node.children) {
-    final found = _findNodeByPath(child, targetPath);
-    if (found != null) {
-      return found;
-    }
-  }
-
-  return null;
 }

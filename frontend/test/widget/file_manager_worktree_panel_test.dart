@@ -71,11 +71,11 @@ void main() {
             value: fileManagerState,
           ),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           home: Scaffold(
             body: DragHandleProvider(
-              dragHandle: const Icon(Icons.drag_indicator),
-              child: const FileManagerWorktreePanel(),
+              dragHandle: Icon(Icons.drag_indicator),
+              child: FileManagerWorktreePanel(),
             ),
           ),
         ),

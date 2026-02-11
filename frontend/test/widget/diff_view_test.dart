@@ -80,7 +80,7 @@ void main() {
         final hasGreenContainer = containers.any((container) {
           final color = container.color;
           if (color != null) {
-            return color.green > color.red && color.alpha > 0;
+            return (color.g * 255).round() > (color.r * 255).round() && (color.a * 255).round() > 0;
           }
           return false;
         });
@@ -117,7 +117,7 @@ void main() {
         final hasRedContainer = containers.any((container) {
           final color = container.color;
           if (color != null) {
-            return color.red > color.green && color.alpha > 0;
+            return (color.r * 255).round() > (color.g * 255).round() && (color.a * 255).round() > 0;
           }
           return false;
         });

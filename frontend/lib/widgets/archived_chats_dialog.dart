@@ -316,7 +316,7 @@ class _ArchivedChatsDialogState extends State<_ArchivedChatsDialog> {
         shrinkWrap: true,
         padding: const EdgeInsets.all(8),
         itemCount: chats.length,
-        separatorBuilder: (_, __) => Divider(
+        separatorBuilder: (context, index) => Divider(
           height: 1,
           color: colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),

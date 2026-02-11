@@ -30,7 +30,7 @@ void main() {
     WorktreeState? worktreeState,
     String? base,
   }) {
-    final primaryWorktreeData = const WorktreeData(
+    const primaryWorktreeData = WorktreeData(
       worktreeRoot: primaryPath,
       isPrimary: true,
       branch: 'main',
@@ -61,7 +61,7 @@ void main() {
         ChangeNotifierProvider<ProjectState>.value(value: project),
         ChangeNotifierProxyProvider<ProjectState, SelectionState>(
           create: (_) => selection,
-          update: (_, __, previous) => previous!,
+          update: (_, proj, previous) => previous!,
         ),
         Provider<GitService>.value(value: gitService),
       ],
@@ -772,7 +772,7 @@ void main() {
 
   group('No worktree selected', () {
     testWidgets('shows placeholder message', (tester) async {
-      final primaryWorktreeData = const WorktreeData(
+      const primaryWorktreeData = WorktreeData(
         worktreeRoot: primaryPath,
         isPrimary: true,
         branch: 'main',
@@ -801,7 +801,7 @@ void main() {
             ChangeNotifierProxyProvider<ProjectState,
                 SelectionState>(
               create: (_) => selection,
-              update: (_, __, previous) => previous!,
+              update: (_, proj, previous) => previous!,
             ),
           ],
           child: const MaterialApp(

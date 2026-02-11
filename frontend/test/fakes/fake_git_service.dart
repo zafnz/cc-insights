@@ -88,7 +88,7 @@ class FakeGitService implements GitService {
     _maybeThrow();
 
     if (!branches.containsKey(path)) {
-      throw GitException(
+      throw const GitException(
         'Not a git repository',
         command: 'git rev-parse --abbrev-ref HEAD',
         exitCode: 128,
@@ -105,7 +105,7 @@ class FakeGitService implements GitService {
     _maybeThrow();
 
     if (!statuses.containsKey(path)) {
-      throw GitException(
+      throw const GitException(
         'Not a git repository',
         command: 'git status --porcelain=v2 --branch',
         exitCode: 128,
@@ -122,7 +122,7 @@ class FakeGitService implements GitService {
     _maybeThrow();
 
     if (!worktrees.containsKey(repoRoot)) {
-      throw GitException(
+      throw const GitException(
         'Not a git repository',
         command: 'git worktree list --porcelain',
         exitCode: 128,

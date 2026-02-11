@@ -258,7 +258,7 @@ void main() {
       await repoDir.create(recursive: true);
 
       // Initialize the repo
-      var result = await Process.run(
+      final result = await Process.run(
         'git',
         ['init'],
         workingDirectory: repoDir.path,
@@ -318,7 +318,7 @@ void main() {
       await repoDir.create(recursive: true);
 
       // Initialize the repo
-      var result = await Process.run(
+      final result = await Process.run(
         'git',
         ['init'],
         workingDirectory: repoDir.path,

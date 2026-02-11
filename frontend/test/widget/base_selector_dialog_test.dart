@@ -66,7 +66,8 @@ void main() {
       final radio = tester.widget<RadioListTile<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.mainOption),
       );
-      check(radio.checked).equals(true);
+      // ignore: deprecated_member_use
+      check(radio.value).equals(radio.groupValue);
     });
 
     testWidgets('pre-selects "main" when current value is main',
@@ -76,7 +77,8 @@ void main() {
       final radio = tester.widget<RadioListTile<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.mainOption),
       );
-      check(radio.checked).equals(true);
+      // ignore: deprecated_member_use
+      check(radio.value).equals(radio.groupValue);
     });
 
     testWidgets('pre-selects "origin/main" when current value is origin/main',
@@ -86,7 +88,8 @@ void main() {
       final radio = tester.widget<RadioListTile<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.originMainOption),
       );
-      check(radio.checked).equals(true);
+      // ignore: deprecated_member_use
+      check(radio.value).equals(radio.groupValue);
     });
 
     testWidgets('pre-selects "Custom" with text for non-standard value',
@@ -97,6 +100,7 @@ void main() {
       final radio = tester.widget<Radio<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.customOption),
       );
+      // ignore: deprecated_member_use
       check(radio.groupValue).equals(radio.value);
 
       // Custom text field should have the value.
@@ -182,10 +186,11 @@ void main() {
       await pumpDialog(tester, currentBase: 'main');
 
       // Verify main is selected initially.
-      var mainRadio = tester.widget<RadioListTile<dynamic>>(
+      final mainRadio = tester.widget<RadioListTile<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.mainOption),
       );
-      check(mainRadio.checked).equals(true);
+      // ignore: deprecated_member_use
+      check(mainRadio.value).equals(mainRadio.groupValue);
 
       // Tap the custom text field.
       await tester.tap(find.byKey(BaseSelectorDialogKeys.customField));
@@ -195,6 +200,7 @@ void main() {
       final customRadio = tester.widget<Radio<dynamic>>(
         find.byKey(BaseSelectorDialogKeys.customOption),
       );
+      // ignore: deprecated_member_use
       check(customRadio.groupValue).equals(customRadio.value);
     });
 

@@ -42,7 +42,7 @@ class WorkingIndicator extends StatefulWidget {
   /// Whether context compaction is in progress.
   ///
   /// When true, shows "Compacting context..." instead of
-  /// "<Agent> is working..." message.
+  /// `<Agent> is working...` message.
   final bool isCompacting;
 
   /// The time when Claude started working.

@@ -274,6 +274,7 @@ class ConversationHeader extends StatelessWidget {
     await backendService.start(type: backendType);
     final error = backendService.errorFor(backendType);
     if (error != null) {
+      if (!context.mounted) return;
       _showBackendSwitchError(context, error);
       return;
     }

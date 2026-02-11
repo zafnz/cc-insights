@@ -136,9 +136,9 @@ class CodeLineView extends StatelessWidget {
     List<Node> nodes,
     Map<String, TextStyle> theme,
   ) {
-    List<TextSpan> spans = [];
+    final List<TextSpan> spans = [];
     var currentSpans = spans;
-    List<List<TextSpan>> stack = [];
+    final List<List<TextSpan>> stack = [];
 
     void traverse(Node node) {
       if (node.value != null) {
@@ -151,7 +151,7 @@ class CodeLineView extends StatelessWidget {
                 ),
         );
       } else if (node.children != null) {
-        List<TextSpan> tmp = [];
+        final List<TextSpan> tmp = [];
         currentSpans.add(
           TextSpan(children: tmp, style: theme[node.className!]),
         );

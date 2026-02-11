@@ -210,7 +210,7 @@ class WorktreeState extends ChangeNotifier {
   ///
   /// Preserved when switching between worktrees so users don't lose their
   /// in-progress messages on worktrees that don't have a chat yet.
-  String _welcomeDraftText = '';
+  String welcomeDraftText = '';
 
   /// Model explicitly chosen by the user in the welcome screen, or `null`
   /// when the user hasn't overridden the global default yet.
@@ -273,8 +273,7 @@ class WorktreeState extends ChangeNotifier {
   ChatState? get selectedChat => _selectedChat;
 
   /// Draft text for the welcome screen (before any chat is created).
-  String get welcomeDraftText => _welcomeDraftText;
-  set welcomeDraftText(String value) => _welcomeDraftText = value;
+  /// Public field for direct access from UI.
 
   /// Model selection for the welcome screen.
   ///

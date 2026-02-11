@@ -292,8 +292,8 @@ void main() {
       final decoration = container.decoration as BoxDecoration;
       final border = decoration.border as Border;
       // Check that red is higher than green and blue (red-ish)
-      expect(border.top.color.red, greaterThan(border.top.color.green));
-      expect(border.top.color.red, greaterThan(border.top.color.blue));
+      expect((border.top.color.r * 255).round(), greaterThan((border.top.color.g * 255).round()));
+      expect((border.top.color.r * 255).round(), greaterThan((border.top.color.b * 255).round()));
     });
 
     testWidgets('danger state (never policy) shows red text on the Never label',
@@ -325,8 +325,8 @@ void main() {
       final textColor = textWidget.style?.color;
       expect(textColor, isNotNull);
       // Check that red is higher than green and blue (red-ish)
-      expect(textColor!.red, greaterThan(textColor.green));
-      expect(textColor.red, greaterThan(textColor.blue));
+      expect((textColor!.r * 255).round(), greaterThan((textColor.g * 255).round()));
+      expect((textColor.r * 255).round(), greaterThan((textColor.b * 255).round()));
     });
 
     testWidgets('disabled state (isEnabled=false) prevents interaction',

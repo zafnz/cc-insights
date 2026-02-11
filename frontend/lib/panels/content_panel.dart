@@ -50,16 +50,14 @@ class ContentPanel extends StatelessWidget {
 
         // Build the title: "Conversation" or "Conversation - <name>"
         String title = 'Conversation';
-        if (conversation != null) {
-          if (conversation.isPrimary) {
-            title = 'Conversation - ${chat.data.name}';
-          } else {
-            final subagentTitle = conversation.taskDescription ??
-                'Subagent #${conversation.subagentNumber ?? '?'}';
-            title = 'Conversation - $subagentTitle';
-          }
+        if (conversation.isPrimary) {
+          title = 'Conversation - ${chat.data.name}';
+        } else {
+          final subagentTitle = conversation.taskDescription ??
+              'Subagent #${conversation.subagentNumber ?? '?'}';
+          title = 'Conversation - $subagentTitle';
         }
-
+      
         return PanelWrapper(
           title: title,
           icon: Icons.chat_bubble_outline,

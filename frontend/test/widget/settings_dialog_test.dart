@@ -94,7 +94,7 @@ void main() {
           settingsService.getValue<int>(
             'appearance.seedColor',
           );
-      check(value).equals(Colors.blue.value);
+      check(value).equals(Colors.blue.toARGB32());
     });
 
     testWidgets('displays custom color button',

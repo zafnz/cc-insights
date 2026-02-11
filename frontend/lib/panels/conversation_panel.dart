@@ -14,7 +14,6 @@ import '../services/backend_service.dart';
 import '../services/event_handler.dart';
 import '../state/selection_state.dart';
 import '../widgets/ask_user_question_dialog.dart';
-import '../widgets/insights_widgets.dart';
 import '../widgets/message_input.dart';
 import '../widgets/output_entries.dart';
 import '../widgets/permission_dialog.dart';
@@ -196,6 +195,7 @@ class _ConversationPanelState extends State<ConversationPanel>
           topIndex = firstItem;
           // Calculate offset within the item using getOffsetToReveal
           // This gives us the scroll offset to align this item at the top
+          // ignore: invalid_use_of_visible_for_testing_member
           final itemOffset = _listController.getOffsetToReveal(
             topIndex,
             0.0, // alignment 0.0 = top of viewport
@@ -476,9 +476,9 @@ class _ConversationPanelState extends State<ConversationPanel>
         // Bottom area: either permission widget or message input
         if (isPrimary)
           shouldShowPermissionWidget
-              ? _buildPermissionWidget(chat!)
+              ? _buildPermissionWidget(chat)
               : MessageInput(
-                  key: ValueKey('input-${chat!.data.id}'),
+                  key: ValueKey('input-${chat.data.id}'),
                   initialText: chat.draftText,
                   onTextChanged: (text) => chat.draftText = text,
                   onSubmit: (text, images, displayFormat) =>
@@ -578,6 +578,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     chat.setPermissionMode(PermissionMode.acceptEdits);
 
     // 4. Start new session with plan as prompt
+    if (!mounted) return;
     final backend = context.read<BackendService>();
     final eventHandler = context.read<EventHandler>();
 

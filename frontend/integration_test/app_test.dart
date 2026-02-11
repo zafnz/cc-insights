@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:cc_insights_v2/main.dart';
-import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/panels/create_worktree_panel.dart';
 import 'package:cc_insights_v2/panels/panels.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';

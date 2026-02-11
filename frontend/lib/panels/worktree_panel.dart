@@ -1,10 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/chat.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import '../models/worktree_tag.dart';
@@ -803,6 +801,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     final deleteBranch =
         settings.getValue<bool>('behavior.deleteBranchWithWorktree');
 
+    if (!context.mounted) return;
     final result = await showDeleteWorktreeDialog(
       context: context,
       worktreePath: worktree.data.worktreeRoot,

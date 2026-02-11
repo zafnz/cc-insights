@@ -136,7 +136,7 @@ class _JsonContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
     final jsonString = encoder.convert(rawMessage);
 
     return Container(

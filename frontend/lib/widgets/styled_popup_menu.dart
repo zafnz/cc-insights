@@ -43,7 +43,7 @@ Future<T?> showStyledMenu<T>({
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(6),
       side: BorderSide(
-        color: colorScheme.primary.withOpacity(0.5),
+        color: colorScheme.primary.withValues(alpha: 0.5),
         width: 1,
       ),
     ),

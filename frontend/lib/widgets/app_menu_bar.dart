@@ -252,7 +252,7 @@ class AppMenuBar extends StatelessWidget {
                   label: 'Restore Worktree...',
                   onSelected: hasProject ? callbacks.onRestoreWorktree : null,
                 ),
-                PlatformMenuItem(
+                const PlatformMenuItem(
                   label: 'Delete Worktree...',
                   onSelected: null, // Not wired up yet
                 ),

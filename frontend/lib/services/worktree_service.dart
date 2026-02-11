@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import '../models/project.dart';
-import '../models/project_config.dart';
 import '../models/worktree.dart';
 import 'git_service.dart';
 import 'log_service.dart';

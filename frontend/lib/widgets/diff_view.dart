@@ -138,7 +138,7 @@ class _DiffViewState extends State<DiffView> {
     });
     final lineNumberWidth = maxLineNumber.toString().length * 10.0 + 16.0;
 
-    Widget listView = NotificationListener<ScrollNotification>(
+    final Widget listView = NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is ScrollMetricsNotification) {
           _checkIfNeedsScroll();

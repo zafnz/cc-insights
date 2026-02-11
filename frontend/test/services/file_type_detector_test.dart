@@ -339,25 +339,25 @@ void main() {
 
       group('text detection', () {
         test('returns false for UTF-8 text', () {
-          final text = 'Hello, World! This is a test file.\n';
+          const text = 'Hello, World! This is a test file.\n';
           final bytes = text.codeUnits;
           check(FileTypeDetector.isBinary(bytes)).isFalse();
         });
 
         test('returns false for text with tabs', () {
-          final text = 'Column1\tColumn2\tColumn3\n';
+          const text = 'Column1\tColumn2\tColumn3\n';
           final bytes = text.codeUnits;
           check(FileTypeDetector.isBinary(bytes)).isFalse();
         });
 
         test('returns false for text with carriage returns', () {
-          final text = 'Line 1\r\nLine 2\r\nLine 3\r\n';
+          const text = 'Line 1\r\nLine 2\r\nLine 3\r\n';
           final bytes = text.codeUnits;
           check(FileTypeDetector.isBinary(bytes)).isFalse();
         });
 
         test('returns false for source code', () {
-          final code = '''
+          const code = '''
 void main() {
   print('Hello, Dart!');
 }
@@ -367,7 +367,7 @@ void main() {
         });
 
         test('returns false for JSON content', () {
-          final json = '{"name": "test", "value": 42, "active": true}';
+          const json = '{"name": "test", "value": 42, "active": true}';
           final bytes = json.codeUnits;
           check(FileTypeDetector.isBinary(bytes)).isFalse();
         });
@@ -847,7 +847,7 @@ void main() {
 
       test('correctly maps extension to type and language', () {
         // Verify consistency between detectType and getLanguageFromExtension
-        final ext = 'dart';
+        const ext = 'dart';
         final type = FileTypeDetector.detectType('file.$ext');
         final lang = FileTypeDetector.getLanguageFromExtension(ext);
 
