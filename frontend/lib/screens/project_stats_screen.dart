@@ -276,53 +276,46 @@ class _ProjectOverviewView extends StatelessWidget {
               0, (sum, m) => sum + m.cacheCreationTokens),
         ),
 
-        // Per-backend breakdowns (only show if more than one backend)
-        if (sortedBackends.length > 1)
-          ...sortedBackends.expand((backend) {
-            final chats = backendGroups[backend]!;
-            final hasCostData = chats.any((c) => c.hasCostData);
-            final backendModelUsage = mergeModelUsage(
-              chats.expand((c) => c.modelUsage).toList(),
-            );
-            final backendTiming = chats.fold(
-              const TimingStats.zero(),
-              (TimingStats acc, c) => acc.merge(c.timing),
-            );
-            final label = backend == 'claude' ? 'Claude' : 'Codex';
+        // Per-backend breakdowns side by side (only show if more than one backend)
+        if (sortedBackends.length > 1) ...[
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: sortedBackends.map((backend) {
+              final chats = backendGroups[backend]!;
+              final hasCostData = chats.any((c) => c.hasCostData);
+              final backendModelUsage = mergeModelUsage(
+                chats.expand((c) => c.modelUsage).toList(),
+              );
+              final backendTiming = chats.fold(
+                const TimingStats.zero(),
+                (TimingStats acc, c) => acc.merge(c.timing),
+              );
+              final label = backend == 'claude' ? 'Claude' : 'Codex';
 
-            return [
-              const SizedBox(height: 20),
-              Text(
-                label.toUpperCase(),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.outline,
-                      letterSpacing: 0.5,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              _KPISummaryRow(
-                cost: chats
-                    .where((c) => c.hasCostData)
-                    .fold(0.0, (sum, c) => sum + c.totalCost),
-                tokens: chats.fold(0, (sum, c) => sum + c.totalTokens),
-                time: backendTiming.claudeWorkingDuration,
-                chats: chats.length,
-                hasCostData: hasCostData,
-              ),
-              const SizedBox(height: 8),
-              _TokenBreakdownSection(
-                inputTokens: backendModelUsage.fold(
-                    0, (sum, m) => sum + m.inputTokens),
-                outputTokens: backendModelUsage.fold(
-                    0, (sum, m) => sum + m.outputTokens),
-                cacheReadTokens: backendModelUsage.fold(
-                    0, (sum, m) => sum + m.cacheReadTokens),
-                cacheCreationTokens: backendModelUsage.fold(
-                    0, (sum, m) => sum + m.cacheCreationTokens),
-                showLabel: false,
-              ),
-            ];
-          }),
+              return Expanded(
+                child: _BackendBreakdownColumn(
+                  label: label,
+                  cost: chats
+                      .where((c) => c.hasCostData)
+                      .fold(0.0, (sum, c) => sum + c.totalCost),
+                  tokens: chats.fold(0, (sum, c) => sum + c.totalTokens),
+                  time: backendTiming.claudeWorkingDuration,
+                  chats: chats.length,
+                  hasCostData: hasCostData,
+                  inputTokens: backendModelUsage.fold(
+                      0, (sum, m) => sum + m.inputTokens),
+                  outputTokens: backendModelUsage.fold(
+                      0, (sum, m) => sum + m.outputTokens),
+                  cacheReadTokens: backendModelUsage.fold(
+                      0, (sum, m) => sum + m.cacheReadTokens),
+                  cacheCreationTokens: backendModelUsage.fold(
+                      0, (sum, m) => sum + m.cacheCreationTokens),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
 
         const SizedBox(height: 24),
 
@@ -658,6 +651,167 @@ class _KPISummaryRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _BackendBreakdownColumn extends StatelessWidget {
+  final String label;
+  final double cost;
+  final int tokens;
+  final Duration time;
+  final int chats;
+  final bool hasCostData;
+  final int inputTokens;
+  final int outputTokens;
+  final int cacheReadTokens;
+  final int cacheCreationTokens;
+
+  const _BackendBreakdownColumn({
+    required this.label,
+    required this.cost,
+    required this.tokens,
+    required this.time,
+    required this.chats,
+    required this.hasCostData,
+    required this.inputTokens,
+    required this.outputTokens,
+    required this.cacheReadTokens,
+    required this.cacheCreationTokens,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    const gap = SizedBox(height: 4);
+    const hGap = SizedBox(width: 4);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.outline,
+                  letterSpacing: 0.5,
+                ),
+          ),
+          const SizedBox(height: 8),
+          // KPI cards: 2x2 grid
+          Row(
+            children: [
+              Expanded(
+                child: _CompactCard(
+                  value: _formatCost(cost, hasCostData: hasCostData),
+                  label: 'Cost',
+                  color: hasCostData ? const Color(0xFF4CAF50) : null,
+                ),
+              ),
+              hGap,
+              Expanded(
+                child: _CompactCard(
+                  value: _formatTokenCount(tokens),
+                  label: 'Tokens',
+                  color: const Color(0xFF2196F3),
+                ),
+              ),
+            ],
+          ),
+          gap,
+          Row(
+            children: [
+              Expanded(
+                child: _CompactCard(
+                  value: TimingStats.formatDuration(time),
+                  label: 'Time',
+                  color: const Color(0xFFFF9800),
+                ),
+              ),
+              hGap,
+              Expanded(
+                child: _CompactCard(
+                  value: chats.toString(),
+                  label: 'Chats',
+                  color: const Color(0xFFD0BCFF),
+                ),
+              ),
+            ],
+          ),
+          gap,
+          // Token breakdown: 2x2 grid
+          Row(
+            children: [
+              Expanded(
+                  child: _CompactCard(
+                      value: _formatTokenCount(inputTokens), label: 'In')),
+              hGap,
+              Expanded(
+                  child: _CompactCard(
+                      value: _formatTokenCount(outputTokens), label: 'Out')),
+            ],
+          ),
+          gap,
+          Row(
+            children: [
+              Expanded(
+                  child: _CompactCard(
+                      value: _formatTokenCount(cacheReadTokens),
+                      label: 'Cache Read')),
+              hGap,
+              Expanded(
+                  child: _CompactCard(
+                      value: _formatTokenCount(cacheCreationTokens),
+                      label: 'Cache Write')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color? color;
+
+  const _CompactCard({
+    required this.value,
+    required this.label,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.outline,
+                  fontSize: 10,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }

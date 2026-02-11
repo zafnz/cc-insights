@@ -12,7 +12,6 @@ void main() {
       required UsageInfo usage,
       String agentLabel = 'Claude',
       List<ModelUsageInfo> modelUsage = const [],
-      String agentLabel = 'Claude',
     }) {
       return MaterialApp(
         home: Scaffold(
@@ -21,7 +20,6 @@ void main() {
               usage: usage,
               agentLabel: agentLabel,
               modelUsage: modelUsage,
-              agentLabel: agentLabel,
             ),
           ),
         ),
