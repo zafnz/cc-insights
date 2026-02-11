@@ -520,7 +520,14 @@ class EventHandler {
 
   // Intermediate usage update — fires after each API call (step) during a turn.
   void _handleUsageUpdate(ChatState chat, UsageUpdateEvent event) {
-    // Only update for main agent events (no parentCallId in extensions).
+    // Accumulate output tokens from ALL events (main + subagent) so the
+    // token counter reflects total work done during the turn.
+    final outputTokens =
+        (event.stepUsage['output_tokens'] as num?)?.toInt() ?? 0;
+    chat.addInTurnOutputTokens(outputTokens);
+
+    // Only update context tracker for main agent events — subagents have
+    // independent context windows that don't reflect the main agent's state.
     final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
     if (parentCallId != null) return;
 

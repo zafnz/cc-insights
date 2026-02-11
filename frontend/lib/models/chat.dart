@@ -324,7 +324,17 @@ class ChatState extends ChangeNotifier {
   final ContextTracker _contextTracker = ContextTracker();
 
   /// Cumulative usage for this chat across all sessions.
+  ///
+  /// Updated authoritatively by [updateCumulativeUsage] at end of each turn.
   UsageInfo _cumulativeUsage = const UsageInfo.zero();
+
+  /// Running output token count accumulated during the current turn.
+  ///
+  /// Each [UsageUpdateEvent] (from main agent and subagents) adds its
+  /// output_tokens here. This allows the cost indicator to show progress
+  /// mid-turn. Reset to 0 when [updateCumulativeUsage] overwrites with
+  /// authoritative totals from the result message.
+  int _inTurnOutputTokens = 0;
 
   /// Per-model usage breakdown for this chat.
   List<ModelUsageInfo> _modelUsage = [];
@@ -434,7 +444,16 @@ class ChatState extends ChangeNotifier {
   ContextTracker get contextTracker => _contextTracker;
 
   /// Cumulative usage for this chat across all sessions.
-  UsageInfo get cumulativeUsage => _cumulativeUsage;
+  ///
+  /// Includes in-turn output tokens accumulated from [UsageUpdateEvent]s
+  /// so that the cost indicator updates during long turns. When the turn
+  /// completes, [updateCumulativeUsage] replaces this with authoritative
+  /// totals and resets the in-turn accumulator.
+  UsageInfo get cumulativeUsage => _inTurnOutputTokens > 0
+      ? _cumulativeUsage.copyWith(
+          outputTokens: _cumulativeUsage.outputTokens + _inTurnOutputTokens,
+        )
+      : _cumulativeUsage;
 
   /// Per-model usage breakdown from the last result message.
   List<ModelUsageInfo> get modelUsage => List.unmodifiable(_modelUsage);
@@ -1594,6 +1613,19 @@ class ChatState extends ChangeNotifier {
     // No need to notifyListeners - ContextTracker is a ChangeNotifier itself
   }
 
+  /// Accumulates output tokens from a single API step during a turn.
+  ///
+  /// Called by [EventHandler] for each [UsageUpdateEvent] (both main agent
+  /// and subagents). This allows the cost indicator to show running token
+  /// totals mid-turn. The accumulator is reset when [updateCumulativeUsage]
+  /// applies the authoritative totals from the result message.
+  void addInTurnOutputTokens(int outputTokens) {
+    if (outputTokens > 0) {
+      _inTurnOutputTokens += outputTokens;
+      notifyListeners();
+    }
+  }
+
   /// Updates usage from a result message.
   ///
   /// The SDK provides session-cumulative values in `modelUsage` and
@@ -1637,6 +1669,9 @@ class ChatState extends ChangeNotifier {
         costUsd: totalCost,
       );
     }
+
+    // Reset the in-turn accumulator — authoritative totals now take over.
+    _inTurnOutputTokens = 0;
 
     // Update context window max if provided
     if (contextWindow != null) {
