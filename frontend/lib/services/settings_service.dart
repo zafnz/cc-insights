@@ -146,6 +146,14 @@ class SettingsService extends ChangeNotifier {
         min: 0,
         max: 60,
       ),
+      SettingDefinition(
+        key: 'appearance.showWorktreeCost',
+        title: 'Show Worktree Cost',
+        description:
+            'Display cost and token usage on linked worktree status lines.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
     ],
   );
 
@@ -212,14 +220,6 @@ class SettingsService extends ChangeNotifier {
         description:
             'When deleting a worktree, also delete the local git branch. '
             'The branch can no longer be recovered locally once deleted.',
-        type: SettingType.toggle,
-        defaultValue: true,
-      ),
-      SettingDefinition(
-        key: 'behavior.showWorktreeCost',
-        title: 'Show Worktree Cost',
-        description:
-            'Display cost and token usage on linked worktree status lines.',
         type: SettingType.toggle,
         defaultValue: true,
       ),
@@ -605,7 +605,7 @@ class SettingsService extends ChangeNotifier {
         config.archiveChats = value as bool;
       case 'behavior.deleteBranchWithWorktree':
         config.deleteBranchWithWorktree = value as bool;
-      case 'behavior.showWorktreeCost':
+      case 'appearance.showWorktreeCost':
         config.showWorktreeCost = value as bool;
       case 'session.claudeCliPath':
         config.claudeCliPath = value as String;
