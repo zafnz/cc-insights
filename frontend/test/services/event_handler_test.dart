@@ -184,11 +184,12 @@ TurnCompleteEvent makeTurnComplete({
   Map<String, ModelTokenUsage>? modelUsage,
   Map<String, dynamic>? extensions,
   Map<String, dynamic>? raw,
+  BackendProvider provider = BackendProvider.claude,
 }) {
   return TurnCompleteEvent(
     id: _nextId(),
     timestamp: DateTime.now(),
-    provider: BackendProvider.claude,
+    provider: provider,
     sessionId: 'test-session',
     isError: isError,
     subtype: subtype,
@@ -927,6 +928,59 @@ void main() {
         // TextEntry + SystemNotificationEntry
         check(entries.length).equals(2);
         check(entries[1]).isA<SystemNotificationEntry>();
+      });
+
+      test('calculates cost for Codex events using pricing table', () {
+        final usage = const TokenUsage(
+          inputTokens: 1000000,
+          outputTokens: 100000,
+          cacheReadTokens: 500000,
+        );
+
+        final modelUsage = {
+          'gpt-5.2-codex': const ModelTokenUsage(
+            inputTokens: 1000000,
+            outputTokens: 100000,
+            cacheReadTokens: 500000,
+            contextWindow: 192000,
+          ),
+        };
+
+        handler.handleEvent(chat, makeTurnComplete(
+          provider: BackendProvider.codex,
+          usage: usage,
+          modelUsage: modelUsage,
+        ));
+
+        // gpt-5.2-codex: 1M * 1.75/1M + 500k * 0.175/1M + 100k * 14.00/1M
+        //              = 1.75 + 0.0875 + 1.4 = 3.2375
+        check(chat.cumulativeUsage.costUsd).isCloseTo(3.2375, 0.0001);
+      });
+
+      test('does not override Claude cost with pricing table', () {
+        final usage = const TokenUsage(
+          inputTokens: 1000,
+          outputTokens: 500,
+        );
+
+        final modelUsage = {
+          'claude-sonnet-4-5': const ModelTokenUsage(
+            inputTokens: 1000,
+            outputTokens: 500,
+            costUsd: 0.05,
+            contextWindow: 200000,
+          ),
+        };
+
+        handler.handleEvent(chat, makeTurnComplete(
+          provider: BackendProvider.claude,
+          usage: usage,
+          costUsd: 0.05,
+          modelUsage: modelUsage,
+        ));
+
+        // Cost should be exactly what Claude reported, not recalculated
+        check(chat.cumulativeUsage.costUsd).equals(0.05);
       });
     });
   });

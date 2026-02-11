@@ -110,7 +110,7 @@ class ConversationHeader extends StatelessWidget {
           final isBackendLocked = chat.hasStarted;
           final caps = backendService.capabilitiesFor(chat.model.backend);
           final currentAgentLabel = agentLabel(chat.model.backend);
-          final showCost = chat.model.backend != sdk.BackendType.codex;
+          final showCost = true;
 
           return Row(
             children: [
