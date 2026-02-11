@@ -201,7 +201,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     }
 
     try {
-      final threadResult = await _startThread(cwd, options);
+      final threadResult = await _startThread(cwd, options, registry);
       final session = CodexSession(
         process: _process,
         threadId: threadResult.threadId,
@@ -233,11 +233,22 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
   Future<_ThreadStartResult> _startThread(
     String cwd,
     SessionOptions? options,
+    InternalToolRegistry? registry,
   ) async {
     final model = options?.model?.trim();
     final resume = options?.resume;
     final resolvedModel = model != null && model.isNotEmpty ? model : null;
     final securityConfig = options?.codexSecurityConfig;
+
+    final dynamicTools = registry != null && registry.isNotEmpty
+        ? registry.tools
+            .map((t) => {
+                  'name': t.name,
+                  'description': t.description,
+                  'inputSchema': t.inputSchema,
+                })
+            .toList()
+        : null;
 
     Map<String, dynamic> result;
     if (resume != null && resume.isNotEmpty) {
@@ -249,6 +260,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
           'sandbox': securityConfig.sandboxMode.wireValue,
           'approvalPolicy': securityConfig.approvalPolicy.wireValue,
         },
+        if (dynamicTools != null) 'dynamicTools': dynamicTools,
       });
     } else {
       result = await _process.sendRequest('thread/start', {
@@ -258,6 +270,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
           'sandbox': securityConfig.sandboxMode.wireValue,
           'approvalPolicy': securityConfig.approvalPolicy.wireValue,
         },
+        if (dynamicTools != null) 'dynamicTools': dynamicTools,
       });
     }
 

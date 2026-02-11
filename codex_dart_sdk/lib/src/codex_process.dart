@@ -101,6 +101,9 @@ class CodexProcess {
             'name': clientName,
             'version': clientVersion,
           },
+          'capabilities': {
+            'experimentalApi': true,
+          },
         })
         .timeout(timeout);
 

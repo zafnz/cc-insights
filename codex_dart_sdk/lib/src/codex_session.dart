@@ -45,9 +45,6 @@ class CodexSession implements AgentSession {
   /// Internal tool registry for application-provided tools.
   final InternalToolRegistry? _registry;
 
-  // TODO: Advertise registry tools to Codex via thread config
-  // TODO: Intercept tool calls matching registry and route to handlers
-
   @override
   String get sessionId => threadId;
 
@@ -262,6 +259,8 @@ class CodexSession implements AgentSession {
           },
           toolUseId: params['itemId'] as String?,
         ));
+      case 'item/tool/call':
+        _handleDynamicToolCall(request, params);
       default:
         _process?.sendError(
           request.id,
@@ -324,6 +323,49 @@ class CodexSession implements AgentSession {
       } else if (response is PermissionDenyResponse) {
         _process?.sendResponse(request.id, {'answers': {}});
       }
+    });
+  }
+
+  void _handleDynamicToolCall(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) {
+    final toolName = params['tool'] as String?;
+    final arguments =
+        (params['arguments'] as Map<dynamic, dynamic>?)
+            ?.cast<String, dynamic>() ??
+        {};
+    final registry = _registry;
+
+    if (registry == null || toolName == null) {
+      _process?.sendResponse(request.id, {
+        'output': 'No tool registry available or missing tool name',
+        'success': false,
+      });
+      return;
+    }
+
+    final tool = registry[toolName];
+    if (tool == null) {
+      _process?.sendResponse(request.id, {
+        'output': 'Unknown tool: $toolName',
+        'success': false,
+      });
+      return;
+    }
+
+    tool.handler(arguments).then((result) {
+      if (_disposed) return;
+      _process?.sendResponse(request.id, {
+        'output': result.content,
+        'success': !result.isError,
+      });
+    }).catchError((Object e) {
+      if (_disposed) return;
+      _process?.sendResponse(request.id, {
+        'output': 'Tool error: $e',
+        'success': false,
+      });
     });
   }
 
