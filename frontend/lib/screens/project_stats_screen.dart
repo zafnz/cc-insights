@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -36,6 +38,35 @@ class _ProjectStatsScreenState extends State<ProjectStatsScreen> {
     if (!_hasLoadedOnce) {
       _hasLoadedOnce = true;
       _loadStats();
+    }
+  }
+
+  /// Reloads stats, preserving the current drill-down selection if possible.
+  Future<void> _refreshStats() async {
+    final previousWorktreeName = _selectedWorktree?.worktreeName;
+    final previousChatName = _selectedChat?.chatName;
+
+    await _loadStats();
+
+    if (_projectStats != null && previousWorktreeName != null) {
+      final worktree = _projectStats!.worktrees
+          .where((w) => w.worktreeName == previousWorktreeName)
+          .firstOrNull;
+      if (worktree != null) {
+        _selectedWorktree = worktree;
+        _currentView = _StatsView.worktree;
+
+        if (previousChatName != null) {
+          final chat = worktree.chats
+              .where((c) => c.chatName == previousChatName)
+              .firstOrNull;
+          if (chat != null) {
+            _selectedChat = chat;
+            _currentView = _StatsView.chat;
+          }
+        }
+      }
+      setState(() {});
     }
   }
 
@@ -139,15 +170,18 @@ class _ProjectStatsScreenState extends State<ProjectStatsScreen> {
       _StatsView.project => _ProjectOverviewView(
           stats: _projectStats!,
           onSelectWorktree: _selectWorktree,
+          onRefresh: _refreshStats,
         ),
       _StatsView.worktree => _WorktreeDetailView(
           worktree: _selectedWorktree!,
           onBack: _backToProject,
           onSelectChat: _selectChat,
+          onRefresh: _refreshStats,
         ),
       _StatsView.chat => _ChatDetailView(
           chat: _selectedChat!,
           onBack: _backToWorktree,
+          onRefresh: _refreshStats,
         ),
     };
   }
@@ -162,10 +196,12 @@ enum _StatsView { project, worktree, chat }
 class _ProjectOverviewView extends StatelessWidget {
   final ProjectStats stats;
   final void Function(WorktreeStats) onSelectWorktree;
+  final VoidCallback onRefresh;
 
   const _ProjectOverviewView({
     required this.stats,
     required this.onSelectWorktree,
+    required this.onRefresh,
   });
 
   @override
@@ -183,6 +219,13 @@ class _ProjectOverviewView extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 18),
+              onPressed: onRefresh,
+              tooltip: 'Refresh stats',
+              visualDensity: VisualDensity.compact,
             ),
             const Spacer(),
             Text(
@@ -258,11 +301,13 @@ class _WorktreeDetailView extends StatelessWidget {
   final WorktreeStats worktree;
   final VoidCallback onBack;
   final void Function(ChatStats) onSelectChat;
+  final VoidCallback onRefresh;
 
   const _WorktreeDetailView({
     required this.worktree,
     required this.onBack,
     required this.onSelectChat,
+    required this.onRefresh,
   });
 
   @override
@@ -290,6 +335,13 @@ class _WorktreeDetailView extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 18),
+              onPressed: onRefresh,
+              tooltip: 'Refresh stats',
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 8),
             Text(
               'Worktree Stats',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -357,10 +409,12 @@ class _WorktreeDetailView extends StatelessWidget {
 class _ChatDetailView extends StatelessWidget {
   final ChatStats chat;
   final VoidCallback onBack;
+  final VoidCallback onRefresh;
 
   const _ChatDetailView({
     required this.chat,
     required this.onBack,
+    required this.onRefresh,
   });
 
   @override
@@ -388,6 +442,13 @@ class _ChatDetailView extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 18),
+              onPressed: onRefresh,
+              tooltip: 'Refresh stats',
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 8),
             Text(
               'Chat Stats',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -595,7 +656,8 @@ class _ModelCostSection extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     // Calculate total for bar proportions
-    final total = modelUsage.fold(0.0, (sum, m) => sum + m.costUsd);
+    final costModels = modelUsage.where((m) => m.costUsd > 0).toList();
+    final total = costModels.fold(0.0, (sum, m) => sum + m.costUsd);
     final hasCodex = backends.contains('codex');
 
     return Column(
@@ -611,7 +673,7 @@ class _ModelCostSection extends StatelessWidget {
         const SizedBox(height: 8),
 
         // Stacked bar
-        if (modelUsage.isNotEmpty) ...[
+        if (costModels.isNotEmpty && total > 0) ...[
           Container(
             height: 8,
             decoration: BoxDecoration(
@@ -621,10 +683,12 @@ class _ModelCostSection extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: Row(
-                children: modelUsage
-                    .where((m) => m.costUsd > 0)
+                children: costModels
                     .map((model) => Expanded(
-                          flex: (model.costUsd * 100).round(),
+                          flex: math.max(
+                            1,
+                            (model.costUsd / total * 1000).round(),
+                          ),
                           child: Container(
                             color: _getModelColor(model.modelName),
                           ),
@@ -1673,8 +1737,14 @@ String _formatNumber(int value) {
 
 String _formatRelativeTime(String isoTimestamp, {required bool isActive}) {
   if (isActive) return 'now';
+  if (isoTimestamp.trim().isEmpty) return '—';
 
-  final timestamp = DateTime.parse(isoTimestamp);
+  late final DateTime timestamp;
+  try {
+    timestamp = DateTime.parse(isoTimestamp);
+  } catch (_) {
+    return '—';
+  }
   final now = DateTime.now().toUtc();
   final diff = now.difference(timestamp);
 
