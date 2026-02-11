@@ -56,9 +56,9 @@ class ChatStats {
 
   /// Whether this chat has cost data.
   ///
-  /// Codex backend doesn't report costs, so we distinguish "cost is $0.00"
-  /// from "cost is unknown".
-  bool get hasCostData => backend != 'codex';
+  /// Returns true for all backends. Codex costs are estimated from a
+  /// pricing lookup table rather than reported directly by the backend.
+  bool get hasCostData => true;
 
   @override
   bool operator ==(Object other) {
@@ -118,13 +118,9 @@ class WorktreeStats {
     required this.backends,
   });
 
-  /// Total cost in USD across all chats with cost data.
-  ///
-  /// Only includes chats where [ChatStats.hasCostData] is true.
+  /// Total cost in USD across all chats.
   double get totalCost {
-    return chats
-        .where((c) => c.hasCostData)
-        .fold(0.0, (sum, c) => sum + c.totalCost);
+    return chats.fold(0.0, (sum, c) => sum + c.totalCost);
   }
 
   /// Total tokens consumed across all chats.

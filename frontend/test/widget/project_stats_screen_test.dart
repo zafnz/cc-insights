@@ -210,8 +210,7 @@ void main() {
         expect(find.textContaining(tempDir.path), findsOneWidget);
       });
 
-      testWidgets('shows dash for cost on codex-only worktrees',
-          (tester) async {
+      testWidgets('shows cost for codex-only worktrees', (tester) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -225,7 +224,7 @@ void main() {
                   outputTokens: 50000,
                   cacheReadTokens: 0,
                   cacheCreationTokens: 0,
-                  costUsd: 0.0,
+                  costUsd: 1.50,
                   contextWindow: 192000,
                 ),
               ],
@@ -241,8 +240,8 @@ void main() {
 
         await pumpWidgetWithRealAsync(tester, createTestApp(project));
 
-        // Cost should show dash
-        expect(find.text('—'), findsWidgets);
+        // Cost should show the estimated value (not a dash)
+        expect(find.text('\$1.50'), findsWidgets);
       });
 
       testWidgets('tapping worktree row transitions to worktree detail',
@@ -731,7 +730,7 @@ void main() {
         expect(find.text('Context Window'), findsOneWidget);
       });
 
-      testWidgets('codex chat shows dash for cost in KPI and model table',
+      testWidgets('codex chat shows cost in KPI and model table',
           (tester) async {
         final project = createMockProject(
           primaryChats: [
@@ -746,7 +745,7 @@ void main() {
                   outputTokens: 50000,
                   cacheReadTokens: 0,
                   cacheCreationTokens: 0,
-                  costUsd: 0.0,
+                  costUsd: 2.50,
                   contextWindow: 192000,
                 ),
               ],
@@ -770,8 +769,8 @@ void main() {
         await tester.tap(find.byIcon(Icons.chevron_right).first);
         await safePumpAndSettle(tester);
 
-        // Cost should show dash in multiple places
-        expect(find.text('—'), findsWidgets);
+        // Cost should show the estimated value (not a dash)
+        expect(find.text('\$2.50'), findsWidgets);
       });
 
       testWidgets('chat detail shows correct model display names',

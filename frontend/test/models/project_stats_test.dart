@@ -76,7 +76,7 @@ void main() {
       check(chat.totalTokens).equals(2250); // 1000 + 500 + 500 + 250
     });
 
-    test('hasCostData returns false for codex', () {
+    test('hasCostData returns true for all backends', () {
       // Arrange
       const claudeChat = ChatStats(
         chatName: 'Claude Chat',
@@ -98,14 +98,14 @@ void main() {
         isActive: true,
       );
 
-      // Act & Assert
+      // Act & Assert — Codex costs are estimated from pricing table
       check(claudeChat.hasCostData).isTrue();
-      check(codexChat.hasCostData).isFalse();
+      check(codexChat.hasCostData).isTrue();
     });
   });
 
   group('WorktreeStats', () {
-    test('totalCost only sums chats with hasCostData', () {
+    test('totalCost sums all chats including codex', () {
       // Arrange
       const worktree = WorktreeStats(
         worktreeName: 'main',
@@ -136,12 +136,12 @@ void main() {
             backend: 'codex',
             modelUsage: [
               ModelUsageInfo(
-                modelName: 'gpt-4',
+                modelName: 'codex-mini-latest',
                 inputTokens: 500,
                 outputTokens: 250,
                 cacheReadTokens: 0,
                 cacheCreationTokens: 0,
-                costUsd: 0.00,
+                costUsd: 0.02,
                 contextWindow: 128000,
               ),
             ],
@@ -153,9 +153,8 @@ void main() {
         backends: {'claude', 'codex'},
       );
 
-      // Act & Assert
-      // Only the Claude chat should be included in cost
-      check(worktree.totalCost).equals(0.05);
+      // Act & Assert — both Claude and Codex costs are included
+      check(worktree.totalCost).isCloseTo(0.07, 0.0001);
     });
 
     test('totalTokens includes all chats including codex', () {
