@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show RateLimitWindow;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -176,39 +177,64 @@ class _RateLimitStats extends StatelessWidget {
     return colorScheme.onSurfaceVariant;
   }
 
-  /// Formats a reset time with relative day and time.
-  String _formatResetTimeWithDay(int? resetsAtEpoch) {
-    if (resetsAtEpoch == null) return 'unknown';
-    final resetsAt =
-        DateTime.fromMillisecondsSinceEpoch(resetsAtEpoch * 1000, isUtc: true);
-    final now = DateTime.now().toUtc();
-    final diff = resetsAt.difference(now);
-    if (diff.isNegative) return 'expired';
+  /// Formats a window for the toolbar: "5hr 80% (reset in 3h2m)".
+  static String _formatToolbarWindow(RateLimitWindow window) {
+    final windowLabel = RateLimitState.formatWindowDuration(
+        window.windowDurationMins);
+    final resetLabel = RateLimitState.formatResetDuration(window.resetsAt);
+    final parts = <String>[
+      if (windowLabel != null) windowLabel,
+      '${window.usedPercent}%',
+      if (resetLabel != null) '(reset in $resetLabel)',
+    ];
+    return parts.join(' ');
+  }
 
-    final dayDiff = resetsAt.difference(DateTime(now.year, now.month, now.day))
-        .inDays;
-    final hour = resetsAt.hour;
-    final minute = resetsAt.minute;
-    final timeStr =
-        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  /// Formats a reset time for the tooltip: "Resets Today at 6pm (3h2m)".
+  static String _formatTooltipReset(int? resetsAtEpoch) {
+    if (resetsAtEpoch == null) return '';
+    final resetsAt = DateTime.fromMillisecondsSinceEpoch(
+        resetsAtEpoch * 1000, isUtc: true)
+        .toLocal();
+    final now = DateTime.now();
+    final diff = resetsAt.difference(now);
+    if (diff.isNegative) return '';
+
+    // Relative day label
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final resetDayStart =
+        DateTime(resetsAt.year, resetsAt.month, resetsAt.day);
+    final dayDiff = resetDayStart.difference(todayStart).inDays;
 
     String dayStr;
     if (dayDiff == 0) {
-      dayStr = 'today';
+      dayStr = 'Today';
     } else if (dayDiff == 1) {
-      dayStr = 'tomorrow';
+      dayStr = 'Tomorrow';
     } else {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      dayStr = days[resetsAt.weekday % 7];
+      const days = [
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+        'Friday', 'Saturday', 'Sunday',
+      ];
+      dayStr = days[resetsAt.weekday - 1];
     }
 
-    final totalMinutes = diff.inMinutes;
-    final hours = totalMinutes ~/ 60;
-    final mins = totalMinutes % 60;
-    final durationStr =
-        mins > 0 ? '${hours}h${mins}m' : '${hours}h';
+    // 12-hour time format
+    final hour12 = resetsAt.hour == 0
+        ? 12
+        : resetsAt.hour > 12
+            ? resetsAt.hour - 12
+            : resetsAt.hour;
+    final amPm = resetsAt.hour >= 12 ? 'pm' : 'am';
+    final timeStr = resetsAt.minute > 0
+        ? '$hour12:${resetsAt.minute.toString().padLeft(2, '0')}$amPm'
+        : '$hour12$amPm';
 
-    return 'Resets $dayStr at $timeStr ($durationStr)';
+    // Relative duration
+    final durationStr = RateLimitState.formatResetDuration(resetsAtEpoch);
+    final durationPart = durationStr != null ? ' ($durationStr)' : '';
+
+    return 'Resets $dayStr at $timeStr$durationPart';
   }
 
   @override
@@ -232,27 +258,40 @@ class _RateLimitStats extends StatelessWidget {
       rateLimits.secondary?.usedPercent ?? 0,
     ].reduce((a, b) => a > b ? a : b);
 
-    // Build the main display text: "Codex: Usage: X%, Y%"
-    final usageParts = <String>[];
+    // Build the toolbar text: "Codex: Usage: 5hr 80% (reset in 3h2m), 7d 30% (reset in 3d12h)"
+    final toolbarParts = <String>[];
     if (rateLimits.primary != null) {
-      usageParts.add('${rateLimits.primary!.usedPercent}%');
+      toolbarParts.add(_formatToolbarWindow(rateLimits.primary!));
     }
     if (rateLimits.secondary != null) {
-      usageParts.add('${rateLimits.secondary!.usedPercent}%');
+      toolbarParts.add(_formatToolbarWindow(rateLimits.secondary!));
     }
-    if (usageParts.isEmpty) return const SizedBox.shrink();
+    if (toolbarParts.isEmpty) return const SizedBox.shrink();
 
-    // Build the tooltip with detailed info
-    final tooltipLines = <String>[];
+    // Build the tooltip
+    final tooltipLines = <String>['Codex Quota Usage', ''];
     if (rateLimits.primary != null) {
-      final resetStr = _formatResetTimeWithDay(rateLimits.primary!.resetsAt);
+      final w = rateLimits.primary!;
+      final windowLabel = RateLimitState.formatWindowDuration(
+          w.windowDurationMins);
       tooltipLines.add(
-          'Primary: ${rateLimits.primary!.usedPercent}% used. $resetStr');
+          'Primary${windowLabel != null ? ' ($windowLabel window)' : ''}');
+      tooltipLines.add('Used: ${w.usedPercent}%');
+      final resetStr = _formatTooltipReset(w.resetsAt);
+      if (resetStr.isNotEmpty) tooltipLines.add(resetStr);
+    }
+    if (rateLimits.primary != null && rateLimits.secondary != null) {
+      tooltipLines.add('');
     }
     if (rateLimits.secondary != null) {
-      final resetStr = _formatResetTimeWithDay(rateLimits.secondary!.resetsAt);
+      final w = rateLimits.secondary!;
+      final windowLabel = RateLimitState.formatWindowDuration(
+          w.windowDurationMins);
       tooltipLines.add(
-          'Secondary: ${rateLimits.secondary!.usedPercent}% used. $resetStr');
+          'Secondary${windowLabel != null ? ' ($windowLabel window)' : ''}');
+      tooltipLines.add('Used: ${w.usedPercent}%');
+      final resetStr = _formatTooltipReset(w.resetsAt);
+      if (resetStr.isNotEmpty) tooltipLines.add(resetStr);
     }
 
     return Row(
@@ -262,7 +301,7 @@ class _RateLimitStats extends StatelessWidget {
         Tooltip(
           message: tooltipLines.join('\n'),
           child: Text(
-            'Codex: Usage: ${usageParts.join(", ")}',
+            'Codex: Usage: ${toolbarParts.join(", ")}',
             style: baseStyle?.copyWith(
               color: _usageColor(maxUsage, colorScheme),
             ),

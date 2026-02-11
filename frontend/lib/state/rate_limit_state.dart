@@ -36,8 +36,8 @@ class RateLimitState extends ChangeNotifier {
   ///
   /// Returns something like "5hr 4% (resets in 2h35m)" or "7d 43% (resets in 3d12h)".
   static String formatWindow(RateLimitWindow window) {
-    final windowLabel = _formatWindowDuration(window.windowDurationMins);
-    final resetLabel = _formatResetTime(window.resetsAt);
+    final windowLabel = formatWindowDuration(window.windowDurationMins);
+    final resetLabel = formatResetDuration(window.resetsAt);
     final parts = <String>[
       if (windowLabel != null) windowLabel,
       '${window.usedPercent}%',
@@ -47,7 +47,7 @@ class RateLimitState extends ChangeNotifier {
   }
 
   /// Formats window duration in minutes to a human-readable label.
-  static String? _formatWindowDuration(int? mins) {
+  static String? formatWindowDuration(int? mins) {
     if (mins == null) return null;
     if (mins < 60) return '${mins}m';
     if (mins < 1440) {
@@ -59,7 +59,7 @@ class RateLimitState extends ChangeNotifier {
   }
 
   /// Formats a Unix epoch reset timestamp to a relative duration string.
-  static String? _formatResetTime(int? resetsAtEpoch) {
+  static String? formatResetDuration(int? resetsAtEpoch) {
     if (resetsAtEpoch == null) return null;
     final resetsAt =
         DateTime.fromMillisecondsSinceEpoch(resetsAtEpoch * 1000, isUtc: true);
