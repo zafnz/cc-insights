@@ -65,10 +65,9 @@ sdk.ReasoningEffort? reasoningEffortFromLabel(String label) {
 /// Header showing conversation context with model/permission selectors and usage.
 ///
 /// Layout behavior:
-/// - >= 700px: All elements visible (name, dropdowns, context, tokens)
-/// - >= 500px: Context and tokens visible, dropdowns clip under them
-/// - >= 350px: Only tokens visible
-/// - < 350px: Only chat name visible
+/// - Toolbar wraps to additional lines when space is tight
+/// - Security permissions stay grouped as a single unit
+/// - Indicators remain visible instead of clipping
 class ConversationHeader extends StatelessWidget {
   const ConversationHeader({
     super.key,
@@ -91,6 +90,29 @@ class ConversationHeader extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final isBackendLocked = chat.hasStarted;
+    final caps = backendService.capabilitiesFor(chat.model.backend);
+    final currentAgentLabel = agentLabel(chat.model.backend);
+    const showCost = true;
+    final rightWidgets = <Widget>[
+      if (chat.model.backend == sdk.BackendType.codex && chat.hasActiveSession)
+        Builder(builder: (context) {
+          final config = chat.securityConfig;
+          if (config is sdk.CodexSecurityConfig) {
+            return SecurityBadge(config: config);
+          }
+          return const SizedBox.shrink();
+        }),
+      ContextIndicator(tracker: chat.contextTracker),
+      CostIndicator(
+        usage: chat.cumulativeUsage,
+        modelUsage: chat.modelUsage,
+        timingStats: chat.timingStats,
+        agentLabel: currentAgentLabel,
+        showCost: showCost,
+      ),
+    ];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -102,160 +124,124 @@ class ConversationHeader extends StatelessWidget {
         ),
       ),
       clipBehavior: Clip.hardEdge,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final showContext = width >= 500;
-          final showTokens = width >= 350;
-          final isBackendLocked = chat.hasStarted;
-          final caps = backendService.capabilitiesFor(chat.model.backend);
-          final currentAgentLabel = agentLabel(chat.model.backend);
-          final showCost = true;
-
-          return Row(
-            children: [
-              // Left side: agent, model, and permission dropdowns
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Builder(
-                        builder: (context) {
-                          final cliAvailability =
-                              context.watch<CliAvailabilityService>();
-                          final agentItems = cliAvailability.codexAvailable
-                              ? const ['Claude', 'Codex']
-                              : const ['Claude'];
-                          return CompactDropdown(
-                            value: agentLabel(chat.model.backend),
-                            items: agentItems,
-                            tooltip: 'Agent',
-                            isEnabled: !isBackendLocked &&
-                                agentItems.length > 1,
-                            onChanged: (value) {
-                              unawaited(
-                                _handleAgentChange(context, chat, value),
-                              );
-                            },
-                          );
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left side: agent, model, and permission dropdowns
+          Expanded(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Builder(
+                  builder: (context) {
+                    final cliAvailability =
+                        context.watch<CliAvailabilityService>();
+                    final agentItems = cliAvailability.codexAvailable
+                        ? const ['Claude', 'Codex']
+                        : const ['Claude'];
+                    return CompactDropdown(
+                      value: agentLabel(chat.model.backend),
+                      items: agentItems,
+                      tooltip: 'Agent',
+                      isEnabled: !isBackendLocked && agentItems.length > 1,
+                      onChanged: (value) {
+                        unawaited(
+                          _handleAgentChange(context, chat, value),
+                        );
+                      },
+                    );
+                  },
+                ),
+                Builder(
+                  builder: (context) {
+                    final models = ChatModelCatalog.forBackend(
+                      chat.model.backend,
+                    );
+                    final selected = models.firstWhere(
+                      (m) => m.id == chat.model.id,
+                      orElse: () => chat.model,
+                    );
+                    final isModelLoading = caps.supportsModelListing &&
+                        backendService.isModelListLoadingFor(
+                          chat.model.backend,
+                        );
+                    return CompactDropdown(
+                      value: selected.label,
+                      items: models.map((m) => m.label).toList(),
+                      isLoading: isModelLoading,
+                      tooltip: 'Model',
+                      onChanged: (value) {
+                        final model = models.firstWhere(
+                          (m) => m.label == value,
+                          orElse: () => selected,
+                        );
+                        chat.setModel(model);
+                      },
+                    );
+                  },
+                ),
+                // Backend-specific security controls
+                if (chat.model.backend == sdk.BackendType.codex) ...[
+                  Builder(
+                    builder: (context) {
+                      final config = chat.securityConfig;
+                      if (config is! sdk.CodexSecurityConfig) {
+                        return const SizedBox.shrink();
+                      }
+                      return SecurityConfigGroup(
+                        config: config,
+                        capabilities:
+                            backendService.codexSecurityCapabilities,
+                        isEnabled: true,
+                        onConfigChanged: (newConfig) {
+                          chat.setSecurityConfig(newConfig);
                         },
-                      ),
-                      const SizedBox(width: 8),
-                      Builder(
-                        builder: (context) {
-                          final models = ChatModelCatalog.forBackend(
-                            chat.model.backend,
-                          );
-                          final selected = models.firstWhere(
-                            (m) => m.id == chat.model.id,
-                            orElse: () => chat.model,
-                          );
-                          final isModelLoading =
-                              caps.supportsModelListing &&
-                              backendService.isModelListLoadingFor(
-                                chat.model.backend,
-                              );
-                          return CompactDropdown(
-                            value: selected.label,
-                            items: models.map((m) => m.label).toList(),
-                            isLoading: isModelLoading,
-                            tooltip: 'Model',
-                            onChanged: (value) {
-                              final model = models.firstWhere(
-                                (m) => m.label == value,
-                                orElse: () => selected,
-                              );
-                              chat.setModel(model);
-                            },
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      // Backend-specific security controls
-                      if (chat.model.backend == sdk.BackendType.codex) ...[
-                        Builder(
-                          builder: (context) {
-                            final config = chat.securityConfig;
-                            if (config is! sdk.CodexSecurityConfig) {
-                              return const SizedBox.shrink();
-                            }
-                            return SecurityConfigGroup(
-                              config: config,
-                              capabilities: backendService.codexSecurityCapabilities,
-                              isEnabled: true,
-                              onConfigChanged: (newConfig) {
-                                chat.setSecurityConfig(newConfig);
-                              },
-                            );
-                          },
-                        ),
-                      ] else ...[
-                        // Claude: existing single dropdown (unchanged)
-                        CompactDropdown(
-                          value: chat.permissionMode.label,
-                          items: PermissionMode.values
-                              .map((m) => m.label)
-                              .toList(),
-                          tooltip: 'Permissions',
-                          onChanged: (value) {
-                            final mode = PermissionMode.values.firstWhere(
-                              (m) => m.label == value,
-                              orElse: () => PermissionMode.defaultMode,
-                            );
-                            chat.setPermissionMode(mode);
-                          },
-                        ),
-                      ],
-                      // Reasoning effort dropdown (only for backends that support it)
-                      if (caps.supportsReasoningEffort) ...[
-                        const SizedBox(width: 8),
-                        CompactDropdown(
-                          value: chat.reasoningEffort?.label ?? 'Default',
-                          items: reasoningEffortItems,
-                          tooltip: 'Reasoning',
-                          onChanged: (value) {
-                            final effort = reasoningEffortFromLabel(value);
-                            chat.setReasoningEffort(effort);
-                          },
-                        ),
-                      ],
-                    ],
+                      );
+                    },
                   ),
-                ),
-              ),
-              // Right side: security badge, context indicator and token/cost
-              // Security badge (Codex only)
-              if (chat.model.backend == sdk.BackendType.codex &&
-                  chat.hasActiveSession) ...[
-                const SizedBox(width: 8),
-                Builder(builder: (context) {
-                  final config = chat.securityConfig;
-                  if (config is sdk.CodexSecurityConfig) {
-                    return SecurityBadge(config: config);
-                  }
-                  return const SizedBox.shrink();
-                }),
+                ] else ...[
+                  // Claude: existing single dropdown (unchanged)
+                  CompactDropdown(
+                    value: chat.permissionMode.label,
+                    items: PermissionMode.values
+                        .map((m) => m.label)
+                        .toList(),
+                    tooltip: 'Permissions',
+                    onChanged: (value) {
+                      final mode = PermissionMode.values.firstWhere(
+                        (m) => m.label == value,
+                        orElse: () => PermissionMode.defaultMode,
+                      );
+                      chat.setPermissionMode(mode);
+                    },
+                  ),
+                ],
+                // Reasoning effort dropdown (only for backends that support it)
+                if (caps.supportsReasoningEffort)
+                  CompactDropdown(
+                    value: chat.reasoningEffort?.label ?? 'Default',
+                    items: reasoningEffortItems,
+                    tooltip: 'Reasoning',
+                    onChanged: (value) {
+                      final effort = reasoningEffortFromLabel(value);
+                      chat.setReasoningEffort(effort);
+                    },
+                  ),
               ],
-              if (showContext) ...[
-                const SizedBox(width: 8),
-                ContextIndicator(tracker: chat.contextTracker),
-              ],
-              if (showTokens) ...[
-                const SizedBox(width: 8),
-                CostIndicator(
-                  usage: chat.cumulativeUsage,
-                  modelUsage: chat.modelUsage,
-                  timingStats: chat.timingStats,
-                  agentLabel: currentAgentLabel,
-                  showCost: showCost,
-                ),
-              ],
-            ],
-          );
-        },
+            ),
+          ),
+          if (rightWidgets.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: rightWidgets,
+            ),
+          ],
+        ],
       ),
     );
   }
