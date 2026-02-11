@@ -40,8 +40,8 @@ tools/_real_claude
 
 _real_claude
 
-# Claude agent memory
-.claude/agent-memory/
+# Claude agent workspace artifacts
+**/.claude/
 
 # CC-Insights config (user-specific)
 .ccinsights/
