@@ -49,6 +49,9 @@ void main() {
   group('ClickToScrollContainer in App', () {
     testWidgets('tool card with scrollable content can be activated and scrolled',
         (tester) async {
+      // Ensure window is large enough for the multi-panel layout
+      await _ensureMinimumSize(tester);
+
       // Launch the real app
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
@@ -157,6 +160,7 @@ void main() {
 
     testWidgets('scroll is blocked before activation in tool card',
         (tester) async {
+      await _ensureMinimumSize(tester);
       await tester.pumpWidget(const CCInsightsApp());
       await safePumpAndSettle(tester);
 
@@ -237,4 +241,19 @@ void main() {
       debugPrint('SUCCESS: Scroll blocked before activation');
     });
   });
+}
+
+Future<void> _ensureMinimumSize(WidgetTester tester) async {
+  const minWidth = 1000.0;
+  const minHeight = 800.0;
+  final binding = tester.binding;
+  final view = binding.platformDispatcher.views.first;
+  final currentSize = view.physicalSize / view.devicePixelRatio;
+
+  if (currentSize.width < minWidth || currentSize.height < minHeight) {
+    final width = currentSize.width < minWidth ? minWidth : currentSize.width;
+    final height =
+        currentSize.height < minHeight ? minHeight : currentSize.height;
+    await binding.setSurfaceSize(Size(width, height));
+  }
 }
