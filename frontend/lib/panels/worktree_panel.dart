@@ -81,7 +81,7 @@ class _WorktreePanelState extends State<WorktreePanel> {
   }
 }
 
-/// Compact "hidden [s|h]" toggle for the worktree panel header.
+/// Compact "Hidden <switch>" toggle for the worktree panel header.
 class _HiddenToggle extends StatelessWidget {
   const _HiddenToggle({
     required this.showHidden,
@@ -94,95 +94,31 @@ class _HiddenToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final activeColor = colorScheme.primary;
-    final inactiveColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.6);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'hidden',
+          'Hidden',
           style: TextStyle(
-            fontSize: 10,
+            fontSize: 11,
             color: colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(width: 3),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: colorScheme.outline.withValues(alpha: 0.3),
-              width: 0.5,
+        const SizedBox(width: 2),
+        SizedBox(
+          height: 20,
+          width: 34,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: Switch(
+              value: showHidden,
+              onChanged: onChanged,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ToggleOption(
-                label: 's',
-                isActive: showHidden,
-                activeColor: activeColor,
-                inactiveColor: inactiveColor,
-                onTap: () => onChanged(true),
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(3),
-                ),
-              ),
-              _ToggleOption(
-                label: 'h',
-                isActive: !showHidden,
-                activeColor: activeColor,
-                inactiveColor: inactiveColor,
-                onTap: () => onChanged(false),
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(3),
-                ),
-              ),
-            ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ToggleOption extends StatelessWidget {
-  const _ToggleOption({
-    required this.label,
-    required this.isActive,
-    required this.activeColor,
-    required this.inactiveColor,
-    required this.onTap,
-    required this.borderRadius,
-  });
-
-  final String label;
-  final bool isActive;
-  final Color activeColor;
-  final Color inactiveColor;
-  final VoidCallback onTap;
-  final BorderRadius borderRadius;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        decoration: BoxDecoration(
-          color: isActive ? activeColor.withValues(alpha: 0.15) : null,
-          borderRadius: borderRadius,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            color: isActive ? activeColor : inactiveColor,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -907,8 +843,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
 
     if (!context.mounted) return;
 
-    // Update in-memory state
+    // Update in-memory state and notify project so the panel header rebuilds
     worktree.setHidden(true);
+    project.notifyListeners();
   }
 
   Future<void> _handleUnhide(BuildContext context) async {
@@ -923,8 +860,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
 
     if (!context.mounted) return;
 
-    // Update in-memory state
+    // Update in-memory state and notify project so the panel header rebuilds
     worktree.setHidden(false);
+    project.notifyListeners();
   }
 
   Future<void> _handleDelete(BuildContext context) async {
