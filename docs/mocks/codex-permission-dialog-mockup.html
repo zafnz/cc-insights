@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codex Permission Dialog Mockup — CC-Insights</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    /* Material 3 deep purple seed - dark mode derived palette */
+    --surface: #141218;
+    --surface-container: #211f26;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --tertiary: #efb8c8;
+    --error: #f2b8b5;
+    --error-container: #8c1d18;
+
+    --green: #4caf50;
+    --orange: #ff9800;
+    --red: #f44336;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: #0e0c11;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 32px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+    color: var(--on-surface);
+  }
+
+  .section-title {
+    width: 100%;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--on-surface);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary);
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    margin-top: -16px;
+  }
+
+  .variant-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .dialog {
+    width: 560px;
+    background: var(--surface);
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  .dialog-header {
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+  }
+
+  .dialog-header .material-icons {
+    font-size: 20px;
+  }
+
+  .dialog-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .label {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .command-box {
+    background: var(--surface-container);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--on-surface);
+  }
+
+  .command-box .prompt {
+    color: var(--tertiary);
+  }
+
+  .cwd {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--on-surface-variant);
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+
+  .meta-label {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    min-width: 70px;
+  }
+
+  .chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(208, 188, 255, 0.12);
+    border: 1px solid rgba(208, 188, 255, 0.35);
+    color: var(--on-surface);
+  }
+
+  .reason {
+    font-size: 12px;
+    color: var(--on-surface);
+  }
+
+  .allow-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .allow-label {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    min-width: 70px;
+  }
+
+  .allow-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--surface-container-high);
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    font-size: 12px;
+    color: var(--on-surface);
+    cursor: default;
+  }
+
+  .allow-select .material-icons {
+    font-size: 18px;
+    color: var(--on-surface-variant);
+  }
+
+  .allow-hint {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+  }
+
+  .dialog-footer {
+    padding: 12px 16px 16px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: linear-gradient(180deg, rgba(20,18,24,0) 0%, rgba(20,18,24,0.7) 100%);
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--on-surface);
+  }
+
+  .btn.ghost {
+    border-color: rgba(73, 69, 79, 0.5);
+    color: var(--on-surface-variant);
+  }
+
+  .btn.outline.danger {
+    border-color: rgba(242, 184, 181, 0.6);
+    color: var(--error);
+  }
+
+  .btn.primary {
+    background: var(--primary);
+    color: #231b2f;
+  }
+
+  .footnote {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--on-surface-variant);
+  }
+</style>
+</head>
+<body>
+  <div class="section-title">Codex Permission Dialog — Mockup</div>
+  <div class="section-subtitle">Two variants: with and without an execpolicy amendment proposal.</div>
+
+  <div class="variant-row">
+    <div class="dialog">
+      <div class="dialog-header">
+        <span class="material-icons">shield</span>
+        Permission Required — Codex
+      </div>
+      <div class="dialog-body">
+        <div class="label">Bash wants to run</div>
+        <div class="command-box"><span class="prompt">$</span> ./frontend/run-flutter-test.sh</div>
+        <div class="cwd">cwd: /Users/zaf/projects/cc-insights</div>
+
+        <div class="meta-row">
+          <div class="meta-label">Actions</div>
+          <div class="chips">
+            <span class="chip">read workspace</span>
+            <span class="chip">list files</span>
+          </div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-label">Reason</div>
+          <div class="reason">retry without sandbox</div>
+        </div>
+
+        <div class="allow-row">
+          <div class="allow-label">Allow</div>
+          <div class="allow-select">
+            <span>Once</span>
+            <span class="material-icons">arrow_drop_down</span>
+          </div>
+          <div class="allow-hint">Once | For session | Always</div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn ghost">Cancel Turn</button>
+        <button class="btn outline danger">Decline</button>
+        <button class="btn primary">Accept</button>
+      </div>
+      <div class="footnote">Always is shown because the server provided a proposed execpolicy amendment.</div>
+    </div>
+
+    <div class="dialog">
+      <div class="dialog-header">
+        <span class="material-icons">shield</span>
+        Permission Required — Codex
+      </div>
+      <div class="dialog-body">
+        <div class="label">Bash wants to run</div>
+        <div class="command-box"><span class="prompt">$</span> ./frontend/run-flutter-test.sh</div>
+        <div class="cwd">cwd: /Users/zaf/projects/cc-insights</div>
+
+        <div class="meta-row">
+          <div class="meta-label">Actions</div>
+          <div class="chips">
+            <span class="chip">read workspace</span>
+            <span class="chip">list files</span>
+          </div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-label">Reason</div>
+          <div class="reason">request for network access</div>
+        </div>
+
+        <div class="allow-row">
+          <div class="allow-label">Allow</div>
+          <div class="allow-select">
+            <span>Once</span>
+            <span class="material-icons">arrow_drop_down</span>
+          </div>
+          <div class="allow-hint">Once | For session</div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn ghost">Cancel Turn</button>
+        <button class="btn outline danger">Decline</button>
+        <button class="btn primary">Accept</button>
+      </div>
+      <div class="footnote">Always is hidden because no execpolicy amendment was proposed.</div>
+    </div>
+  </div>
+</body>
+</html>

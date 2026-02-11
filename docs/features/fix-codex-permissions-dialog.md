@@ -49,6 +49,9 @@ Codex permission requests can include a server-proposed execpolicy amendment tha
 *Always only shown when proposed execpolicy amendment is present
 ```
 
+## HTML Mockup
+See `docs/mocks/codex-permission-dialog-mockup.html`.
+
 ## Design Decisions
 - Split UI into two widgets:
   - `ClaudePermissionDialog` (existing behavior, unchanged)

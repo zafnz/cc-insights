@@ -64,11 +64,12 @@ dependencies:
   file_picker: ^10.3.10
 
   agent_sdk_core: any
-  flutter_test: any
   codex_sdk: any
   markdown: any
   highlight: any
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
