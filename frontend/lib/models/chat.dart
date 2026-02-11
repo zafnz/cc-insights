@@ -609,6 +609,25 @@ class ChatState extends ChangeNotifier {
   /// updates the model on the running session.
   void setModel(ChatModel model) {
     if (_model != model) {
+      // Check if the backend type is changing
+      final backendChanged = model.backend != _model.backend;
+
+      // If backend changed, update security config to match new backend
+      if (backendChanged) {
+        if (model.backend == sdk.BackendType.codex) {
+          _securityConfig = const sdk.CodexSecurityConfig(
+            sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+            approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+          );
+        } else {
+          _securityConfig = sdk.ClaudeSecurityConfig(
+            permissionMode: sdk.PermissionMode.fromString(
+              RuntimeConfig.instance.defaultPermissionMode,
+            ),
+          );
+        }
+      }
+
       _model = model;
       _scheduleMetaSave();
       // Update the model on the active transport if one exists

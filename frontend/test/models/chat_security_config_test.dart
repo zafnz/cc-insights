@@ -1,4 +1,5 @@
 import 'package:cc_insights_v2/models/chat.dart';
+import 'package:cc_insights_v2/models/chat_model.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/persistence_models.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
@@ -273,6 +274,69 @@ void main() {
 
       // Should not notify
       check(notifyCount).equals(0);
+    });
+
+    test('Switching model from Claude to Codex backend updates securityConfig to CodexSecurityConfig', () {
+      // Start with a Claude chat (default backend)
+      final chat = resources.track(ChatState(ChatData.create(
+        name: 'test',
+        worktreeRoot: '/tmp',
+      )));
+
+      // Verify initial state is Claude
+      check(chat.securityConfig).isA<sdk.ClaudeSecurityConfig>();
+      check(chat.model.backend).equals(sdk.BackendType.directCli);
+
+      // Switch to a Codex model
+      const codexModel = ChatModel(
+        id: 'gpt-4',
+        label: 'GPT-4',
+        backend: sdk.BackendType.codex,
+      );
+
+      chat.setModel(codexModel);
+
+      // Security config should now be CodexSecurityConfig with default values
+      check(chat.securityConfig).isA<sdk.CodexSecurityConfig>();
+      final config = chat.securityConfig as sdk.CodexSecurityConfig;
+      check(config.sandboxMode).equals(sdk.CodexSandboxMode.workspaceWrite);
+      check(config.approvalPolicy).equals(sdk.CodexApprovalPolicy.onRequest);
+      check(chat.model.backend).equals(sdk.BackendType.codex);
+    });
+
+    test('Switching model from Codex to Claude backend updates securityConfig to ClaudeSecurityConfig', () {
+      // Start with a Codex chat
+      final chat = resources.track(ChatState(ChatData.create(
+        name: 'test',
+        worktreeRoot: '/tmp',
+      )));
+
+      // Set initial Codex config
+      const codexModel = ChatModel(
+        id: 'gpt-4',
+        label: 'GPT-4',
+        backend: sdk.BackendType.codex,
+      );
+      chat.setModel(codexModel);
+
+      // Verify we're on Codex
+      check(chat.securityConfig).isA<sdk.CodexSecurityConfig>();
+      check(chat.model.backend).equals(sdk.BackendType.codex);
+
+      // Switch to a Claude model
+      const claudeModel = ChatModel(
+        id: 'opus',
+        label: 'Opus',
+        backend: sdk.BackendType.directCli,
+      );
+
+      chat.setModel(claudeModel);
+
+      // Security config should now be ClaudeSecurityConfig with default permission mode
+      check(chat.securityConfig).isA<sdk.ClaudeSecurityConfig>();
+      final config = chat.securityConfig as sdk.ClaudeSecurityConfig;
+      check(config.permissionMode).equals(sdk.PermissionMode.defaultMode);
+      check(chat.model.backend).equals(sdk.BackendType.directCli);
     });
   });
 }
