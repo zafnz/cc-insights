@@ -154,6 +154,22 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: true,
       ),
+      SettingDefinition(
+        key: 'appearance.codexUsageDisplay',
+        title: 'Show Codex Usage in Statusbar',
+        description:
+            'How to display Codex rate limit usage in the status bar. '
+            '`Summary` shows percentages and time remaining. '
+            '`Graph` shows bar graphs. '
+            '`Never` hides the display entirely.',
+        type: SettingType.dropdown,
+        defaultValue: 'summary',
+        options: [
+          SettingOption(value: 'never', label: 'Never'),
+          SettingOption(value: 'summary', label: 'Summary'),
+          SettingOption(value: 'graph', label: 'Graph'),
+        ],
+      ),
     ],
   );
 

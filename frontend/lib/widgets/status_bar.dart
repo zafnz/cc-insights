@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/project.dart';
 import '../models/ticket.dart';
+import '../services/settings_service.dart';
 import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
 
@@ -166,15 +167,23 @@ class _ProjectStats extends StatelessWidget {
 /// Rate limit display from Codex backend.
 ///
 /// Shows primary and secondary rate limit windows when available.
-/// Hidden when no rate limit data has been received.
+/// Supports three display modes controlled by the
+/// `appearance.codexUsageDisplay` setting: never, summary, graph.
 class _RateLimitStats extends StatelessWidget {
   const _RateLimitStats();
 
   /// Returns a color based on usage percentage.
-  Color _usageColor(int percent, ColorScheme colorScheme) {
+  static Color _usageColor(int percent, ColorScheme colorScheme) {
     if (percent >= 80) return colorScheme.error;
     if (percent >= 50) return Colors.orange;
     return colorScheme.onSurfaceVariant;
+  }
+
+  /// Returns a bar color based on usage percentage.
+  static Color _barColor(int percent) {
+    if (percent >= 90) return Colors.red;
+    if (percent >= 50) return Colors.orange;
+    return Colors.green;
   }
 
   /// Formats a window for the toolbar: "5hr 80% (reset in 3h2m)".
@@ -237,38 +246,8 @@ class _RateLimitStats extends StatelessWidget {
     return 'Resets $dayStr at $timeStr$durationPart';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Use nullable lookup so the widget works without the provider in tests.
-    final RateLimitState? rateLimits;
-    try {
-      rateLimits = context.watch<RateLimitState>();
-    } on ProviderNotFoundException {
-      return const SizedBox.shrink();
-    }
-    if (!rateLimits.hasData) return const SizedBox.shrink();
-
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final baseStyle = textTheme.labelSmall;
-
-    // Determine highest usage for the overall color
-    final maxUsage = [
-      rateLimits.primary?.usedPercent ?? 0,
-      rateLimits.secondary?.usedPercent ?? 0,
-    ].reduce((a, b) => a > b ? a : b);
-
-    // Build the toolbar text: "Codex: Usage: 5hr 80% (reset in 3h2m), 7d 30% (reset in 3d12h)"
-    final toolbarParts = <String>[];
-    if (rateLimits.primary != null) {
-      toolbarParts.add(_formatToolbarWindow(rateLimits.primary!));
-    }
-    if (rateLimits.secondary != null) {
-      toolbarParts.add(_formatToolbarWindow(rateLimits.secondary!));
-    }
-    if (toolbarParts.isEmpty) return const SizedBox.shrink();
-
-    // Build the tooltip
+  /// Builds the tooltip text shared by both summary and graph modes.
+  static String _buildTooltip(RateLimitState rateLimits) {
     final tooltipLines = <String>['Codex Quota Usage', ''];
     if (rateLimits.primary != null) {
       final w = rateLimits.primary!;
@@ -293,13 +272,68 @@ class _RateLimitStats extends StatelessWidget {
       final resetStr = _formatTooltipReset(w.resetsAt);
       if (resetStr.isNotEmpty) tooltipLines.add(resetStr);
     }
+    return tooltipLines.join('\n');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Read display mode from settings (default: summary).
+    String displayMode = 'summary';
+    try {
+      final settings = context.watch<SettingsService>();
+      displayMode = settings.getValue<String>('appearance.codexUsageDisplay');
+    } on ProviderNotFoundException {
+      // No settings provider in tests — use default.
+    }
+
+    if (displayMode == 'never') return const SizedBox.shrink();
+
+    // Use nullable lookup so the widget works without the provider in tests.
+    final RateLimitState? rateLimits;
+    try {
+      rateLimits = context.watch<RateLimitState>();
+    } on ProviderNotFoundException {
+      return const SizedBox.shrink();
+    }
+    if (!rateLimits.hasData) return const SizedBox.shrink();
+
+    final tooltip = _buildTooltip(rateLimits);
+
+    if (displayMode == 'graph') {
+      return _buildGraph(context, rateLimits, tooltip);
+    }
+    return _buildSummary(context, rateLimits, tooltip);
+  }
+
+  /// Summary mode: text with percentages and reset times.
+  Widget _buildSummary(
+    BuildContext context,
+    RateLimitState rateLimits,
+    String tooltip,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.labelSmall;
+
+    final maxUsage = [
+      rateLimits.primary?.usedPercent ?? 0,
+      rateLimits.secondary?.usedPercent ?? 0,
+    ].reduce((a, b) => a > b ? a : b);
+
+    final toolbarParts = <String>[];
+    if (rateLimits.primary != null) {
+      toolbarParts.add(_formatToolbarWindow(rateLimits.primary!));
+    }
+    if (rateLimits.secondary != null) {
+      toolbarParts.add(_formatToolbarWindow(rateLimits.secondary!));
+    }
+    if (toolbarParts.isEmpty) return const SizedBox.shrink();
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         const _StatusBarDot(),
         Tooltip(
-          message: tooltipLines.join('\n'),
+          message: tooltip,
           child: Text(
             'Codex: Usage: ${toolbarParts.join(", ")}',
             style: baseStyle?.copyWith(
@@ -308,6 +342,64 @@ class _RateLimitStats extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Graph mode: two small bar graphs, no text percentages.
+  Widget _buildGraph(
+    BuildContext context,
+    RateLimitState rateLimits,
+    String tooltip,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.labelSmall;
+
+    final bars = <Widget>[];
+    if (rateLimits.primary != null) {
+      bars.add(_buildBar(rateLimits.primary!, colorScheme));
+    }
+    if (rateLimits.secondary != null) {
+      if (bars.isNotEmpty) bars.add(const SizedBox(width: 4));
+      bars.add(_buildBar(rateLimits.secondary!, colorScheme));
+    }
+    if (bars.isEmpty) return const SizedBox.shrink();
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _StatusBarDot(),
+        Tooltip(
+          message: tooltip,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Codex:',
+                style: baseStyle?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 6),
+              ...bars,
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Builds a single usage bar for graph mode.
+  Widget _buildBar(RateLimitWindow window, ColorScheme colorScheme) {
+    final percent = window.usedPercent;
+    return SizedBox(
+      width: 40,
+      height: 4,
+      child: LinearProgressIndicator(
+        value: (percent / 100).clamp(0.0, 1.0),
+        backgroundColor:
+            colorScheme.onSurfaceVariant.withValues(alpha: 0.15),
+        valueColor: AlwaysStoppedAnimation<Color>(_barColor(percent)),
+      ),
     );
   }
 }
