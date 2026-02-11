@@ -176,6 +176,41 @@ class _RateLimitStats extends StatelessWidget {
     return colorScheme.onSurfaceVariant;
   }
 
+  /// Formats a reset time with relative day and time.
+  String _formatResetTimeWithDay(int? resetsAtEpoch) {
+    if (resetsAtEpoch == null) return 'unknown';
+    final resetsAt =
+        DateTime.fromMillisecondsSinceEpoch(resetsAtEpoch * 1000, isUtc: true);
+    final now = DateTime.now().toUtc();
+    final diff = resetsAt.difference(now);
+    if (diff.isNegative) return 'expired';
+
+    final dayDiff = resetsAt.difference(DateTime(now.year, now.month, now.day))
+        .inDays;
+    final hour = resetsAt.hour;
+    final minute = resetsAt.minute;
+    final timeStr =
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+    String dayStr;
+    if (dayDiff == 0) {
+      dayStr = 'today';
+    } else if (dayDiff == 1) {
+      dayStr = 'tomorrow';
+    } else {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      dayStr = days[resetsAt.weekday % 7];
+    }
+
+    final totalMinutes = diff.inMinutes;
+    final hours = totalMinutes ~/ 60;
+    final mins = totalMinutes % 60;
+    final durationStr =
+        mins > 0 ? '${hours}h${mins}m' : '${hours}h';
+
+    return 'Resets $dayStr at $timeStr ($durationStr)';
+  }
+
   @override
   Widget build(BuildContext context) {
     // Use nullable lookup so the widget works without the provider in tests.
@@ -197,26 +232,27 @@ class _RateLimitStats extends StatelessWidget {
       rateLimits.secondary?.usedPercent ?? 0,
     ].reduce((a, b) => a > b ? a : b);
 
-    final parts = <String>[];
+    // Build the main display text: "Codex: Usage: X%, Y%"
+    final usageParts = <String>[];
     if (rateLimits.primary != null) {
-      parts.add(RateLimitState.formatWindow(rateLimits.primary!));
+      usageParts.add('${rateLimits.primary!.usedPercent}%');
     }
     if (rateLimits.secondary != null) {
-      parts.add(RateLimitState.formatWindow(rateLimits.secondary!));
+      usageParts.add('${rateLimits.secondary!.usedPercent}%');
     }
-    if (parts.isEmpty) return const SizedBox.shrink();
+    if (usageParts.isEmpty) return const SizedBox.shrink();
 
-    final tooltipLines = <String>['Codex Rate Limits'];
-    if (rateLimits.planType != null) {
-      tooltipLines.add('Plan: ${rateLimits.planType}');
-    }
+    // Build the tooltip with detailed info
+    final tooltipLines = <String>[];
     if (rateLimits.primary != null) {
+      final resetStr = _formatResetTimeWithDay(rateLimits.primary!.resetsAt);
       tooltipLines.add(
-          'Primary: ${rateLimits.primary!.usedPercent}% used');
+          'Primary: ${rateLimits.primary!.usedPercent}% used. $resetStr');
     }
     if (rateLimits.secondary != null) {
+      final resetStr = _formatResetTimeWithDay(rateLimits.secondary!.resetsAt);
       tooltipLines.add(
-          'Secondary: ${rateLimits.secondary!.usedPercent}% used');
+          'Secondary: ${rateLimits.secondary!.usedPercent}% used. $resetStr');
     }
 
     return Row(
@@ -226,7 +262,7 @@ class _RateLimitStats extends StatelessWidget {
         Tooltip(
           message: tooltipLines.join('\n'),
           child: Text(
-            'Ratelimits: ${parts.join(", ")}',
+            'Codex: Usage: ${usageParts.join(", ")}',
             style: baseStyle?.copyWith(
               color: _usageColor(maxUsage, colorScheme),
             ),
