@@ -18,10 +18,8 @@ void main() {
     late FakePersistenceService fakePersistenceService;
     late ProjectState projectState;
     late SelectionState selectionState;
-    late Future<void> Function() cleanupConfig;
 
-    setUp(() async {
-      cleanupConfig = await setupTestConfig();
+    setUp(() {
       fakeConfigService = FakeProjectConfigService();
       fakePersistenceService = FakePersistenceService();
 
@@ -48,7 +46,6 @@ void main() {
 
     tearDown(() async {
       await resources.disposeAll();
-      await cleanupConfig();
     });
 
     Widget buildTestWidget({ProjectConfig? config}) {

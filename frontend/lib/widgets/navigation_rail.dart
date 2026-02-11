@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
-import '../state/ticket_board_state.dart';
 
 /// Navigation rail with main view button and settings/log icons.
 class AppNavigationRail extends StatelessWidget {
@@ -18,7 +15,6 @@ class AppNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoardState = context.watch<TicketBoardState>();
 
     return Container(
       width: 48,
@@ -44,25 +40,12 @@ class AppNavigationRail extends StatelessWidget {
             onTap: () => onDestinationSelected(1),
           ),
           const SizedBox(height: 4),
-          // Tickets button
-          _NavRailButton(
-            icon: Icons.task_alt_outlined,
-            selectedIcon: Icons.task_alt,
-            tooltip: 'Tickets',
-            isSelected: selectedIndex == 4,
-            onTap: () => onDestinationSelected(4),
-            badge: ticketBoardState.activeCount > 0
-                ? ticketBoardState.activeCount.toString()
-                : null,
-          ),
-          const SizedBox(height: 4),
-          // Project Stats button
           _NavRailButton(
             icon: Icons.bar_chart_outlined,
             selectedIcon: Icons.bar_chart,
             tooltip: 'Project Stats',
-            isSelected: selectedIndex == 5,
-            onTap: () => onDestinationSelected(5),
+            isSelected: selectedIndex == 4,
+            onTap: () => onDestinationSelected(4),
           ),
           const Spacer(),
           // Bottom buttons: Logs, Settings
@@ -102,7 +85,6 @@ class _NavRailButton extends StatelessWidget {
     required this.tooltip,
     required this.isSelected,
     required this.onTap,
-    this.badge,
   });
 
   final IconData icon;
@@ -110,27 +92,10 @@ class _NavRailButton extends StatelessWidget {
   final String tooltip;
   final bool isSelected;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    Widget iconWidget = Icon(
-      isSelected ? (selectedIcon ?? icon) : icon,
-      size: 20,
-      color: isSelected
-          ? colorScheme.primary
-          : colorScheme.onSurfaceVariant,
-    );
-
-    // Wrap with badge if provided
-    if (badge != null) {
-      iconWidget = Badge(
-        label: Text(badge!),
-        child: iconWidget,
-      );
-    }
 
     return Tooltip(
       message: tooltip,
@@ -146,7 +111,13 @@ class _NavRailButton extends StatelessWidget {
           child: SizedBox(
             width: 36,
             height: 36,
-            child: iconWidget,
+            child: Icon(
+              isSelected ? (selectedIcon ?? icon) : icon,
+              size: 20,
+              color: isSelected
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),

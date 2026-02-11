@@ -30,8 +30,6 @@ import '../models/chat.dart';
 import '../models/chat_model.dart';
 import '../models/codex_pricing.dart';
 import '../models/output_entry.dart';
-import '../models/ticket.dart';
-import '../state/ticket_board_state.dart';
 import 'ask_ai_service.dart';
 import 'log_service.dart';
 import 'runtime_config.dart';
@@ -81,28 +79,6 @@ class EventHandler {
   /// AskAiService for generating chat titles.
   final AskAiService? _askAiService;
 
-  /// Ticket board state for intercepting create_tickets tool calls.
-  ///
-  /// When set, tool invocations with toolName 'create_tickets' are intercepted
-  /// and routed to the ticket board for bulk review. Set this during
-  /// initialization when the ticket board is available.
-  TicketBoardState? ticketBoard;
-
-  /// Pending tool use ID for a create_tickets invocation awaiting user review.
-  ///
-  /// Stored when a create_tickets tool call is intercepted, used to send the
-  /// tool result back to the agent after the user approves or rejects.
-  String? _pendingTicketToolUseId;
-
-  /// The chat that sent the pending create_tickets tool invocation.
-  ///
-  /// Stored alongside [_pendingTicketToolUseId] so we can send the tool result
-  /// back through the correct chat's transport.
-  ChatState? _pendingTicketChat;
-
-  /// Maximum number of ticket proposals allowed in a single create_tickets call.
-  static const int maxProposalCount = 50;
-
   /// Set of chat IDs that are currently having their title generated.
   ///
   /// Used to prevent duplicate concurrent title generation requests.
@@ -140,11 +116,7 @@ class EventHandler {
   ///
   /// If [askAiService] is provided, it will be used to auto-generate chat
   /// titles after the first assistant response.
-  ///
-  /// If [ticketBoard] is provided, `create_tickets` tool invocations will
-  /// be intercepted and routed to the ticket board for bulk review.
-  EventHandler({AskAiService? askAiService, this.ticketBoard})
-      : _askAiService = askAiService;
+  EventHandler({AskAiService? askAiService}) : _askAiService = askAiService;
 
   /// Handle an incoming InsightsEvent.
   ///
@@ -176,8 +148,8 @@ class EventHandler {
         _handleStreamDelta(chat, e);
       case final UsageUpdateEvent e:
         _handleUsageUpdate(chat, e);
-      case PermissionRequestEvent e:
-        _handlePermissionRequest(chat, e);
+      case PermissionRequestEvent _:
+        break; // Handled via permission stream
     }
   }
 
@@ -194,12 +166,6 @@ class EventHandler {
   }
 
   void _handleToolInvocation(ChatState chat, ToolInvocationEvent event) {
-    // Intercept create_tickets tool calls for ticket board integration
-    if (event.toolName == 'create_tickets' && ticketBoard != null) {
-      _handleCreateTickets(chat, event);
-      return;
-    }
-
     final conversationId = _resolveConversationId(chat, event.parentCallId);
 
     // Check for streaming entries to finalize
@@ -265,190 +231,6 @@ class EventHandler {
       chat.removePendingPermissionByToolUseId(event.callId);
     }
   }
-
-  /// Handles a create_tickets tool invocation.
-  ///
-  /// Parses the tool input, validates the proposals, and stages them in the
-  /// [ticketBoard] for bulk review. The tool result is deferred until the
-  /// user approves or rejects the proposals via [completeTicketReview].
-  void _handleCreateTickets(ChatState chat, ToolInvocationEvent event) {
-    final board = ticketBoard!;
-
-    // Parse the tickets array from tool input
-    final ticketsInput = event.input['tickets'];
-    if (ticketsInput == null || ticketsInput is! List) {
-      developer.log(
-        'create_tickets: missing or invalid "tickets" field in tool input',
-        name: 'EventHandler',
-        level: 900,
-      );
-      return;
-    }
-
-    final ticketsList = ticketsInput.cast<Map<String, dynamic>>();
-
-    // Validate: not empty
-    if (ticketsList.isEmpty) {
-      developer.log(
-        'create_tickets: empty tickets array',
-        name: 'EventHandler',
-        level: 900,
-      );
-      return;
-    }
-
-    // Validate: not too many
-    if (ticketsList.length > maxProposalCount) {
-      developer.log(
-        'create_tickets: too many proposals (${ticketsList.length} > $maxProposalCount)',
-        name: 'EventHandler',
-        level: 900,
-      );
-      return;
-    }
-
-    // Parse and validate each proposal
-    final proposals = <TicketProposal>[];
-    for (var i = 0; i < ticketsList.length; i++) {
-      final json = ticketsList[i];
-
-      // Validate required fields
-      final title = json['title'] as String?;
-      final description = json['description'] as String?;
-      final kind = json['kind'] as String?;
-
-      if (title == null || title.isEmpty) {
-        developer.log(
-          'create_tickets: proposal at index $i missing required "title" field',
-          name: 'EventHandler',
-          level: 900,
-        );
-        return;
-      }
-
-      if (description == null) {
-        developer.log(
-          'create_tickets: proposal at index $i missing required "description" field',
-          name: 'EventHandler',
-          level: 900,
-        );
-        return;
-      }
-
-      if (kind == null || kind.isEmpty) {
-        developer.log(
-          'create_tickets: proposal at index $i missing required "kind" field',
-          name: 'EventHandler',
-          level: 900,
-        );
-        return;
-      }
-
-      try {
-        proposals.add(TicketProposal.fromJson(json));
-      } catch (e) {
-        developer.log(
-          'create_tickets: failed to parse proposal at index $i: $e',
-          name: 'EventHandler',
-          level: 900,
-        );
-        return;
-      }
-    }
-
-    // Store the pending tool use ID and chat for the result callback
-    _pendingTicketToolUseId = event.callId;
-    _pendingTicketChat = chat;
-
-    // Wire up the callback so the result is sent back when review completes
-    board.onBulkReviewComplete = ({
-      required int approvedCount,
-      required int rejectedCount,
-    }) {
-      completeTicketReview(
-        approvedCount: approvedCount,
-        rejectedCount: rejectedCount,
-      );
-      // Clear the callback after it fires
-      board.onBulkReviewComplete = null;
-    };
-
-    // Stage the proposals in the ticket board
-    board.proposeBulk(
-      proposals,
-      sourceChatId: chat.data.id,
-      sourceChatName: chat.data.name,
-    );
-
-    developer.log(
-      'create_tickets: staged ${proposals.length} proposals for bulk review',
-      name: 'EventHandler',
-    );
-
-    // Also create the tool entry for display (showing the tool was used)
-    final conversationId = _resolveConversationId(chat, event.parentCallId);
-    final entry = ToolUseOutputEntry(
-      timestamp: DateTime.now(),
-      toolName: event.toolName,
-      toolKind: event.kind,
-      provider: event.provider,
-      toolUseId: event.callId,
-      toolInput: Map<String, dynamic>.from(event.input),
-      model: event.model,
-    );
-    entry.addRawMessage(event.raw ?? {});
-    _toolCallIndex[event.callId] = entry;
-    chat.addOutputEntry(conversationId, entry);
-  }
-
-  /// Completes the ticket review and sends the tool result back to the agent.
-  ///
-  /// Call this after the user approves or rejects proposals in the bulk review
-  /// panel. The [approvedCount] and [rejectedCount] are used to build the
-  /// result message sent back to the agent.
-  ///
-  /// If no pending ticket review exists, this is a no-op.
-  void completeTicketReview({
-    required int approvedCount,
-    required int rejectedCount,
-  }) {
-    final toolUseId = _pendingTicketToolUseId;
-    final chat = _pendingTicketChat;
-
-    if (toolUseId == null || chat == null) return;
-
-    // Build result message
-    final total = approvedCount + rejectedCount;
-    final String resultText;
-    if (approvedCount == 0) {
-      resultText = 'All $total ticket proposals were rejected by the user.';
-    } else if (rejectedCount == 0) {
-      resultText = 'All $approvedCount ticket proposals were approved and created.';
-    } else {
-      resultText = '$approvedCount of $total ticket proposals were approved and created. '
-          '$rejectedCount were rejected.';
-    }
-
-    // Update the tool entry with the result
-    final entry = _toolCallIndex[toolUseId];
-    if (entry != null) {
-      entry.updateResult(resultText, false);
-      chat.persistToolResult(toolUseId, resultText, false);
-      chat.notifyListeners();
-    }
-
-    // Clear pending state
-    _pendingTicketToolUseId = null;
-    _pendingTicketChat = null;
-
-    developer.log(
-      'create_tickets: review completed - approved=$approvedCount, rejected=$rejectedCount',
-      name: 'EventHandler',
-    );
-  }
-
-  /// Whether there is a pending ticket review awaiting user action.
-  bool get hasPendingTicketReview => _pendingTicketToolUseId != null;
 
   /// Formats token count with K suffix for readability.
   String _formatTokens(int tokens) {
@@ -743,9 +525,6 @@ class EventHandler {
 
       // Reset the flag for the next turn
       _hasAssistantOutputThisTurn[chatId] = false;
-
-      // Ticket status transitions: linked tickets → inReview + cost accumulation
-      _updateLinkedTicketsOnTurnComplete(chat, event);
     } else {
       // Subagent result - determine agent status from subtype
       final AgentStatus status;
@@ -1173,83 +952,6 @@ $userMessage''';
     }
   }
 
-  /// Updates linked tickets when a main agent turn completes.
-  ///
-  /// Transitions non-terminal linked tickets to [TicketStatus.inReview] and
-  /// accumulates cost/usage statistics from the turn.
-  void _updateLinkedTicketsOnTurnComplete(
-    ChatState chat,
-    TurnCompleteEvent event,
-  ) {
-    final board = ticketBoard;
-    if (board == null) return;
-
-    final linkedTickets = board.getTicketsForChat(chat.data.id);
-    if (linkedTickets.isEmpty) return;
-
-    // Calculate total tokens from usage
-    int totalTokens = 0;
-    if (event.usage != null) {
-      totalTokens = event.usage!.inputTokens + event.usage!.outputTokens;
-    }
-
-    final costUsd = event.costUsd ?? 0.0;
-    final durationMs = event.durationMs ?? 0;
-
-    for (final ticket in linkedTickets) {
-      // Transition to inReview if not in a terminal state
-      if (!ticket.isTerminal) {
-        board.setStatus(ticket.id, TicketStatus.inReview);
-      }
-
-      // Accumulate cost stats regardless of status (even terminal tickets
-      // should track their total cost)
-      if (totalTokens > 0 || costUsd > 0 || durationMs > 0) {
-        board.accumulateCostStats(
-          ticket.id,
-          tokens: totalTokens,
-          cost: costUsd,
-          agentTimeMs: durationMs,
-        );
-      }
-    }
-  }
-
-  /// Handles a permission request event for ticket status transitions.
-  ///
-  /// When a linked chat requests permission, transitions linked tickets
-  /// to [TicketStatus.needsInput] so the user knows attention is needed.
-  /// The actual permission UI handling is still done via the permission stream.
-  void _handlePermissionRequest(ChatState chat, PermissionRequestEvent event) {
-    // Ticket status transition: linked tickets → needsInput
-    final board = ticketBoard;
-    if (board != null) {
-      final linkedTickets = board.getTicketsForChat(chat.data.id);
-      for (final ticket in linkedTickets) {
-        if (!ticket.isTerminal && ticket.status == TicketStatus.active) {
-          board.setStatus(ticket.id, TicketStatus.needsInput);
-        }
-      }
-    }
-  }
-
-  /// Notifies the event handler that a permission response was sent.
-  ///
-  /// Call this from [ChatState] after [allowPermission] or [denyPermission]
-  /// to transition linked tickets back to [TicketStatus.active] from
-  /// [TicketStatus.needsInput].
-  void handlePermissionResponse(ChatState chat) {
-    final board = ticketBoard;
-    if (board == null) return;
-
-    final linkedTickets = board.getTicketsForChat(chat.data.id);
-    for (final ticket in linkedTickets) {
-      if (ticket.status == TicketStatus.needsInput) {
-        board.setStatus(ticket.id, TicketStatus.active);
-      }
-    }
-  }
-
   /// Clears all internal state.
   ///
   /// Call this when the session ends or is cleared.
@@ -1261,8 +963,6 @@ $userMessage''';
     _expectingContextSummary.clear();
     _pendingTitleGenerations.clear();
     _titlesGenerated.clear();
-    _pendingTicketToolUseId = null;
-    _pendingTicketChat = null;
     _streamingBlocks.clear();
     _activeStreamingEntries.clear();
     _streamingConversationId = null;
