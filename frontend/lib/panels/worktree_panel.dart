@@ -1011,9 +1011,6 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                         ),
                       ),
                     const SizedBox(height: 2),
-                    // Cost/token summary for linked worktrees
-                    if (!data.isPrimary)
-                      _WorktreeCostSummary(worktree: worktree),
                     // Path + status on same line (muted, monospace, ~11px)
                     // Primary worktree: show full path trimmed from the start.
                     // Linked worktrees: cost/token summary instead of path.
