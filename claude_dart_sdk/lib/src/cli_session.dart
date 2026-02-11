@@ -352,7 +352,22 @@ class CliSession {
       _lastAssistantUsage = messageUsage;
     }
 
-    if (content == null || content.isEmpty) return [];
+    if (content == null || content.isEmpty) {
+      // Even if there's no content, emit usage update if we have usage data.
+      // This happens for intermediate assistant messages during tool use.
+      if (messageUsage != null) {
+        return [
+          UsageUpdateEvent(
+            id: _nextEventId(),
+            timestamp: DateTime.now(),
+            provider: BackendProvider.claude,
+            sessionId: sid,
+            stepUsage: Map<String, dynamic>.from(messageUsage),
+          ),
+        ];
+      }
+      return [];
+    }
 
     final events = <InsightsEvent>[];
 
@@ -427,6 +442,17 @@ class CliSession {
             ));
           }
       }
+    }
+
+    // Emit intermediate usage update so the frontend can update in real-time.
+    if (messageUsage != null) {
+      events.add(UsageUpdateEvent(
+        id: _nextEventId(),
+        timestamp: DateTime.now(),
+        provider: BackendProvider.claude,
+        sessionId: sid,
+        stepUsage: Map<String, dynamic>.from(messageUsage),
+      ));
     }
 
     return events;

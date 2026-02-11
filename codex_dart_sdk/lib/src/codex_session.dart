@@ -342,6 +342,27 @@ class CodexSession implements AgentSession {
     if (contextWindow != null && contextWindow > 0) {
       _modelContextWindow = contextWindow;
     }
+
+    // Emit intermediate usage update from the "last" per-step field.
+    // Uses Claude-compatible field names so ContextTracker.updateFromUsage works.
+    final lastUsage = _latestTokenUsage?['last'] as Map<String, dynamic>?;
+    final lastInput = (lastUsage?['inputTokens'] as num?)?.toInt() ?? 0;
+    final lastOutput = (lastUsage?['outputTokens'] as num?)?.toInt() ?? 0;
+    final lastCached = (lastUsage?['cachedInputTokens'] as num?)?.toInt() ?? 0;
+    if (lastInput > 0 || lastOutput > 0) {
+      _eventsController.add(UsageUpdateEvent(
+        id: _nextEventId(),
+        timestamp: DateTime.now(),
+        provider: BackendProvider.codex,
+        sessionId: threadId,
+        stepUsage: {
+          'input_tokens': lastInput,
+          'output_tokens': lastOutput,
+          'cache_read_input_tokens': lastCached,
+          'cache_creation_input_tokens': 0,
+        },
+      ));
+    }
   }
 
   void _handleItemStarted(Map<String, dynamic> params) {

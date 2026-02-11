@@ -10,6 +10,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         TextEvent,
         UserInputEvent,
         TurnCompleteEvent,
+        UsageUpdateEvent,
         SessionInitEvent,
         SessionStatusEvent,
         ContextCompactionEvent,
@@ -143,6 +144,8 @@ class EventHandler {
         _handleSubagentComplete(chat, e);
       case StreamDeltaEvent e:
         _handleStreamDelta(chat, e);
+      case UsageUpdateEvent e:
+        _handleUsageUpdate(chat, e);
       case PermissionRequestEvent _:
         break; // Handled via permission stream
     }
@@ -513,6 +516,16 @@ class EventHandler {
 
       chat.updateAgent(status, parentCallId);
     }
+  }
+
+  // Intermediate usage update — fires after each API call (step) during a turn.
+  void _handleUsageUpdate(ChatState chat, UsageUpdateEvent event) {
+    // Only update for main agent events (no parentCallId in extensions).
+    final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
+    if (parentCallId != null) return;
+
+    // Update context tracker with per-step usage (reflects actual context size).
+    chat.updateContextFromUsage(event.stepUsage);
   }
 
   // Task 4d: Streaming delta handling

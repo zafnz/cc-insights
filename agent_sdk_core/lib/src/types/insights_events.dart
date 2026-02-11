@@ -239,6 +239,7 @@ sealed class InsightsEvent {
       'context_compaction' => ContextCompactionEvent.fromJson(json),
       'permission_request' => PermissionRequestEvent.fromJson(json),
       'stream_delta' => StreamDeltaEvent.fromJson(json),
+      'usage_update' => UsageUpdateEvent.fromJson(json),
       _ => throw ArgumentError('Unknown event type: $event'),
     };
   }
@@ -973,6 +974,64 @@ class PermissionSuggestionData {
         if (directory != null) 'directory': directory,
         if (mode != null) 'mode': mode,
         'description': description,
+      };
+}
+
+// ---------------------------------------------------------------------------
+// Usage update events
+// ---------------------------------------------------------------------------
+
+/// Intermediate usage data emitted during a turn.
+///
+/// This event carries per-step usage from a single API call, allowing the
+/// frontend to update context and token displays in real-time rather than
+/// waiting for the [TurnCompleteEvent] at the end of the turn.
+///
+/// The [stepUsage] contains per-API-call token counts (input, output, cache).
+/// These are NOT cumulative across steps — they reflect a single step.
+///
+/// When the turn completes, [TurnCompleteEvent] provides authoritative
+/// cumulative totals that overwrite any intermediate estimates.
+class UsageUpdateEvent extends InsightsEvent {
+  final String sessionId;
+
+  /// Per-step usage from a single API call.
+  ///
+  /// Keys use snake_case wire format:
+  /// - `input_tokens`
+  /// - `output_tokens`
+  /// - `cache_creation_input_tokens`
+  /// - `cache_read_input_tokens`
+  final Map<String, dynamic> stepUsage;
+
+  const UsageUpdateEvent({
+    required super.id,
+    required super.timestamp,
+    required super.provider,
+    super.raw,
+    super.extensions,
+    required this.sessionId,
+    required this.stepUsage,
+  });
+
+  factory UsageUpdateEvent.fromJson(Map<String, dynamic> json) {
+    final base = InsightsEvent.parseBase(json);
+    return UsageUpdateEvent(
+      id: base.id,
+      timestamp: base.timestamp,
+      provider: base.provider,
+      raw: base.raw,
+      extensions: base.extensions,
+      sessionId: json['sessionId'] as String,
+      stepUsage: json['stepUsage'] as Map<String, dynamic>? ?? {},
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...baseJson('usage_update'),
+        'sessionId': sessionId,
+        'stepUsage': stepUsage,
       };
 }
 
