@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/project.dart';
 import '../models/ticket.dart';
+import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
 
 /// Status bar showing backend connection status and statistics.
@@ -56,6 +57,7 @@ class StatusBar extends StatelessWidget {
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+          const _RateLimitStats(),
           const Spacer(),
           // Stats on the right
           if (showTicketStats)
@@ -153,6 +155,81 @@ class _ProjectStats extends StatelessWidget {
           'Total \$${totalCost.toStringAsFixed(2)}',
           style: textTheme.labelSmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Rate limit display from Codex backend.
+///
+/// Shows primary and secondary rate limit windows when available.
+/// Hidden when no rate limit data has been received.
+class _RateLimitStats extends StatelessWidget {
+  const _RateLimitStats();
+
+  /// Returns a color based on usage percentage.
+  Color _usageColor(int percent, ColorScheme colorScheme) {
+    if (percent >= 80) return colorScheme.error;
+    if (percent >= 50) return Colors.orange;
+    return colorScheme.onSurfaceVariant;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Use nullable lookup so the widget works without the provider in tests.
+    final RateLimitState? rateLimits;
+    try {
+      rateLimits = context.watch<RateLimitState>();
+    } on ProviderNotFoundException {
+      return const SizedBox.shrink();
+    }
+    if (!rateLimits.hasData) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final baseStyle = textTheme.labelSmall;
+
+    // Determine highest usage for the overall color
+    final maxUsage = [
+      rateLimits.primary?.usedPercent ?? 0,
+      rateLimits.secondary?.usedPercent ?? 0,
+    ].reduce((a, b) => a > b ? a : b);
+
+    final parts = <String>[];
+    if (rateLimits.primary != null) {
+      parts.add(RateLimitState.formatWindow(rateLimits.primary!));
+    }
+    if (rateLimits.secondary != null) {
+      parts.add(RateLimitState.formatWindow(rateLimits.secondary!));
+    }
+    if (parts.isEmpty) return const SizedBox.shrink();
+
+    final tooltipLines = <String>['Codex Rate Limits'];
+    if (rateLimits.planType != null) {
+      tooltipLines.add('Plan: ${rateLimits.planType}');
+    }
+    if (rateLimits.primary != null) {
+      tooltipLines.add(
+          'Primary: ${rateLimits.primary!.usedPercent}% used');
+    }
+    if (rateLimits.secondary != null) {
+      tooltipLines.add(
+          'Secondary: ${rateLimits.secondary!.usedPercent}% used');
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _StatusBarDot(),
+        Tooltip(
+          message: tooltipLines.join('\n'),
+          child: Text(
+            'Ratelimits: ${parts.join(", ")}',
+            style: baseStyle?.copyWith(
+              color: _usageColor(maxUsage, colorScheme),
+            ),
           ),
         ),
       ],

@@ -40,6 +40,7 @@ import 'services/menu_action_service.dart';
 import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'state/theme_state.dart';
+import 'state/rate_limit_state.dart';
 import 'state/ticket_board_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
@@ -197,6 +198,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Theme state for dynamic theme switching.
   ThemeState? _themeState;
+
+  /// Rate limit state for displaying rate limit information from Codex.
+  final RateLimitState _rateLimitState = RateLimitState();
 
   /// Menu action service for broadcasting menu actions to MainScreen.
   final MenuActionService _menuActionService = MenuActionService();
@@ -385,6 +389,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create or use injected EventHandler
     _eventHandler =
         widget.eventHandler ?? EventHandler(askAiService: _askAiService);
+    _eventHandler!.rateLimitState = _rateLimitState;
 
     // Initialize project (sync for mock, async for CLI launch)
     // If showing welcome screen, defer project loading until user selects one
@@ -1022,6 +1027,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Theme state for dynamic theme switching
         ChangeNotifierProvider<ThemeState>.value(
           value: _themeState!,
+        ),
+        // Rate limit state for displaying Codex rate limits
+        ChangeNotifierProvider<RateLimitState>.value(
+          value: _rateLimitState,
         ),
         // Dialog observer for keyboard focus management
         Provider<DialogObserver>.value(value: _dialogObserver),

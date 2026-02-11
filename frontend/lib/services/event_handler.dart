@@ -11,6 +11,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         UserInputEvent,
         TurnCompleteEvent,
         UsageUpdateEvent,
+        RateLimitUpdateEvent,
         SessionInitEvent,
         SessionStatusEvent,
         ContextCompactionEvent,
@@ -31,6 +32,7 @@ import '../models/chat_model.dart';
 import '../models/codex_pricing.dart';
 import '../models/output_entry.dart';
 import '../models/ticket.dart';
+import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
 import 'ask_ai_service.dart';
 import 'log_service.dart';
@@ -80,6 +82,12 @@ class EventHandler {
 
   /// AskAiService for generating chat titles.
   final AskAiService? _askAiService;
+
+  /// Rate limit state for displaying rate limit information.
+  ///
+  /// When set, [RateLimitUpdateEvent]s are forwarded to this state so the UI
+  /// can display the latest rate limit data.
+  RateLimitState? rateLimitState;
 
   /// Ticket board state for intercepting create_tickets tool calls.
   ///
@@ -178,6 +186,8 @@ class EventHandler {
         _handleUsageUpdate(chat, e);
       case PermissionRequestEvent e:
         _handlePermissionRequest(chat, e);
+      case final RateLimitUpdateEvent e:
+        rateLimitState?.update(e);
     }
   }
 

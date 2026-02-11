@@ -163,6 +163,8 @@ class CodexSession implements AgentSession {
         _handleTurnCompleted(params);
       case 'config/warning':
         _handleConfigWarning(params);
+      case 'account/rateLimits/updated':
+        _handleRateLimitsUpdated(params);
       default:
         break;
     }
@@ -622,6 +624,30 @@ class CodexSession implements AgentSession {
       sessionId: threadId,
       text: summary,
       kind: TextKind.error,
+    ));
+  }
+
+  void _handleRateLimitsUpdated(Map<String, dynamic> params) {
+    final rateLimits = params['rateLimits'] as Map<String, dynamic>?;
+    if (rateLimits == null) return;
+
+    final primaryJson = rateLimits['primary'] as Map<String, dynamic>?;
+    final secondaryJson = rateLimits['secondary'] as Map<String, dynamic>?;
+    final creditsJson = rateLimits['credits'] as Map<String, dynamic>?;
+
+    _eventsController.add(RateLimitUpdateEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.codex,
+      raw: params,
+      sessionId: threadId,
+      primary:
+          primaryJson != null ? RateLimitWindow.fromJson(primaryJson) : null,
+      secondary:
+          secondaryJson != null ? RateLimitWindow.fromJson(secondaryJson) : null,
+      credits:
+          creditsJson != null ? RateLimitCredits.fromJson(creditsJson) : null,
+      planType: rateLimits['planType'] as String?,
     ));
   }
 

@@ -240,6 +240,7 @@ sealed class InsightsEvent {
       'permission_request' => PermissionRequestEvent.fromJson(json),
       'stream_delta' => StreamDeltaEvent.fromJson(json),
       'usage_update' => UsageUpdateEvent.fromJson(json),
+      'rate_limit_update' => RateLimitUpdateEvent.fromJson(json),
       _ => throw ArgumentError('Unknown event type: $event'),
     };
   }
@@ -1096,5 +1097,124 @@ class StreamDeltaEvent extends InsightsEvent {
         if (jsonDelta != null) 'jsonDelta': jsonDelta,
         if (blockIndex != null) 'blockIndex': blockIndex,
         if (callId != null) 'callId': callId,
+      };
+}
+
+// ---------------------------------------------------------------------------
+// Rate limit events
+// ---------------------------------------------------------------------------
+
+/// A single rate limit window (primary or secondary).
+@immutable
+class RateLimitWindow {
+  final int usedPercent;
+  final int? windowDurationMins;
+  final int? resetsAt;
+
+  const RateLimitWindow({
+    required this.usedPercent,
+    this.windowDurationMins,
+    this.resetsAt,
+  });
+
+  factory RateLimitWindow.fromJson(Map<String, dynamic> json) {
+    return RateLimitWindow(
+      usedPercent: json['usedPercent'] as int? ?? 0,
+      windowDurationMins: json['windowDurationMins'] as int?,
+      resetsAt: (json['resetsAt'] as num?)?.toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'usedPercent': usedPercent,
+        if (windowDurationMins != null)
+          'windowDurationMins': windowDurationMins,
+        if (resetsAt != null) 'resetsAt': resetsAt,
+      };
+}
+
+/// Credit information from the rate limit update.
+@immutable
+class RateLimitCredits {
+  final bool hasCredits;
+  final bool unlimited;
+  final String? balance;
+
+  const RateLimitCredits({
+    required this.hasCredits,
+    required this.unlimited,
+    this.balance,
+  });
+
+  factory RateLimitCredits.fromJson(Map<String, dynamic> json) {
+    return RateLimitCredits(
+      hasCredits: json['hasCredits'] as bool? ?? false,
+      unlimited: json['unlimited'] as bool? ?? false,
+      balance: json['balance'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'hasCredits': hasCredits,
+        'unlimited': unlimited,
+        if (balance != null) 'balance': balance,
+      };
+}
+
+/// Account rate limit data updated by the backend.
+///
+/// This event is emitted when the backend reports updated rate limit
+/// information for the account. It carries primary and secondary rate
+/// limit windows, credit info, and the plan type.
+class RateLimitUpdateEvent extends InsightsEvent {
+  final String sessionId;
+  final RateLimitWindow? primary;
+  final RateLimitWindow? secondary;
+  final RateLimitCredits? credits;
+  final String? planType;
+
+  const RateLimitUpdateEvent({
+    required super.id,
+    required super.timestamp,
+    required super.provider,
+    super.raw,
+    super.extensions,
+    required this.sessionId,
+    this.primary,
+    this.secondary,
+    this.credits,
+    this.planType,
+  });
+
+  factory RateLimitUpdateEvent.fromJson(Map<String, dynamic> json) {
+    final base = InsightsEvent.parseBase(json);
+    return RateLimitUpdateEvent(
+      id: base.id,
+      timestamp: base.timestamp,
+      provider: base.provider,
+      raw: base.raw,
+      extensions: base.extensions,
+      sessionId: json['sessionId'] as String,
+      primary: json['primary'] != null
+          ? RateLimitWindow.fromJson(json['primary'] as Map<String, dynamic>)
+          : null,
+      secondary: json['secondary'] != null
+          ? RateLimitWindow.fromJson(json['secondary'] as Map<String, dynamic>)
+          : null,
+      credits: json['credits'] != null
+          ? RateLimitCredits.fromJson(json['credits'] as Map<String, dynamic>)
+          : null,
+      planType: json['planType'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...baseJson('rate_limit_update'),
+        'sessionId': sessionId,
+        if (primary != null) 'primary': primary!.toJson(),
+        if (secondary != null) 'secondary': secondary!.toJson(),
+        if (credits != null) 'credits': credits!.toJson(),
+        if (planType != null) 'planType': planType,
       };
 }
