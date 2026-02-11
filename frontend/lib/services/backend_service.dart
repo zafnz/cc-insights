@@ -43,6 +43,10 @@ class BackendService extends ChangeNotifier {
   final Set<BackendType> _starting = {};
   final Set<BackendType> _modelListLoading = {};
 
+  final _rateLimitsController =
+      StreamController<RateLimitUpdateEvent>.broadcast();
+  StreamSubscription<RateLimitUpdateEvent>? _rateLimitSub;
+
   BackendType? _backendType;
 
   /// Whether the backend is ready to accept session creation requests.
@@ -109,6 +113,12 @@ class BackendService extends ChangeNotifier {
     }
     return null;
   }
+
+  /// Stream of account-level rate limit updates from the Codex backend.
+  ///
+  /// Emits events directly from the backend process, independent of any
+  /// active session. Returns an empty stream if no Codex backend is active.
+  Stream<RateLimitUpdateEvent> get rateLimits => _rateLimitsController.stream;
 
   /// Returns security capabilities for the Codex backend.
   CodexSecurityCapabilities get codexSecurityCapabilities {
@@ -198,6 +208,14 @@ class BackendService extends ChangeNotifier {
         _errors[type] = error.toString();
         notifyListeners();
       });
+
+      // Forward Codex rate limit events
+      if (type == BackendType.codex && backend is CodexBackend) {
+        _rateLimitSub?.cancel();
+        _rateLimitSub = backend.rateLimits.listen(
+          _rateLimitsController.add,
+        );
+      }
 
       // Backend log entries (SDK message traces) are NOT forwarded to
       // LogService. They are high-volume chat/session data that belongs
@@ -366,6 +384,10 @@ class BackendService extends ChangeNotifier {
 
   /// Disposes a single backend and its associated subscriptions.
   Future<void> _disposeBackend(BackendType type) async {
+    if (type == BackendType.codex) {
+      await _rateLimitSub?.cancel();
+      _rateLimitSub = null;
+    }
     await _errorSubscriptions.remove(type)?.cancel();
     final backend = _backends.remove(type);
     await backend?.dispose();
@@ -379,6 +401,8 @@ class BackendService extends ChangeNotifier {
   /// the backend process is properly terminated.
   @override
   void dispose() {
+    _rateLimitSub?.cancel();
+    _rateLimitsController.close();
     for (final sub in _errorSubscriptions.values) {
       sub.cancel();
     }

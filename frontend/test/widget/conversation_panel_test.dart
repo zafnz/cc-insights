@@ -182,6 +182,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
       const CodexSecurityCapabilities();
 
   @override
+  Stream<sdk.RateLimitUpdateEvent> get rateLimits => const Stream.empty();
+
+  @override
   void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {
     // Not needed in these tests
   }

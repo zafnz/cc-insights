@@ -49,6 +49,9 @@ class FakeCodexBackend implements CodexBackend {
   Stream<LogEntry> get logEntries => const Stream.empty();
 
   @override
+  Stream<RateLimitUpdateEvent> get rateLimits => const Stream.empty();
+
+  @override
   List<AgentSession> get sessions => [];
 
   @override

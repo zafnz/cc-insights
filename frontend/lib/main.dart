@@ -227,6 +227,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Subscription forwarding SDK trace logs to LogService.
   StreamSubscription<sdk.LogEntry>? _sdkLogSubscription;
 
+  /// Subscription forwarding backend-level rate limit events to UI state.
+  StreamSubscription<sdk.RateLimitUpdateEvent>? _rateLimitSubscription;
+
   /// Debounce timer for saving window size after resize.
   Timer? _windowSizeDebounce;
 
@@ -390,6 +393,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _eventHandler =
         widget.eventHandler ?? EventHandler(askAiService: _askAiService);
     _eventHandler!.rateLimitState = _rateLimitState;
+
+    // Subscribe to backend-level rate limit events (independent of sessions).
+    // This ensures rate limit data is captured even if no chat session is
+    // actively listening when the notification arrives.
+    _rateLimitSubscription = _backend!.rateLimits.listen(
+      _rateLimitState.update,
+    );
 
     // Initialize project (sync for mock, async for CLI launch)
     // If showing welcome screen, defer project loading until user selects one
@@ -598,6 +608,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void dispose() {
     _windowSizeDebounce?.cancel();
     _sdkLogSubscription?.cancel();
+    _rateLimitSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _menuActionService.removeListener(_onMenuServiceChanged);
     _themeState?.removeListener(_onThemeChanged);

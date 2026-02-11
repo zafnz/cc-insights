@@ -7,15 +7,21 @@ import 'codex_config.dart';
 import 'codex_config_writer.dart';
 import 'codex_process.dart';
 import 'codex_session.dart';
+import 'json_rpc.dart';
 
 /// Backend that communicates with Codex app-server.
 class CodexBackend implements AgentBackend, ModelListingBackend {
-  CodexBackend._({required CodexProcess process}) : _process = process;
+  CodexBackend._({required CodexProcess process}) : _process = process {
+    _setupRateLimitListener();
+  }
 
   final CodexProcess _process;
 
   final _sessions = <String, CodexSession>{};
   final _errorsController = StreamController<BackendError>.broadcast();
+  final _rateLimitsController =
+      StreamController<RateLimitUpdateEvent>.broadcast();
+  StreamSubscription<JsonRpcNotification>? _rateLimitSub;
 
   bool _disposed = false;
 
@@ -37,6 +43,43 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
         supportsModelListing: true,
         supportsReasoningEffort: true,
       );
+
+  /// Stream of account-level rate limit updates.
+  ///
+  /// Listens directly on the process notification stream so events are
+  /// captured regardless of whether any session is active.
+  Stream<RateLimitUpdateEvent> get rateLimits => _rateLimitsController.stream;
+
+  void _setupRateLimitListener() {
+    _rateLimitSub = _process.notifications.listen((notification) {
+      if (notification.method != 'account/rateLimits/updated') return;
+      final params = notification.params ?? const <String, dynamic>{};
+      final rateLimits = params['rateLimits'] as Map<String, dynamic>?;
+      if (rateLimits == null) return;
+
+      final primaryJson = rateLimits['primary'] as Map<String, dynamic>?;
+      final secondaryJson = rateLimits['secondary'] as Map<String, dynamic>?;
+      final creditsJson = rateLimits['credits'] as Map<String, dynamic>?;
+
+      _rateLimitsController.add(RateLimitUpdateEvent(
+        id: 'backend-ratelimit-${DateTime.now().microsecondsSinceEpoch}',
+        timestamp: DateTime.now(),
+        provider: BackendProvider.codex,
+        raw: params,
+        sessionId: '',
+        primary: primaryJson != null
+            ? RateLimitWindow.fromJson(primaryJson)
+            : null,
+        secondary: secondaryJson != null
+            ? RateLimitWindow.fromJson(secondaryJson)
+            : null,
+        credits: creditsJson != null
+            ? RateLimitCredits.fromJson(creditsJson)
+            : null,
+        planType: rateLimits['planType'] as String?,
+      ));
+    });
+  }
 
   /// Spawn a Codex app-server backend.
   static Future<CodexBackend> create({String? executablePath}) async {
@@ -238,6 +281,8 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     }
     _sessions.clear();
 
+    await _rateLimitSub?.cancel();
+    await _rateLimitsController.close();
     await _errorsController.close();
     await _process.dispose();
   }
