@@ -783,11 +783,11 @@ class PersistenceService {
     }
   }
 
-  /// Hides a worktree by removing it from the projects.json index.
+  /// Hides a worktree by setting `hidden: true` in projects.json.
   ///
-  /// This removes the worktree entry from projects.json but leaves all files
-  /// on disk intact (both the worktree directory and any associated chat files).
-  /// The worktree can be re-added later by discovering it via git worktree list.
+  /// The worktree entry remains in projects.json with its chats and tags
+  /// preserved. Hidden worktrees are filtered from the UI by default but
+  /// can be shown via a toggle in the worktree panel header.
   ///
   /// This is a fire-and-forget operation - errors are logged but not thrown.
   Future<void> hideWorktreeFromIndex({
@@ -817,12 +817,14 @@ class PersistenceService {
         return;
       }
 
-      // Remove the worktree from the map
-      final updatedWorktrees = Map<String, WorktreeInfo>.from(project.worktrees)
-        ..remove(worktreePath);
-
-      // Rebuild the index without this worktree
-      final updatedProject = project.copyWith(worktrees: updatedWorktrees);
+      // Set hidden flag on the worktree
+      final updatedWorktree = worktree.copyWith(hidden: true);
+      final updatedProject = project.copyWith(
+        worktrees: {
+          ...project.worktrees,
+          worktreePath: updatedWorktree,
+        },
+      );
       final updatedIndex = projectsIndex.copyWith(
         projects: {
           ...projectsIndex.projects,
@@ -833,12 +835,71 @@ class PersistenceService {
       await saveProjectsIndex(updatedIndex);
 
       developer.log(
-        'Hidden worktree $worktreePath from projects.json (files preserved)',
+        'Hidden worktree $worktreePath in projects.json (hidden flag set)',
         name: 'PersistenceService',
       );
     } catch (e) {
       developer.log(
         'Failed to hide worktree $worktreePath: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+    }
+  }
+
+  /// Unhides a worktree by setting `hidden: false` in projects.json.
+  ///
+  /// This is a fire-and-forget operation - errors are logged but not thrown.
+  Future<void> unhideWorktreeFromIndex({
+    required String projectRoot,
+    required String worktreePath,
+  }) async {
+    try {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
+
+      if (project == null) {
+        developer.log(
+          'Project not found for worktree unhide: $projectRoot',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for unhide: $worktreePath',
+          name: 'PersistenceService',
+          level: 900,
+        );
+        return;
+      }
+
+      final updatedWorktree = worktree.copyWith(hidden: false);
+      final updatedProject = project.copyWith(
+        worktrees: {
+          ...project.worktrees,
+          worktreePath: updatedWorktree,
+        },
+      );
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {
+          ...projectsIndex.projects,
+          projectRoot: updatedProject,
+        },
+      );
+
+      await saveProjectsIndex(updatedIndex);
+
+      developer.log(
+        'Unhidden worktree $worktreePath in projects.json',
+        name: 'PersistenceService',
+      );
+    } catch (e) {
+      developer.log(
+        'Failed to unhide worktree $worktreePath: $e',
         name: 'PersistenceService',
         error: e,
       );

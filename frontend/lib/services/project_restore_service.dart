@@ -206,6 +206,7 @@ class ProjectRestoreService {
       chats: chats,
       tags: worktreeInfo.tags,
       base: base,
+      hidden: worktreeInfo.hidden,
     );
   }
 

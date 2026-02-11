@@ -206,6 +206,9 @@ class WorktreeState extends ChangeNotifier {
   /// default". New worktrees inherit the project's defaultBase at creation.
   String? _base;
 
+  /// Whether this worktree is hidden from the default view.
+  bool _hidden;
+
   /// Draft text typed in the welcome screen before any chat is created.
   ///
   /// Preserved when switching between worktrees so users don't lose their
@@ -238,9 +241,11 @@ class WorktreeState extends ChangeNotifier {
     List<ChatState>? chats,
     List<String>? tags,
     String? base,
+    bool hidden = false,
   }) : _chats = chats ?? [],
        _tags = tags ?? [],
        _base = base,
+       _hidden = hidden,
        _selectedChat = null {
     // Initialize welcome security config based on default backend
     final defaultBackend = RuntimeConfig.instance.defaultBackend;
@@ -364,6 +369,16 @@ class WorktreeState extends ChangeNotifier {
     } else {
       _tags.add(tagName);
     }
+    notifyListeners();
+  }
+
+  /// Whether this worktree is hidden from the default view.
+  bool get hidden => _hidden;
+
+  /// Sets the hidden state of this worktree.
+  void setHidden(bool value) {
+    if (_hidden == value) return;
+    _hidden = value;
     notifyListeners();
   }
 

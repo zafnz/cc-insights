@@ -21,7 +21,7 @@ import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
 /// Worktree panel - shows the list of worktrees.
-class WorktreePanel extends StatelessWidget {
+class WorktreePanel extends StatefulWidget {
   const WorktreePanel({super.key});
 
   /// When true, animated indicators (spinners) are replaced with static
@@ -30,12 +30,37 @@ class WorktreePanel extends StatelessWidget {
   static bool disableAnimations = false;
 
   @override
+  State<WorktreePanel> createState() => _WorktreePanelState();
+}
+
+class _WorktreePanelState extends State<WorktreePanel> {
+  bool _showHidden = false;
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final project = context.watch<ProjectState>();
+    final hasHiddenWorktrees =
+        project.allWorktrees.any((w) => w.hidden);
 
     return PanelWrapper(
       title: 'Worktrees',
       icon: Icons.account_tree,
+      trailing: hasHiddenWorktrees
+          ? Tooltip(
+              message: _showHidden ? 'Hide hidden worktrees' : 'Show hidden worktrees',
+              child: GestureDetector(
+                onTap: () => setState(() => _showHidden = !_showHidden),
+                child: Icon(
+                  _showHidden ? Icons.visibility : Icons.visibility_off,
+                  size: 14,
+                  color: _showHidden
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          : null,
       contextMenuItems: [
         styledMenuItem(
           value: 'restore',
@@ -60,14 +85,16 @@ class WorktreePanel extends StatelessWidget {
           ),
         ),
       ],
-      child: const _WorktreeListContent(),
+      child: _WorktreeListContent(showHidden: _showHidden),
     );
   }
 }
 
 /// Content of the worktree list panel (without header - that's in PanelWrapper).
 class _WorktreeListContent extends StatefulWidget {
-  const _WorktreeListContent();
+  const _WorktreeListContent({required this.showHidden});
+
+  final bool showHidden;
 
   @override
   State<_WorktreeListContent> createState() => _WorktreeListContentState();
@@ -155,11 +182,14 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
   Widget build(BuildContext context) {
     final project = context.watch<ProjectState>();
     final selection = context.watch<SelectionState>();
-    final worktrees = project.allWorktrees;
+    final allWorktrees = project.allWorktrees;
+    final worktrees = widget.showHidden
+        ? allWorktrees
+        : allWorktrees.where((w) => !w.hidden).toList();
 
-    // Ensure keys and listeners are set up
-    _ensureKeysForWorktrees(worktrees);
-    _setupChatListeners(worktrees, selection.selectedWorktree);
+    // Ensure keys and listeners are set up (for all worktrees, not just visible)
+    _ensureKeysForWorktrees(allWorktrees);
+    _setupChatListeners(allWorktrees, selection.selectedWorktree);
 
     // +1 for the ghost "Create New Worktree" card
     final itemCount = worktrees.length + 1;
@@ -613,23 +643,42 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       ),
       if (!data.isPrimary) ...[
         const PopupMenuDivider(height: 8),
-        styledMenuItem(
-          value: 'hide',
-          child: Row(
-            children: [
-              Icon(
-                Icons.visibility_off_outlined,
-                size: 16,
-                color: colorScheme.onSurface,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Hide Worktree',
-                style: TextStyle(color: colorScheme.onSurface),
-              ),
-            ],
+        if (worktree.hidden)
+          styledMenuItem(
+            value: 'unhide',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.visibility_outlined,
+                  size: 16,
+                  color: colorScheme.onSurface,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Unhide Worktree',
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+              ],
+            ),
+          )
+        else
+          styledMenuItem(
+            value: 'hide',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.visibility_off_outlined,
+                  size: 16,
+                  color: colorScheme.onSurface,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Hide Worktree',
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+              ],
+            ),
           ),
-        ),
         styledMenuItem(
           value: 'delete',
           child: Row(
@@ -662,6 +711,8 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         _showTagsSubmenu(context, position, availableTags);
       case 'hide':
         await _handleHide(context);
+      case 'unhide':
+        await _handleUnhide(context);
       case 'delete':
         await _handleDelete(context);
       default:
@@ -750,18 +801,8 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   Future<void> _handleHide(BuildContext context) async {
     final project = context.read<ProjectState>();
     final persistenceService = context.read<PersistenceService>();
-    final settings = context.read<SettingsService>();
-    final archive = settings.getValue<bool>('behavior.archiveChats');
 
-    // Archive chats before hiding if the setting is enabled
-    if (archive) {
-      await persistenceService.archiveWorktreeChats(
-        projectRoot: project.data.repoRoot,
-        worktreePath: worktree.data.worktreeRoot,
-      );
-    }
-
-    // Hide from projects.json (files stay on disk)
+    // Set hidden flag in projects.json
     await persistenceService.hideWorktreeFromIndex(
       projectRoot: project.data.repoRoot,
       worktreePath: worktree.data.worktreeRoot,
@@ -769,8 +810,24 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
 
     if (!context.mounted) return;
 
-    // Remove the worktree from the project state
-    project.removeLinkedWorktree(worktree);
+    // Update in-memory state
+    worktree.setHidden(true);
+  }
+
+  Future<void> _handleUnhide(BuildContext context) async {
+    final project = context.read<ProjectState>();
+    final persistenceService = context.read<PersistenceService>();
+
+    // Clear hidden flag in projects.json
+    await persistenceService.unhideWorktreeFromIndex(
+      projectRoot: project.data.repoRoot,
+      worktreePath: worktree.data.worktreeRoot,
+    );
+
+    if (!context.mounted) return;
+
+    // Update in-memory state
+    worktree.setHidden(false);
   }
 
   Future<void> _handleDelete(BuildContext context) async {
@@ -844,7 +901,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         final availableTags =
             context.read<SettingsService>().availableTags;
 
-        return GestureDetector(
+        Widget item = GestureDetector(
           onSecondaryTapUp: (details) {
             _showContextMenu(context, details.globalPosition);
           },
@@ -877,6 +934,16 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                             padding: const EdgeInsets.only(right: 6),
                             child: _WorktreeActivitySpinner(
                               color: colorScheme.primary,
+                            ),
+                          ),
+                        // Hidden indicator
+                        if (worktree.hidden)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(
+                              Icons.visibility_off,
+                              size: 12,
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                         // Branch name (normal weight, ~13px)
@@ -941,6 +1008,12 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           ),
           ),
         );
+
+        if (worktree.hidden) {
+          item = Opacity(opacity: 0.5, child: item);
+        }
+
+        return item;
       },
     );
   }

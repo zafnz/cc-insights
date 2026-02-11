@@ -554,6 +554,13 @@ class WorktreeInfo {
   /// Null means "use the project default".
   final String? base;
 
+  /// Whether this worktree is hidden from the UI.
+  ///
+  /// Hidden worktrees are kept in projects.json but filtered from the
+  /// worktree list by default. A toggle in the worktree panel header
+  /// allows showing/hiding them.
+  final bool hidden;
+
   /// Creates a [WorktreeInfo] instance.
   const WorktreeInfo({
     required this.type,
@@ -561,6 +568,7 @@ class WorktreeInfo {
     this.chats = const [],
     this.tags = const [],
     this.base,
+    this.hidden = false,
   });
 
   /// Creates a primary worktree with the given name.
@@ -569,6 +577,7 @@ class WorktreeInfo {
     this.chats = const [],
     this.tags = const [],
     this.base,
+    this.hidden = false,
   }) : type = 'primary';
 
   /// Creates a linked worktree with the given name.
@@ -577,6 +586,7 @@ class WorktreeInfo {
     this.chats = const [],
     this.tags = const [],
     this.base,
+    this.hidden = false,
   }) : type = 'linked';
 
   /// Whether this is the primary worktree (repo root).
@@ -595,6 +605,7 @@ class WorktreeInfo {
     List<String>? tags,
     String? base,
     bool clearBase = false,
+    bool? hidden,
   }) {
     return WorktreeInfo(
       type: type ?? this.type,
@@ -602,6 +613,7 @@ class WorktreeInfo {
       chats: chats ?? this.chats,
       tags: tags ?? this.tags,
       base: clearBase ? null : (base ?? this.base),
+      hidden: hidden ?? this.hidden,
     );
   }
 
@@ -613,6 +625,7 @@ class WorktreeInfo {
       'chats': chats.map((c) => c.toJson()).toList(),
       'tags': tags,
       if (base != null) 'base': base,
+      if (hidden) 'hidden': true,
     };
   }
 
@@ -629,6 +642,7 @@ class WorktreeInfo {
       tags: tagsList.cast<String>(),
       // Support both old 'baseOverride' and new 'base' keys for migration
       base: json['base'] as String? ?? json['baseOverride'] as String?,
+      hidden: json['hidden'] as bool? ?? false,
     );
   }
 
@@ -640,7 +654,8 @@ class WorktreeInfo {
         other.name == name &&
         listEquals(other.chats, chats) &&
         listEquals(other.tags, tags) &&
-        other.base == base;
+        other.base == base &&
+        other.hidden == hidden;
   }
 
   @override
@@ -650,13 +665,14 @@ class WorktreeInfo {
         Object.hashAll(chats),
         Object.hashAll(tags),
         base,
+        hidden,
       );
 
   @override
   String toString() {
     return 'WorktreeInfo(type: $type, name: $name, '
         'chats: ${chats.length}, tags: $tags, '
-        'base: $base)';
+        'base: $base, hidden: $hidden)';
   }
 }
 
