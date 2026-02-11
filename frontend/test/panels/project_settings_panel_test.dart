@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../fakes/fake_persistence_service.dart';
 import '../fakes/fake_project_config_service.dart';
 import '../test_helpers.dart';
 
@@ -14,11 +15,13 @@ void main() {
   group('ProjectSettingsPanel - Git category', () {
     final resources = TestResources();
     late FakeProjectConfigService fakeConfigService;
+    late FakePersistenceService fakePersistenceService;
     late ProjectState projectState;
     late SelectionState selectionState;
 
     setUp(() {
       fakeConfigService = FakeProjectConfigService();
+      fakePersistenceService = FakePersistenceService();
 
       final worktree = WorktreeState(
         const WorktreeData(
@@ -62,6 +65,8 @@ void main() {
               height: 900,
               child: ProjectSettingsPanel(
                 configService: fakeConfigService,
+                persistenceService: fakePersistenceService,
+                worktreeRootCalculator: (_) async => '/test/.project-wt',
               ),
             ),
           ),

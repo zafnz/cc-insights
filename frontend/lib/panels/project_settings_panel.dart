@@ -74,6 +74,9 @@ const _categories = [
   ),
 ];
 
+/// Signature for a function that calculates the default worktree root path.
+typedef WorktreeRootCalculator = Future<String> Function(String projectRoot);
+
 /// Panel for configuring project-specific settings.
 ///
 /// Settings are stored in `.ccinsights/config.json` at the project root.
@@ -81,10 +84,21 @@ const _categories = [
 /// - Lifecycle hooks (worktree-pre-create, worktree-post-create, etc.)
 /// - User-defined action buttons
 class ProjectSettingsPanel extends StatefulWidget {
-  const ProjectSettingsPanel({super.key, this.configService});
+  const ProjectSettingsPanel({
+    super.key,
+    this.configService,
+    this.persistenceService,
+    this.worktreeRootCalculator,
+  });
 
   /// Optional config service for dependency injection (used in tests).
   final ProjectConfigService? configService;
+
+  /// Optional persistence service for dependency injection (used in tests).
+  final PersistenceService? persistenceService;
+
+  /// Optional worktree root calculator for dependency injection (used in tests).
+  final WorktreeRootCalculator? worktreeRootCalculator;
 
   @override
   State<ProjectSettingsPanel> createState() => _ProjectSettingsPanelState();
@@ -93,6 +107,7 @@ class ProjectSettingsPanel extends StatefulWidget {
 class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
   late final ProjectConfigService _configService;
   late final PersistenceService _persistenceService;
+  late final WorktreeRootCalculator _worktreeRootCalculator;
   ProjectConfig _config = const ProjectConfig.empty();
   bool _isLoading = true;
   String? _errorMessage;
@@ -120,7 +135,9 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     super.initState();
     _configService =
         widget.configService ?? context.read<ProjectConfigService>();
-    _persistenceService = PersistenceService();
+    _persistenceService = widget.persistenceService ?? PersistenceService();
+    _worktreeRootCalculator =
+        widget.worktreeRootCalculator ?? calculateDefaultWorktreeRoot;
     _loadConfig();
   }
 
@@ -151,7 +168,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       final savedWorktreeRoot = projectInfo?.defaultWorktreeRoot;
 
       // Calculate the default worktree root
-      final calculatedRoot = await calculateDefaultWorktreeRoot(projectRoot);
+      final calculatedRoot = await _worktreeRootCalculator(projectRoot);
 
       if (mounted) {
         setState(() {

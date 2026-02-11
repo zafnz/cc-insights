@@ -144,6 +144,25 @@
 - Pattern for effective base: Check `config.defaultBase` is not null/empty/"auto", use as effectiveBase
 - Test pattern: Use `_TrackingFakeGitService` to verify createWorktree was/wasn't called
 
-## Test Counts (as of 2026-02-06)
-- Unit/widget tests: ~2081 total (2 skipped)
+## Project Stats Feature
+- **Aggregation Models**: `frontend/lib/models/project_stats.dart`
+  - `ChatStats`: Per-chat statistics with `backend` field ('claude'/'codex')
+  - `WorktreeStats`: Aggregated worktree stats with `isDeleted` (worktreePath == null)
+  - `ProjectStats`: Project-wide aggregation
+  - `mergeModelUsage()`: Helper to merge ModelUsageInfo by model name (sums tokens/cost, max contextWindow)
+- **StatsService**: `frontend/lib/services/stats_service.dart`
+  - Constructor injection of PersistenceService
+  - `buildProjectStats()`: Merges historical tracking.jsonl + live ChatState data
+  - Worktree naming: Use `p.basename(worktree.data.worktreeRoot)` for names
+  - Backend aggregation: Collect distinct backends from all chats into `Set<String>`
+  - Deleted detection: Worktrees in historical data but not live get `worktreePath: null`
+  - Sorting: Active worktrees first (alphabetical), then deleted (alphabetical)
+  - Only includes worktrees with chats (empty worktrees omitted)
+- **Backend Label**: `ChatState.backendLabel` getter returns 'claude' or 'codex' for cost tracking
+- **Cost Distinction**: `hasCostData` getter checks backend != 'codex' to distinguish "$0.00" from "unknown"
+- **Timing Aggregation**: Use `TimingStats.merge()` to combine timing data across chats/worktrees
+- **Testing**: Use `check(value).isCloseTo(expected, tolerance)` for double comparisons due to floating-point precision
+
+## Test Counts (as of 2026-02-11)
+- Unit/widget tests: ~2100 total (2 skipped)
 - Integration tests: 9 (require macOS desktop build)

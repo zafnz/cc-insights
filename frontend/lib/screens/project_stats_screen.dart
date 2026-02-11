@@ -900,7 +900,9 @@ class _TimingItem extends StatelessWidget {
   }
 }
 
-class _WorktreesTable extends StatelessWidget {
+enum _SortDirection { ascending, descending }
+
+class _WorktreesTable extends StatefulWidget {
   final List<WorktreeStats> worktrees;
   final void Function(WorktreeStats) onSelectWorktree;
 
@@ -910,8 +912,59 @@ class _WorktreesTable extends StatelessWidget {
   });
 
   @override
+  State<_WorktreesTable> createState() => _WorktreesTableState();
+}
+
+class _WorktreesTableState extends State<_WorktreesTable> {
+  String? _sortColumn;
+  _SortDirection _sortDirection = _SortDirection.descending;
+
+  List<WorktreeStats> get _sortedWorktrees {
+    if (_sortColumn == null) return widget.worktrees;
+
+    final sorted = List<WorktreeStats>.from(widget.worktrees);
+    final asc = _sortDirection == _SortDirection.ascending;
+
+    sorted.sort((a, b) {
+      int cmp;
+      switch (_sortColumn) {
+        case 'Worktree':
+          cmp = a.worktreeName.toLowerCase().compareTo(b.worktreeName.toLowerCase());
+        case 'Chats':
+          cmp = a.chatCount.compareTo(b.chatCount);
+        case 'Tokens':
+          cmp = a.totalTokens.compareTo(b.totalTokens);
+        case 'Cost':
+          cmp = a.totalCost.compareTo(b.totalCost);
+        case 'Time':
+          cmp = a.totalTiming.claudeWorkingMs.compareTo(b.totalTiming.claudeWorkingMs);
+        default:
+          cmp = 0;
+      }
+      return asc ? cmp : -cmp;
+    });
+    return sorted;
+  }
+
+  void _onSort(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortDirection = _sortDirection == _SortDirection.ascending
+            ? _SortDirection.descending
+            : _SortDirection.ascending;
+      } else {
+        _sortColumn = column;
+        _sortDirection = column == 'Worktree'
+            ? _SortDirection.ascending
+            : _SortDirection.descending;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final sorted = _sortedWorktrees;
 
     return Table(
       columnWidths: const {
@@ -927,16 +980,21 @@ class _WorktreesTable extends StatelessWidget {
       children: [
         TableRow(
           children: [
-            _TableHeader('Worktree'),
+            _SortableTableHeader('Worktree',
+                sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
             _TableHeader('Backend'),
-            _TableHeader('Chats', align: TextAlign.right),
-            _TableHeader('Tokens', align: TextAlign.right),
-            _TableHeader('Cost', align: TextAlign.right),
-            _TableHeader('Time', align: TextAlign.right),
+            _SortableTableHeader('Chats',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
+            _SortableTableHeader('Tokens',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
+            _SortableTableHeader('Cost',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
+            _SortableTableHeader('Time',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
             const SizedBox(),
           ],
         ),
-        ...worktrees.map((worktree) => TableRow(
+        ...sorted.map((worktree) => TableRow(
               children: [
                 _WorktreeNameCell(worktree: worktree),
                 _BackendBadgesCell(backends: worktree.backends),
@@ -958,7 +1016,7 @@ class _WorktreesTable extends StatelessWidget {
                 TableCell(
                   verticalAlignment: TableCellVerticalAlignment.middle,
                   child: InkWell(
-                    onTap: () => onSelectWorktree(worktree),
+                    onTap: () => widget.onSelectWorktree(worktree),
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
@@ -1086,7 +1144,7 @@ class _BackendBadge extends StatelessWidget {
   }
 }
 
-class _ChatsTable extends StatelessWidget {
+class _ChatsTable extends StatefulWidget {
   final List<ChatStats> chats;
   final void Function(ChatStats) onSelectChat;
 
@@ -1096,8 +1154,59 @@ class _ChatsTable extends StatelessWidget {
   });
 
   @override
+  State<_ChatsTable> createState() => _ChatsTableState();
+}
+
+class _ChatsTableState extends State<_ChatsTable> {
+  String? _sortColumn;
+  _SortDirection _sortDirection = _SortDirection.descending;
+
+  List<ChatStats> get _sortedChats {
+    if (_sortColumn == null) return widget.chats;
+
+    final sorted = List<ChatStats>.from(widget.chats);
+    final asc = _sortDirection == _SortDirection.ascending;
+
+    sorted.sort((a, b) {
+      int cmp;
+      switch (_sortColumn) {
+        case 'Chat':
+          cmp = a.chatName.toLowerCase().compareTo(b.chatName.toLowerCase());
+        case 'Tokens':
+          cmp = a.totalTokens.compareTo(b.totalTokens);
+        case 'Cost':
+          cmp = a.totalCost.compareTo(b.totalCost);
+        case 'Agent Time':
+          cmp = a.timing.claudeWorkingMs.compareTo(b.timing.claudeWorkingMs);
+        case 'Date':
+          cmp = a.timestamp.compareTo(b.timestamp);
+        default:
+          cmp = 0;
+      }
+      return asc ? cmp : -cmp;
+    });
+    return sorted;
+  }
+
+  void _onSort(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortDirection = _sortDirection == _SortDirection.ascending
+            ? _SortDirection.descending
+            : _SortDirection.ascending;
+      } else {
+        _sortColumn = column;
+        _sortDirection = column == 'Chat'
+            ? _SortDirection.ascending
+            : _SortDirection.descending;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final sorted = _sortedChats;
 
     return Table(
       columnWidths: const {
@@ -1113,16 +1222,21 @@ class _ChatsTable extends StatelessWidget {
       children: [
         TableRow(
           children: [
-            _TableHeader('Chat'),
+            _SortableTableHeader('Chat',
+                sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
             _TableHeader('Backend'),
-            _TableHeader('Tokens', align: TextAlign.right),
-            _TableHeader('Cost', align: TextAlign.right),
-            _TableHeader('Agent Time', align: TextAlign.right),
-            _TableHeader('Date', align: TextAlign.right),
+            _SortableTableHeader('Tokens',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
+            _SortableTableHeader('Cost',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
+            _SortableTableHeader('Agent Time',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
+            _SortableTableHeader('Date',
+                align: TextAlign.right, sortColumn: _sortColumn, sortDirection: _sortDirection, onSort: _onSort),
             const SizedBox(),
           ],
         ),
-        ...chats.map((chat) => TableRow(
+        ...sorted.map((chat) => TableRow(
               children: [
                 _ChatNameCell(chat: chat),
                 TableCell(
@@ -1153,7 +1267,7 @@ class _ChatsTable extends StatelessWidget {
                 TableCell(
                   verticalAlignment: TableCellVerticalAlignment.middle,
                   child: InkWell(
-                    onTap: () => onSelectChat(chat),
+                    onTap: () => widget.onSelectChat(chat),
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
@@ -1383,6 +1497,80 @@ class _ChatDetailsTable extends StatelessWidget {
   }
 }
 
+class _SortableTableHeader extends StatelessWidget {
+  final String text;
+  final TextAlign align;
+  final String? sortColumn;
+  final _SortDirection sortDirection;
+  final void Function(String) onSort;
+
+  const _SortableTableHeader(
+    this.text, {
+    this.align = TextAlign.left,
+    required this.sortColumn,
+    required this.sortDirection,
+    required this.onSort,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isActive = sortColumn == text;
+    final color = isActive ? colorScheme.onSurface : colorScheme.outline;
+
+    final label = Text(
+      text,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            letterSpacing: 0.5,
+            fontWeight: isActive ? FontWeight.w600 : null,
+          ),
+    );
+
+    final arrow = isActive
+        ? Icon(
+            sortDirection == _SortDirection.ascending
+                ? Icons.arrow_upward
+                : Icons.arrow_downward,
+            size: 12,
+            color: color,
+          )
+        : null;
+
+    final children = align == TextAlign.right
+        ? [if (arrow != null) arrow, label]
+        : [label, if (arrow != null) arrow];
+
+    return TableCell(
+      verticalAlignment: TableCellVerticalAlignment.middle,
+      child: InkWell(
+        onTap: () => onSort(text),
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: align == TextAlign.right
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            children: children.map<Widget>((c) {
+              if (c is Icon) {
+                return Padding(
+                  padding: align == TextAlign.right
+                      ? const EdgeInsets.only(right: 2)
+                      : const EdgeInsets.only(left: 2),
+                  child: c,
+                );
+              }
+              return c;
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TableHeader extends StatelessWidget {
   final String text;
   final TextAlign align;
@@ -1499,13 +1687,13 @@ String _formatRelativeTime(String isoTimestamp, {required bool isActive}) {
 Color _getModelColor(String modelName) {
   final lower = modelName.toLowerCase();
   if (lower.contains('opus')) {
-    return const Color(0xFFD0BCFF);
+    return const Color(0xFFD0BCFF); // purple
   } else if (lower.contains('sonnet')) {
-    return const Color(0xFF82B1FF);
+    return const Color(0xFFFF9800); // orange
   } else if (lower.contains('haiku')) {
-    return const Color(0xFF69F0AE);
+    return const Color(0xFF69F0AE); // green
   } else {
     // Other (codex, etc.)
-    return const Color(0xFF00BCD4);
+    return const Color(0xFFFF5252); // red
   }
 }
