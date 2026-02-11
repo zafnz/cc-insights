@@ -103,6 +103,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to show cost/token usage on linked worktree status lines.
   bool _showWorktreeCost = true;
 
+  /// Whether agents can access ticket tools (create_ticket MCP tool).
+  bool _agentTicketToolsEnabled = true;
+
   /// Default model for new chats (composite value, e.g. 'last_used',
   /// 'claude:opus', 'codex:gpt-5.2').
   String _defaultModel = 'last_used';
@@ -374,6 +377,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether agents can access ticket tools.
+  bool get agentTicketToolsEnabled => _agentTicketToolsEnabled;
+
+  set agentTicketToolsEnabled(bool value) {
+    if (_agentTicketToolsEnabled != value) {
+      _agentTicketToolsEnabled = value;
+      notifyListeners();
+    }
+  }
+
   /// Default model for new chats (composite value).
   String get defaultModel => _defaultModel;
 
@@ -558,5 +571,6 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._claudeCliPath = '';
     _instance._codexCliPath = '';
     _instance._codexAvailable = true;
+    _instance._agentTicketToolsEnabled = true;
   }
 }

@@ -12,8 +12,10 @@ import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
 import '../services/backend_service.dart';
 import '../services/cli_availability_service.dart';
+import '../services/internal_tools_service.dart';
 import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
+import '../state/ticket_board_state.dart';
 import '../state/theme_state.dart';
 import '../widgets/insights_widgets.dart';
 
@@ -206,13 +208,16 @@ class _CategoryTile extends StatelessWidget {
                     : colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 10),
-              Text(
-                category.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
+              Expanded(
+                child: Text(
+                  category.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -279,6 +284,17 @@ class _SettingsContent extends StatelessWidget {
               cliAvailability.codexAvailable;
         }),
       );
+      return;
+    }
+
+    if (definition.key == 'projectMgmt.agentTicketTools') {
+      unawaited(settings.setValue(definition.key, value));
+      final tools = context.read<InternalToolsService>();
+      if (value == true) {
+        tools.registerTicketTools(context.read<TicketBoardState>());
+      } else {
+        tools.unregisterTicketTools();
+      }
       return;
     }
 

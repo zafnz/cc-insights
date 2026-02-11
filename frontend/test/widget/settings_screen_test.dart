@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:cc_insights_v2/screens/settings_screen.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
+import 'package:cc_insights_v2/services/internal_tools_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
+import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +20,8 @@ void main() {
   late SettingsService settingsService;
   late MockBackendService mockBackend;
   late FakeCliAvailabilityService fakeCliAvailability;
+  late InternalToolsService internalToolsService;
+  late TicketBoardState ticketBoardState;
 
   setUp(() {
     RuntimeConfig.resetForTesting();
@@ -28,11 +32,15 @@ void main() {
     );
     mockBackend = MockBackendService();
     fakeCliAvailability = FakeCliAvailabilityService();
+    internalToolsService = InternalToolsService();
+    ticketBoardState = TicketBoardState('test-project');
   });
 
   tearDown(() {
     settingsService.dispose();
     mockBackend.dispose();
+    internalToolsService.dispose();
+    ticketBoardState.dispose();
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
     }
@@ -45,6 +53,12 @@ void main() {
         ChangeNotifierProvider<SettingsService>.value(value: settingsService),
         ChangeNotifierProvider<CliAvailabilityService>.value(
           value: fakeCliAvailability,
+        ),
+        ChangeNotifierProvider<InternalToolsService>.value(
+          value: internalToolsService,
+        ),
+        ChangeNotifierProvider<TicketBoardState>.value(
+          value: ticketBoardState,
         ),
       ],
       child: const MaterialApp(
@@ -64,6 +78,7 @@ void main() {
         expect(find.text('Behavior'), findsOneWidget);
         expect(find.text('Session'), findsOneWidget);
         expect(find.text('Developer'), findsOneWidget);
+        expect(find.text('Project Mgmt'), findsOneWidget);
       });
 
       testWidgets('renders Settings header', (tester) async {
@@ -314,6 +329,50 @@ void main() {
           settingsService.getValue<String>('appearance.bashToolSummary'),
           'description',
         );
+      });
+    });
+
+    group('project mgmt category', () {
+      testWidgets('shows Agent Ticket Tools toggle', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
+        await safePumpAndSettle(tester);
+
+        // Navigate to Project Mgmt category
+        await tester.tap(find.text('Project Mgmt'));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Agent Ticket Tools'), findsOneWidget);
+
+        await tester.binding.setSurfaceSize(null);
+      });
+
+      testWidgets('toggling off unregisters ticket tools', (tester) async {
+        // Register tools first
+        internalToolsService.registerTicketTools(ticketBoardState);
+        expect(internalToolsService.registry['create_ticket'], isNotNull);
+
+        await tester.pumpWidget(createTestApp());
+        await tester.binding.setSurfaceSize(const Size(1200, 900));
+        await safePumpAndSettle(tester);
+
+        // Navigate to Project Mgmt category
+        await tester.tap(find.text('Project Mgmt'));
+        await safePumpAndSettle(tester);
+
+        // Toggle off - find the switch and tap it
+        final switches = find.byType(Switch);
+        expect(switches, findsOneWidget);
+        await tester.tap(switches.first);
+        await safePumpAndSettle(tester);
+
+        expect(
+          settingsService.getValue<bool>('projectMgmt.agentTicketTools'),
+          false,
+        );
+        expect(internalToolsService.registry['create_ticket'], isNull);
+
+        await tester.binding.setSurfaceSize(null);
       });
     });
 

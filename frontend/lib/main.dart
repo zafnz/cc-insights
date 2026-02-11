@@ -1074,9 +1074,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             // Wire up the event handler for ticket status transitions
             context.read<EventHandler>().ticketBoard = ticketBoardState;
             // Register internal MCP tools with the ticket board
-            context.read<InternalToolsService>().registerTicketTools(
-              ticketBoardState,
-            );
+            if (context.read<SettingsService>().getValue<bool>(
+              'projectMgmt.agentTicketTools',
+            )) {
+              context.read<InternalToolsService>().registerTicketTools(
+                ticketBoardState,
+              );
+            }
             // Load tickets asynchronously (fire-and-forget)
             ticketBoardState.load();
             return ticketBoardState;
@@ -1093,9 +1097,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             // Wire up the event handler for ticket status transitions
             context.read<EventHandler>().ticketBoard = ticketBoardState;
             // Register internal MCP tools with the ticket board
-            context.read<InternalToolsService>().registerTicketTools(
-              ticketBoardState,
-            );
+            if (context.read<SettingsService>().getValue<bool>(
+              'projectMgmt.agentTicketTools',
+            )) {
+              context.read<InternalToolsService>().registerTicketTools(
+                ticketBoardState,
+              );
+            }
             ticketBoardState.load();
             return ticketBoardState;
           },

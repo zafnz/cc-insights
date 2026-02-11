@@ -49,6 +49,7 @@ class SettingsService extends ChangeNotifier {
     _sessionCategory,
     _loggingCategory,
     _developerCategory,
+    _projectMgmtCategory,
   ];
 
   static const _tagsCategory = SettingCategory(
@@ -410,6 +411,25 @@ class SettingsService extends ChangeNotifier {
     ],
   );
 
+  static const _projectMgmtCategory = SettingCategory(
+    id: 'projectMgmt',
+    label: 'Project Mgmt',
+    description: 'Configure project management and agent integration',
+    icon: Icons.assignment_outlined,
+    settings: [
+      SettingDefinition(
+        key: 'projectMgmt.agentTicketTools',
+        title: 'Agent Ticket Tools',
+        description:
+            'Allow agents to create tickets on the project board via '
+            'the create_ticket tool. When disabled, agents cannot '
+            'propose or create tickets.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+    ],
+  );
+
   // ---------------------------------------------------------------------------
   // Window persistence
   // ---------------------------------------------------------------------------
@@ -660,6 +680,8 @@ class SettingsService extends ChangeNotifier {
         config.loggingFilePath = value as String;
       case 'logging.minimumLevel':
         config.loggingMinimumLevel = value as String;
+      case 'projectMgmt.agentTicketTools':
+        config.agentTicketToolsEnabled = value as bool;
     }
   }
 
