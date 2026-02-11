@@ -70,11 +70,14 @@ class SecurityConfigGroup extends StatelessWidget {
             ),
           ),
           // Sandbox mode dropdown
-          _SandboxModeDropdown(
-            config: config,
-            capabilities: capabilities,
-            isEnabled: isEnabled,
-            onConfigChanged: onConfigChanged,
+          Flexible(
+            fit: FlexFit.loose,
+            child: _SandboxModeDropdown(
+              config: config,
+              capabilities: capabilities,
+              isEnabled: isEnabled,
+              onConfigChanged: onConfigChanged,
+            ),
           ),
           // Vertical divider
           Container(
@@ -84,13 +87,16 @@ class SecurityConfigGroup extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 2),
           ),
           // Approval policy dropdown
-          _ApprovalPolicyDropdown(
-            policy: config.approvalPolicy,
-            capabilities: capabilities,
-            isEnabled: isEnabled,
-            onChanged: (policy) {
-              onConfigChanged(config.copyWith(approvalPolicy: policy));
-            },
+          Flexible(
+            fit: FlexFit.loose,
+            child: _ApprovalPolicyDropdown(
+              policy: config.approvalPolicy,
+              capabilities: capabilities,
+              isEnabled: isEnabled,
+              onChanged: (policy) {
+                onConfigChanged(config.copyWith(approvalPolicy: policy));
+              },
+            ),
           ),
         ],
       ),
@@ -226,16 +232,21 @@ class _SandboxModeDropdownState extends State<_SandboxModeDropdown> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _modeLabel(widget.config.sandboxMode),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isDanger ? FontWeight.w600 : FontWeight.w500,
-                  color: isDanger
-                      ? colorScheme.error
-                      : (isEnabled
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurfaceVariant),
+              Flexible(
+                child: Text(
+                  _modeLabel(widget.config.sandboxMode),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isDanger ? FontWeight.w600 : FontWeight.w500,
+                    color: isDanger
+                        ? colorScheme.error
+                        : (isEnabled
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ),
               const SizedBox(width: 2),
@@ -435,16 +446,21 @@ class _ApprovalPolicyDropdownState extends State<_ApprovalPolicyDropdown> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                _policyLabel(widget.policy),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isDanger ? FontWeight.w600 : FontWeight.w500,
-                  color: isDanger
-                      ? colorScheme.error
-                      : (isEnabled
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurfaceVariant),
+              Flexible(
+                child: Text(
+                  _policyLabel(widget.policy),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isDanger ? FontWeight.w600 : FontWeight.w500,
+                    color: isDanger
+                        ? colorScheme.error
+                        : (isEnabled
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ),
               const SizedBox(width: 2),
