@@ -36,6 +36,12 @@ class CostTrackingEntry {
   /// respond to prompts.
   final TimingStats timing;
 
+  /// Backend that produced this entry.
+  ///
+  /// Possible values: 'claude', 'codex'.
+  /// Defaults to 'claude' for backward compatibility with existing files.
+  final String backend;
+
   /// Creates a [CostTrackingEntry] instance.
   const CostTrackingEntry({
     required this.worktree,
@@ -43,6 +49,7 @@ class CostTrackingEntry {
     required this.timestamp,
     required this.modelUsage,
     this.timing = const TimingStats.zero(),
+    this.backend = 'claude',
   });
 
   /// Creates a tracking entry from a chat's final state.
@@ -51,12 +58,14 @@ class CostTrackingEntry {
   /// The [chatName] is the user-visible chat name.
   /// The [modelUsage] is the chat's cumulative per-model usage.
   /// The [timing] is the chat's accumulated timing statistics.
+  /// The [backend] is the backend type ('claude' or 'codex').
   /// The timestamp is set to the current time.
   factory CostTrackingEntry.fromChat({
     required String worktreeName,
     required String chatName,
     required List<ModelUsageInfo> modelUsage,
     TimingStats timing = const TimingStats.zero(),
+    required String backend,
   }) {
     return CostTrackingEntry(
       worktree: worktreeName,
@@ -64,6 +73,7 @@ class CostTrackingEntry {
       timestamp: DateTime.now().toUtc().toIso8601String(),
       modelUsage: modelUsage,
       timing: timing,
+      backend: backend,
     );
   }
 
@@ -85,6 +95,7 @@ class CostTrackingEntry {
               })
           .toList(),
       'timing': timing.toJson(),
+      'backend': backend,
     };
   }
 
@@ -114,6 +125,7 @@ class CostTrackingEntry {
       timing: timingJson != null
           ? TimingStats.fromJson(timingJson)
           : const TimingStats.zero(),
+      backend: json['backend'] as String? ?? 'claude',
     );
   }
 
@@ -130,7 +142,8 @@ class CostTrackingEntry {
         other.chatName == chatName &&
         other.timestamp == timestamp &&
         listEquals(other.modelUsage, modelUsage) &&
-        other.timing == timing;
+        other.timing == timing &&
+        other.backend == backend;
   }
 
   @override
@@ -140,11 +153,13 @@ class CostTrackingEntry {
         timestamp,
         Object.hashAll(modelUsage),
         timing,
+        backend,
       );
 
   @override
   String toString() {
     return 'CostTrackingEntry(worktree: $worktree, chatName: $chatName, '
-        'timestamp: $timestamp, totalCost: \$${totalCost.toStringAsFixed(4)})';
+        'timestamp: $timestamp, backend: $backend, '
+        'totalCost: \$${totalCost.toStringAsFixed(4)})';
   }
 }

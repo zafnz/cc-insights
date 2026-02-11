@@ -516,6 +516,7 @@ class ProjectRestoreService {
         chatName: chat.data.name,
         modelUsage: chat.modelUsage,
         timing: chat.timingStats,
+        backend: chat.backendLabel,
       );
 
       // Append to tracking.jsonl

@@ -905,6 +905,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           _menuActionService.triggerAction(MenuAction.showSettings),
       onShowLogs: () =>
           _menuActionService.triggerAction(MenuAction.showLogs),
+      onShowStats: _projectSelected
+          ? () => _menuActionService.triggerAction(MenuAction.showStats)
+          : null,
 
       // Panels
       onToggleMergeChatsAgents: _projectSelected

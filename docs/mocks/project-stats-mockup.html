@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Stats Screen - Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Material 3 deep purple seed - dark mode derived palette */
+    --surface: #141218;
+    --surface-dim: #141218;
+    --surface-container: #211f26;
+    --surface-container-low: #1d1b20;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary: #ccc2dc;
+    --tertiary: #efb8c8;
+    --error: #f2b8b5;
+    --inverse-surface: #e6e0e9;
+    --inverse-on-surface: #322f35;
+
+    /* Semantic colors */
+    --green: #4caf50;
+    --orange: #ff9800;
+    --blue: #2196f3;
+    --red: #f44336;
+    --cyan: #00bcd4;
+    --purple: #d0bcff;
+
+    /* Fonts */
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    color: var(--on-surface);
+    font-family: var(--font-system);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 { font-size: 14px; font-weight: 600; color: var(--on-surface); margin-bottom: 4px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--on-surface-variant); margin-bottom: 12px; }
+  h3 { font-size: 12px; font-weight: 500; color: var(--outline); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+
+  /* ── Layout ── */
+  .mockup-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 8px;
+  }
+  .mockup-subtitle {
+    font-size: 13px;
+    color: var(--outline);
+    margin-bottom: 32px;
+    max-width: 700px;
+    line-height: 1.5;
+  }
+
+  .screen-set {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  .screen {
+    background: var(--surface);
+    border: 1px solid var(--outline-variant);
+    border-radius: 12px;
+    overflow: hidden;
+    width: 520px;
+    flex-shrink: 0;
+  }
+
+  .screen-header {
+    background: var(--surface-container);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--outline-variant);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .screen-header .back-btn {
+    font-size: 18px;
+    color: var(--primary);
+    cursor: pointer;
+    text-decoration: none;
+    line-height: 1;
+  }
+
+  .screen-header .title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .screen-header .subtitle {
+    font-size: 11px;
+    color: var(--outline);
+    margin-left: auto;
+  }
+
+  .screen-body {
+    padding: 16px;
+  }
+
+  /* ── Summary Cards ── */
+  .summary-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .summary-card {
+    flex: 1;
+    background: var(--surface-container);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .summary-card .value {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--on-surface);
+  }
+
+  .summary-card .value.cost { color: var(--green); }
+  .summary-card .value.tokens { color: var(--blue); }
+  .summary-card .value.time { color: var(--orange); }
+  .summary-card .value.chats { color: var(--purple); }
+
+  .summary-card .label {
+    font-size: 10px;
+    color: var(--outline);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 6px 8px;
+    color: var(--outline);
+    font-weight: 500;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--outline-variant);
+  }
+
+  thead th.right { text-align: right; }
+
+  tbody td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+    vertical-align: middle;
+  }
+
+  tbody td.right { text-align: right; font-family: var(--font-mono); font-size: 11px; }
+  tbody td.mono { font-family: var(--font-mono); font-size: 11px; }
+
+  tbody tr:hover {
+    background: var(--surface-container-low);
+    cursor: pointer;
+  }
+
+  tbody tr.no-hover:hover {
+    background: transparent;
+    cursor: default;
+  }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  .badge.claude { background: rgba(208, 188, 255, 0.15); color: var(--primary); }
+  .badge.codex { background: rgba(0, 188, 212, 0.15); color: var(--cyan); }
+  .badge.deleted { background: rgba(244, 67, 54, 0.15); color: var(--red); }
+  .badge.active { background: rgba(76, 175, 80, 0.15); color: var(--green); }
+
+  /* ── Model breakdown bars ── */
+  .model-bar-container {
+    margin-bottom: 16px;
+  }
+
+  .model-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    background: var(--surface-container-highest);
+  }
+
+  .model-bar .segment {
+    height: 100%;
+    transition: width 0.3s ease;
+  }
+
+  .model-bar .segment.opus { background: #d0bcff; }
+  .model-bar .segment.sonnet { background: #82b1ff; }
+  .model-bar .segment.haiku { background: #69f0ae; }
+  .model-bar .segment.codex { background: #00bcd4; }
+
+  .model-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--on-surface-variant);
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .legend-dot.opus { background: #d0bcff; }
+  .legend-dot.sonnet { background: #82b1ff; }
+  .legend-dot.haiku { background: #69f0ae; }
+  .legend-dot.codex { background: #00bcd4; }
+
+  /* ── Token breakdown ── */
+  .token-breakdown {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .token-item {
+    background: var(--surface-container);
+    border-radius: 6px;
+    padding: 10px;
+  }
+
+  .token-item .token-label {
+    font-size: 10px;
+    color: var(--outline);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .token-item .token-value {
+    font-size: 16px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--on-surface);
+    margin-top: 2px;
+  }
+
+  /* ── Section divider ── */
+  .section {
+    margin-bottom: 20px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--outline-variant);
+    margin: 16px 0;
+    opacity: 0.5;
+  }
+
+  /* ── Drill arrow ── */
+  .drill-arrow {
+    color: var(--outline);
+    font-size: 14px;
+  }
+
+  /* ── Annotation boxes ── */
+  .annotation {
+    background: rgba(208, 188, 255, 0.08);
+    border: 1px dashed rgba(208, 188, 255, 0.3);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    line-height: 1.5;
+  }
+
+  .annotation strong { color: var(--primary); }
+
+  /* ── Notes section ── */
+  .design-notes {
+    max-width: 1100px;
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--outline-variant);
+  }
+
+  .design-notes h2 {
+    font-size: 16px;
+    color: var(--primary);
+    margin-bottom: 16px;
+  }
+
+  .design-notes p, .design-notes li {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--on-surface-variant);
+  }
+
+  .design-notes ul {
+    padding-left: 20px;
+    margin-bottom: 16px;
+  }
+
+  .design-notes li { margin-bottom: 6px; }
+  .design-notes code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--surface-container);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--primary);
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-title">Project Stats Screen</div>
+<div class="mockup-subtitle">
+  A drill-down stats view: Project Overview → Worktree Detail → Chat Detail.
+  Shows historical data from tracking.jsonl (closed/deleted chats) merged with live data from active chats.
+  Accessible from the app sidebar or menu bar.
+</div>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- SCREEN 1: PROJECT OVERVIEW                      -->
+<!-- ════════════════════════════════════════════════ -->
+<div class="screen-set">
+
+<div class="screen">
+  <div class="screen-header">
+    <span class="title">Project Stats</span>
+    <span class="subtitle">CC-Insights</span>
+  </div>
+  <div class="screen-body">
+
+    <!-- Top-level KPIs -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="value cost">$14.27</div>
+        <div class="label">Total Cost</div>
+      </div>
+      <div class="summary-card">
+        <div class="value tokens">2.4M</div>
+        <div class="label">Total Tokens</div>
+      </div>
+      <div class="summary-card">
+        <div class="value time">3h 12m</div>
+        <div class="label">Agent Time</div>
+      </div>
+      <div class="summary-card">
+        <div class="value chats">18</div>
+        <div class="label">Chats</div>
+      </div>
+    </div>
+
+    <!-- Cost by Model -->
+    <div class="section">
+      <h3>Cost by Model</h3>
+      <div class="model-bar-container">
+        <div class="model-bar">
+          <div class="segment opus" style="width: 55%"></div>
+          <div class="segment sonnet" style="width: 30%"></div>
+          <div class="segment haiku" style="width: 8%"></div>
+          <div class="segment codex" style="width: 7%"></div>
+        </div>
+        <div class="model-legend">
+          <div class="legend-item"><span class="legend-dot opus"></span> Opus 4.5 — $7.85</div>
+          <div class="legend-item"><span class="legend-dot sonnet"></span> Sonnet 4.5 — $4.28</div>
+          <div class="legend-item"><span class="legend-dot haiku"></span> Haiku 4.5 — $1.14</div>
+          <div class="legend-item"><span class="legend-dot codex"></span> Codex (o3) — <em style="color:var(--outline)">tokens only</em></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Token Breakdown -->
+    <div class="section">
+      <h3>Token Breakdown</h3>
+      <div class="token-breakdown">
+        <div class="token-item">
+          <div class="token-label">Input</div>
+          <div class="token-value">1.82M</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Output</div>
+          <div class="token-value">584K</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Cache Read</div>
+          <div class="token-value">1.21M</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Cache Write</div>
+          <div class="token-value">340K</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Worktree Breakdown Table -->
+    <div class="section">
+      <h3>Worktrees</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Worktree</th>
+            <th>Backend</th>
+            <th class="right">Chats</th>
+            <th class="right">Tokens</th>
+            <th class="right">Cost</th>
+            <th class="right">Time</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div style="font-weight:500">main</div>
+              <div style="font-size:10px;color:var(--outline)">/Users/zaf/projects/cc-insights</div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">8</td>
+            <td class="right">1.1M</td>
+            <td class="right">$7.42</td>
+            <td class="right">1h 28m</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">feat-dark-mode</div>
+              <div style="font-size:10px;color:var(--outline)">/Users/zaf/projects/cc-insights-wt/dark</div>
+            </td>
+            <td><span class="badge claude">Claude</span> <span class="badge codex">Codex</span></td>
+            <td class="right">6</td>
+            <td class="right">820K</td>
+            <td class="right">$4.18</td>
+            <td class="right">58m</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">refactor-state <span class="badge deleted">deleted</span></div>
+              <div style="font-size:10px;color:var(--outline)">worktree no longer exists</div>
+            </td>
+            <td><span class="badge codex">Codex</span></td>
+            <td class="right">3</td>
+            <td class="right">410K</td>
+            <td class="right">—</td>
+            <td class="right">42m</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">fix-permissions</div>
+              <div style="font-size:10px;color:var(--outline)">/Users/zaf/projects/cc-insights-wt/perms</div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">1</td>
+            <td class="right">72K</td>
+            <td class="right">$0.67</td>
+            <td class="right">4m</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="annotation">
+      <strong>Note:</strong> Codex-only worktrees show "—" for cost since Codex doesn't report cost data.
+      Mixed worktrees show the sum of Claude costs only.
+      Deleted worktrees are preserved from tracking.jsonl and shown with a badge.
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- SCREEN 2: WORKTREE DETAIL                       -->
+<!-- ════════════════════════════════════════════════ -->
+
+<div class="screen">
+  <div class="screen-header">
+    <a class="back-btn">‹</a>
+    <span class="title">feat-dark-mode</span>
+    <span class="subtitle">Worktree Stats</span>
+  </div>
+  <div class="screen-body">
+
+    <!-- Worktree KPIs -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="value cost">$4.18</div>
+        <div class="label">Total Cost</div>
+      </div>
+      <div class="summary-card">
+        <div class="value tokens">820K</div>
+        <div class="label">Total Tokens</div>
+      </div>
+      <div class="summary-card">
+        <div class="value time">58m</div>
+        <div class="label">Agent Time</div>
+      </div>
+      <div class="summary-card">
+        <div class="value chats">6</div>
+        <div class="label">Chats</div>
+      </div>
+    </div>
+
+    <!-- Model breakdown for this worktree -->
+    <div class="section">
+      <h3>Cost by Model</h3>
+      <div class="model-bar-container">
+        <div class="model-bar">
+          <div class="segment sonnet" style="width: 62%"></div>
+          <div class="segment haiku" style="width: 18%"></div>
+          <div class="segment codex" style="width: 20%"></div>
+        </div>
+        <div class="model-legend">
+          <div class="legend-item"><span class="legend-dot sonnet"></span> Sonnet 4.5 — $2.59</div>
+          <div class="legend-item"><span class="legend-dot haiku"></span> Haiku 4.5 — $0.75</div>
+          <div class="legend-item"><span class="legend-dot codex"></span> o3 — 164K tokens</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timing breakdown -->
+    <div class="section">
+      <h3>Timing</h3>
+      <div class="token-breakdown">
+        <div class="token-item">
+          <div class="token-label">Agent Working</div>
+          <div class="token-value">42m</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">User Response</div>
+          <div class="token-value">16m</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Avg Turn Time</div>
+          <div class="token-value">1m 24s</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Avg Response</div>
+          <div class="token-value">32s</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Chats in this worktree -->
+    <div class="section">
+      <h3>Chats</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Chat</th>
+            <th>Backend</th>
+            <th class="right">Tokens</th>
+            <th class="right">Cost</th>
+            <th class="right">Agent Time</th>
+            <th class="right">Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div style="font-weight:500">Add theme provider <span class="badge active">active</span></div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">245K</td>
+            <td class="right">$1.82</td>
+            <td class="right">14m</td>
+            <td class="right mono">now</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">Fix toggle animation</div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">182K</td>
+            <td class="right">$0.77</td>
+            <td class="right">8m</td>
+            <td class="right mono">2h ago</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">Scaffold dark palette</div>
+            </td>
+            <td><span class="badge codex">Codex</span></td>
+            <td class="right">164K</td>
+            <td class="right">—</td>
+            <td class="right">12m</td>
+            <td class="right mono">5h ago</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">Color system research</div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">120K</td>
+            <td class="right">$0.94</td>
+            <td class="right">6m</td>
+            <td class="right mono">yesterday</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">Initial exploration</div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">68K</td>
+            <td class="right">$0.41</td>
+            <td class="right">3m</td>
+            <td class="right mono">2d ago</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="font-weight:500">Linting fixes</div>
+            </td>
+            <td><span class="badge claude">Claude</span></td>
+            <td class="right">41K</td>
+            <td class="right">$0.24</td>
+            <td class="right">2m</td>
+            <td class="right mono">2d ago</td>
+            <td class="drill-arrow">›</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="annotation">
+      <strong>Data source:</strong> Active chats pull live data from ChatState.
+      Closed chats come from tracking.jsonl entries matching this worktree name.
+      Relative timestamps shown; tooltip reveals full ISO 8601 date.
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- SCREEN 3: CHAT DETAIL                           -->
+<!-- ════════════════════════════════════════════════ -->
+
+<div class="screen">
+  <div class="screen-header">
+    <a class="back-btn">‹</a>
+    <span class="title">Add theme provider</span>
+    <span class="subtitle">Chat Stats</span>
+  </div>
+  <div class="screen-body">
+
+    <!-- Chat-level KPIs -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="value cost">$1.82</div>
+        <div class="label">Cost</div>
+      </div>
+      <div class="summary-card">
+        <div class="value tokens">245K</div>
+        <div class="label">Tokens</div>
+      </div>
+      <div class="summary-card">
+        <div class="value time">14m</div>
+        <div class="label">Agent Time</div>
+      </div>
+    </div>
+
+    <!-- Per-model table -->
+    <div class="section">
+      <h3>Model Usage</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th class="right">Input</th>
+            <th class="right">Output</th>
+            <th class="right">Cache Read</th>
+            <th class="right">Cache Write</th>
+            <th class="right">Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="no-hover">
+            <td><span class="legend-dot sonnet" style="display:inline-block;margin-right:6px"></span>Sonnet 4.5</td>
+            <td class="right">142K</td>
+            <td class="right">48K</td>
+            <td class="right">89K</td>
+            <td class="right">22K</td>
+            <td class="right">$1.42</td>
+          </tr>
+          <tr class="no-hover">
+            <td><span class="legend-dot haiku" style="display:inline-block;margin-right:6px"></span>Haiku 4.5</td>
+            <td class="right">31K</td>
+            <td class="right">12K</td>
+            <td class="right">18K</td>
+            <td class="right">5K</td>
+            <td class="right">$0.40</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Timing details -->
+    <div class="section">
+      <h3>Timing</h3>
+      <div class="token-breakdown">
+        <div class="token-item">
+          <div class="token-label">Agent Working</div>
+          <div class="token-value">14m 12s</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">User Response</div>
+          <div class="token-value">4m 38s</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Work Cycles</div>
+          <div class="token-value">11</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">User Prompts</div>
+          <div class="token-value">7</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Metadata -->
+    <div class="section">
+      <h3>Details</h3>
+      <table>
+        <tbody>
+          <tr class="no-hover">
+            <td style="color:var(--outline);width:120px">Backend</td>
+            <td><span class="badge claude">Claude</span></td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Worktree</td>
+            <td>feat-dark-mode</td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Status</td>
+            <td><span class="badge active">active</span></td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Context Window</td>
+            <td class="mono">200,000</td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Avg Turn</td>
+            <td class="mono">1m 17s</td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Avg Response</td>
+            <td class="mono">39s</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /screen-set -->
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- SCREEN 4: CODEX CHAT DETAIL (shows cost gap)    -->
+<!-- ════════════════════════════════════════════════ -->
+
+<div style="margin-top:32px">
+<div class="screen-set">
+
+<div class="screen">
+  <div class="screen-header">
+    <a class="back-btn">‹</a>
+    <span class="title">Scaffold dark palette</span>
+    <span class="subtitle">Chat Stats (Codex)</span>
+  </div>
+  <div class="screen-body">
+
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="value" style="color:var(--outline)">—</div>
+        <div class="label">Cost</div>
+      </div>
+      <div class="summary-card">
+        <div class="value tokens">164K</div>
+        <div class="label">Tokens</div>
+      </div>
+      <div class="summary-card">
+        <div class="value time">12m</div>
+        <div class="label">Agent Time</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Model Usage</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th class="right">Input</th>
+            <th class="right">Output</th>
+            <th class="right">Cache Read</th>
+            <th class="right">Cache Write</th>
+            <th class="right">Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="no-hover">
+            <td><span class="legend-dot codex" style="display:inline-block;margin-right:6px"></span>o3</td>
+            <td class="right">98K</td>
+            <td class="right">42K</td>
+            <td class="right">24K</td>
+            <td class="right">0</td>
+            <td class="right" style="color:var(--outline)">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h3>Timing</h3>
+      <div class="token-breakdown">
+        <div class="token-item">
+          <div class="token-label">Agent Working</div>
+          <div class="token-value">12m 4s</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">User Response</div>
+          <div class="token-value">2m 11s</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">Work Cycles</div>
+          <div class="token-value">8</div>
+        </div>
+        <div class="token-item">
+          <div class="token-label">User Prompts</div>
+          <div class="token-value">3</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <h3>Details</h3>
+      <table>
+        <tbody>
+          <tr class="no-hover">
+            <td style="color:var(--outline);width:120px">Backend</td>
+            <td><span class="badge codex">Codex</span></td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Worktree</td>
+            <td>feat-dark-mode</td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Status</td>
+            <td>Closed (5h ago)</td>
+          </tr>
+          <tr class="no-hover">
+            <td style="color:var(--outline)">Context Window</td>
+            <td class="mono">192,000</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="annotation">
+      <strong>Codex chats:</strong> Cost is shown as "—" because the Codex backend does not report cost data.
+      Token counts and timing are fully tracked. If Codex adds cost reporting in the future,
+      the same <code>costUsd</code> field in <code>ModelUsageInfo</code> will carry it — no schema change needed.
+    </div>
+
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- DESIGN NOTES                                    -->
+<!-- ════════════════════════════════════════════════ -->
+
+<div class="design-notes">
+  <h2>Design & Implementation Notes</h2>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">1. tracking.jsonl Schema Change</h3>
+  <p>Add a <code>backend</code> field to <code>CostTrackingEntry</code>:</p>
+  <ul>
+    <li><code>"backend": "claude"</code> or <code>"backend": "codex"</code></li>
+    <li>Backward compatible: <code>fromJson</code> defaults to <code>"claude"</code> for existing entries without the field</li>
+    <li>Source: <code>ChatState</code> needs to expose its backend provider (already available on <code>ToolCallEntry.provider</code>)</li>
+  </ul>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">2. Unified ModelUsageInfo (No Separate Codex Structure)</h3>
+  <p>Both backends use the <strong>same <code>ModelUsageInfo</code> structure</strong>. Rationale:</p>
+  <ul>
+    <li>Both backends emit <code>TurnCompleteEvent</code> with the same fields</li>
+    <li>The only difference is Codex has <code>costUsd: 0.0</code> — a data gap, not a schema mismatch</li>
+    <li>The <code>backend</code> field on the entry lets the UI distinguish "cost is $0" from "cost is unknown"</li>
+    <li>If Codex later reports costs, the same field carries them — zero migration needed</li>
+  </ul>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">3. Data Sources</h3>
+  <ul>
+    <li><strong>Historical data:</strong> Read from <code>~/.ccinsights/projects/&lt;id&gt;/tracking.jsonl</code> — contains closed/deleted chats and worktrees</li>
+    <li><strong>Live data:</strong> From in-memory <code>ChatState.modelUsage</code> and <code>ChatState.timingStats</code> for active chats</li>
+    <li><strong>Merge strategy:</strong> Combine both sources at display time. Active chats are identified by their presence in the current <code>WorktreeState</code></li>
+  </ul>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">4. Navigation & Drill-Down</h3>
+  <ul>
+    <li><strong>Project → Worktree:</strong> Tap a worktree row to see its chats</li>
+    <li><strong>Worktree → Chat:</strong> Tap a chat row to see per-model breakdown</li>
+    <li><strong>Back navigation:</strong> Standard back button in header, or breadcrumb</li>
+    <li>Implemented as a single screen with a <code>Navigator</code> or a stack of views within a <code>PageView</code></li>
+  </ul>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">5. UI Patterns</h3>
+  <ul>
+    <li><strong>Summary cards:</strong> KPI row at top of each level (cost, tokens, time, chats)</li>
+    <li><strong>Model bar:</strong> Stacked horizontal bar showing cost/token distribution by model</li>
+    <li><strong>Tables:</strong> Sortable rows for worktrees and chats</li>
+    <li><strong>Backend badges:</strong> Claude (purple) and Codex (cyan) badges on rows</li>
+    <li><strong>Cost handling:</strong> Show "—" for Codex cost fields; project/worktree totals only sum known costs with a note</li>
+    <li><strong>Deleted worktrees:</strong> Shown with a "deleted" badge, path says "worktree no longer exists"</li>
+    <li><strong>Active chats:</strong> Shown with an "active" badge, data refreshes live</li>
+  </ul>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">6. New Files Needed</h3>
+  <ul>
+    <li><code>frontend/lib/screens/project_stats_screen.dart</code> — Main screen with drill-down navigation</li>
+    <li><code>frontend/lib/models/project_stats.dart</code> — Aggregation models (ProjectStats, WorktreeStats, ChatStats)</li>
+    <li><code>frontend/lib/services/stats_service.dart</code> — Reads tracking.jsonl + merges live data</li>
+    <li>Tests for the above</li>
+  </ul>
+
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:14px;color:var(--on-surface)">7. Entry Point</h3>
+  <ul>
+    <li>Accessed from the app's sidebar/menu (alongside Settings, File Manager, etc.)</li>
+    <li>Available at project level — requires a project to be selected</li>
+    <li>Menu item: "Project Stats" with a chart/analytics icon</li>
+  </ul>
+</div>
+
+</body>
+</html>

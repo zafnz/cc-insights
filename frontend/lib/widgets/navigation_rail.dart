@@ -39,6 +39,14 @@ class AppNavigationRail extends StatelessWidget {
             isSelected: selectedIndex == 1,
             onTap: () => onDestinationSelected(1),
           ),
+          const SizedBox(height: 4),
+          _NavRailButton(
+            icon: Icons.bar_chart_outlined,
+            selectedIcon: Icons.bar_chart,
+            tooltip: 'Project Stats',
+            isSelected: selectedIndex == 4,
+            onTap: () => onDestinationSelected(4),
+          ),
           const Spacer(),
           // Bottom buttons: Logs, Settings
           Divider(

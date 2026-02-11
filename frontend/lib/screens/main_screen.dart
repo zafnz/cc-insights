@@ -24,6 +24,7 @@ import '../widgets/navigation_rail.dart';
 import '../widgets/status_bar.dart';
 import 'file_manager_screen.dart';
 import 'log_viewer_screen.dart';
+import 'project_stats_screen.dart';
 import 'settings_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
@@ -171,6 +172,9 @@ class _MainScreenState extends State<MainScreen> {
         break;
       case MenuAction.showLogs:
         _handleNavigationChange(3);
+        break;
+      case MenuAction.showStats:
+        _handleNavigationChange(4);
         break;
       case MenuAction.showProjectSettings:
         _handleNavigationChange(0);
@@ -897,6 +901,8 @@ class _MainScreenState extends State<MainScreen> {
                         const SettingsScreen(),
                         // Index 3: Log viewer screen
                         const LogViewerScreen(),
+                        // Index 4: Project Stats screen
+                        const ProjectStatsScreen(),
                       ],
                     ),
                   ),

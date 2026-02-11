@@ -37,6 +37,7 @@ class MenuCallbacks {
   final VoidCallback? onShowFileManager;
   final VoidCallback? onShowSettings;
   final VoidCallback? onShowLogs;
+  final VoidCallback? onShowStats;
 
   // Panels
   final VoidCallback? onToggleMergeChatsAgents;
@@ -65,6 +66,7 @@ class MenuCallbacks {
     this.onShowFileManager,
     this.onShowSettings,
     this.onShowLogs,
+    this.onShowStats,
     this.onToggleMergeChatsAgents,
     this.agentsMergedIntoChats = false,
   });
@@ -394,6 +396,14 @@ class AppMenuBar extends StatelessWidget {
                     meta: true,
                   ),
                   onSelected: callbacks.onShowSettings,
+                ),
+                PlatformMenuItem(
+                  label: 'Project Stats',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.digit5,
+                    meta: true,
+                  ),
+                  onSelected: hasProject ? callbacks.onShowStats : null,
                 ),
               ],
             ),

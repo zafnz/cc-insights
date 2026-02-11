@@ -319,7 +319,7 @@ void main() {
           expect(stackFinder, findsOneWidget);
 
           final stack = tester.widget<IndexedStack>(stackFinder);
-          expect(stack.children.length, 4);
+          expect(stack.children.length, 5);
           expect(stack.index, 0); // Initially showing main screen
         },
       );

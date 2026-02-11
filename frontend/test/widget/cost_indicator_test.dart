@@ -11,6 +11,7 @@ void main() {
     Widget createTestApp({
       required UsageInfo usage,
       List<ModelUsageInfo> modelUsage = const [],
+      String agentLabel = 'Claude',
     }) {
       return MaterialApp(
         home: Scaffold(
@@ -18,6 +19,7 @@ void main() {
             child: CostIndicator(
               usage: usage,
               modelUsage: modelUsage,
+              agentLabel: agentLabel,
             ),
           ),
         ),

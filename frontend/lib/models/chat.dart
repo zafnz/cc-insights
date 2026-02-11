@@ -1707,6 +1707,12 @@ class ChatState extends ChangeNotifier {
     };
   }
 
+  /// User-facing backend label for cost tracking.
+  ///
+  /// Returns 'claude' for Claude CLI backend, 'codex' for Codex backend.
+  /// This differs from [_backendTypeValue] which returns 'direct' for Claude.
+  String get backendLabel => _model.backend == sdk.BackendType.codex ? 'codex' : 'claude';
+
   /// Persists the session ID to projects.json.
   ///
   /// This is a fire-and-forget operation - errors are logged but don't block

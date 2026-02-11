@@ -1307,6 +1307,74 @@ class PersistenceService {
     }
   }
 
+  /// Loads cost tracking entries from the project's tracking.jsonl file.
+  ///
+  /// Returns an empty list if the file doesn't exist.
+  /// Skips invalid lines and logs warnings for them.
+  Future<List<CostTrackingEntry>> loadCostTracking(String projectId) async {
+    final path = costTrackingPath(projectId);
+    final file = File(path);
+
+    if (!await file.exists()) {
+      developer.log(
+        'Cost tracking file not found for project $projectId',
+        name: 'PersistenceService',
+      );
+      return [];
+    }
+
+    final entries = <CostTrackingEntry>[];
+    var lineNumber = 0;
+    var skippedLines = 0;
+
+    try {
+      final bytes = await file.readAsBytes();
+      final content = utf8.decode(bytes, allowMalformed: true);
+      final lines = content.split('\n');
+
+      for (final line in lines) {
+        lineNumber++;
+        if (line.trim().isEmpty) continue;
+
+        try {
+          final json = jsonDecode(line) as Map<String, dynamic>;
+          final entry = CostTrackingEntry.fromJson(json);
+          entries.add(entry);
+        } catch (e) {
+          skippedLines++;
+          developer.log(
+            'Skipping invalid line $lineNumber in cost tracking: $e',
+            name: 'PersistenceService',
+            error: e,
+          );
+        }
+      }
+
+      if (skippedLines > 0) {
+        developer.log(
+          'Loaded ${entries.length} cost tracking entries for project $projectId '
+          '($skippedLines invalid lines skipped)',
+          name: 'PersistenceService',
+          level: 900,
+        );
+      } else {
+        developer.log(
+          'Loaded ${entries.length} cost tracking entries for project $projectId',
+          name: 'PersistenceService',
+        );
+      }
+
+      return entries;
+    } catch (e) {
+      developer.log(
+        'Failed to load cost tracking for project $projectId: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+      return entries;
+    }
+  }
+
   /// Appends a cost tracking entry to the project's tracking.jsonl file.
   ///
   /// This is called when a chat is closed or when a worktree is deleted.
