@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart'
     show
@@ -18,6 +19,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         SubagentCompleteEvent,
         StreamDeltaEvent,
         PermissionRequestEvent,
+        ReasoningEffort,
         ToolKind,
         TextKind,
         SessionStatus,
@@ -26,6 +28,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
 
 import '../models/agent.dart';
 import '../models/chat.dart';
+import '../models/chat_model.dart';
 import '../models/codex_pricing.dart';
 import '../models/output_entry.dart';
 import 'ask_ai_service.dart';
@@ -338,7 +341,32 @@ class EventHandler {
   }
 
   void _handleSessionInit(ChatState chat, SessionInitEvent event) {
-    // No-op - system initialization is handled elsewhere
+    // Sync the server-reported model to the chat's model dropdown so the UI
+    // shows the actual resolved model (e.g. "gpt-5.2-codex" instead of
+    // "Default (server)").
+    final serverModel = event.model;
+    if (serverModel != null && serverModel.isNotEmpty) {
+      final models = ChatModelCatalog.forBackend(chat.model.backend);
+      final match = models.where((m) => m.id == serverModel).toList();
+      if (match.isNotEmpty) {
+        chat.syncModelFromServer(match.first);
+      } else {
+        // Model not in catalog — add it dynamically so the dropdown shows it
+        final resolved = ChatModel(
+          id: serverModel,
+          label: serverModel,
+          backend: chat.model.backend,
+        );
+        chat.syncModelFromServer(resolved);
+      }
+    }
+
+    // Sync the server-reported reasoning effort to the chat so the dropdown
+    // reflects what the server is actually using.
+    final effort = ReasoningEffort.fromString(event.reasoningEffort);
+    if (effort != null && effort != chat.reasoningEffort) {
+      chat.syncReasoningEffortFromServer(effort);
+    }
   }
 
   void _handleSessionStatus(ChatState chat, SessionStatusEvent event) {
@@ -431,17 +459,26 @@ class EventHandler {
 
     // Calculate cost from pricing table for Codex (which doesn't report cost)
     double totalCostUsd = event.costUsd ?? 0.0;
+    stderr.writeln(
+      '[COST DEBUG] TurnComplete: provider=${event.provider}, costUsd=$totalCostUsd, '
+      'modelUsage=${modelUsageList?.map((m) => '${m.modelName}:${m.inputTokens}in/${m.outputTokens}out/${m.cacheReadTokens}cache').toList()}, '
+      'usage=${usageInfo != null ? '${usageInfo.inputTokens}in/${usageInfo.outputTokens}out' : 'null'}',
+    );
     if (totalCostUsd == 0.0 &&
         event.provider == BackendProvider.codex &&
         modelUsageList != null) {
       modelUsageList = modelUsageList.map((m) {
         final pricing = lookupCodexPricing(m.modelName);
+        stderr.writeln(
+          '[COST DEBUG] Pricing lookup for "${m.modelName}": ${pricing != null ? 'found (input=${pricing.inputPerMillion}, output=${pricing.outputPerMillion})' : 'NOT FOUND'}',
+        );
         if (pricing == null) return m;
         final cost = pricing.calculateCost(
           inputTokens: m.inputTokens,
           cachedInputTokens: m.cacheReadTokens,
           outputTokens: m.outputTokens,
         );
+        stderr.writeln('[COST DEBUG] Calculated cost for ${m.modelName}: \$$cost');
         return ModelUsageInfo(
           modelName: m.modelName,
           inputTokens: m.inputTokens,
@@ -453,6 +490,7 @@ class EventHandler {
         );
       }).toList();
       totalCostUsd = modelUsageList.fold(0.0, (sum, m) => sum + m.costUsd);
+      stderr.writeln('[COST DEBUG] Total calculated cost: \$$totalCostUsd');
       if (usageInfo != null && totalCostUsd > 0.0) {
         usageInfo = usageInfo.copyWith(costUsd: totalCostUsd);
       }

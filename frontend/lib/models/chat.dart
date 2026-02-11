@@ -775,6 +775,30 @@ class ChatState extends ChangeNotifier {
     }
   }
 
+  /// Updates the displayed model from a server-reported value.
+  ///
+  /// Unlike [setModel], this does NOT send a command back to the session.
+  /// Used when the server reports the resolved model (e.g. in SessionInitEvent).
+  void syncModelFromServer(ChatModel model) {
+    if (_model != model) {
+      _model = model;
+      _scheduleMetaSave();
+      notifyListeners();
+    }
+  }
+
+  /// Updates the displayed reasoning effort from a server-reported value.
+  ///
+  /// Unlike [setReasoningEffort], this does NOT send a command back to the
+  /// session. Used when the server reports the active reasoning effort.
+  void syncReasoningEffortFromServer(sdk.ReasoningEffort? effort) {
+    if (_reasoningEffort != effort) {
+      _reasoningEffort = effort;
+      _scheduleMetaSave();
+      notifyListeners();
+    }
+  }
+
   /// Renames this chat.
   ///
   /// Updates the in-memory state and persists the new name to projects.json.

@@ -281,6 +281,7 @@ sealed class InsightsEvent {
 class SessionInitEvent extends InsightsEvent {
   final String sessionId;
   final String? model;
+  final String? reasoningEffort;
   final String? cwd;
   final List<String>? availableTools;
   final List<McpServerStatus>? mcpServers;
@@ -297,6 +298,7 @@ class SessionInitEvent extends InsightsEvent {
     super.extensions,
     required this.sessionId,
     this.model,
+    this.reasoningEffort,
     this.cwd,
     this.availableTools,
     this.mcpServers,
@@ -316,6 +318,7 @@ class SessionInitEvent extends InsightsEvent {
       extensions: base.extensions,
       sessionId: json['sessionId'] as String,
       model: json['model'] as String?,
+      reasoningEffort: json['reasoningEffort'] as String?,
       cwd: json['cwd'] as String?,
       availableTools: (json['availableTools'] as List<dynamic>?)
           ?.cast<String>(),
@@ -340,6 +343,7 @@ class SessionInitEvent extends InsightsEvent {
         ...baseJson('session_init'),
         'sessionId': sessionId,
         if (model != null) 'model': model,
+        if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
         if (cwd != null) 'cwd': cwd,
         if (availableTools != null) 'availableTools': availableTools,
         if (mcpServers != null)

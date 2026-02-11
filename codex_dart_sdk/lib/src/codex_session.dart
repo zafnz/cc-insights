@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart';
@@ -13,16 +14,24 @@ class CodexSession implements AgentSession {
   CodexSession({
     required CodexProcess process,
     required this.threadId,
+    String? serverModel,
+    String? serverReasoningEffort,
   })  : _process = process,
-        _isTestSession = false {
+        _isTestSession = false,
+        _serverModel = serverModel,
+        _serverReasoningEffort = serverReasoningEffort {
     _setupStreams();
   }
 
   /// Creates a test session that is not connected to a real backend.
   CodexSession.forTesting({
     required this.threadId,
+    String? serverModel,
+    String? serverReasoningEffort,
   })  : _process = null,
-        _isTestSession = true;
+        _isTestSession = true,
+        _serverModel = serverModel,
+        _serverReasoningEffort = serverReasoningEffort;
 
   final CodexProcess? _process;
   final bool _isTestSession;
@@ -52,6 +61,12 @@ class CodexSession implements AgentSession {
   /// Exposes tracked temp image paths for testing.
   @visibleForTesting
   Set<String> get tempImagePaths => _tempImagePaths;
+
+  /// Model name reported by the server in the thread/start response.
+  final String? _serverModel;
+
+  /// Reasoning effort reported by the server in the thread/start response.
+  final String? _serverReasoningEffort;
 
   Map<String, dynamic>? _latestTokenUsage;
   int? _modelContextWindow;
@@ -127,6 +142,8 @@ class CodexSession implements AgentSession {
   void _handleNotification(JsonRpcNotification notification) {
     if (_disposed) return;
     final params = notification.params ?? const <String, dynamic>{};
+
+    stderr.writeln('[CODEX DEBUG] notification: ${notification.method}');
 
     switch (notification.method) {
       case 'thread/started':
@@ -308,7 +325,16 @@ class CodexSession implements AgentSession {
     final id = thread?['id'] as String?;
     if (id != threadId) return;
 
-    _modelName = thread?['model'] as String?;
+    // Use model from notification, falling back to thread/start response
+    _modelName = thread?['model'] as String? ?? _serverModel;
+    // Use reasoning effort from notification, falling back to thread/start response
+    final reasoningEffort =
+        params['reasoningEffort'] as String? ?? _serverReasoningEffort;
+    stderr.writeln(
+      '[CODEX DEBUG] thread/started model=$_modelName, '
+      'reasoningEffort=$reasoningEffort, '
+      'thread keys=${thread?.keys.toList()}',
+    );
 
     _eventsController.add(SessionInitEvent(
       id: _nextEventId(),
@@ -316,10 +342,8 @@ class CodexSession implements AgentSession {
       provider: BackendProvider.codex,
       raw: params,
       sessionId: threadId,
-      model: thread?['model'] as String?,
-      // Codex doesn't provide these in thread/started:
-      // cwd, availableTools, mcpServers, permissionMode,
-      // account, slashCommands, availableModels
+      model: _modelName,
+      reasoningEffort: reasoningEffort,
     ));
   }
 

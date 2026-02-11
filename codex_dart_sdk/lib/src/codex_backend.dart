@@ -157,12 +157,14 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     }
 
     try {
-      final threadId = await _startThread(cwd, options);
+      final threadResult = await _startThread(cwd, options);
       final session = CodexSession(
         process: _process,
-        threadId: threadId,
+        threadId: threadResult.threadId,
+        serverModel: threadResult.model,
+        serverReasoningEffort: threadResult.reasoningEffort,
       );
-      _sessions[threadId] = session;
+      _sessions[threadResult.threadId] = session;
 
       if (content != null && content.isNotEmpty) {
         await session.sendWithContent(content);
@@ -183,7 +185,10 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     }
   }
 
-  Future<String> _startThread(String cwd, SessionOptions? options) async {
+  Future<_ThreadStartResult> _startThread(
+    String cwd,
+    SessionOptions? options,
+  ) async {
     final model = options?.model?.trim();
     final resume = options?.resume;
     final resolvedModel = model != null && model.isNotEmpty ? model : null;
@@ -216,7 +221,11 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     if (threadId == null || threadId.isEmpty) {
       throw const BackendProcessError('Invalid thread response');
     }
-    return threadId;
+    return _ThreadStartResult(
+      threadId: threadId,
+      model: result['model'] as String?,
+      reasoningEffort: result['reasoningEffort'] as String?,
+    );
   }
 
   @override
@@ -232,4 +241,17 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     await _errorsController.close();
     await _process.dispose();
   }
+}
+
+/// Result from thread/start or thread/resume, capturing server-reported values.
+class _ThreadStartResult {
+  const _ThreadStartResult({
+    required this.threadId,
+    this.model,
+    this.reasoningEffort,
+  });
+
+  final String threadId;
+  final String? model;
+  final String? reasoningEffort;
 }
