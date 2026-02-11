@@ -157,6 +157,16 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
     }
   }
 
+  /// Re-wire callbacks if they've been lost.
+  void _ensureDialogObserverConnected() {
+    final observer = widget.dialogObserver;
+    if (observer == null) return;
+    if (observer.onDialogOpened != _onDialogOpened) {
+      observer.onDialogOpened = _onDialogOpened;
+      observer.onDialogClosed = _onDialogClosed;
+    }
+  }
+
   void _onDialogOpened() {
     if (!_suspendedForDialog) {
       _suspendedForDialog = true;
@@ -179,8 +189,14 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
   void didUpdateWidget(KeyboardFocusManager oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.dialogObserver != widget.dialogObserver) {
+      // Observer instance changed — disconnect old, connect new
       _disconnectDialogObserver();
       _connectDialogObserver();
+    } else {
+      // Same observer instance — ensure callbacks are still wired.
+      // They can be lost if initState ran before the observer was
+      // fully available (e.g. widget created before first build).
+      _ensureDialogObserverConnected();
     }
   }
 
@@ -213,7 +229,6 @@ class KeyboardFocusManagerState extends State<KeyboardFocusManager> {
       _handledKeys.clear();
       return false;
     }
-
     // Handle app-level keyboard shortcuts before typing-key logic.
     // These work regardless of message input focus state.
     if (event is KeyDownEvent) {
