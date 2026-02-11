@@ -709,13 +709,35 @@ void main() {
         expect(event.extensions?['codex.commandActions'], ['allow', 'deny']);
       });
 
-      test('emits PermissionRequestEvent for fileChange approval', () async {
+      test('emits enriched PermissionRequestEvent for fileChange approval',
+          () async {
+        // First inject item/started so the session tracks the file change data
+        session.injectNotification(JsonRpcNotification(
+          method: 'item/started',
+          params: {
+            'threadId': 'test-thread',
+            'item': {
+              'id': 'item-011',
+              'type': 'fileChange',
+              'changes': [
+                {
+                  'path': '/Users/zaf/project/src/main.dart',
+                  'diff': '@@ -1,3 +1,4 @@\n+import "foo";',
+                },
+              ],
+            },
+          },
+        ));
+        await waitForEvents();
+        capturedEvents.clear();
+
+        // Now the approval request arrives with grantRoot: null
         session.injectServerRequest(JsonRpcServerRequest(
           id: 43,
           method: 'item/fileChange/requestApproval',
           params: {
             'threadId': 'test-thread',
-            'grantRoot': '/Users/zaf/project/src',
+            'grantRoot': null,
             'itemId': 'item-011',
           },
         ));
@@ -723,10 +745,30 @@ void main() {
         expect(capturedEvents, hasLength(1));
         final event = capturedEvents.first as PermissionRequestEvent;
         expect(event.requestId, '43');
-        expect(event.toolName, 'Write');
+        expect(event.toolName, 'FileChange');
         expect(event.toolKind, ToolKind.edit);
-        expect(event.toolInput['file_path'], '/Users/zaf/project/src');
+        expect(
+            event.toolInput['file_path'], '/Users/zaf/project/src/main.dart');
+        expect(event.toolInput['content'],
+            contains('@@ -1,3 +1,4 @@\n+import "foo";'));
         expect(event.toolUseId, 'item-011');
+      });
+
+      test('falls back to grantRoot when no prior item/started', () async {
+        session.injectServerRequest(JsonRpcServerRequest(
+          id: 44,
+          method: 'item/fileChange/requestApproval',
+          params: {
+            'threadId': 'test-thread',
+            'grantRoot': '/Users/zaf/project/src',
+            'itemId': 'item-099',
+          },
+        ));
+        await waitForEvents();
+        expect(capturedEvents, hasLength(1));
+        final event = capturedEvents.first as PermissionRequestEvent;
+        expect(event.toolName, 'FileChange');
+        expect(event.toolInput['file_path'], '/Users/zaf/project/src');
         expect(event.extensions?['codex.grantRoot'], '/Users/zaf/project/src');
       });
 

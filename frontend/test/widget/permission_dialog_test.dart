@@ -189,6 +189,86 @@ void main() {
       });
     });
 
+    group('FileChange tool display', () {
+      testWidgets('shows header with FileChange tool name', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'FileChange',
+          toolInput: {
+            'file_path': '/Users/test/main.dart',
+            'content': '@@ -1,3 +1,4 @@\n+import "foo";',
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        expect(find.textContaining('Permission Required: FileChange'),
+            findsOneWidget);
+      });
+
+      testWidgets('shows file path from enriched input', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'FileChange',
+          toolInput: {
+            'file_path': '/Users/test/main.dart',
+            'content': '@@ -1,3 +1,4 @@',
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        expect(find.textContaining('/Users/test/main.dart'), findsOneWidget);
+      });
+
+      testWidgets('shows diff content in code box', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'FileChange',
+          toolInput: {
+            'file_path': '/Users/test/main.dart',
+            'content': '@@ -1,3 +1,4 @@\n+import "foo";',
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        expect(find.textContaining('+import "foo"'), findsOneWidget);
+      });
+
+      testWidgets('shows multiple file paths', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'FileChange',
+          toolInput: {
+            'file_path': '/Users/test/main.dart',
+            'paths': ['/Users/test/main.dart', '/Users/test/utils.dart'],
+            'content': 'diff1\n\ndiff2',
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        expect(find.textContaining('/Users/test/main.dart'), findsOneWidget);
+        expect(find.textContaining('/Users/test/utils.dart'), findsOneWidget);
+      });
+
+      testWidgets('handles empty content gracefully', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'FileChange',
+          toolInput: {
+            'file_path': '/Users/test/main.dart',
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        // Should render file path without error
+        expect(find.textContaining('/Users/test/main.dart'), findsOneWidget);
+      });
+    });
+
     group('Generic tool display', () {
       testWidgets('shows key-value pairs for unknown tools', (tester) async {
         final request = createFakeRequest(

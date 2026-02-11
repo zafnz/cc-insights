@@ -60,6 +60,10 @@ class CodexSession implements AgentSession {
   String? _currentTurnId;
   String? _effortOverride;
 
+  /// Tracks fileChange items by itemId so approval requests can be enriched
+  /// with file paths and diffs from the earlier item/started event.
+  final Map<String, Map<String, dynamic>> _fileChangeItems = {};
+
   int _eventIdCounter = 0;
 
   String _nextEventId() {
@@ -182,13 +186,17 @@ class CodexSession implements AgentSession {
           },
         ));
       case 'item/fileChange/requestApproval':
+        final fileItemId = params['itemId'] as String?;
+        final trackedItem =
+            fileItemId != null ? _fileChangeItems[fileItemId] : null;
+        final enrichedInput = trackedItem != null
+            ? _fileChangeInput(trackedItem)
+            : {'file_path': params['grantRoot'] ?? ''};
         _emitApprovalRequest(
           request,
-          toolName: 'Write',
-          toolInput: {
-            'file_path': params['grantRoot'] ?? '',
-          },
-          toolUseId: params['itemId'] as String?,
+          toolName: 'FileChange',
+          toolInput: enrichedInput,
+          toolUseId: fileItemId,
         );
         _eventsController.add(PermissionRequestEvent(
           id: _nextEventId(),
@@ -197,12 +205,10 @@ class CodexSession implements AgentSession {
           raw: params,
           sessionId: threadId,
           requestId: request.id.toString(),
-          toolName: 'Write',
+          toolName: 'FileChange',
           toolKind: ToolKind.edit,
-          toolInput: {
-            'file_path': params['grantRoot'] ?? '',
-          },
-          toolUseId: params['itemId'] as String?,
+          toolInput: enrichedInput,
+          toolUseId: fileItemId,
           extensions: {
             if (params['grantRoot'] != null)
               'codex.grantRoot': params['grantRoot'],
@@ -366,6 +372,10 @@ class CodexSession implements AgentSession {
           },
         ));
       case 'fileChange':
+        final itemId = item['id'] as String? ?? '';
+        if (itemId.isNotEmpty) {
+          _fileChangeItems[itemId] = item;
+        }
         final fileChangePaths = _extractCodexLocations('fileChange', item);
         _eventsController.add(ToolInvocationEvent(
           id: _nextEventId(),
@@ -469,6 +479,8 @@ class CodexSession implements AgentSession {
           isError: cmdIsError,
         ));
       case 'fileChange':
+        final completedId = item['id'] as String?;
+        if (completedId != null) _fileChangeItems.remove(completedId);
         final fileIsError = (item['status'] as String?) == 'failed';
         final completedPaths = _extractCodexLocations('fileChange', item);
         _eventsController.add(ToolCompletionEvent(
@@ -773,6 +785,7 @@ class CodexSession implements AgentSession {
   void _dispose() {
     if (_disposed) return;
     _disposed = true;
+    _fileChangeItems.clear();
     _deleteTempFiles(Set<String>.of(_tempImagePaths));
     _notificationSub?.cancel();
     _requestSub?.cancel();

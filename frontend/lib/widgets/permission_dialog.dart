@@ -734,6 +734,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
     final baseContent = switch (permission.toolName) {
       'Bash' => _buildBashContent(toolInput),
       'Write' => _buildWriteContent(toolInput),
+      'FileChange' => _buildFileChangeContent(toolInput),
       'Edit' => _buildEditContent(toolInput),
       // ExitPlanMode is handled by _buildExpandedPlanView (full-panel mode)
       // and never reaches _buildToolContent.
@@ -823,6 +824,43 @@ class _PermissionDialogState extends State<PermissionDialog> {
           backgroundColor:
               Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
+      ],
+    );
+  }
+
+  Widget _buildFileChangeContent(Map<String, dynamic> input) {
+    final filePath = input['file_path'] as String? ?? '';
+    final paths = (input['paths'] as List<dynamic>?)
+        ?.whereType<String>()
+        .toList();
+    final content = input['content'] as String? ?? '';
+    final lineCount =
+        content.isEmpty ? 0 : '\n'.allMatches(content).length + 1;
+    final truncatedContent = _truncate(content, 500);
+
+    final displayPaths =
+        paths != null && paths.length > 1 ? paths : [filePath];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final path in displayPaths)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: SelectableText(
+              'File: $path',
+              style: monoStyle(fontSize: PermissionFontSizes.filePath),
+            ),
+          ),
+        if (content.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _ScrollableCodeBox(
+            content: truncatedContent,
+            lineCount: lineCount,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+        ],
       ],
     );
   }
