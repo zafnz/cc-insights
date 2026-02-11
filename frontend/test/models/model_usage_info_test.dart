@@ -145,6 +145,62 @@ void main() {
         check(usage.displayName).equals('Haiku 3.5');
       });
 
+      test('extracts GPT-5.2 Codex from gpt-5.2-codex', () {
+        const usage = ModelUsageInfo(
+          modelName: 'gpt-5.2-codex',
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          costUsd: 0.0,
+          contextWindow: 200000,
+        );
+
+        check(usage.displayName).equals('GPT-5.2 Codex');
+      });
+
+      test('extracts GPT-5.1 Codex Mini from gpt-5.1-codex-mini', () {
+        const usage = ModelUsageInfo(
+          modelName: 'gpt-5.1-codex-mini',
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          costUsd: 0.0,
+          contextWindow: 200000,
+        );
+
+        check(usage.displayName).equals('GPT-5.1 Codex Mini');
+      });
+
+      test('extracts GPT-5.1 Codex Max from gpt-5.1-codex-max', () {
+        const usage = ModelUsageInfo(
+          modelName: 'gpt-5.1-codex-max',
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          costUsd: 0.0,
+          contextWindow: 200000,
+        );
+
+        check(usage.displayName).equals('GPT-5.1 Codex Max');
+      });
+
+      test('extracts GPT-5.2 from bare gpt model name', () {
+        const usage = ModelUsageInfo(
+          modelName: 'gpt-5.2',
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          costUsd: 0.0,
+          contextWindow: 200000,
+        );
+
+        check(usage.displayName).equals('GPT-5.2');
+      });
+
       test('returns original name for unknown format', () {
         // Arrange
         const usage = ModelUsageInfo(

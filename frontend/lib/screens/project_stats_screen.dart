@@ -647,6 +647,14 @@ class _ModelCostSection extends StatelessWidget {
                 )),
           ],
         ),
+        const SizedBox(height: 6),
+        Text(
+          'Costs are only calculated for models that support them (currently Claude models only).',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.outline,
+                fontSize: 11,
+              ),
+        ),
       ],
     );
   }
@@ -1686,14 +1694,24 @@ String _formatRelativeTime(String isoTimestamp, {required bool isActive}) {
 
 Color _getModelColor(String modelName) {
   final lower = modelName.toLowerCase();
+  // Claude models
   if (lower.contains('opus')) {
     return const Color(0xFFD0BCFF); // purple
   } else if (lower.contains('sonnet')) {
     return const Color(0xFFFF9800); // orange
   } else if (lower.contains('haiku')) {
     return const Color(0xFF69F0AE); // green
-  } else {
-    // Other (codex, etc.)
-    return const Color(0xFFFF5252); // red
   }
+  // GPT/Codex models - distinguish by variant
+  if (lower.contains('codex-mini')) {
+    return const Color(0xFF4DD0E1); // cyan
+  } else if (lower.contains('codex-max')) {
+    return const Color(0xFFFF5252); // red
+  } else if (lower.contains('codex')) {
+    return const Color(0xFF00BCD4); // teal
+  } else if (lower.startsWith('gpt-')) {
+    return const Color(0xFF42A5F5); // blue
+  }
+  // Unknown
+  return const Color(0xFF9E9E9E); // grey
 }

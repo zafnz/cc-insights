@@ -53,6 +53,9 @@ class ModelUsageInfo {
   /// - "claude-haiku-4-5-20251001" -> "Haiku 4.5"
   /// - "claude-opus-4-5-20251101" -> "Opus 4.5"
   /// - "claude-3-5-sonnet-20241022" -> "Sonnet 3.5"
+  /// - "gpt-5.2-codex" -> "GPT-5.2 Codex"
+  /// - "gpt-5.1-codex-mini" -> "GPT-5.1 Codex Mini"
+  /// - "gpt-5.2" -> "GPT-5.2"
   /// - "unknown-model" -> "unknown-model"
   String get displayName {
     final lower = modelName.toLowerCase();
@@ -82,6 +85,22 @@ class ModelUsageInfo {
       final name = oldFormatMatch.group(3)!;
       final capitalizedName = name[0].toUpperCase() + name.substring(1);
       return '$capitalizedName $major.$minor';
+    }
+
+    // Match GPT/Codex models like "gpt-5.2-codex", "gpt-5.1-codex-mini", "gpt-5.2"
+    final gptMatch = RegExp(
+      r'gpt-(\d+(?:\.\d+)?)(.*)',
+    ).firstMatch(lower);
+
+    if (gptMatch != null) {
+      final version = gptMatch.group(1)!;
+      final suffix = gptMatch.group(2)!; // e.g. "-codex", "-codex-mini", ""
+      final parts = suffix
+          .split('-')
+          .where((s) => s.isNotEmpty)
+          .map((s) => s[0].toUpperCase() + s.substring(1))
+          .join(' ');
+      return parts.isEmpty ? 'GPT-$version' : 'GPT-$version $parts';
     }
 
     // Fallback: return as-is
