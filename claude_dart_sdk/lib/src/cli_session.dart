@@ -347,8 +347,10 @@ class CliSession {
     // Stash per-step usage from this assistant message. Each assistant message
     // carries usage for a single API call (step). The last one in a turn
     // reflects the actual context window size.
+    // Only stash from main agent messages — subagent messages have their own
+    // context window and would give misleading values for the main turn.
     final messageUsage = message?['usage'] as Map<String, dynamic>?;
-    if (messageUsage != null) {
+    if (messageUsage != null && parentToolUseId == null) {
       _lastAssistantUsage = messageUsage;
     }
 
@@ -363,6 +365,9 @@ class CliSession {
             provider: BackendProvider.claude,
             sessionId: sid,
             stepUsage: Map<String, dynamic>.from(messageUsage),
+            extensions: parentToolUseId != null
+                ? {'parent_tool_use_id': parentToolUseId}
+                : null,
           ),
         ];
       }
@@ -452,6 +457,9 @@ class CliSession {
         provider: BackendProvider.claude,
         sessionId: sid,
         stepUsage: Map<String, dynamic>.from(messageUsage),
+        extensions: parentToolUseId != null
+            ? {'parent_tool_use_id': parentToolUseId}
+            : null,
       ));
     }
 
