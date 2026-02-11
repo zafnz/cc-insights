@@ -6,6 +6,7 @@ import '../services/log_service.dart';
 import '../services/runtime_config.dart';
 import 'chat.dart';
 import 'chat_model.dart';
+import 'output_entry.dart';
 
 /// Immutable data representing a git worktree.
 ///
@@ -208,6 +209,13 @@ class WorktreeState extends ChangeNotifier {
 
   /// Whether this worktree is hidden from the default view.
   bool _hidden;
+
+  /// Accumulated cost and token data from closed chats, grouped by backend.
+  ///
+  /// When a chat is removed via [removeChat], its usage data is captured here
+  /// so that the worktree panel can display total costs including closed chats.
+  /// Key is the backend label ('claude' or 'codex').
+  final Map<String, _ClosedChatUsage> _closedChatUsage = {};
 
   /// Draft text typed in the welcome screen before any chat is created.
   ///
@@ -453,15 +461,71 @@ class WorktreeState extends ChangeNotifier {
 
   /// Removes a chat from this worktree.
   ///
+  /// Before disposing, captures the chat's cost/token data into
+  /// [_closedChatUsage] so worktree-level aggregation remains accurate.
   /// If the removed chat was selected, the selection is cleared.
-  /// The removed chat is disposed to clean up its resources.
   void removeChat(ChatState chat) {
+    // Capture cost data before disposing
+    final usage = chat.cumulativeUsage;
+    if (usage.totalTokens > 0 || usage.costUsd > 0) {
+      final backend = chat.backendLabel;
+      final existing = _closedChatUsage[backend];
+      if (existing != null) {
+        _closedChatUsage[backend] = _ClosedChatUsage(
+          totalTokens: existing.totalTokens + usage.totalTokens,
+          costUsd: existing.costUsd + usage.costUsd,
+        );
+      } else {
+        _closedChatUsage[backend] = _ClosedChatUsage(
+          totalTokens: usage.totalTokens,
+          costUsd: usage.costUsd,
+        );
+      }
+    }
+
     _chats.remove(chat);
     if (_selectedChat == chat) {
       _selectedChat = null;
     }
     chat.dispose();
     notifyListeners();
+  }
+
+  /// Returns aggregated cost and token totals per backend, combining
+  /// active chats and closed chats.
+  ///
+  /// Returns a map of backend label ('claude' or 'codex') to
+  /// (totalTokens, costUsd).
+  Map<String, ({int totalTokens, double costUsd})> get costPerBackend {
+    final result = <String, ({int totalTokens, double costUsd})>{};
+
+    // Start with closed chat data
+    for (final entry in _closedChatUsage.entries) {
+      result[entry.key] = (
+        totalTokens: entry.value.totalTokens,
+        costUsd: entry.value.costUsd,
+      );
+    }
+
+    // Add active chat data
+    for (final chat in _chats) {
+      final backend = chat.backendLabel;
+      final usage = chat.cumulativeUsage;
+      final existing = result[backend];
+      if (existing != null) {
+        result[backend] = (
+          totalTokens: existing.totalTokens + usage.totalTokens,
+          costUsd: existing.costUsd + usage.costUsd,
+        );
+      } else {
+        result[backend] = (
+          totalTokens: usage.totalTokens,
+          costUsd: usage.costUsd,
+        );
+      }
+    }
+
+    return result;
   }
 
   @override
@@ -474,4 +538,15 @@ class WorktreeState extends ChangeNotifier {
     _selectedChat = null;
     super.dispose();
   }
+}
+
+/// Accumulated cost/token data from a closed chat.
+class _ClosedChatUsage {
+  final int totalTokens;
+  final double costUsd;
+
+  const _ClosedChatUsage({
+    required this.totalTokens,
+    required this.costUsd,
+  });
 }

@@ -1011,6 +1011,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                         ),
                       ),
                     const SizedBox(height: 2),
+                    // Cost/token summary for linked worktrees
+                    if (!data.isPrimary)
+                      _WorktreeCostSummary(worktree: worktree),
                     // Path + status on same line (muted, monospace, ~11px)
                     // Primary worktree: show full path trimmed from the start.
                     // Linked worktrees: hide path (branch name already shown above).
@@ -1429,6 +1432,90 @@ class _TagChip extends StatelessWidget {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Cost/token summary for linked worktrees
+// -----------------------------------------------------------------------------
 
+/// Displays aggregated cost and token usage per backend for a linked worktree.
+///
+/// Shows total cost followed by per-backend token counts, e.g.:
+/// `$5.20 - Claude 🪙5M Codex 🪙2.7M`
+///
+/// Only renders when there is usage data. Hidden for primary worktrees.
+class _WorktreeCostSummary extends StatelessWidget {
+  const _WorktreeCostSummary({required this.worktree});
 
+  final WorktreeState worktree;
 
+  @override
+  Widget build(BuildContext context) {
+    final costPerBackend = worktree.costPerBackend;
+    if (costPerBackend.isEmpty) return const SizedBox.shrink();
+
+    final totalCost = costPerBackend.values.fold(
+      0.0,
+      (sum, v) => sum + v.costUsd,
+    );
+    final hasAnyCost = costPerBackend.values.any((v) => v.costUsd > 0);
+
+    final textStyle = TextStyle(fontSize: 11, color: Colors.grey[600]);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          if (hasAnyCost) ...[
+            Text(
+              '\$${_formatCost(totalCost)}',
+              style: textStyle,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                '-',
+                style: textStyle,
+              ),
+            ),
+          ],
+          // Per-backend token summaries
+          ...costPerBackend.entries.expand((entry) {
+            final label = entry.key == 'codex' ? 'Codex' : 'Claude';
+            return [
+              Text(
+                label,
+                style: textStyle,
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.token,
+                size: 12,
+                color: Colors.grey[600],
+              ),
+              Text(
+                _formatTokenCount(entry.value.totalTokens),
+                style: textStyle,
+              ),
+              const SizedBox(width: 6),
+            ];
+          }),
+        ],
+      ),
+    );
+  }
+
+  static String _formatTokenCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(0)}k';
+    }
+    return count.toString();
+  }
+
+  static String _formatCost(double cost) {
+    if (cost >= 0.01 || cost == 0) {
+      return cost.toStringAsFixed(2);
+    }
+    return cost.toStringAsFixed(4);
+  }
+}
