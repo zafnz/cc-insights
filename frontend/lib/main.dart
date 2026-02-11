@@ -33,6 +33,7 @@ import 'services/runtime_config.dart';
 import 'services/project_config_service.dart';
 import 'services/settings_service.dart';
 import 'services/script_execution_service.dart';
+import 'services/codex_pricing_service.dart';
 import 'services/event_handler.dart';
 import 'services/worktree_watcher_service.dart';
 import 'services/menu_action_service.dart';
@@ -297,6 +298,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Initialize application logging
     _initializeLogging();
+
+    // Load Codex pricing (from disk cache, then fetch remote in background)
+    CodexPricingService.instance.initialize();
 
     // Enable SDK debug logging to file
     _initializeSdkLogging();

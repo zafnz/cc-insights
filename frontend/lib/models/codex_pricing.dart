@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 
+import '../services/codex_pricing_service.dart';
+
 /// Per-million-token pricing for a Codex/GPT model.
 ///
 /// Prices are in USD per million tokens.
-// TODO: Fetch pricing dynamically from
-// https://raw.githubusercontent.com/zafnz/cc-insights/refs/heads/main/codex-pricing.json
 @immutable
 class CodexModelPricing {
   final double inputPerMillion;
@@ -96,17 +96,35 @@ const codexPricingTable = <String, CodexModelPricing>{
 
 /// Look up pricing for a Codex/GPT model.
 ///
-/// Tries exact match first, then checks if the model name starts with any
-/// known pricing key (longest match wins). Returns null if no match found.
+/// Checks dynamically loaded pricing (from CodexPricingService) first, then
+/// falls back to the hardcoded table. Uses exact match first, then longest
+/// prefix match. Returns null if no match found.
 CodexModelPricing? lookupCodexPricing(String modelName) {
   final lower = modelName.toLowerCase();
+  final service = CodexPricingService.instance;
 
-  // Exact match
+  // Try dynamic pricing first (from file/network), then hardcoded fallback
+  if (service.hasDynamicPricing) {
+    final dynamic_ = service.lookup(lower);
+    if (dynamic_ != null) return dynamic_;
+
+    // Prefix match against dynamic pricing
+    CodexModelPricing? best;
+    int bestLen = 0;
+    for (final entry in service.entries) {
+      if (lower.startsWith(entry.key) && entry.key.length > bestLen) {
+        best = entry.value;
+        bestLen = entry.key.length;
+      }
+    }
+    if (best != null) return best;
+  }
+
+  // Hardcoded fallback: exact match
   final exact = codexPricingTable[lower];
   if (exact != null) return exact;
 
-  // Prefix match: find the longest key that is a prefix of the model name.
-  // E.g. model "gpt-5.2-codex-preview" would match "gpt-5.2-codex".
+  // Hardcoded fallback: prefix match (longest key wins)
   CodexModelPricing? best;
   int bestLen = 0;
   for (final entry in codexPricingTable.entries) {
