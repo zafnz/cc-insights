@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket List Panel Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+
+    --green: #4caf50;
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 32px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+  }
+
+  /* ── Panel shell ── */
+  .panel {
+    width: 320px;
+    background: var(--surface);
+    border-radius: 4px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 700px;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--surface-container-highest);
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .panel-header .mi { font-size: 14px; color: var(--on-surface-variant); }
+  .panel-header .title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.7);
+  }
+  .panel-header .drag-handle { font-size: 14px; color: rgba(202,196,208,0.5); }
+
+  /* ── Search + actions bar ── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    gap: 6px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    flex-shrink: 0;
+  }
+
+  .search-box {
+    flex: 1;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    background: var(--surface-container-low);
+    border-radius: 6px;
+    border: 1px solid rgba(73,69,79,0.3);
+  }
+  .search-box .mi { font-size: 14px; color: var(--on-surface-variant); }
+  .search-box .placeholder {
+    font-size: 11px;
+    color: rgba(202,196,208,0.5);
+    font-family: var(--font-mono);
+  }
+
+  .compact-btn {
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    background: var(--surface-container-high);
+    border: none;
+    border-radius: 4px;
+    color: var(--on-surface-variant);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-system);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .compact-btn:hover { background: rgba(208,188,255,0.08); }
+  .compact-btn .mi { font-size: 14px; }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--primary);
+  }
+  .icon-btn:hover { background: rgba(208,188,255,0.08); }
+  .icon-btn .mi { font-size: 16px; }
+
+  /* ── View toggle + group-by row ── */
+  .sub-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    flex-shrink: 0;
+  }
+
+  .view-toggle {
+    display: flex;
+    height: 24px;
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .view-toggle .segment {
+    width: 28px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--on-surface-variant);
+  }
+  .view-toggle .segment .mi { font-size: 14px; }
+  .view-toggle .segment.active {
+    background: rgba(79,55,139,0.5);
+    color: var(--primary);
+  }
+
+  .spacer { flex: 1; }
+
+  /* ── Category header ── */
+  .category-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background: rgba(54,52,59,0.5);
+    gap: 6px;
+  }
+  .category-header .name {
+    flex: 1;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--on-surface-variant);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .category-header .count {
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    font-family: var(--font-mono);
+  }
+  .category-header .progress-bar {
+    width: 40px;
+    height: 4px;
+    background: rgba(73,69,79,0.3);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .category-header .progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+  }
+
+  /* ── Ticket list item ── */
+  .ticket-list { flex: 1; overflow-y: auto; }
+
+  .ticket-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    gap: 6px;
+    border-bottom: 1px solid var(--surface-container-highest);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .ticket-item:hover { background: rgba(208,188,255,0.04); }
+  .ticket-item.selected { background: rgba(79,55,139,0.3); }
+
+  .ticket-item .status-icon { font-size: 14px; flex-shrink: 0; }
+  .ticket-item .status-icon.done { color: var(--green); }
+  .ticket-item .status-icon.active { color: var(--blue); }
+  .ticket-item .status-icon.ready { color: var(--grey-dark); }
+  .ticket-item .status-icon.blocked { color: var(--orange); }
+  .ticket-item .status-icon.input { color: var(--amber); }
+  .ticket-item .status-icon.draft { color: var(--grey); }
+  .ticket-item .status-icon.review { color: var(--purple); }
+
+  .ticket-item .ticket-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+    width: 52px;
+  }
+
+  .ticket-item .ticket-title {
+    flex: 1;
+    font-size: 13px;
+    color: var(--on-surface);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ticket-item .ticket-title.struck {
+    text-decoration: line-through;
+    color: var(--on-surface-variant);
+  }
+
+  /* ── Effort badge ── */
+  .effort-badge {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .effort-badge.small {
+    background: rgba(76,175,80,0.15);
+    border: 0.5px solid rgba(76,175,80,0.4);
+    color: var(--green);
+  }
+  .effort-badge.medium {
+    background: rgba(255,167,38,0.15);
+    border: 0.5px solid rgba(255,167,38,0.4);
+    color: var(--orange);
+  }
+  .effort-badge.large {
+    background: rgba(239,83,80,0.15);
+    border: 0.5px solid rgba(239,83,80,0.4);
+    color: var(--red);
+  }
+
+  /* ── Kind badge ── */
+  .kind-badge {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .kind-badge.feature { background: rgba(66,165,245,0.15); border: 0.5px solid rgba(66,165,245,0.4); color: var(--blue); }
+  .kind-badge.research { background: rgba(206,147,216,0.15); border: 0.5px solid rgba(206,147,216,0.4); color: var(--purple); }
+  .kind-badge.test { background: rgba(77,182,172,0.15); border: 0.5px solid rgba(77,182,172,0.4); color: var(--teal); }
+  .kind-badge.question { background: rgba(255,202,40,0.15); border: 0.5px solid rgba(255,202,40,0.4); color: var(--amber); }
+  .kind-badge.chore { background: rgba(158,158,158,0.15); border: 0.5px solid rgba(158,158,158,0.4); color: var(--grey); }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Ticket List Panel — Grouped by Category</div>
+
+<div class="panel">
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <span class="mi material-icons">task_alt</span>
+    <span class="title">Tickets</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <!-- Search + Filter + Add -->
+  <div class="toolbar">
+    <div class="search-box">
+      <span class="mi material-icons">search</span>
+      <span class="placeholder">Search tickets...</span>
+    </div>
+    <button class="compact-btn">
+      <span class="mi material-icons">filter_list</span>
+      Filter
+    </button>
+    <button class="icon-btn"><span class="mi material-icons">add</span></button>
+  </div>
+
+  <!-- View toggle + Group by -->
+  <div class="sub-toolbar">
+    <div class="view-toggle">
+      <button class="segment active"><span class="mi material-icons">list</span></button>
+      <button class="segment"><span class="mi material-icons">account_tree</span></button>
+    </div>
+    <div class="spacer"></div>
+    <button class="compact-btn">
+      <span class="mi material-icons" style="font-size:12px">segment</span>
+      Category
+      <span class="mi material-icons" style="font-size:14px">arrow_drop_down</span>
+    </button>
+  </div>
+
+  <!-- Ticket List -->
+  <div class="ticket-list">
+
+    <!-- Auth & Permissions -->
+    <div class="category-header">
+      <span class="name">Auth &amp; Permissions</span>
+      <span class="count">3/7</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:43%"></div></div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon done">check_circle_outline</span>
+      <span class="ticket-id">TKT-001</span>
+      <span class="ticket-title struck">Research OAuth providers</span>
+      <span class="effort-badge small">small</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon done">check_circle_outline</span>
+      <span class="ticket-id">TKT-002</span>
+      <span class="ticket-title struck">Design auth data model</span>
+      <span class="effort-badge small">small</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon done">check_circle_outline</span>
+      <span class="ticket-id">TKT-003</span>
+      <span class="ticket-title struck">Implement login screen</span>
+      <span class="effort-badge medium">medium</span>
+    </div>
+    <div class="ticket-item selected">
+      <span class="mi material-icons status-icon active">play_circle_outline</span>
+      <span class="ticket-id">TKT-004</span>
+      <span class="ticket-title">Implement token refresh</span>
+      <span class="effort-badge small">small</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+      <span class="ticket-id">TKT-005</span>
+      <span class="ticket-title">Add permission middleware</span>
+      <span class="effort-badge medium">medium</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+      <span class="ticket-id">TKT-006</span>
+      <span class="ticket-title">Write auth integration tests</span>
+      <span class="effort-badge medium">medium</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon input">help_outline</span>
+      <span class="ticket-id">TKT-007</span>
+      <span class="ticket-title">Decide: session vs JWT?</span>
+      <span class="kind-badge question">question</span>
+    </div>
+
+    <!-- Data Layer -->
+    <div class="category-header">
+      <span class="name">Data Layer</span>
+      <span class="count">0/4</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon blocked">block</span>
+      <span class="ticket-id">TKT-008</span>
+      <span class="ticket-title">Design database schema</span>
+      <span class="effort-badge large">large</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+      <span class="ticket-id">TKT-009</span>
+      <span class="ticket-title">Implement repository layer</span>
+      <span class="effort-badge medium">medium</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+      <span class="ticket-id">TKT-010</span>
+      <span class="ticket-title">Add migration system</span>
+      <span class="effort-badge medium">medium</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+      <span class="ticket-id">TKT-011</span>
+      <span class="ticket-title">Seed data &amp; fixtures</span>
+      <span class="effort-badge small">small</span>
+    </div>
+
+    <!-- UI Components -->
+    <div class="category-header">
+      <span class="name">UI Components</span>
+      <span class="count">0/3</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon draft">edit_note</span>
+      <span class="ticket-id">TKT-012</span>
+      <span class="ticket-title">Design component library</span>
+      <span class="effort-badge large">large</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon draft">edit_note</span>
+      <span class="ticket-id">TKT-013</span>
+      <span class="ticket-title">Build form widgets</span>
+      <span class="effort-badge medium">medium</span>
+    </div>
+    <div class="ticket-item">
+      <span class="mi material-icons status-icon draft">edit_note</span>
+      <span class="ticket-id">TKT-014</span>
+      <span class="ticket-title">Implement theme system</span>
+      <span class="effort-badge small">small</span>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

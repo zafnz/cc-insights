@@ -14,6 +14,7 @@ import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
+import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/widgets/dialog_observer.dart';
 import 'package:cc_insights_v2/widgets/navigation_rail.dart';
@@ -45,6 +46,7 @@ void main() {
     late DialogObserver dialogObserver;
     late MenuActionService menuActionService;
     late FakeCliAvailabilityService fakeCliAvailability;
+    late TicketBoardState ticketBoardState;
 
     /// Creates a project with primary and linked worktrees for testing.
     ProjectState createProject() {
@@ -122,6 +124,9 @@ void main() {
           ChangeNotifierProvider<CliAvailabilityService>.value(
             value: fakeCliAvailability,
           ),
+          ChangeNotifierProvider<TicketBoardState>.value(
+            value: ticketBoardState,
+          ),
         ],
         child: const MaterialApp(
           home: MainScreen(),
@@ -150,6 +155,7 @@ void main() {
       dialogObserver = DialogObserver();
       menuActionService = MenuActionService();
       fakeCliAvailability = FakeCliAvailabilityService();
+      ticketBoardState = TicketBoardState('test-project');
 
       // Set up fake file system
       fakeFileSystem.addDirectory('/Users/test/my-project');
@@ -319,7 +325,7 @@ void main() {
           expect(stackFinder, findsOneWidget);
 
           final stack = tester.widget<IndexedStack>(stackFinder);
-          expect(stack.children.length, 5);
+          expect(stack.children.length, 6);
           expect(stack.index, 0); // Initially showing main screen
         },
       );
@@ -487,6 +493,9 @@ void main() {
                 ),
                 ChangeNotifierProvider<CliAvailabilityService>.value(
                   value: fakeCliAvailability,
+                ),
+                ChangeNotifierProvider<TicketBoardState>.value(
+                  value: ticketBoardState,
                 ),
               ],
               child: MaterialApp(
