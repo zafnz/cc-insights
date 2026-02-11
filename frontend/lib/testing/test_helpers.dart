@@ -292,8 +292,25 @@ Future<Future<void> Function()> setupTestConfig() async {
 
   // Return cleanup function
   return () async {
-    if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
+    // Allow pending async auto-saves to complete before deleting.
+    // Without this, fire-and-forget saves may hold file handles open,
+    // causing "Directory not empty" errors on macOS.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // Retry deletion to handle macOS race condition where auto-save writes
+    // to the directory concurrently with tearDown cleanup.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+        break;
+      } on FileSystemException {
+        if (attempt < 2) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        // Ignore on final attempt - temp directory will be cleaned up by OS
+      }
     }
     // Reset persistence service to default
     PersistenceService.setBaseDir(

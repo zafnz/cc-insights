@@ -12,6 +12,12 @@ Feature docs are different from architectural documentation or SDK references:
 
 ## Feature Documents
 
+### Project Management — Ticket System
+
+**[project-management.md](project-management.md)** - Ticket/task management system
+
+Structured ticket system where agents generate tickets during planning, tickets form a dependency DAG, and users can dispatch agents to work on them. Covers the full data model, state management, UI components, agent integration, and a 5-phase implementation plan.
+
 ### Configuration System
 
 **[config-cli-files.md](config-cli-files.md)** - Configuration system design

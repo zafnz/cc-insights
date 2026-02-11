@@ -40,6 +40,7 @@ import 'services/menu_action_service.dart';
 import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'state/theme_state.dart';
+import 'state/ticket_board_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
 import 'widgets/dialog_observer.dart';
@@ -1027,6 +1028,38 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Menu action service for broadcasting menu actions to MainScreen
         ChangeNotifierProvider<MenuActionService>.value(
           value: _menuActionService,
+        ),
+        // Ticket board state for project management
+        ChangeNotifierProxyProvider<ProjectState, TicketBoardState>(
+          create: (context) {
+            final projectState = context.read<ProjectState>();
+            final projectId = PersistenceService.generateProjectId(
+              projectState.data.repoRoot,
+            );
+            final ticketBoardState = TicketBoardState(
+              projectId,
+              persistence: context.read<PersistenceService>(),
+            );
+            // Wire up the event handler for create_tickets interception
+            context.read<EventHandler>().ticketBoard = ticketBoardState;
+            // Load tickets asynchronously (fire-and-forget)
+            ticketBoardState.load();
+            return ticketBoardState;
+          },
+          update: (context, project, previous) {
+            if (previous != null) return previous;
+            final projectId = PersistenceService.generateProjectId(
+              project.data.repoRoot,
+            );
+            final ticketBoardState = TicketBoardState(
+              projectId,
+              persistence: context.read<PersistenceService>(),
+            );
+            // Wire up the event handler for create_tickets interception
+            context.read<EventHandler>().ticketBoard = ticketBoardState;
+            ticketBoardState.load();
+            return ticketBoardState;
+          },
         ),
       ],
       child: _NotificationNavigationListener(

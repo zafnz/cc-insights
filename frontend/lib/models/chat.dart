@@ -224,6 +224,12 @@ class ChatState extends ChangeNotifier {
   /// Subscription to the transport's events stream (for EventHandler).
   StreamSubscription<sdk.InsightsEvent>? _eventSubscription;
 
+  /// The event handler for this chat's session.
+  ///
+  /// Set when a session starts, cleared when it ends. Used to notify
+  /// the handler of permission responses for ticket status transitions.
+  EventHandler? _eventHandler;
+
   /// Subscription to the transport's permission request stream.
   StreamSubscription<sdk.PermissionRequest>? _permissionSubscription;
 
@@ -1121,6 +1127,9 @@ class ChatState extends ChangeNotifier {
       _contextTracker.updateAutocompactBuffer(null);
     }
 
+    // Store the event handler reference for permission response callbacks
+    _eventHandler = eventHandler;
+
     // Store the new session ID for future resume.
     // Use resolvedSessionId which returns the SDK's session ID if available.
     final transport = _transport!;
@@ -1237,6 +1246,7 @@ class ChatState extends ChangeNotifier {
 
     _transport = null;
     _session = null;
+    _eventHandler = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1387,6 +1397,10 @@ class ChatState extends ChangeNotifier {
       updatedInput: updatedInput,
       updatedPermissions: updatedPermissions,
     );
+
+    // Notify event handler for ticket status transitions (needsInput → active)
+    _eventHandler?.handlePermissionResponse(this);
+
     notifyListeners();
   }
 
@@ -1447,6 +1461,10 @@ class ChatState extends ChangeNotifier {
 
     LogService.instance.info('Permission', 'Permission denied: tool=${request.toolName}', meta: {'chat': _data.name});
     request.deny(message, interrupt: interrupt);
+
+    // Notify event handler for ticket status transitions (needsInput → active)
+    _eventHandler?.handlePermissionResponse(this);
+
     notifyListeners();
   }
 
@@ -1521,6 +1539,7 @@ class ChatState extends ChangeNotifier {
     _transport?.dispose();
     _transport = null;
     _session = null;
+    _eventHandler = null;
     _isWorking = false;
     _isCompacting = false;
     _workingStartTime = null;
@@ -1595,6 +1614,7 @@ class ChatState extends ChangeNotifier {
     _workingStartTime = null;
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();
+    _eventHandler = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1989,6 +2009,7 @@ class ChatState extends ChangeNotifier {
     _session?.kill();
     _session = null;
     _testHasActiveSession = false;
+    _eventHandler = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();

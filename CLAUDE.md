@@ -374,8 +374,11 @@ frontend/test/
 
 **CRITICAL FOR CLAUDE: Always use the ./run-flutter-test.sh script**
 
-- Do NOT use `flutter test`, use `./frontend/run-flutter-test.sh` 
-- To run integration tests, specify the file and environment, like so run-flutter-test.sh integration_test/app_test.dart -d macos
+- Do NOT use `flutter test`, use `./frontend/run-flutter-test.sh`
+- The script accepts optional parameters: `./frontend/run-flutter-test.sh [<testfile>] [flags]`
+- Run a specific test file: `./frontend/run-flutter-test.sh test/widget/ticket_screen_test.dart`
+- Run integration tests: `./frontend/run-flutter-test.sh integration_test/app_test.dart -d macos`
+- Run all tests: `./frontend/run-flutter-test.sh`
 ---
 
 ## Common Pitfalls

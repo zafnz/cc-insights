@@ -16,6 +16,7 @@ import '../services/project_restore_service.dart';
 import '../services/settings_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
+import '../state/ticket_board_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/restore_worktree_dialog.dart';
@@ -26,6 +27,7 @@ import 'file_manager_screen.dart';
 import 'log_viewer_screen.dart';
 import 'project_stats_screen.dart';
 import 'settings_screen.dart';
+import 'ticket_screen.dart';
 
 /// Main screen using drag_split_layout for movable, resizable panels.
 class MainScreen extends StatefulWidget {
@@ -80,12 +82,13 @@ class _MainScreenState extends State<MainScreen> {
     // Listen for native menu actions
     _windowChannel.setMethodCallHandler(_handleNativeMethodCall);
 
-    // Listen for backend errors, menu actions, and unhandled exceptions
-    // after the first frame
+    // Listen for backend errors, menu actions, unhandled exceptions,
+    // and ticket board state changes after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupBackendErrorListener();
       _setupMenuActionListener();
       _setupUnhandledErrorListener();
+      _setupTicketBoardListener();
       _syncMergeStateToMenu();
     });
   }
@@ -142,6 +145,21 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  void _setupTicketBoardListener() {
+    final ticketBoard = context.read<TicketBoardState>();
+    ticketBoard.addListener(_onTicketBoardChanged);
+  }
+
+  void _onTicketBoardChanged() {
+    if (!mounted) return;
+    final ticketBoard = context.read<TicketBoardState>();
+    // Auto-navigate to ticket screen when bulk review mode is entered
+    if (ticketBoard.detailMode == TicketDetailMode.bulkReview &&
+        _selectedNavIndex != 4) {
+      _handleNavigationChange(4);
+    }
+  }
+
   void _setupMenuActionListener() {
     final menuService = context.read<MenuActionService>();
     menuService.addListener(_onMenuAction);
@@ -171,7 +189,7 @@ class _MainScreenState extends State<MainScreen> {
         _handleNavigationChange(3);
         break;
       case MenuAction.showStats:
-        _handleNavigationChange(4);
+        _handleNavigationChange(5);
         break;
       case MenuAction.showProjectSettings:
         _handleNavigationChange(0);
@@ -406,9 +424,10 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Whether the given nav index needs keyboard interception suspended.
   ///
-  /// Settings screen has text fields that need direct keyboard input,
-  /// so we suspend the global keyboard interception for it.
-  bool _needsKeyboardSuspension(int index) => index == 2 || index == 3;
+  /// Only the main view (index 0) uses the global keyboard grabber to route
+  /// keystrokes to the message input. All other screens have their own text
+  /// fields that need direct keyboard input.
+  bool _needsKeyboardSuspension(int index) => index != 0;
 
   /// Handles navigation destination changes (nav rail).
   ///
@@ -461,6 +480,7 @@ class _MainScreenState extends State<MainScreen> {
     try {
       context.read<BackendService>().removeListener(_onBackendChanged);
       context.read<MenuActionService>().removeListener(_onMenuAction);
+      context.read<TicketBoardState>().removeListener(_onTicketBoardChanged);
     } catch (_) {
       // Context may not be valid during dispose
     }
@@ -893,7 +913,9 @@ class _MainScreenState extends State<MainScreen> {
                         const SettingsScreen(),
                         // Index 3: Log viewer screen
                         const LogViewerScreen(),
-                        // Index 4: Project Stats screen
+                        // Index 4: Ticket screen
+                        const TicketScreen(),
+                        // Index 5: Project Stats screen
                         const ProjectStatsScreen(),
                       ],
                     ),
@@ -902,7 +924,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             // Status bar (locked to bottom)
-            const StatusBar(),
+            StatusBar(showTicketStats: _selectedNavIndex == 4),
           ],
         ),
       ),

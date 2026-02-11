@@ -66,6 +66,10 @@ class PersistenceService {
   static String costTrackingPath(String projectId) =>
       '${projectDir(projectId)}/tracking.jsonl';
 
+  /// Path to a project's tickets file (JSON format).
+  static String ticketsPath(String projectId) =>
+      '${projectDir(projectId)}/tickets.json';
+
   /// Generates a stable project ID from the project root path.
   ///
   /// Uses the first 8 characters of the SHA-256 hash of the path.
@@ -1492,6 +1496,67 @@ class PersistenceService {
         error: e,
       );
       // Don't rethrow - cost tracking failures shouldn't block chat closure
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ticket Methods
+  // ---------------------------------------------------------------------------
+
+  /// Loads tickets from disk.
+  ///
+  /// Returns null if the file doesn't exist or is invalid.
+  Future<Map<String, dynamic>?> loadTickets(String projectId) async {
+    final path = ticketsPath(projectId);
+    final file = File(path);
+
+    if (!await file.exists()) {
+      developer.log(
+        'Tickets file not found: $projectId',
+        name: 'PersistenceService',
+      );
+      return null;
+    }
+
+    try {
+      final content = await file.readAsString();
+      if (content.trim().isEmpty) {
+        return null;
+      }
+
+      final json = jsonDecode(content) as Map<String, dynamic>;
+      return json;
+    } catch (e) {
+      developer.log(
+        'Failed to parse tickets for $projectId: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+      return null;
+    }
+  }
+
+  /// Saves tickets to disk.
+  ///
+  /// Creates the project directory if it doesn't exist.
+  Future<void> saveTickets(String projectId, Map<String, dynamic> data) async {
+    final path = ticketsPath(projectId);
+
+    try {
+      await ensureDirectories(projectId);
+
+      final encoder = const JsonEncoder.withIndent('  ');
+      final content = encoder.convert(data);
+      await File(path).writeAsString(content);
+
+      developer.log('Saved tickets: $projectId', name: 'PersistenceService');
+    } catch (e) {
+      developer.log(
+        'Failed to save tickets $projectId: $e',
+        name: 'PersistenceService',
+        error: e,
+      );
+      rethrow;
     }
   }
 }
