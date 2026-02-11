@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart';
@@ -148,8 +147,6 @@ class CodexSession implements AgentSession {
   void _handleNotification(JsonRpcNotification notification) {
     if (_disposed) return;
     final params = notification.params ?? const <String, dynamic>{};
-
-    stderr.writeln('[CODEX DEBUG] notification: ${notification.method}');
 
     switch (notification.method) {
       case 'thread/started':
@@ -336,12 +333,6 @@ class CodexSession implements AgentSession {
     // Use reasoning effort from notification, falling back to thread/start response
     final reasoningEffort =
         params['reasoningEffort'] as String? ?? _serverReasoningEffort;
-    stderr.writeln(
-      '[CODEX DEBUG] thread/started model=$_modelName, '
-      'reasoningEffort=$reasoningEffort, '
-      'thread keys=${thread?.keys.toList()}',
-    );
-
     _eventsController.add(SessionInitEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -577,7 +568,7 @@ class CodexSession implements AgentSession {
 
     // Build modelUsage so the frontend can identify the model for cost
     // calculation and context tracking.
-    final modelKey = _modelName ?? 'codex';
+    final modelKey = _modelName ?? _serverModel ?? 'codex';
     final modelUsage = <String, ModelTokenUsage>{
       modelKey: ModelTokenUsage(
         inputTokens: inputTokens,

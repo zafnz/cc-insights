@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart'
     show
@@ -459,26 +458,17 @@ class EventHandler {
 
     // Calculate cost from pricing table for Codex (which doesn't report cost)
     double totalCostUsd = event.costUsd ?? 0.0;
-    stderr.writeln(
-      '[COST DEBUG] TurnComplete: provider=${event.provider}, costUsd=$totalCostUsd, '
-      'modelUsage=${modelUsageList?.map((m) => '${m.modelName}:${m.inputTokens}in/${m.outputTokens}out/${m.cacheReadTokens}cache').toList()}, '
-      'usage=${usageInfo != null ? '${usageInfo.inputTokens}in/${usageInfo.outputTokens}out' : 'null'}',
-    );
     if (totalCostUsd == 0.0 &&
         event.provider == BackendProvider.codex &&
         modelUsageList != null) {
       modelUsageList = modelUsageList.map((m) {
         final pricing = lookupCodexPricing(m.modelName);
-        stderr.writeln(
-          '[COST DEBUG] Pricing lookup for "${m.modelName}": ${pricing != null ? 'found (input=${pricing.inputPerMillion}, output=${pricing.outputPerMillion})' : 'NOT FOUND'}',
-        );
         if (pricing == null) return m;
         final cost = pricing.calculateCost(
           inputTokens: m.inputTokens,
           cachedInputTokens: m.cacheReadTokens,
           outputTokens: m.outputTokens,
         );
-        stderr.writeln('[COST DEBUG] Calculated cost for ${m.modelName}: \$$cost');
         return ModelUsageInfo(
           modelName: m.modelName,
           inputTokens: m.inputTokens,
@@ -490,7 +480,6 @@ class EventHandler {
         );
       }).toList();
       totalCostUsd = modelUsageList.fold(0.0, (sum, m) => sum + m.costUsd);
-      stderr.writeln('[COST DEBUG] Total calculated cost: \$$totalCostUsd');
       if (usageInfo != null && totalCostUsd > 0.0) {
         usageInfo = usageInfo.copyWith(costUsd: totalCostUsd);
       }
