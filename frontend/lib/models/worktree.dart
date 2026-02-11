@@ -507,10 +507,11 @@ class WorktreeState extends ChangeNotifier {
       );
     }
 
-    // Add active chat data
+    // Add active chat data (skip chats with no usage)
     for (final chat in _chats) {
-      final backend = chat.backendLabel;
       final usage = chat.cumulativeUsage;
+      if (usage.totalTokens == 0 && usage.costUsd == 0) continue;
+      final backend = chat.backendLabel;
       final existing = result[backend];
       if (existing != null) {
         result[backend] = (

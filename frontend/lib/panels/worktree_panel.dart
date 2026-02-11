@@ -1016,7 +1016,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                       _WorktreeCostSummary(worktree: worktree),
                     // Path + status on same line (muted, monospace, ~11px)
                     // Primary worktree: show full path trimmed from the start.
-                    // Linked worktrees: hide path (branch name already shown above).
+                    // Linked worktrees: cost/token summary instead of path.
                     Row(
                       children: [
                         if (data.isPrimary)
@@ -1034,7 +1034,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                             ),
                           )
                         else
-                          const Spacer(),
+                          Expanded(
+                            child: _WorktreeCostSummary(worktree: worktree),
+                          ),
                         // Inline status indicators
                         InlineStatusIndicators(data: data),
                       ],
@@ -1460,46 +1462,43 @@ class _WorktreeCostSummary extends StatelessWidget {
 
     final textStyle = TextStyle(fontSize: 11, color: Colors.grey[600]);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        children: [
-          if (hasAnyCost) ...[
-            Text(
-              '\$${_formatCost(totalCost)}',
+    return Row(
+      children: [
+        if (hasAnyCost) ...[
+          Text(
+            '\$${_formatCost(totalCost)}',
+            style: textStyle,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '-',
               style: textStyle,
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                '-',
-                style: textStyle,
-              ),
-            ),
-          ],
-          // Per-backend token summaries
-          ...costPerBackend.entries.expand((entry) {
-            final label = entry.key == 'codex' ? 'Codex' : 'Claude';
-            return [
-              Text(
-                label,
-                style: textStyle,
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                Icons.token,
-                size: 12,
-                color: Colors.grey[600],
-              ),
-              Text(
-                _formatTokenCount(entry.value.totalTokens),
-                style: textStyle,
-              ),
-              const SizedBox(width: 6),
-            ];
-          }),
+          ),
         ],
-      ),
+        // Per-backend token summaries
+        ...costPerBackend.entries.expand((entry) {
+          final label = entry.key == 'codex' ? 'Codex' : 'Claude';
+          return [
+            Text(
+              label,
+              style: textStyle,
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              Icons.token,
+              size: 12,
+              color: Colors.grey[600],
+            ),
+            Text(
+              _formatTokenCount(entry.value.totalTokens),
+              style: textStyle,
+            ),
+            const SizedBox(width: 6),
+          ];
+        }),
+      ],
     );
   }
 
