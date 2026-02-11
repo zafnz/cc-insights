@@ -216,12 +216,12 @@ class WorktreeState extends ChangeNotifier {
   /// when the user hasn't overridden the global default yet.
   ChatModel? _welcomeModelOverride;
 
-  /// Permission mode selected in the welcome screen before chat creation.
+  /// Backend-specific security configuration for the welcome screen.
   ///
-  /// Initialized from [RuntimeConfig.instance.defaultPermissionMode].
-  PermissionMode _welcomePermissionMode = PermissionMode.fromApiName(
-    RuntimeConfig.instance.defaultPermissionMode,
-  );
+  /// Initialized based on [RuntimeConfig.instance.defaultBackend]:
+  /// - Codex: CodexSecurityConfig with workspaceWrite + onRequest
+  /// - Claude: ClaudeSecurityConfig with default permission mode
+  late sdk.SecurityConfig _welcomeSecurityConfig;
 
   /// Reasoning effort selected in the welcome screen before chat creation.
   ///
@@ -241,7 +241,22 @@ class WorktreeState extends ChangeNotifier {
   }) : _chats = chats ?? [],
        _tags = tags ?? [],
        _base = base,
-       _selectedChat = null;
+       _selectedChat = null {
+    // Initialize welcome security config based on default backend
+    final defaultBackend = RuntimeConfig.instance.defaultBackend;
+    if (defaultBackend == sdk.BackendType.codex) {
+      _welcomeSecurityConfig = const sdk.CodexSecurityConfig(
+        sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+        approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+      );
+    } else {
+      _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(
+        permissionMode: sdk.PermissionMode.fromString(
+          RuntimeConfig.instance.defaultPermissionMode,
+        ),
+      );
+    }
+  }
 
   /// The immutable data for this worktree.
   WorktreeData get data => _data;
@@ -273,16 +288,57 @@ class WorktreeState extends ChangeNotifier {
       );
   set welcomeModel(ChatModel value) {
     if (_welcomeModelOverride == value) return;
+
+    // If backend changed, update security config to match new backend
+    final backendChanged = value.backend != welcomeModel.backend;
+    if (backendChanged) {
+      if (value.backend == sdk.BackendType.codex) {
+        _welcomeSecurityConfig = const sdk.CodexSecurityConfig(
+          sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+          approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+        );
+      } else {
+        _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(
+          permissionMode: sdk.PermissionMode.fromString(
+            RuntimeConfig.instance.defaultPermissionMode,
+          ),
+        );
+      }
+    }
+
     _welcomeModelOverride = value;
     notifyListeners();
   }
 
-  /// Permission mode selection for the welcome screen.
-  PermissionMode get welcomePermissionMode => _welcomePermissionMode;
-  set welcomePermissionMode(PermissionMode value) {
-    if (_welcomePermissionMode == value) return;
-    _welcomePermissionMode = value;
+  /// Security configuration for the welcome screen.
+  ///
+  /// Backend-specific: CodexSecurityConfig for Codex, ClaudeSecurityConfig for Claude.
+  sdk.SecurityConfig get welcomeSecurityConfig => _welcomeSecurityConfig;
+  set welcomeSecurityConfig(sdk.SecurityConfig value) {
+    if (_welcomeSecurityConfig == value) return;
+    _welcomeSecurityConfig = value;
     notifyListeners();
+  }
+
+  /// Permission mode selection for the welcome screen.
+  ///
+  /// Derived from [welcomeSecurityConfig] for backward compatibility.
+  /// Returns default mode if the security config is not a ClaudeSecurityConfig.
+  PermissionMode get welcomePermissionMode {
+    if (_welcomeSecurityConfig case sdk.ClaudeSecurityConfig(:final permissionMode)) {
+      // Convert sdk.PermissionMode to PermissionMode
+      return PermissionMode.fromApiName(permissionMode.value);
+    }
+    return PermissionMode.defaultMode;
+  }
+
+  set welcomePermissionMode(PermissionMode value) {
+    // Only update if current config is Claude
+    if (_welcomeSecurityConfig is sdk.ClaudeSecurityConfig) {
+      final sdkMode = sdk.PermissionMode.fromString(value.apiName);
+      _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(permissionMode: sdkMode);
+      notifyListeners();
+    }
   }
 
   /// Reasoning effort selection for the welcome screen.
