@@ -14,6 +14,7 @@ import '../services/project_config_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/script_execution_service.dart';
 import '../services/menu_action_service.dart';
+import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/delete_worktree_dialog.dart';
@@ -1032,7 +1033,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                           )
                         else
                           Expanded(
-                            child: _WorktreeCostSummary(worktree: worktree),
+                            child: RuntimeConfig.instance.showWorktreeCost
+                                ? _WorktreeCostSummary(worktree: worktree)
+                                : const SizedBox.shrink(),
                           ),
                         // Inline status indicators
                         InlineStatusIndicators(data: data),

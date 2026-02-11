@@ -100,6 +100,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether to delete the local branch when deleting a worktree.
   bool _deleteBranchWithWorktree = true;
 
+  /// Whether to show cost/token usage on linked worktree status lines.
+  bool _showWorktreeCost = true;
+
   /// Default model for new chats (composite value, e.g. 'last_used',
   /// 'claude:opus', 'codex:gpt-5.2').
   String _defaultModel = 'last_used';
@@ -362,6 +365,15 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  bool get showWorktreeCost => _showWorktreeCost;
+
+  set showWorktreeCost(bool value) {
+    if (_showWorktreeCost != value) {
+      _showWorktreeCost = value;
+      notifyListeners();
+    }
+  }
+
   /// Default model for new chats (composite value).
   String get defaultModel => _defaultModel;
 
@@ -532,6 +544,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._desktopNotifications = true;
     _instance._archiveChats = false;
     _instance._deleteBranchWithWorktree = true;
+    _instance._showWorktreeCost = true;
     _instance._defaultModel = 'last_used';
     _instance._defaultBackend = BackendType.directCli;
     _instance._defaultPermissionMode = 'default';

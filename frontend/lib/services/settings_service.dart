@@ -215,6 +215,14 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: true,
       ),
+      SettingDefinition(
+        key: 'behavior.showWorktreeCost',
+        title: 'Show Worktree Cost',
+        description:
+            'Display cost and token usage on linked worktree status lines.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
     ],
   );
 
@@ -597,6 +605,8 @@ class SettingsService extends ChangeNotifier {
         config.archiveChats = value as bool;
       case 'behavior.deleteBranchWithWorktree':
         config.deleteBranchWithWorktree = value as bool;
+      case 'behavior.showWorktreeCost':
+        config.showWorktreeCost = value as bool;
       case 'session.claudeCliPath':
         config.claudeCliPath = value as String;
       case 'session.codexCliPath':
