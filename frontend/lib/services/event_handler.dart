@@ -144,7 +144,7 @@ class EventHandler {
         _handleSubagentComplete(chat, e);
       case final StreamDeltaEvent e:
         _handleStreamDelta(chat, e);
-      case UsageUpdateEvent e:
+      case final UsageUpdateEvent e:
         _handleUsageUpdate(chat, e);
       case PermissionRequestEvent _:
         break; // Handled via permission stream
