@@ -283,8 +283,8 @@ void main() {
       // Verify "Claude" agent label is visible (default backend)
       expect(find.text('Claude'), findsWidgets);
 
-      // Verify default model label is visible (Opus is the default)
-      expect(find.text('Opus'), findsWidgets);
+      // Verify default model label is visible (Haiku is the default - first in catalog)
+      expect(find.text('Haiku'), findsWidgets);
 
       // Verify default permission label
       expect(find.text('Default'), findsWidgets);
