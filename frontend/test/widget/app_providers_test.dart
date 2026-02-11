@@ -151,6 +151,12 @@ class _FakeTestSession implements TestSession {
   @override
   Future<void> setReasoningEffort(String? effort) async {}
 
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
+
   // Test-only members
   @override
   final List<String> testSentMessages = [];

@@ -799,6 +799,37 @@ class ChatState extends ChangeNotifier {
     }
   }
 
+  /// Syncs server-reported model and reasoning effort from the transport.
+  ///
+  /// Called immediately after transport creation to pick up values that were
+  /// reported by the server in the session creation response. These arrive
+  /// before the event stream is subscribed, so they can't be handled via
+  /// [SessionInitEvent].
+  void _syncServerReportedValues(sdk.EventTransport transport) {
+    final serverModel = transport.serverModel;
+    if (serverModel != null && serverModel.isNotEmpty) {
+      final models = ChatModelCatalog.forBackend(_model.backend);
+      final match = models.where((m) => m.id == serverModel).toList();
+      if (match.isNotEmpty) {
+        syncModelFromServer(match.first);
+      } else {
+        syncModelFromServer(ChatModel(
+          id: serverModel,
+          label: serverModel,
+          backend: _model.backend,
+        ));
+      }
+    }
+
+    final serverEffort = transport.serverReasoningEffort;
+    if (serverEffort != null) {
+      final effort = sdk.ReasoningEffort.fromString(serverEffort);
+      if (effort != null) {
+        syncReasoningEffortFromServer(effort);
+      }
+    }
+  }
+
   /// Renames this chat.
   ///
   /// Updates the in-memory state and persists the new name to projects.json.
@@ -1073,6 +1104,12 @@ class ChatState extends ChangeNotifier {
 
     // Capture capabilities from the transport (set during creation).
     _capabilities = _transport!.capabilities ?? const sdk.BackendCapabilities();
+
+    // Sync server-reported model and reasoning effort to the UI.
+    // These are available immediately from the transport (populated during
+    // session creation) and won't arrive via the event stream because the
+    // SessionInitEvent fires before we subscribe to events.
+    _syncServerReportedValues(_transport!);
 
     _markStarted();
 

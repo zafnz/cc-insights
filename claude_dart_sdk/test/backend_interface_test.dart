@@ -405,6 +405,12 @@ class MockAgentSession implements AgentSession {
   @override
   Future<void> setReasoningEffort(String? effort) async {}
 
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
+
   /// Emit an event for testing.
   void emitEvent(InsightsEvent event) {
     if (_disposed) return;

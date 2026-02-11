@@ -73,6 +73,12 @@ class FakeAgentSession implements AgentSession {
     setReasoningEffortCalls.add(effort);
   }
 
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
+
   /// Emit an event on the session's events stream.
   void emitEvent(InsightsEvent event) {
     _eventsController.add(event);

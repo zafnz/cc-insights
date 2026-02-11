@@ -984,4 +984,10 @@ class _MockAgentSession implements AgentSession {
 
   @override
   Future<void> setReasoningEffort(String? effort) async {}
+
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
 }

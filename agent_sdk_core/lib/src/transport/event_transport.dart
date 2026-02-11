@@ -44,6 +44,17 @@ abstract class EventTransport {
   /// Remote transports will use [PermissionResponseCommand] instead.
   Stream<PermissionRequest> get permissionRequests;
 
+  /// The model name reported by the server at session creation time.
+  ///
+  /// Available immediately after transport creation. Null if the backend
+  /// doesn't report a resolved model.
+  String? get serverModel => null;
+
+  /// The reasoning effort reported by the server at session creation time.
+  ///
+  /// Available immediately after transport creation. Null if not applicable.
+  String? get serverReasoningEffort => null;
+
   /// Clean up resources.
   Future<void> dispose();
 }

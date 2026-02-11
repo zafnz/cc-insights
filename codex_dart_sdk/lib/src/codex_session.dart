@@ -68,6 +68,12 @@ class CodexSession implements AgentSession {
   /// Reasoning effort reported by the server in the thread/start response.
   final String? _serverReasoningEffort;
 
+  @override
+  String? get serverModel => _serverModel;
+
+  @override
+  String? get serverReasoningEffort => _serverReasoningEffort;
+
   Map<String, dynamic>? _latestTokenUsage;
   int? _modelContextWindow;
   String? _modelName;

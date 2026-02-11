@@ -78,6 +78,12 @@ class InProcessTransport implements EventTransport {
   BackendCapabilities? get capabilities => _capabilities;
 
   @override
+  String? get serverModel => _session.serverModel;
+
+  @override
+  String? get serverReasoningEffort => _session.serverReasoningEffort;
+
+  @override
   Future<void> send(BackendCommand command) async {
     switch (command) {
       case SendMessageCommand(:final text, :final content):

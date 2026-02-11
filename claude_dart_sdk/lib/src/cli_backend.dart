@@ -384,4 +384,10 @@ class _CliSessionAdapter implements AgentSession {
       'Check BackendCapabilities.supportsReasoningEffort before calling.',
     );
   }
+
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
 }

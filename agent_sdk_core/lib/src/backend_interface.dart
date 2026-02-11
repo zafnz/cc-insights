@@ -184,4 +184,17 @@ abstract class AgentSession {
   /// Only applicable to Codex backends with reasoning-capable models.
   /// Claude backends will ignore this setting.
   Future<void> setReasoningEffort(String? effort);
+
+  /// The model name reported by the server at session creation time.
+  ///
+  /// Returns the resolved model (e.g. "gpt-5.2-codex") that the server is
+  /// actually using. Null if the server didn't report a model or the backend
+  /// doesn't support this.
+  String? get serverModel => null;
+
+  /// The reasoning effort level reported by the server at session creation.
+  ///
+  /// Returns the effort string (e.g. "high") that the server is actually
+  /// using. Null if not reported or not applicable.
+  String? get serverReasoningEffort => null;
 }
