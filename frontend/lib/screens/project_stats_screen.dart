@@ -207,6 +207,22 @@ class _ProjectOverviewView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final allChats = stats.worktrees.expand((w) => w.chats).toList();
+    final allModelUsage = stats.aggregatedModelUsage;
+    final allBackends = stats.worktrees.expand((w) => w.backends).toSet();
+
+    // Compute per-backend breakdowns
+    final backendGroups = <String, List<ChatStats>>{};
+    for (final chat in allChats) {
+      backendGroups.putIfAbsent(chat.backend, () => []).add(chat);
+    }
+    // Sort backends: claude first, then codex, then others alphabetically
+    final sortedBackends = backendGroups.keys.toList()
+      ..sort((a, b) {
+        if (a == 'claude') return -1;
+        if (b == 'claude') return 1;
+        return a.compareTo(b);
+      });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,34 +254,82 @@ class _ProjectOverviewView extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // KPI Summary Row
+        // Total KPI Summary Row
         _KPISummaryRow(
           cost: stats.totalCost,
           tokens: stats.totalTokens,
           time: stats.totalTiming.claudeWorkingDuration,
           chats: stats.totalChats,
-          hasCostData: stats.worktrees.any((w) =>
-              w.chats.any((c) => c.hasCostData)),
+          hasCostData: allChats.any((c) => c.hasCostData),
         ),
+        const SizedBox(height: 16),
+
+        // Total Token Breakdown
+        _TokenBreakdownSection(
+          inputTokens: allModelUsage.fold(
+              0, (sum, m) => sum + m.inputTokens),
+          outputTokens: allModelUsage.fold(
+              0, (sum, m) => sum + m.outputTokens),
+          cacheReadTokens: allModelUsage.fold(
+              0, (sum, m) => sum + m.cacheReadTokens),
+          cacheCreationTokens: allModelUsage.fold(
+              0, (sum, m) => sum + m.cacheCreationTokens),
+        ),
+
+        // Per-backend breakdowns (only show if more than one backend)
+        if (sortedBackends.length > 1)
+          ...sortedBackends.expand((backend) {
+            final chats = backendGroups[backend]!;
+            final hasCostData = chats.any((c) => c.hasCostData);
+            final backendModelUsage = mergeModelUsage(
+              chats.expand((c) => c.modelUsage).toList(),
+            );
+            final backendTiming = chats.fold(
+              const TimingStats.zero(),
+              (TimingStats acc, c) => acc.merge(c.timing),
+            );
+            final label = backend == 'claude' ? 'Claude' : 'Codex';
+
+            return [
+              const SizedBox(height: 20),
+              Text(
+                label.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.outline,
+                      letterSpacing: 0.5,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              _KPISummaryRow(
+                cost: chats
+                    .where((c) => c.hasCostData)
+                    .fold(0.0, (sum, c) => sum + c.totalCost),
+                tokens: chats.fold(0, (sum, c) => sum + c.totalTokens),
+                time: backendTiming.claudeWorkingDuration,
+                chats: chats.length,
+                hasCostData: hasCostData,
+              ),
+              const SizedBox(height: 8),
+              _TokenBreakdownSection(
+                inputTokens: backendModelUsage.fold(
+                    0, (sum, m) => sum + m.inputTokens),
+                outputTokens: backendModelUsage.fold(
+                    0, (sum, m) => sum + m.outputTokens),
+                cacheReadTokens: backendModelUsage.fold(
+                    0, (sum, m) => sum + m.cacheReadTokens),
+                cacheCreationTokens: backendModelUsage.fold(
+                    0, (sum, m) => sum + m.cacheCreationTokens),
+                showLabel: false,
+              ),
+            ];
+          }),
+
         const SizedBox(height: 24),
 
         // Cost by Model
         _ModelCostSection(
-          modelUsage: stats.aggregatedModelUsage,
-          backends: stats.worktrees.expand((w) => w.backends).toSet(),
-        ),
-        const SizedBox(height: 24),
-
-        // Token Breakdown
-        _TokenBreakdownSection(
-          inputTokens: stats.aggregatedModelUsage.fold(
-              0, (sum, m) => sum + m.inputTokens),
-          outputTokens: stats.aggregatedModelUsage.fold(
-              0, (sum, m) => sum + m.outputTokens),
-          cacheReadTokens: stats.aggregatedModelUsage.fold(
-              0, (sum, m) => sum + m.cacheReadTokens),
-          cacheCreationTokens: stats.aggregatedModelUsage.fold(
-              0, (sum, m) => sum + m.cacheCreationTokens),
+          modelUsage: allModelUsage,
+          backends: allBackends,
         ),
         const SizedBox(height: 16),
 
@@ -765,12 +829,14 @@ class _TokenBreakdownSection extends StatelessWidget {
   final int outputTokens;
   final int cacheReadTokens;
   final int cacheCreationTokens;
+  final bool showLabel;
 
   const _TokenBreakdownSection({
     required this.inputTokens,
     required this.outputTokens,
     required this.cacheReadTokens,
     required this.cacheCreationTokens,
+    this.showLabel = true,
   });
 
   @override
@@ -780,14 +846,16 @@ class _TokenBreakdownSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'TOKEN BREAKDOWN',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.outline,
-                letterSpacing: 0.5,
-              ),
-        ),
-        const SizedBox(height: 8),
+        if (showLabel) ...[
+          Text(
+            'TOKEN BREAKDOWN',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.outline,
+                  letterSpacing: 0.5,
+                ),
+          ),
+          const SizedBox(height: 8),
+        ],
         Row(
           children: [
             Expanded(child: _TokenItem(label: 'Input', value: inputTokens)),
