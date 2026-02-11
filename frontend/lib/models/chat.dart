@@ -1035,6 +1035,7 @@ class ChatState extends ChangeNotifier {
     required String prompt,
     List<AttachedImage> images = const [],
     InternalToolsService? internalToolsService,
+    String? systemPromptAppend,
   }) async {
     _t('ChatState', '========== startSession ==========');
     _t('ChatState', 'chatId: ${_data.id}');
@@ -1101,7 +1102,9 @@ class ChatState extends ChangeNotifier {
         // Load permission rules and MCP servers from user, project, and local settings files
         settingSources: const ['user', 'project', 'local'],
         // Use Claude Code's system prompt (includes CLAUDE.md support)
-        systemPrompt: const sdk.PresetSystemPrompt(),
+        systemPrompt: sdk.PresetSystemPrompt(
+          append: systemPromptAppend,
+        ),
         // Stream partial messages if the setting is enabled
         includePartialMessages: RuntimeConfig.instance.streamOfThought,
       ),

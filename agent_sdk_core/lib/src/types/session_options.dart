@@ -264,10 +264,12 @@ class SessionOptions {
   /// Returns warnings for options that the Codex backend ignores:
   /// permissionMode, allowDangerouslySkipPermissions, permissionPromptToolName,
   /// tools, plugins, strictMcpConfig, resumeSessionAt, allowedTools,
-  /// disallowedTools, systemPrompt, maxTurns, maxBudgetUsd, maxThinkingTokens,
+  /// disallowedTools, maxTurns, maxBudgetUsd, maxThinkingTokens,
   /// includePartialMessages, enableFileCheckpointing, additionalDirectories,
   /// mcpServers, agents, hooks, sandbox, settingSources, betas, outputFormat,
   /// fallbackModel.
+  ///
+  /// Note: systemPrompt is now supported (mapped to baseInstructions).
   ///
   /// Also warns if codexSecurityConfig is set, as it should be handled
   /// separately by the Codex backend implementation.
@@ -303,9 +305,7 @@ class SessionOptions {
     if (disallowedTools != null) {
       warnings.add('disallowedTools is ignored by Codex backend');
     }
-    if (systemPrompt != null) {
-      warnings.add('systemPrompt is ignored by Codex backend');
-    }
+    // systemPrompt is now supported by Codex backend (mapped to baseInstructions)
     if (maxTurns != null) {
       warnings.add('maxTurns is ignored by Codex backend');
     }

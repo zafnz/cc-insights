@@ -250,6 +250,16 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
             .toList()
         : null;
 
+    // Extract system prompt text for Codex's baseInstructions parameter.
+    final systemPrompt = options?.systemPrompt;
+    String? instructions;
+    if (systemPrompt is CustomSystemPrompt) {
+      instructions = systemPrompt.prompt;
+    } else if (systemPrompt is PresetSystemPrompt &&
+        systemPrompt.append != null) {
+      instructions = systemPrompt.append;
+    }
+
     Map<String, dynamic> result;
     if (resume != null && resume.isNotEmpty) {
       result = await _process.sendRequest('thread/resume', {
@@ -271,6 +281,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
           'approvalPolicy': securityConfig.approvalPolicy.wireValue,
         },
         if (dynamicTools != null) 'dynamicTools': dynamicTools,
+        if (instructions != null) 'baseInstructions': instructions,
       });
     }
 

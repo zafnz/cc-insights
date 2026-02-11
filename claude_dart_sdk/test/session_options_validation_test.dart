@@ -258,14 +258,14 @@ void main() {
       expect(result.warnings, contains(contains('permissionMode')));
     });
 
-    test('warns about systemPrompt', () {
+    test('does not warn about systemPrompt (now supported via baseInstructions)', () {
       const options = SessionOptions(
         systemPrompt: CustomSystemPrompt('Be helpful'),
       );
 
       final result = options.validateForCodex();
 
-      expect(result.warnings, contains(contains('systemPrompt')));
+      expect(result.warnings, isNot(contains(contains('systemPrompt'))));
     });
 
     test('warns about maxTurns', () {
@@ -469,7 +469,10 @@ void main() {
 
       final result = options.validateForCodex();
 
-      expect(result.warnings.length, greaterThanOrEqualTo(5));
+      // systemPrompt is now supported (mapped to baseInstructions),
+      // so only 4 warnings: permissionMode, maxTurns, maxBudgetUsd,
+      // includePartialMessages.
+      expect(result.warnings.length, greaterThanOrEqualTo(4));
     });
   });
 
