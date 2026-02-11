@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:path/path.dart' as p;
 
 import '../models/chat.dart';
@@ -270,7 +271,28 @@ class ProjectRestoreService {
   void _applyMetaToChat(ChatState chat, ChatMeta meta) {
     final backend = ChatModelCatalog.backendFromValue(meta.backendType);
     chat.setModel(ChatModelCatalog.defaultForBackend(backend, meta.model));
-    chat.setPermissionMode(PermissionMode.fromApiName(meta.permissionMode));
+
+    // Restore security config from meta
+    if (backend == sdk.BackendType.codex && meta.codexSandboxMode != null) {
+      // Codex chat with security config
+      chat.setSecurityConfig(sdk.CodexSecurityConfig(
+        sandboxMode: sdk.CodexSandboxMode.fromWire(meta.codexSandboxMode!),
+        approvalPolicy: meta.codexApprovalPolicy != null
+            ? sdk.CodexApprovalPolicy.fromWire(meta.codexApprovalPolicy!)
+            : sdk.CodexApprovalPolicy.onRequest,
+        workspaceWriteOptions: meta.codexWorkspaceWriteOptions != null
+            ? sdk.CodexWorkspaceWriteOptions.fromJson(meta.codexWorkspaceWriteOptions!)
+            : null,
+        webSearch: meta.codexWebSearch != null
+            ? sdk.CodexWebSearchMode.fromWire(meta.codexWebSearch!)
+            : null,
+      ));
+    } else {
+      // Claude chat or old meta without Codex fields
+      chat.setSecurityConfig(sdk.ClaudeSecurityConfig(
+        permissionMode: sdk.PermissionMode.fromString(meta.permissionMode),
+      ));
+    }
   }
 
   /// Creates a new project and saves it to persistence.

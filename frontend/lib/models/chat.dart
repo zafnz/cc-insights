@@ -270,12 +270,8 @@ class ChatState extends ChangeNotifier {
     fallbackBackend: RuntimeConfig.instance.defaultBackend,
   );
 
-  /// The permission mode for this chat.
-  ///
-  /// Initialized from [RuntimeConfig.instance.defaultPermissionMode].
-  PermissionMode _permissionMode = PermissionMode.fromApiName(
-    RuntimeConfig.instance.defaultPermissionMode,
-  );
+  /// Backend-specific security configuration.
+  late sdk.SecurityConfig _securityConfig;
 
   /// The reasoning effort level for this chat (Codex only).
   ///
@@ -378,7 +374,21 @@ class ChatState extends ChangeNotifier {
   PersistenceService persistenceService = PersistenceService();
 
   /// Creates a [ChatState] with the given data.
-  ChatState(this._data);
+  ChatState(this._data) {
+    final defaultBackend = RuntimeConfig.instance.defaultBackend;
+    if (defaultBackend == sdk.BackendType.codex) {
+      _securityConfig = const sdk.CodexSecurityConfig(
+        sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+        approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+      );
+    } else {
+      _securityConfig = sdk.ClaudeSecurityConfig(
+        permissionMode: sdk.PermissionMode.fromString(
+          RuntimeConfig.instance.defaultPermissionMode,
+        ),
+      );
+    }
+  }
 
   /// Creates a new [ChatState] with a newly created chat.
   ///
@@ -496,8 +506,19 @@ class ChatState extends ChangeNotifier {
   /// The selected model for this chat.
   ChatModel get model => _model;
 
+  /// The backend-specific security configuration for this chat.
+  sdk.SecurityConfig get securityConfig => _securityConfig;
+
   /// The permission mode for this chat.
-  PermissionMode get permissionMode => _permissionMode;
+  ///
+  /// For Claude chats, returns the permission mode from the security config.
+  /// For Codex chats, returns the default mode for backward compatibility.
+  PermissionMode get permissionMode {
+    if (_securityConfig case sdk.ClaudeSecurityConfig(:final permissionMode)) {
+      return PermissionMode.fromApiName(permissionMode.value);
+    }
+    return PermissionMode.defaultMode;
+  }
 
   /// The reasoning effort level for this chat (Codex only).
   ///
@@ -609,18 +630,96 @@ class ChatState extends ChangeNotifier {
   /// If the backend does not support permission mode changes, the value is
   /// stored locally but not sent to the session.
   void setPermissionMode(PermissionMode mode) {
-    if (_permissionMode != mode) {
-      _permissionMode = mode;
-      _scheduleMetaSave();
-      if (_capabilities.supportsPermissionModeChange && _transport != null) {
-        final sessionId = _transport!.sessionId ?? '';
-        _transport!.send(sdk.SetPermissionModeCommand(
-          sessionId: sessionId,
-          mode: _sdkPermissionMode.value,
-        ));
-      }
-      notifyListeners();
+    final sdkMode = _toSdkPermissionMode(mode);
+    setSecurityConfig(sdk.ClaudeSecurityConfig(permissionMode: sdkMode));
+  }
+
+  /// Sets the security configuration for this chat.
+  ///
+  /// If a session is active and the backend supports mid-session config changes,
+  /// this also updates the configuration on the running session.
+  void setSecurityConfig(sdk.SecurityConfig config) {
+    if (_securityConfig == config) return;
+    final oldConfig = _securityConfig;
+    _securityConfig = config;
+    _scheduleMetaSave();
+
+    // Generate change notification
+    final message = _describeSecurityChange(oldConfig, config);
+    if (message != null) {
+      addEntry(SystemNotificationEntry(
+        timestamp: DateTime.now(),
+        message: message,
+      ));
     }
+
+    switch (config) {
+      case sdk.ClaudeSecurityConfig(:final permissionMode):
+        if (_capabilities.supportsPermissionModeChange && _transport != null) {
+          final sessionId = _transport!.sessionId ?? '';
+          _transport!.send(sdk.SetPermissionModeCommand(
+            sessionId: sessionId,
+            mode: permissionMode.value,
+          ));
+        }
+      case sdk.CodexSecurityConfig():
+        // Mid-session Codex config changes will be handled in a future task
+        break;
+    }
+
+    notifyListeners();
+  }
+
+  /// Describes a security configuration change.
+  ///
+  /// Returns a user-friendly message describing what changed, or null if
+  /// there is no meaningful change to report.
+  String? _describeSecurityChange(sdk.SecurityConfig old, sdk.SecurityConfig newConfig) {
+    if (old is sdk.CodexSecurityConfig && newConfig is sdk.CodexSecurityConfig) {
+      final parts = <String>[];
+      if (old.sandboxMode != newConfig.sandboxMode) {
+        parts.add('Sandbox changed to ${_sandboxLabel(newConfig.sandboxMode)}');
+      }
+      if (old.approvalPolicy != newConfig.approvalPolicy) {
+        parts.add('Approval policy set to ${_policyLabel(newConfig.approvalPolicy)}');
+      }
+      return parts.isEmpty ? null : parts.join('. ');
+    }
+    if (old is sdk.ClaudeSecurityConfig && newConfig is sdk.ClaudeSecurityConfig) {
+      if (old.permissionMode != newConfig.permissionMode) {
+        return 'Permission mode changed to ${newConfig.permissionMode.value}';
+      }
+    }
+    return null;
+  }
+
+  /// Returns a display label for a sandbox mode.
+  String _sandboxLabel(sdk.CodexSandboxMode mode) {
+    return switch (mode) {
+      sdk.CodexSandboxMode.readOnly => 'Read Only',
+      sdk.CodexSandboxMode.workspaceWrite => 'Workspace Write',
+      sdk.CodexSandboxMode.dangerFullAccess => 'Full Access',
+    };
+  }
+
+  /// Returns a display label for an approval policy.
+  String _policyLabel(sdk.CodexApprovalPolicy policy) {
+    return switch (policy) {
+      sdk.CodexApprovalPolicy.untrusted => 'Untrusted',
+      sdk.CodexApprovalPolicy.onRequest => 'On Request',
+      sdk.CodexApprovalPolicy.onFailure => 'On Failure',
+      sdk.CodexApprovalPolicy.never => 'Never',
+    };
+  }
+
+  /// Converts a [PermissionMode] to SDK permission mode.
+  sdk.PermissionMode _toSdkPermissionMode(PermissionMode mode) {
+    return switch (mode) {
+      PermissionMode.defaultMode => sdk.PermissionMode.defaultMode,
+      PermissionMode.acceptEdits => sdk.PermissionMode.acceptEdits,
+      PermissionMode.plan => sdk.PermissionMode.plan,
+      PermissionMode.bypass => sdk.PermissionMode.bypassPermissions,
+    };
   }
 
   /// Sets the reasoning effort level for this chat.
@@ -899,7 +998,12 @@ class ChatState extends ChangeNotifier {
       cwd: worktreeRoot,
       options: sdk.SessionOptions(
         model: model.id.isEmpty ? null : model.id,
-        permissionMode: _sdkPermissionMode,
+        permissionMode: _securityConfig is sdk.ClaudeSecurityConfig
+            ? (_securityConfig as sdk.ClaudeSecurityConfig).permissionMode
+            : null,
+        codexSecurityConfig: _securityConfig is sdk.CodexSecurityConfig
+            ? _securityConfig as sdk.CodexSecurityConfig
+            : null,
         resume: _lastSessionId,
         // Load permission rules and MCP servers from user, project, and local settings files
         settingSources: const ['user', 'project', 'local'],
@@ -1195,23 +1299,30 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Syncs the local [_permissionMode] based on a permission response.
+  /// Syncs the local security config based on a permission response.
   ///
   /// Checks [updatedPermissions] for a `setMode` directive and updates
   /// accordingly. If the approved tool is `ExitPlanMode` with no explicit
   /// mode change, reverts to [PermissionMode.defaultMode] since plan mode
   /// has ended.
+  ///
+  /// Only applies to Claude chats.
   void _syncPermissionModeFromResponse(
     String? toolName,
     List<dynamic>? updatedPermissions,
   ) {
+    // Only applies to Claude chats
+    if (_securityConfig is! sdk.ClaudeSecurityConfig) return;
+
     // Check for explicit setMode in updatedPermissions
     if (updatedPermissions != null) {
       for (final perm in updatedPermissions) {
         if (perm is Map<String, dynamic> && perm['type'] == 'setMode') {
           final mode = perm['mode'] as String?;
           if (mode != null) {
-            _permissionMode = PermissionMode.fromApiName(mode);
+            _securityConfig = sdk.ClaudeSecurityConfig(
+              permissionMode: sdk.PermissionMode.fromString(mode),
+            );
             _scheduleMetaSave();
             return;
           }
@@ -1221,7 +1332,9 @@ class ChatState extends ChangeNotifier {
 
     // ExitPlanMode approved without explicit setMode → revert to default
     if (toolName == 'ExitPlanMode') {
-      _permissionMode = PermissionMode.defaultMode;
+      _securityConfig = const sdk.ClaudeSecurityConfig(
+        permissionMode: sdk.PermissionMode.defaultMode,
+      );
       _scheduleMetaSave();
     }
   }
@@ -1332,15 +1445,6 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Converts the chat's permission mode to SDK permission mode.
-  sdk.PermissionMode get _sdkPermissionMode {
-    return switch (_permissionMode) {
-      PermissionMode.defaultMode => sdk.PermissionMode.defaultMode,
-      PermissionMode.acceptEdits => sdk.PermissionMode.acceptEdits,
-      PermissionMode.plan => sdk.PermissionMode.plan,
-      PermissionMode.bypass => sdk.PermissionMode.bypassPermissions,
-    };
-  }
 
   /// Sets the SDK session for this chat.
   ///
@@ -1681,7 +1785,9 @@ class ChatState extends ChangeNotifier {
         model: _model.id,
         backendType: _backendTypeValue,
         hasStarted: _hasStarted,
-        permissionMode: _permissionMode.apiName,
+        permissionMode: _securityConfig is sdk.ClaudeSecurityConfig
+            ? (_securityConfig as sdk.ClaudeSecurityConfig).permissionMode.value
+            : 'default',
         createdAt: _data.createdAt ?? DateTime.now(),
         lastActiveAt: DateTime.now(),
         context: ContextInfo(
@@ -1692,6 +1798,19 @@ class ChatState extends ChangeNotifier {
         usage: _cumulativeUsage,
         modelUsage: _modelUsage,
         timing: _timingStats,
+        // Add Codex fields
+        codexSandboxMode: _securityConfig is sdk.CodexSecurityConfig
+            ? (_securityConfig as sdk.CodexSecurityConfig).sandboxMode.wireValue
+            : null,
+        codexApprovalPolicy: _securityConfig is sdk.CodexSecurityConfig
+            ? (_securityConfig as sdk.CodexSecurityConfig).approvalPolicy.wireValue
+            : null,
+        codexWorkspaceWriteOptions: _securityConfig is sdk.CodexSecurityConfig
+            ? (_securityConfig as sdk.CodexSecurityConfig).workspaceWriteOptions?.toJson()
+            : null,
+        codexWebSearch: _securityConfig is sdk.CodexSecurityConfig
+            ? (_securityConfig as sdk.CodexSecurityConfig).webSearch?.wireValue
+            : null,
       );
       await persistenceService.saveChatMeta(_projectId!, _data.id, meta);
     } catch (e) {

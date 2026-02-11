@@ -1,3 +1,5 @@
+import 'security_config.dart';
+
 /// Result of validating [SessionOptions] against a specific backend.
 ///
 /// Contains a list of [warnings] for options that are set but unsupported
@@ -45,6 +47,7 @@ class SessionOptions {
     this.betas,
     this.outputFormat,
     this.fallbackModel,
+    this.codexSecurityConfig,
   });
 
   /// Model to use (e.g., 'sonnet', 'opus', 'haiku').
@@ -130,6 +133,12 @@ class SessionOptions {
 
   /// Fallback model if primary fails.
   final String? fallbackModel;
+
+  /// Security configuration for Codex backend.
+  ///
+  /// Used by the Codex backend to pass sandbox/approval settings to thread/start.
+  /// This field is NOT serialized in toJson() since it's only used internally.
+  final CodexSecurityConfig? codexSecurityConfig;
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -259,10 +268,16 @@ class SessionOptions {
   /// includePartialMessages, enableFileCheckpointing, additionalDirectories,
   /// mcpServers, agents, hooks, sandbox, settingSources, betas, outputFormat,
   /// fallbackModel.
+  ///
+  /// Also warns if codexSecurityConfig is set, as it should be handled
+  /// separately by the Codex backend implementation.
   OptionsValidationResult validateForCodex() {
     final warnings = <String>[];
     if (permissionMode != null) {
-      warnings.add('permissionMode is ignored by Codex backend');
+      warnings.add('permissionMode is ignored by Codex backend (use codexSecurityConfig instead)');
+    }
+    if (codexSecurityConfig != null) {
+      warnings.add('codexSecurityConfig is internal to Codex backend and not serialized in SessionOptions.toJson()');
     }
     if (allowDangerouslySkipPermissions != null) {
       warnings.add('allowDangerouslySkipPermissions is ignored by Codex backend');

@@ -7,6 +7,7 @@ import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:claude_sdk/claude_sdk.dart';
+import 'package:codex_sdk/codex_sdk.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -95,6 +96,13 @@ class FakeBackendService extends BackendService {
       content: content,
     );
   }
+
+  @override
+  CodexSecurityConfig? get codexSecurityConfig => null;
+
+  @override
+  CodexSecurityCapabilities get codexSecurityCapabilities =>
+      const CodexSecurityCapabilities();
 }
 
 /// Minimal fake session for testing.

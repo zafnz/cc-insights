@@ -1,5 +1,7 @@
 # Permission Model Deep Dive
 
+> **Note:** For security configuration (permission modes, sandbox settings, approval policies), see [11-security-config.md](./11-security-config.md). This document focuses on runtime permission request handling.
+
 Permissions are the most complex cross-backend concern because every backend implements them differently, yet the frontend needs a unified experience.
 
 ## Current State

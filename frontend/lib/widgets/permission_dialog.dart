@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendProvider;
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -65,6 +66,21 @@ class PermissionDialogKeys {
   /// The "Clear context + Accept edits" button for ExitPlanMode.
   static const planClearContext =
       Key('permission_dialog_plan_clear_context');
+
+  /// The "Cancel Turn" button (Codex).
+  static const cancelTurnButton = Key('permission_dialog_cancel_turn');
+
+  /// The "Accept" button (Codex).
+  static const acceptButton = Key('permission_dialog_accept');
+
+  /// The "Decline" button (Codex).
+  static const declineButton = Key('permission_dialog_decline');
+
+  /// The command actions display (Codex).
+  static const commandActions = Key('permission_dialog_command_actions');
+
+  /// The reason display (Codex).
+  static const reason = Key('permission_dialog_reason');
 }
 
 // =============================================================================
@@ -139,6 +155,7 @@ TextStyle textStyle({
 /// - Permission suggestions with behavior dropdowns (Ask/Allow/Deny)
 /// - Destination dropdown for rule storage location
 /// - "Enable Mode" button for setMode suggestions
+/// - Backend-aware dialogs (Claude vs Codex)
 class PermissionDialog extends StatefulWidget {
   const PermissionDialog({
     super.key,
@@ -147,6 +164,7 @@ class PermissionDialog extends StatefulWidget {
     required this.onDeny,
     this.projectDir,
     this.onClearContextAndAcceptEdits,
+    this.provider,
   });
 
   /// The permission request from the SDK.
@@ -161,7 +179,8 @@ class PermissionDialog extends StatefulWidget {
 
   /// Called when the user denies the permission.
   /// The callback receives a denial message explaining why.
-  final void Function(String message) onDeny;
+  /// For Codex backend, interrupt can be set to true to cancel the entire turn.
+  final void Function(String message, {bool interrupt}) onDeny;
 
   /// Called when the user wants to clear context and restart with the plan.
   /// Only used for ExitPlanMode. Provides the plan text for the new session.
@@ -169,6 +188,10 @@ class PermissionDialog extends StatefulWidget {
 
   /// The project directory for resolving relative file paths.
   final String? projectDir;
+
+  /// The backend provider this request came from.
+  /// When null, defaults to Claude behavior.
+  final BackendProvider? provider;
 
   @override
   State<PermissionDialog> createState() => _PermissionDialogState();
@@ -181,9 +204,6 @@ class _PermissionDialogState extends State<PermissionDialog> {
 
   // Track destination overrides per suggestion index
   final Map<int, sdk.PermissionDestination> _destinations = {};
-
-  // Whether the plan view is expanded (for ExitPlanMode)
-  bool _isPlanExpanded = false;
 
   // Controller for the plan feedback text input (ExitPlanMode Option 4)
   final TextEditingController _feedbackController = TextEditingController();
@@ -213,10 +233,14 @@ class _PermissionDialogState extends State<PermissionDialog> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Parse suggestions
+    // Determine if this is a Codex backend
+    // When provider is explicitly set, use it. Otherwise default to Claude.
+    final isCodex = widget.provider == BackendProvider.codex;
+
+    // Parse suggestions (Claude only)
     final suggestions = permission.parsedSuggestions;
 
-    // Check for setMode suggestion
+    // Check for setMode suggestion (Claude only)
     final setModeSuggestion =
         suggestions.where((s) => s.type == 'setMode').toList();
     final hasSetMode = setModeSuggestion.isNotEmpty;
@@ -224,7 +248,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
         ? _formatModeName(setModeSuggestion.first.mode ?? 'unknown')
         : null;
 
-    // Check for non-setMode suggestions
+    // Check for non-setMode suggestions (Claude only)
     final otherSuggestions =
         suggestions.where((s) => s.type != 'setMode').toList();
 
@@ -268,65 +292,136 @@ class _PermissionDialogState extends State<PermissionDialog> {
                       colorScheme.surfaceContainer.withValues(alpha: 0.3),
                   // No rounded corners - integrated look
                 ),
-                child: Row(
-                  children: [
-                    // Suggestions on the left (only non-setMode suggestions)
-                    if (otherSuggestions.isNotEmpty)
-                      Expanded(
-                        child: _buildSuggestionsRow(otherSuggestions),
-                      )
-                    else
-                      const Spacer(),
-                    // Buttons on the right
-                    const SizedBox(width: 14),
-                    // Enable mode button (if setMode suggestion exists)
-                    if (hasSetMode) ...[
-                      OutlinedButton(
-                        onPressed: () =>
-                            _handleAllowWithMode(setModeSuggestion.first),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: colorScheme.tertiary,
-                          side: BorderSide(color: colorScheme.tertiary.withValues(alpha: 0.5)),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        child: Text('Enable $modeName'),
+                child: isCodex
+                    ? _buildCodexFooter(context, colorScheme)
+                    : _buildClaudeFooter(
+                        context,
+                        colorScheme,
+                        otherSuggestions,
+                        hasSetMode,
+                        setModeSuggestion,
+                        modeName,
                       ),
-                      const SizedBox(width: 8),
-                    ],
-                    OutlinedButton(
-                      key: PermissionDialogKeys.denyButton,
-                      onPressed: _handleDeny,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colorScheme.error,
-                        side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text('Deny'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      key: PermissionDialogKeys.allowButton,
-                      onPressed: _handleAllow,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: colorScheme.onPrimary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: const Text('Allow'),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  /// Builds the footer for Claude backend with suggestions and buttons.
+  Widget _buildClaudeFooter(
+    BuildContext context,
+    ColorScheme colorScheme,
+    List<sdk.PermissionSuggestion> otherSuggestions,
+    bool hasSetMode,
+    List<sdk.PermissionSuggestion> setModeSuggestion,
+    String? modeName,
+  ) {
+    return Row(
+      children: [
+        // Suggestions on the left (only non-setMode suggestions)
+        if (otherSuggestions.isNotEmpty)
+          Expanded(
+            child: _buildSuggestionsRow(otherSuggestions),
+          )
+        else
+          const Spacer(),
+        // Buttons on the right
+        const SizedBox(width: 14),
+        // Enable mode button (if setMode suggestion exists)
+        if (hasSetMode) ...[
+          OutlinedButton(
+            onPressed: () =>
+                _handleAllowWithMode(setModeSuggestion.first),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.tertiary,
+              side: BorderSide(color: colorScheme.tertiary.withValues(alpha: 0.5)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text('Enable $modeName'),
+          ),
+          const SizedBox(width: 8),
+        ],
+        OutlinedButton(
+          key: PermissionDialogKeys.denyButton,
+          onPressed: _handleDeny,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colorScheme.error,
+            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Deny'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          key: PermissionDialogKeys.allowButton,
+          onPressed: _handleAllow,
+          style: FilledButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Allow'),
+        ),
+      ],
+    );
+  }
+
+  /// Builds the footer for Codex backend with three action buttons.
+  Widget _buildCodexFooter(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        OutlinedButton(
+          key: PermissionDialogKeys.cancelTurnButton,
+          onPressed: _handleCancelTurn,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colorScheme.onSurfaceVariant,
+            side: BorderSide(color: colorScheme.outlineVariant),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Cancel Turn'),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          key: PermissionDialogKeys.declineButton,
+          onPressed: _handleDecline,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colorScheme.error,
+            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Decline'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          key: PermissionDialogKeys.acceptButton,
+          onPressed: _handleAllow,
+          style: FilledButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Accept'),
+        ),
+      ],
     );
   }
 
@@ -634,19 +729,39 @@ class _PermissionDialogState extends State<PermissionDialog> {
   /// Build tool-specific content display.
   Widget _buildToolContent(sdk.PermissionRequest permission) {
     final toolInput = permission.toolInput;
+    final isCodex = widget.provider == BackendProvider.codex;
 
-    switch (permission.toolName) {
-      case 'Bash':
-        return _buildBashContent(toolInput);
-      case 'Write':
-        return _buildWriteContent(toolInput);
-      case 'Edit':
-        return _buildEditContent(toolInput);
+    final baseContent = switch (permission.toolName) {
+      'Bash' => _buildBashContent(toolInput),
+      'Write' => _buildWriteContent(toolInput),
+      'Edit' => _buildEditContent(toolInput),
       // ExitPlanMode is handled by _buildExpandedPlanView (full-panel mode)
       // and never reaches _buildToolContent.
-      default:
-        return _buildGenericContent(toolInput);
+      _ => _buildGenericContent(toolInput),
+    };
+
+    // Add Codex-specific fields if available
+    if (isCodex) {
+      return Column(
+        key: PermissionDialogKeys.content,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          baseContent,
+          // Show command actions if available (Codex)
+          if (toolInput['commandActions'] != null) ...[
+            const SizedBox(height: 8),
+            _buildCommandActionsRow(toolInput['commandActions']),
+          ],
+          // Show reason if available (Codex)
+          if (permission.decisionReason != null) ...[
+            const SizedBox(height: 8),
+            _buildReasonRow(permission.decisionReason!),
+          ],
+        ],
+      );
     }
+
+    return baseContent;
   }
 
   Widget _buildBashContent(Map<String, dynamic> input) {
@@ -780,6 +895,69 @@ class _PermissionDialogState extends State<PermissionDialog> {
         details,
         style: monoStyle(fontSize: PermissionFontSizes.genericContent),
       ),
+    );
+  }
+
+  /// Build command actions row (Codex).
+  Widget _buildCommandActionsRow(dynamic commandActions) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final actions = commandActions is List
+        ? commandActions.map((a) => a.toString()).join(', ')
+        : commandActions.toString();
+
+    return Row(
+      key: PermissionDialogKeys.commandActions,
+      children: [
+        Icon(
+          Icons.info_outline,
+          size: 14,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Actions: ',
+          style: textStyle(
+            fontSize: 11,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          actions,
+          style: textStyle(
+            fontSize: 11,
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build reason row (Codex).
+  Widget _buildReasonRow(String reason) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      key: PermissionDialogKeys.reason,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.chat_bubble_outline,
+          size: 14,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            reason,
+            style: textStyle(
+              fontSize: 11,
+              color: colorScheme.onSurface,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1004,7 +1182,17 @@ class _PermissionDialogState extends State<PermissionDialog> {
   }
 
   void _handleDeny() {
-    widget.onDeny('User denied permission');
+    widget.onDeny('User denied permission', interrupt: false);
+  }
+
+  /// Handle Cancel Turn (Codex) - cancels the entire turn.
+  void _handleCancelTurn() {
+    widget.onDeny('cancelled', interrupt: true);
+  }
+
+  /// Handle Decline (Codex) - declines without canceling the turn.
+  void _handleDecline() {
+    widget.onDeny('User declined permission', interrupt: false);
   }
 
   /// Handle allow with setMode suggestion enabled.

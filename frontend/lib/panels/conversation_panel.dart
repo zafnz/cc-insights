@@ -518,6 +518,10 @@ class _ConversationPanelState extends State<ConversationPanel>
       );
     } else {
       final selection = context.read<SelectionState>();
+      // Derive provider from chat's backend type
+      final provider = chat.model.backend == sdk.BackendType.codex
+          ? sdk.BackendProvider.codex
+          : sdk.BackendProvider.claude;
       dialogWidget = PermissionDialog(
         request: permission,
         projectDir: selection.selectedChat?.data.worktreeRoot,
@@ -530,10 +534,12 @@ class _ConversationPanelState extends State<ConversationPanel>
             updatedPermissions: updatedPermissions,
           );
         },
-        onDeny: (message) => chat.denyPermission(message),
+        onDeny: (message, {bool interrupt = false}) =>
+            chat.denyPermission(message, interrupt: interrupt),
         onClearContextAndAcceptEdits: isExitPlanMode
             ? (planText) => _handleClearContextPlanApproval(chat, planText)
             : null,
+        provider: provider,
       );
     }
 

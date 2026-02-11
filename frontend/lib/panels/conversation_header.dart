@@ -13,6 +13,8 @@ import '../services/cli_availability_service.dart';
 import '../widgets/context_indicator.dart';
 import '../widgets/cost_indicator.dart';
 import '../widgets/insights_widgets.dart';
+import '../widgets/security_badge.dart';
+import '../widgets/security_config_group.dart';
 import 'compact_dropdown.dart';
 
 // -----------------------------------------------------------------------------
@@ -172,20 +174,41 @@ class ConversationHeader extends StatelessWidget {
                         },
                       ),
                       const SizedBox(width: 8),
-                      CompactDropdown(
-                        value: chat.permissionMode.label,
-                        items: PermissionMode.values
-                            .map((m) => m.label)
-                            .toList(),
-                        tooltip: 'Permissions',
-                        onChanged: (value) {
-                          final mode = PermissionMode.values.firstWhere(
-                            (m) => m.label == value,
-                            orElse: () => PermissionMode.defaultMode,
-                          );
-                          chat.setPermissionMode(mode);
-                        },
-                      ),
+                      // Backend-specific security controls
+                      if (chat.model.backend == sdk.BackendType.codex) ...[
+                        Builder(
+                          builder: (context) {
+                            final config = chat.securityConfig;
+                            if (config is! sdk.CodexSecurityConfig) {
+                              return const SizedBox.shrink();
+                            }
+                            return SecurityConfigGroup(
+                              config: config,
+                              capabilities: backendService.codexSecurityCapabilities,
+                              isEnabled: true,
+                              onConfigChanged: (newConfig) {
+                                chat.setSecurityConfig(newConfig);
+                              },
+                            );
+                          },
+                        ),
+                      ] else ...[
+                        // Claude: existing single dropdown (unchanged)
+                        CompactDropdown(
+                          value: chat.permissionMode.label,
+                          items: PermissionMode.values
+                              .map((m) => m.label)
+                              .toList(),
+                          tooltip: 'Permissions',
+                          onChanged: (value) {
+                            final mode = PermissionMode.values.firstWhere(
+                              (m) => m.label == value,
+                              orElse: () => PermissionMode.defaultMode,
+                            );
+                            chat.setPermissionMode(mode);
+                          },
+                        ),
+                      ],
                       // Reasoning effort dropdown (only for backends that support it)
                       if (caps.supportsReasoningEffort) ...[
                         const SizedBox(width: 8),
@@ -203,7 +226,19 @@ class ConversationHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              // Right side: context indicator and token/cost
+              // Right side: security badge, context indicator and token/cost
+              // Security badge (Codex only)
+              if (chat.model.backend == sdk.BackendType.codex &&
+                  chat.hasActiveSession) ...[
+                const SizedBox(width: 8),
+                Builder(builder: (context) {
+                  final config = chat.securityConfig;
+                  if (config is sdk.CodexSecurityConfig) {
+                    return SecurityBadge(config: config);
+                  }
+                  return const SizedBox.shrink();
+                }),
+              ],
               if (showContext) ...[
                 const SizedBox(width: 8),
                 ContextIndicator(tracker: chat.contextTracker),

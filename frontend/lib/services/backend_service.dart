@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:claude_sdk/claude_sdk.dart';
+import 'package:codex_sdk/codex_sdk.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/chat_model.dart';
@@ -100,6 +101,24 @@ class BackendService extends ChangeNotifier {
     return _backends[type]?.capabilities ?? const BackendCapabilities();
   }
 
+  /// Returns the current security config for the Codex backend.
+  CodexSecurityConfig? get codexSecurityConfig {
+    final backend = _backends[BackendType.codex];
+    if (backend is CodexBackend) {
+      return backend.currentSecurityConfig;
+    }
+    return null;
+  }
+
+  /// Returns security capabilities for the Codex backend.
+  CodexSecurityCapabilities get codexSecurityCapabilities {
+    final backend = _backends[BackendType.codex];
+    if (backend is CodexBackend) {
+      return backend.securityCapabilities;
+    }
+    return const CodexSecurityCapabilities();
+  }
+
   /// Creates a backend instance. Override in tests to inject fakes.
   @visibleForTesting
   Future<AgentBackend> createBackend({
@@ -107,6 +126,13 @@ class BackendService extends ChangeNotifier {
     String? executablePath,
   }) {
     return BackendFactory.create(type: type, executablePath: executablePath);
+  }
+
+  /// Registers a backend for testing purposes.
+  @visibleForTesting
+  void registerBackendForTesting(BackendType type, AgentBackend backend) {
+    _backends[type] = backend;
+    notifyListeners();
   }
 
   /// Starts the backend.

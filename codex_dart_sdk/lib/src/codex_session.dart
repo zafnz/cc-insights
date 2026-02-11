@@ -28,7 +28,6 @@ class CodexSession implements AgentSession {
   final bool _isTestSession;
 
   /// Thread ID from Codex.
-  @override
   final String threadId;
 
   @override
@@ -66,20 +65,6 @@ class CodexSession implements AgentSession {
   String _nextEventId() {
     _eventIdCounter++;
     return 'evt-codex-${threadId.hashCode.toRadixString(16)}-$_eventIdCounter';
-  }
-
-  /// Maps a Codex item type to a ToolKind and display tool name.
-  ({ToolKind kind, String toolName}) _codexToolKind(
-      String itemType, Map<String, dynamic> item) {
-    return switch (itemType) {
-      'commandExecution' => (kind: ToolKind.execute, toolName: 'Bash'),
-      'fileChange' => (kind: ToolKind.edit, toolName: 'FileChange'),
-      'mcpToolCall' => (
-          kind: ToolKind.mcp,
-          toolName: _mcpToolName(item),
-        ),
-      _ => (kind: ToolKind.other, toolName: itemType),
-    };
   }
 
   /// Constructs a Claude-compatible MCP tool name: `mcp__<server>__<tool>`.
@@ -152,6 +137,8 @@ class CodexSession implements AgentSession {
         _handleItemCompleted(params);
       case 'turn/completed':
         _handleTurnCompleted(params);
+      case 'config/warning':
+        _handleConfigWarning(params);
       default:
         break;
     }
@@ -570,6 +557,19 @@ class CodexSession implements AgentSession {
       extensions: lastStepUsage != null
           ? {'lastStepUsage': lastStepUsage}
           : null,
+    ));
+  }
+
+  void _handleConfigWarning(Map<String, dynamic> params) {
+    final summary = params['summary'] as String? ?? '';
+    _eventsController.add(TextEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.codex,
+      raw: params,
+      sessionId: threadId,
+      text: summary,
+      kind: TextKind.error,
     ));
   }
 

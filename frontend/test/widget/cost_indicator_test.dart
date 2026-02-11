@@ -10,6 +10,7 @@ void main() {
   group('CostIndicator', () {
     Widget createTestApp({
       required UsageInfo usage,
+      String agentLabel = 'Claude',
       List<ModelUsageInfo> modelUsage = const [],
       String agentLabel = 'Claude',
     }) {
@@ -18,6 +19,7 @@ void main() {
           body: Center(
             child: CostIndicator(
               usage: usage,
+              agentLabel: agentLabel,
               modelUsage: modelUsage,
               agentLabel: agentLabel,
             ),

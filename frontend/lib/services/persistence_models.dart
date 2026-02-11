@@ -133,6 +133,18 @@ class ChatMeta {
   /// to respond to prompts.
   final TimingStats timing;
 
+  /// Codex sandbox mode (Codex backend only).
+  final String? codexSandboxMode;
+
+  /// Codex approval policy (Codex backend only).
+  final String? codexApprovalPolicy;
+
+  /// Codex workspace-write options (Codex backend only).
+  final Map<String, dynamic>? codexWorkspaceWriteOptions;
+
+  /// Codex web search mode (Codex backend only).
+  final String? codexWebSearch;
+
   /// Creates a [ChatMeta] instance.
   const ChatMeta({
     required this.model,
@@ -145,6 +157,10 @@ class ChatMeta {
     required this.usage,
     this.modelUsage = const [],
     this.timing = const TimingStats.zero(),
+    this.codexSandboxMode,
+    this.codexApprovalPolicy,
+    this.codexWorkspaceWriteOptions,
+    this.codexWebSearch,
   });
 
   /// Creates a [ChatMeta] with default values for a new chat.
@@ -166,6 +182,10 @@ class ChatMeta {
       usage: const UsageInfo.zero(),
       modelUsage: const [],
       timing: const TimingStats.zero(),
+      codexSandboxMode: null,
+      codexApprovalPolicy: null,
+      codexWorkspaceWriteOptions: null,
+      codexWebSearch: null,
     );
   }
 
@@ -181,6 +201,10 @@ class ChatMeta {
     UsageInfo? usage,
     List<ModelUsageInfo>? modelUsage,
     TimingStats? timing,
+    String? codexSandboxMode,
+    String? codexApprovalPolicy,
+    Map<String, dynamic>? codexWorkspaceWriteOptions,
+    String? codexWebSearch,
   }) {
     return ChatMeta(
       model: model ?? this.model,
@@ -193,6 +217,10 @@ class ChatMeta {
       usage: usage ?? this.usage,
       modelUsage: modelUsage ?? this.modelUsage,
       timing: timing ?? this.timing,
+      codexSandboxMode: codexSandboxMode ?? this.codexSandboxMode,
+      codexApprovalPolicy: codexApprovalPolicy ?? this.codexApprovalPolicy,
+      codexWorkspaceWriteOptions: codexWorkspaceWriteOptions ?? this.codexWorkspaceWriteOptions,
+      codexWebSearch: codexWebSearch ?? this.codexWebSearch,
     );
   }
 
@@ -225,6 +253,10 @@ class ChatMeta {
               })
           .toList(),
       'timing': timing.toJson(),
+      if (codexSandboxMode != null) 'codexSandboxMode': codexSandboxMode,
+      if (codexApprovalPolicy != null) 'codexApprovalPolicy': codexApprovalPolicy,
+      if (codexWorkspaceWriteOptions != null) 'codexWorkspaceWriteOptions': codexWorkspaceWriteOptions,
+      if (codexWebSearch != null) 'codexWebSearch': codexWebSearch,
     };
   }
 
@@ -272,6 +304,10 @@ class ChatMeta {
       timing: timingJson != null
           ? TimingStats.fromJson(timingJson)
           : const TimingStats.zero(),
+      codexSandboxMode: json['codexSandboxMode'] as String?,
+      codexApprovalPolicy: json['codexApprovalPolicy'] as String?,
+      codexWorkspaceWriteOptions: json['codexWorkspaceWriteOptions'] as Map<String, dynamic>?,
+      codexWebSearch: json['codexWebSearch'] as String?,
     );
   }
 

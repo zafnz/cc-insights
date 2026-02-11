@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart';
+import 'package:meta/meta.dart';
 
+import 'codex_config.dart';
+import 'codex_config_writer.dart';
 import 'codex_process.dart';
 import 'codex_session.dart';
 
@@ -16,6 +19,19 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
 
   bool _disposed = false;
 
+  CodexSecurityConfig? _currentConfig;
+  CodexSecurityCapabilities? _capabilities;
+
+  /// Current security configuration read from the Codex app-server.
+  CodexSecurityConfig? get currentSecurityConfig => _currentConfig;
+
+  /// Security capabilities (enterprise restrictions).
+  CodexSecurityCapabilities get securityCapabilities =>
+      _capabilities ?? const CodexSecurityCapabilities();
+
+  /// Config writer for mid-session changes.
+  CodexConfigWriter get configWriter => CodexConfigWriter(_process);
+
   @override
   BackendCapabilities get capabilities => const BackendCapabilities(
         supportsModelListing: true,
@@ -27,7 +43,34 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     final process = await CodexProcess.start(
       CodexProcessConfig(executablePath: executablePath),
     );
+    final backend = CodexBackend._(process: process);
+    await backend._readInitialConfig();
+    return backend;
+  }
+
+  Future<void> _readInitialConfig() async {
+    try {
+      final reader = CodexConfigReader(_process);
+      _currentConfig = await reader.readSecurityConfig();
+      _capabilities = await reader.readCapabilities();
+    } catch (e) {
+      // Config read is best-effort; fall back to defaults
+      SdkLogger.instance.warning('Failed to read Codex config: $e');
+      _currentConfig = CodexSecurityConfig.defaultConfig;
+      _capabilities = const CodexSecurityCapabilities();
+    }
+  }
+
+  /// Create a backend with a mock process for testing.
+  @visibleForTesting
+  static CodexBackend createForTesting({required CodexProcess process}) {
     return CodexBackend._(process: process);
+  }
+
+  /// Exposed for testing: manually trigger config read.
+  @visibleForTesting
+  Future<void> testReadConfig() async {
+    await _readInitialConfig();
   }
 
   @override
@@ -144,6 +187,7 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     final model = options?.model?.trim();
     final resume = options?.resume;
     final resolvedModel = model != null && model.isNotEmpty ? model : null;
+    final securityConfig = options?.codexSecurityConfig;
 
     Map<String, dynamic> result;
     if (resume != null && resume.isNotEmpty) {
@@ -151,11 +195,19 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
         'threadId': resume,
         'cwd': cwd,
         if (resolvedModel != null) 'model': resolvedModel,
+        if (securityConfig != null) ...{
+          'sandbox': securityConfig.sandboxMode.wireValue,
+          'approvalPolicy': securityConfig.approvalPolicy.wireValue,
+        },
       });
     } else {
       result = await _process.sendRequest('thread/start', {
         'cwd': cwd,
         if (resolvedModel != null) 'model': resolvedModel,
+        if (securityConfig != null) ...{
+          'sandbox': securityConfig.sandboxMode.wireValue,
+          'approvalPolicy': securityConfig.approvalPolicy.wireValue,
+        },
       });
     }
 

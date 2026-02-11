@@ -59,7 +59,6 @@ class JsonRpcClient {
   final StreamSubscription<String> _inputSub;
 
   File? _edgeLogFile;
-  String? _edgeLogPath;
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
   final _serverRequests =
       StreamController<JsonRpcServerRequest>.broadcast();
@@ -217,10 +216,8 @@ class JsonRpcClient {
         parent.createSync(recursive: true);
       }
       _edgeLogFile = file;
-      _edgeLogPath = path;
     } catch (_) {
       _edgeLogFile = null;
-      _edgeLogPath = null;
     }
   }
 

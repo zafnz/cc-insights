@@ -14,6 +14,7 @@ import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
+import 'package:codex_sdk/codex_sdk.dart' show CodexSecurityConfig, CodexSecurityCapabilities;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -172,6 +173,18 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
       session: session,
       capabilities: capabilitiesFor(type),
     );
+  }
+
+  @override
+  CodexSecurityConfig? get codexSecurityConfig => null;
+
+  @override
+  CodexSecurityCapabilities get codexSecurityCapabilities =>
+      const CodexSecurityCapabilities();
+
+  @override
+  void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {
+    // Not needed in these tests
   }
 
   void reset() {

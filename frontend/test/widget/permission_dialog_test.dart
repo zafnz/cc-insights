@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendProvider;
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
@@ -35,16 +36,18 @@ void main() {
         Map<String, dynamic>? updatedInput,
         List<dynamic>? updatedPermissions,
       })? onAllow,
-      void Function(String)? onDeny,
+      void Function(String, {bool interrupt})? onDeny,
       void Function(String planText)? onClearContextAndAcceptEdits,
+      BackendProvider? provider,
     }) {
       return MaterialApp(
         home: Scaffold(
           body: PermissionDialog(
             request: request,
             onAllow: onAllow ?? ({updatedInput, updatedPermissions}) {},
-            onDeny: onDeny ?? (_) {},
+            onDeny: onDeny ?? (_, {interrupt = false}) {},
             onClearContextAndAcceptEdits: onClearContextAndAcceptEdits,
+            provider: provider,
           ),
         ),
       );
@@ -244,7 +247,7 @@ void main() {
 
         await tester.pumpWidget(createTestApp(
           request: request,
-          onDeny: (message) => denyMessage = message,
+          onDeny: (message, {interrupt = false}) => denyMessage = message,
         ));
         await safePumpAndSettle(tester);
 
@@ -313,7 +316,7 @@ void main() {
           Map<String, dynamic>? updatedInput,
           List<dynamic>? updatedPermissions,
         })? onAllow,
-        void Function(String)? onDeny,
+        void Function(String, {bool interrupt})? onDeny,
         void Function(String planText)? onClearContextAndAcceptEdits,
       }) {
         return MaterialApp(
@@ -324,7 +327,7 @@ void main() {
               child: PermissionDialog(
                 request: request,
                 onAllow: onAllow ?? ({updatedInput, updatedPermissions}) {},
-                onDeny: onDeny ?? (_) {},
+                onDeny: onDeny ?? (_, {interrupt = false}) {},
                 onClearContextAndAcceptEdits: onClearContextAndAcceptEdits,
               ),
             ),
@@ -552,7 +555,7 @@ void main() {
 
         await tester.pumpWidget(createPlanTestApp(
           request: request,
-          onDeny: (msg) => denyMessage = msg,
+          onDeny: (msg, {interrupt = false}) => denyMessage = msg,
         ));
         await safePumpAndSettle(tester);
 
@@ -581,7 +584,7 @@ void main() {
 
         await tester.pumpWidget(createPlanTestApp(
           request: request,
-          onDeny: (msg) => denyMessage = msg,
+          onDeny: (msg, {interrupt = false}) => denyMessage = msg,
         ));
         await safePumpAndSettle(tester);
 
@@ -660,7 +663,7 @@ void main() {
 
         await tester.pumpWidget(createPlanTestApp(
           request: request,
-          onDeny: (msg) => denyMessage = msg,
+          onDeny: (msg, {interrupt = false}) => denyMessage = msg,
         ));
         await safePumpAndSettle(tester);
 
@@ -685,6 +688,180 @@ void main() {
         // Should show description icon, not shield
         expect(find.byIcon(Icons.description_outlined), findsOneWidget);
         expect(find.byIcon(Icons.shield_outlined), findsNothing);
+      });
+    });
+
+    group('Codex permission dialog', () {
+      testWidgets('shows 3 buttons for Codex backend', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'Bash',
+          toolInput: {'command': 'npm test'},
+        );
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should show Codex buttons
+        expect(find.text('Cancel Turn'), findsOneWidget);
+        expect(find.text('Decline'), findsOneWidget);
+        expect(find.text('Accept'), findsOneWidget);
+
+        // Should NOT show Claude buttons
+        expect(find.text('Deny'), findsNothing);
+        expect(find.text('Allow'), findsNothing);
+      });
+
+      testWidgets('Claude permission shows 2 buttons', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'Bash',
+          toolInput: {'command': 'npm test'},
+        );
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.claude,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should show Claude buttons
+        expect(find.text('Deny'), findsOneWidget);
+        expect(find.text('Allow'), findsOneWidget);
+
+        // Should NOT show Codex buttons
+        expect(find.text('Cancel Turn'), findsNothing);
+        expect(find.text('Decline'), findsNothing);
+        expect(find.text('Accept'), findsNothing);
+      });
+
+      testWidgets('Codex dialog does NOT show suggestions section', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'Bash',
+          toolInput: {'command': 'npm test'},
+        );
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should not have any suggestion text
+        expect(find.textContaining('Always'), findsNothing);
+        expect(find.textContaining('Ask'), findsNothing);
+      });
+
+      testWidgets('shows reason when decisionReason is set', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'Bash',
+          toolInput: {'command': 'npm test'},
+          decisionReason: 'Running tests to verify the changes compile correctly.',
+        );
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should show the reason with the chat bubble icon
+        expect(find.byKey(PermissionDialogKeys.reason), findsOneWidget);
+        expect(
+          find.textContaining('Running tests to verify'),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.chat_bubble_outline), findsOneWidget);
+      });
+
+      testWidgets('shows command actions when available', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'Bash',
+          toolInput: {
+            'command': 'npm test',
+            'commandActions': ['read', 'search'],
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should show the actions row
+        expect(find.byKey(PermissionDialogKeys.commandActions), findsOneWidget);
+        expect(find.textContaining('Actions:'), findsOneWidget);
+        expect(find.textContaining('read, search'), findsOneWidget);
+        expect(find.byIcon(Icons.info_outline), findsOneWidget);
+      });
+
+      testWidgets('Cancel Turn button calls onDeny with interrupt: true', (tester) async {
+        String? denyMessage;
+        bool? denyInterrupt;
+        final request = createFakeRequest();
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+          onDeny: (message, {bool interrupt = false}) {
+            denyMessage = message;
+            denyInterrupt = interrupt;
+          },
+        ));
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Cancel Turn'));
+        await tester.pump();
+
+        check(denyMessage).isNotNull();
+        check(denyMessage!).equals('cancelled');
+        check(denyInterrupt).isNotNull();
+        check(denyInterrupt!).isTrue();
+      });
+
+      testWidgets('Decline button calls onDeny with interrupt: false', (tester) async {
+        String? denyMessage;
+        bool? denyInterrupt;
+        final request = createFakeRequest();
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+          onDeny: (message, {bool interrupt = false}) {
+            denyMessage = message;
+            denyInterrupt = interrupt;
+          },
+        ));
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Decline'));
+        await tester.pump();
+
+        check(denyMessage).isNotNull();
+        check(denyMessage!).contains('declined');
+        check(denyInterrupt).isNotNull();
+        check(denyInterrupt!).isFalse();
+      });
+
+      testWidgets('Accept button calls onAllow', (tester) async {
+        var allowCalled = false;
+        final request = createFakeRequest();
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.codex,
+          onAllow: ({updatedInput, updatedPermissions}) {
+            allowCalled = true;
+          },
+        ));
+        await safePumpAndSettle(tester);
+
+        await tester.tap(find.text('Accept'));
+        await tester.pump();
+
+        check(allowCalled).isTrue();
       });
     });
 
