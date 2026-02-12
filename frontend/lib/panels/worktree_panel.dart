@@ -1480,7 +1480,11 @@ class _WorktreeCostSummary extends StatelessWidget {
           ],
           // Per-backend token summaries
           ...costPerBackend.entries.expand((entry) {
-            final label = entry.key == 'codex' ? 'Codex' : 'Claude';
+            final label = switch (entry.key) {
+              'codex' => 'Codex',
+              'acp' => 'ACP',
+              _ => 'Claude',
+            };
             return [
               Text(
                 label,

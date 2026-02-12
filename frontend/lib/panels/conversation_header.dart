@@ -35,12 +35,20 @@ const List<String> reasoningEffortItems = [
 
 /// Returns a display label for a backend type.
 String agentLabel(sdk.BackendType backend) {
-  return backend == sdk.BackendType.codex ? 'Codex' : 'Claude';
+  return switch (backend) {
+    sdk.BackendType.directCli => 'Claude',
+    sdk.BackendType.codex => 'Codex',
+    sdk.BackendType.acp => 'ACP',
+  };
 }
 
 /// Converts a display label to a backend type.
 sdk.BackendType backendFromAgent(String value) {
-  return value == 'Codex' ? sdk.BackendType.codex : sdk.BackendType.directCli;
+  return switch (value) {
+    'Codex' => sdk.BackendType.codex,
+    'ACP' => sdk.BackendType.acp,
+    _ => sdk.BackendType.directCli,
+  };
 }
 
 /// Converts a dropdown label to a ReasoningEffort value.
@@ -138,9 +146,11 @@ class ConversationHeader extends StatelessWidget {
                   builder: (context) {
                     final cliAvailability =
                         context.watch<CliAvailabilityService>();
-                    final agentItems = cliAvailability.codexAvailable
-                        ? const ['Claude', 'Codex']
-                        : const ['Claude'];
+                    final agentItems = <String>[
+                      'Claude',
+                      if (cliAvailability.codexAvailable) 'Codex',
+                      if (cliAvailability.acpAvailable) 'ACP',
+                    ];
                     return CompactDropdown(
                       value: agentLabel(chat.model.backend),
                       items: agentItems,

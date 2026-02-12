@@ -214,7 +214,7 @@ class WorktreeState extends ChangeNotifier {
   ///
   /// When a chat is removed via [removeChat], its usage data is captured here
   /// so that the worktree panel can display total costs including closed chats.
-  /// Key is the backend label ('claude' or 'codex').
+  /// Key is the backend label ('claude', 'codex', or 'acp').
   final Map<String, _ClosedChatUsage> _closedChatUsage = {};
 
   /// Draft text typed in the welcome screen before any chat is created.
@@ -494,7 +494,7 @@ class WorktreeState extends ChangeNotifier {
   /// Returns aggregated cost and token totals per backend, combining
   /// active chats and closed chats.
   ///
-  /// Returns a map of backend label ('claude' or 'codex') to
+  /// Returns a map of backend label ('claude', 'codex', or 'acp') to
   /// (totalTokens, costUsd).
   Map<String, ({int totalTokens, double costUsd})> get costPerBackend {
     final result = <String, ({int totalTokens, double costUsd})>{};

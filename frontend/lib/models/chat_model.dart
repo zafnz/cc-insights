@@ -48,8 +48,18 @@ class ChatModelCatalog {
     backend: BackendType.codex,
   );
 
+  static const ChatModel _acpDefaultModel = ChatModel(
+    id: '',
+    label: 'Default (agent)',
+    backend: BackendType.acp,
+  );
+
   static final List<ChatModel> _defaultCodexModels = [
     _codexDefaultModel,
+  ];
+
+  static const List<ChatModel> acpModels = [
+    _acpDefaultModel,
   ];
 
   static List<ChatModel> _codexModels = List.of(_defaultCodexModels);
@@ -78,6 +88,7 @@ class ChatModelCatalog {
     return switch (backend) {
       BackendType.codex => codexModels,
       BackendType.directCli => claudeModels,
+      BackendType.acp => acpModels,
     };
   }
 
@@ -85,6 +96,8 @@ class ChatModelCatalog {
     switch (value) {
       case 'codex':
         return BackendType.codex;
+      case 'acp':
+        return BackendType.acp;
       case 'direct':
       case 'directcli':
       case 'cli':
@@ -124,7 +137,7 @@ class ChatModelCatalog {
 
   /// Returns all available models as composite setting options.
   ///
-  /// Format: `"last_used"`, `"claude:<id>"`, or `"codex:<id>"`.
+  /// Format: `"last_used"`, `"claude:<id>"`, `"codex:<id>"`, or `"acp:<id>"`.
   static List<SettingOption> allModelOptions() {
     final options = <SettingOption>[
       const SettingOption(value: 'last_used', label: 'Last used'),
@@ -140,6 +153,11 @@ class ChatModelCatalog {
           m.id.isEmpty ? 'Codex: Default (server)' : 'Codex: ${m.label}';
       options.add(SettingOption(value: 'codex:${m.id}', label: label));
     }
+    for (final m in acpModels) {
+      final label =
+          m.id.isEmpty ? 'ACP: Default (agent)' : 'ACP: ${m.label}';
+      options.add(SettingOption(value: 'acp:${m.id}', label: label));
+    }
     return options;
   }
 
@@ -152,8 +170,11 @@ class ChatModelCatalog {
     if (colon < 0) return null;
     final prefix = value.substring(0, colon);
     final modelId = value.substring(colon + 1);
-    final backend =
-        prefix == 'codex' ? BackendType.codex : BackendType.directCli;
+    final backend = switch (prefix) {
+      'codex' => BackendType.codex,
+      'acp' => BackendType.acp,
+      _ => BackendType.directCli,
+    };
     return (backend, modelId.isEmpty ? null : modelId);
   }
 }

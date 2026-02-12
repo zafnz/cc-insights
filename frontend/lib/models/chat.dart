@@ -1968,15 +1968,23 @@ class ChatState extends ChangeNotifier {
   String get _backendTypeValue {
     return switch (_model.backend) {
       sdk.BackendType.codex => 'codex',
+      sdk.BackendType.acp => 'acp',
       sdk.BackendType.directCli => 'direct',
     };
   }
 
   /// User-facing backend label for cost tracking.
   ///
-  /// Returns 'claude' for Claude CLI backend, 'codex' for Codex backend.
+  /// Returns 'claude' for Claude CLI backend, 'codex' for Codex backend,
+  /// and 'acp' for ACP backend.
   /// This differs from [_backendTypeValue] which returns 'direct' for Claude.
-  String get backendLabel => _model.backend == sdk.BackendType.codex ? 'codex' : 'claude';
+  String get backendLabel {
+    return switch (_model.backend) {
+      sdk.BackendType.codex => 'codex',
+      sdk.BackendType.acp => 'acp',
+      sdk.BackendType.directCli => 'claude',
+    };
+  }
 
   /// Persists the session ID to projects.json.
   ///

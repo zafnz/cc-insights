@@ -38,7 +38,7 @@ class CostTrackingEntry {
 
   /// Backend that produced this entry.
   ///
-  /// Possible values: 'claude', 'codex'.
+  /// Possible values: 'claude', 'codex', 'acp'.
   /// Defaults to 'claude' for backward compatibility with existing files.
   final String backend;
 
@@ -58,7 +58,7 @@ class CostTrackingEntry {
   /// The [chatName] is the user-visible chat name.
   /// The [modelUsage] is the chat's cumulative per-model usage.
   /// The [timing] is the chat's accumulated timing statistics.
-  /// The [backend] is the backend type ('claude' or 'codex').
+  /// The [backend] is the backend type ('claude', 'codex', or 'acp').
   /// The timestamp is set to the current time.
   factory CostTrackingEntry.fromChat({
     required String worktreeName,

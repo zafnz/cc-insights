@@ -14,14 +14,22 @@ void main() {
       expect(BackendType.codex.name, equals('codex'));
     });
 
-    test('has exactly two values', () {
-      expect(BackendType.values, hasLength(2));
+    test('has acp value', () {
+      expect(BackendType.acp, isA<BackendType>());
+      expect(BackendType.acp.name, equals('acp'));
+    });
+
+    test('has exactly three values', () {
+      expect(BackendType.values, hasLength(3));
       expect(BackendType.values, contains(BackendType.directCli));
       expect(BackendType.values, contains(BackendType.codex));
+      expect(BackendType.values, contains(BackendType.acp));
     });
 
     test('values have distinct indices', () {
       expect(BackendType.directCli.index, isNot(BackendType.codex.index));
+      expect(BackendType.directCli.index, isNot(BackendType.acp.index));
+      expect(BackendType.codex.index, isNot(BackendType.acp.index));
     });
   });
 
@@ -45,6 +53,10 @@ void main() {
       expect(BackendFactory.parseType('codex'), equals(BackendType.codex));
     });
 
+    test('parses "acp" to BackendType.acp', () {
+      expect(BackendFactory.parseType('acp'), equals(BackendType.acp));
+    });
+
     test('returns null for legacy "nodejs" and "node" values', () {
       expect(BackendFactory.parseType('nodejs'), isNull);
       expect(BackendFactory.parseType('node'), isNull);
@@ -54,6 +66,7 @@ void main() {
       expect(BackendFactory.parseType('DIRECT'), equals(BackendType.directCli));
       expect(BackendFactory.parseType('CLI'), equals(BackendType.directCli));
       expect(BackendFactory.parseType('CODEX'), equals(BackendType.codex));
+      expect(BackendFactory.parseType('ACP'), equals(BackendType.acp));
     });
 
     test('returns null for unrecognized values', () {

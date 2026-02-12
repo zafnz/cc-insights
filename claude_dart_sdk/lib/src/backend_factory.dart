@@ -12,13 +12,16 @@ enum BackendType {
 
   /// Codex app-server backend
   codex,
+
+  /// ACP JSON-RPC backend
+  acp,
 }
 
 /// Factory for creating agent backends.
 ///
 /// This factory supports the direct claude-cli backend (default) and the
-/// Codex backend. The backend type can be specified via the [BackendType]
-/// enum or overridden via the `CLAUDE_BACKEND` environment variable.
+  /// Codex or ACP backend. The backend type can be specified via the [BackendType]
+  /// enum or overridden via the `CLAUDE_BACKEND` environment variable.
 ///
 /// Example:
 /// ```dart
@@ -28,6 +31,7 @@ enum BackendType {
 /// // Use environment variable override
 /// // Set CLAUDE_BACKEND=direct to use direct CLI (default)
 /// // Set CLAUDE_BACKEND=codex to use Codex backend
+/// // Set CLAUDE_BACKEND=acp to use ACP backend
 /// final backend = await BackendFactory.create();
 /// ```
 class BackendFactory {
@@ -40,7 +44,8 @@ class BackendFactory {
   ///
   /// [type] - The backend type to create. Defaults to [BackendType.directCli].
   ///   This can be overridden by the `CLAUDE_BACKEND` environment variable.
-  /// [executablePath] - Path to claude-cli or codex (depending on backend).
+  /// [executablePath] - Path to claude-cli, codex, or ACP executable
+  ///   (depending on backend).
   ///   Defaults to `CLAUDE_CODE_PATH` env var or 'claude' for Claude, and
   ///   'codex' for Codex.
   static Future<AgentBackend> create({
@@ -56,6 +61,8 @@ class BackendFactory {
 
       case BackendType.codex:
         return codex.CodexBackend.create(executablePath: executablePath);
+      case BackendType.acp:
+        throw UnsupportedError('ACP backend is not implemented yet.');
     }
   }
 
@@ -78,6 +85,8 @@ class BackendFactory {
         return BackendType.directCli;
       case 'codex':
         return BackendType.codex;
+      case 'acp':
+        return BackendType.acp;
       default:
         return type;
     }
@@ -99,6 +108,8 @@ class BackendFactory {
         return BackendType.directCli;
       case 'codex':
         return BackendType.codex;
+      case 'acp':
+        return BackendType.acp;
       default:
         return null;
     }

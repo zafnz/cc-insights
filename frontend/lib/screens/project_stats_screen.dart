@@ -216,11 +216,15 @@ class _ProjectOverviewView extends StatelessWidget {
     for (final chat in allChats) {
       backendGroups.putIfAbsent(chat.backend, () => []).add(chat);
     }
-    // Sort backends: claude first, then codex, then others alphabetically
+    // Sort backends: claude first, then codex, then acp, then others alphabetically
     final sortedBackends = backendGroups.keys.toList()
       ..sort((a, b) {
-        if (a == 'claude') return -1;
-        if (b == 'claude') return 1;
+        const priority = {'claude': 0, 'codex': 1, 'acp': 2};
+        final aPriority = priority[a];
+        final bPriority = priority[b];
+        if (aPriority != null || bPriority != null) {
+          return (aPriority ?? 99).compareTo(bPriority ?? 99);
+        }
         return a.compareTo(b);
       });
 
@@ -291,7 +295,12 @@ class _ProjectOverviewView extends StatelessWidget {
                 const TimingStats.zero(),
                 (TimingStats acc, c) => acc.merge(c.timing),
               );
-              final label = backend == 'claude' ? 'Claude' : 'Codex';
+              final label = switch (backend) {
+                'claude' => 'Claude',
+                'codex' => 'Codex',
+                'acp' => 'ACP',
+                _ => backend,
+              };
 
               return Expanded(
                 child: _BackendBreakdownColumn(
@@ -1416,8 +1425,12 @@ class _BackendBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isClaude = backend == 'claude';
-    final color = isClaude ? const Color(0xFFD0BCFF) : const Color(0xFF00BCD4);
+    final (label, color) = switch (backend) {
+      'claude' => ('Claude', const Color(0xFFD0BCFF)),
+      'codex' => ('Codex', const Color(0xFF00BCD4)),
+      'acp' => ('ACP', const Color(0xFF4CAF50)),
+      _ => (backend, const Color(0xFF9E9E9E)),
+    };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1426,7 +1439,7 @@ class _BackendBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        isClaude ? 'Claude' : 'Codex',
+        label,
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w500,

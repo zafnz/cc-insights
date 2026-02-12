@@ -128,7 +128,7 @@ class RuntimeConfig extends ChangeNotifier {
   bool _agentTicketToolsEnabled = true;
 
   /// Default model for new chats (composite value, e.g. 'last_used',
-  /// 'claude:opus', 'codex:gpt-5.2').
+  /// 'claude:opus', 'codex:gpt-5.2', 'acp:default').
   String _defaultModel = 'last_used';
 
   /// Default backend for new chats.
@@ -164,8 +164,14 @@ class RuntimeConfig extends ChangeNotifier {
   /// Custom path to the Codex CLI executable (empty = use PATH lookup).
   String _codexCliPath = '';
 
+  /// Custom path to the ACP agent executable (empty = use PATH lookup).
+  String _acpCliPath = '';
+
   /// Whether the Codex CLI is available on this system.
   bool _codexAvailable = true;
+
+  /// Whether the ACP agent executable is available on this system.
+  bool _acpAvailable = true;
 
   /// The working directory for this session.
   String get workingDirectory => _workingDirectory;
@@ -628,12 +634,34 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Custom path to the ACP agent executable.
+  ///
+  /// Empty string means use default PATH lookup.
+  String get acpCliPath => _acpCliPath;
+
+  set acpCliPath(String value) {
+    if (_acpCliPath != value) {
+      _acpCliPath = value;
+      notifyListeners();
+    }
+  }
+
   /// Whether the Codex CLI is available on this system.
   bool get codexAvailable => _codexAvailable;
 
   set codexAvailable(bool value) {
     if (_codexAvailable != value) {
       _codexAvailable = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether the ACP agent executable is available on this system.
+  bool get acpAvailable => _acpAvailable;
+
+  set acpAvailable(bool value) {
+    if (_acpAvailable != value) {
+      _acpAvailable = value;
       notifyListeners();
     }
   }
@@ -689,7 +717,9 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._markdownBackend = MarkdownBackend.flutterMarkdownPlus;
     _instance._claudeCliPath = '';
     _instance._codexCliPath = '';
+    _instance._acpCliPath = '';
     _instance._codexAvailable = true;
+    _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;
   }
 }

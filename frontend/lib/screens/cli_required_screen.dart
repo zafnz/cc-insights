@@ -74,6 +74,8 @@ class _CliRequiredScreenState extends State<CliRequiredScreen> {
       claudePath: path,
       codexPath:
           widget.settingsService.getEffectiveValue<String>('session.codexCliPath'),
+      acpPath:
+          widget.settingsService.getEffectiveValue<String>('session.acpCliPath'),
     );
 
     if (!mounted) return;
@@ -98,6 +100,8 @@ class _CliRequiredScreenState extends State<CliRequiredScreen> {
     await widget.cliAvailability.checkAll(
       codexPath:
           widget.settingsService.getEffectiveValue<String>('session.codexCliPath'),
+      acpPath:
+          widget.settingsService.getEffectiveValue<String>('session.acpCliPath'),
     );
 
     if (!mounted) return;

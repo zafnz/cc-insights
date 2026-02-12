@@ -281,6 +281,16 @@ class SettingsService extends ChangeNotifier {
         placeholder: '/usr/local/bin/codex',
       ),
       SettingDefinition(
+        key: 'session.acpCliPath',
+        title: 'ACP Agent Path',
+        description:
+            'Path to the ACP agent executable. Leave empty to '
+            'find it automatically via PATH.',
+        type: SettingType.text,
+        defaultValue: '',
+        placeholder: '/usr/local/bin/acp',
+      ),
+      SettingDefinition(
         key: 'session.defaultModel',
         title: 'Default Model',
         description:
@@ -746,6 +756,8 @@ class SettingsService extends ChangeNotifier {
         config.claudeCliPath = value as String;
       case 'session.codexCliPath':
         config.codexCliPath = value as String;
+      case 'session.acpCliPath':
+        config.acpCliPath = value as String;
       case 'session.defaultModel':
         final composite = value as String;
         config.defaultModel = composite;
@@ -834,7 +846,11 @@ class SettingsService extends ChangeNotifier {
     // Old format: model is a bare ID like 'opus', 'sonnet', 'haiku',
     // or a Codex model ID like 'gpt-5.2'.
     final backend = _values['session.defaultBackend'] as String? ?? 'direct';
-    final prefix = backend == 'codex' ? 'codex' : 'claude';
+    final prefix = switch (backend) {
+      'codex' => 'codex',
+      'acp' => 'acp',
+      _ => 'claude',
+    };
     _values['session.defaultModel'] = '$prefix:$model';
     // Remove the legacy key so it doesn't interfere on future loads.
     _values.remove('session.defaultBackend');

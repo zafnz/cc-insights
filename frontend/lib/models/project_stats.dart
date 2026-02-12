@@ -15,7 +15,7 @@ class ChatStats {
   /// The worktree name this chat belongs to.
   final String worktree;
 
-  /// Backend that produced this chat ('claude' or 'codex').
+  /// Backend that produced this chat ('claude', 'codex', or 'acp').
   final String backend;
 
   /// Per-model usage breakdown with costs.

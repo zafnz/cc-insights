@@ -34,10 +34,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - UI test for backend selection options.
 - Definition of Done:
   - ACP appears as a backend option in UI and can be selected without runtime errors.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 3: Create `acp_dart_sdk` Package Skeleton**
 - Description: Add new Dart package with project structure, pubspec, and exports aligned to other SDKs.

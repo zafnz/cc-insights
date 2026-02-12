@@ -520,9 +520,11 @@ class _ConversationPanelState extends State<ConversationPanel>
     } else {
       final selection = context.read<SelectionState>();
       // Derive provider from chat's backend type
-      final provider = chat.model.backend == sdk.BackendType.codex
-          ? sdk.BackendProvider.codex
-          : sdk.BackendProvider.claude;
+      final provider = switch (chat.model.backend) {
+        sdk.BackendType.codex => sdk.BackendProvider.codex,
+        sdk.BackendType.acp => sdk.BackendProvider.acp,
+        sdk.BackendType.directCli => sdk.BackendProvider.claude,
+      };
       dialogWidget = PermissionDialog(
         request: permission,
         projectDir: selection.selectedChat?.data.worktreeRoot,
@@ -639,10 +641,11 @@ class _ConversationPanelState extends State<ConversationPanel>
       itemBuilder: (context, index) {
         // Working indicator is at the end (bottom visually)
         if (showIndicator && index == entries.length) {
-          final agentName =
-              chat?.model.backend == sdk.BackendType.codex
-                  ? 'Codex'
-                  : 'Claude';
+          final agentName = switch (chat?.model.backend) {
+            sdk.BackendType.codex => 'Codex',
+            sdk.BackendType.acp => 'ACP',
+            _ => 'Claude',
+          };
           return WorkingIndicator(
             agentName: agentName,
             isCompacting: isCompacting,

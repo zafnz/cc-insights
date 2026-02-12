@@ -9,6 +9,7 @@ class FakeCliAvailabilityService extends ChangeNotifier
     implements CliAvailabilityService {
   bool _claudeAvailable = true;
   bool _codexAvailable = true;
+  bool _acpAvailable = true;
   bool _checked = true;
   int checkAllCalls = 0;
 
@@ -17,6 +18,9 @@ class FakeCliAvailabilityService extends ChangeNotifier
 
   @override
   bool get codexAvailable => _codexAvailable;
+
+  @override
+  bool get acpAvailable => _acpAvailable;
 
   @override
   bool get checked => _checked;
@@ -31,6 +35,11 @@ class FakeCliAvailabilityService extends ChangeNotifier
     notifyListeners();
   }
 
+  set acpAvailable(bool value) {
+    _acpAvailable = value;
+    notifyListeners();
+  }
+
   set checked(bool value) {
     _checked = value;
     notifyListeners();
@@ -40,6 +49,7 @@ class FakeCliAvailabilityService extends ChangeNotifier
   Future<void> checkAll({
     String claudePath = '',
     String codexPath = '',
+    String acpPath = '',
   }) async {
     checkAllCalls++;
   }

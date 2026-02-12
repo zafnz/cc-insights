@@ -307,5 +307,28 @@ void main() {
       check(newConfig.sandboxMode).equals(sdk.CodexSandboxMode.readOnly);
       check(newConfig.approvalPolicy).equals(sdk.CodexApprovalPolicy.onRequest); // unchanged
     });
+
+    testWidgets('Agent dropdown includes ACP when available', (tester) async {
+      fakeCliAvailability.codexAvailable = true;
+      fakeCliAvailability.acpAvailable = true;
+
+      final chat = resources.track(
+        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+      );
+      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null));
+
+      await tester.pumpWidget(buildTestWidget(chat));
+      await safePumpAndSettle(tester);
+
+      final agentDropdown = tester.widget<CompactDropdown>(
+        find.byWidgetPredicate(
+          (widget) => widget is CompactDropdown && widget.tooltip == 'Agent',
+        ),
+      );
+
+      check(agentDropdown.items).contains('Claude');
+      check(agentDropdown.items).contains('Codex');
+      check(agentDropdown.items).contains('ACP');
+    });
   });
 }

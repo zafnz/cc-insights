@@ -169,6 +169,8 @@ class BackendService extends ChangeNotifier {
       BackendType.codex => config.codexCliPath.isEmpty
           ? null
           : config.codexCliPath,
+      BackendType.acp =>
+        config.acpCliPath.isEmpty ? null : config.acpCliPath,
     };
   }
 

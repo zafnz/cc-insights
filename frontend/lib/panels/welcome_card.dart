@@ -393,9 +393,11 @@ class _WelcomeHeader extends StatelessWidget {
                     builder: (context) {
                       final cliAvailability =
                           context.watch<CliAvailabilityService>();
-                      final agentItems = cliAvailability.codexAvailable
-                          ? const ['Claude', 'Codex']
-                          : const ['Claude'];
+                      final agentItems = <String>[
+                        'Claude',
+                        if (cliAvailability.codexAvailable) 'Codex',
+                        if (cliAvailability.acpAvailable) 'ACP',
+                      ];
                       return CompactDropdown(
                         value: agentLabel(model.backend),
                         items: agentItems,

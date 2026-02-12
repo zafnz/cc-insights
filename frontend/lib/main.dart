@@ -194,7 +194,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The settings service for application preferences.
   SettingsService? _settingsService;
 
-  /// CLI availability service for checking claude/codex existence.
+  /// CLI availability service for checking claude/codex/acp existence.
   CliAvailabilityService? _cliAvailability;
 
   /// The persistence service for storing project/chat data.
@@ -375,8 +375,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         await _cliAvailability!.checkAll(
           claudePath: config.claudeCliPath,
           codexPath: config.codexCliPath,
+          acpPath: config.acpCliPath,
         );
         config.codexAvailable = _cliAvailability!.codexAvailable;
+        config.acpAvailable = _cliAvailability!.acpAvailable;
 
         if (_cliAvailability!.claudeAvailable) {
           _backend?.start(type: config.defaultBackend);
@@ -755,6 +757,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           // Update codex availability
           RuntimeConfig.instance.codexAvailable =
               _cliAvailability!.codexAvailable;
+          RuntimeConfig.instance.acpAvailable =
+              _cliAvailability!.acpAvailable;
           // Start the backend now that claude is available
           if (widget.backendService == null) {
             _backend?.start(type: RuntimeConfig.instance.defaultBackend);
@@ -979,7 +983,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       providers: [
         // Central logging service (singleton, rate-limited notifications)
         ChangeNotifierProvider<LogService>.value(value: LogService.instance),
-        // CLI availability service for checking claude/codex existence
+        // CLI availability service for checking claude/codex/acp existence
         ChangeNotifierProvider<CliAvailabilityService>.value(
           value: _cliAvailability!,
         ),

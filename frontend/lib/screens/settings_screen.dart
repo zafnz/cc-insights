@@ -265,7 +265,8 @@ class _SettingsContent extends StatelessWidget {
     }
 
     if (definition.key == 'session.claudeCliPath' ||
-        definition.key == 'session.codexCliPath') {
+        definition.key == 'session.codexCliPath' ||
+        definition.key == 'session.acpCliPath') {
       unawaited(settings.setValue(definition.key, value));
       // Re-validate CLI availability with new paths
       final cliAvailability = context.read<CliAvailabilityService>();
@@ -278,10 +279,15 @@ class _SettingsContent extends StatelessWidget {
               codexPath: definition.key == 'session.codexCliPath'
                   ? value as String
                   : RuntimeConfig.instance.codexCliPath,
+              acpPath: definition.key == 'session.acpCliPath'
+                  ? value as String
+                  : RuntimeConfig.instance.acpCliPath,
             )
             .then((_) {
           RuntimeConfig.instance.codexAvailable =
               cliAvailability.codexAvailable;
+          RuntimeConfig.instance.acpAvailable =
+              cliAvailability.acpAvailable;
         }),
       );
       return;
@@ -409,7 +415,8 @@ class _SettingsContent extends StatelessWidget {
 
     // CLI path settings get a file picker button
     if (definition.key == 'session.claudeCliPath' ||
-        definition.key == 'session.codexCliPath') {
+        definition.key == 'session.codexCliPath' ||
+        definition.key == 'session.acpCliPath') {
       var cliDefinition = definition;
       if (definition.key == 'session.codexCliPath') {
         final cliAvailability = context.watch<CliAvailabilityService>();
@@ -422,6 +429,19 @@ class _SettingsContent extends StatelessWidget {
             defaultValue: definition.defaultValue,
             placeholder: definition.placeholder,
             errorText: 'Codex CLI could not be found.',
+          );
+        }
+      } else if (definition.key == 'session.acpCliPath') {
+        final cliAvailability = context.watch<CliAvailabilityService>();
+        if (!cliAvailability.acpAvailable) {
+          cliDefinition = SettingDefinition(
+            key: definition.key,
+            title: definition.title,
+            description: definition.description,
+            type: definition.type,
+            defaultValue: definition.defaultValue,
+            placeholder: definition.placeholder,
+            errorText: 'ACP agent could not be found.',
           );
         }
       }

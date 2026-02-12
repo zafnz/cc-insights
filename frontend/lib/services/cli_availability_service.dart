@@ -4,13 +4,14 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// Service that checks whether CLI executables (claude, codex) are available.
+/// Service that checks whether CLI executables (claude, codex, acp) are available.
 ///
 /// Call [checkAll] after settings are loaded so that custom paths from
 /// user preferences are taken into account.
 class CliAvailabilityService extends ChangeNotifier {
   bool _claudeAvailable = false;
   bool _codexAvailable = false;
+  bool _acpAvailable = false;
   bool _checked = false;
 
   /// Whether the Claude CLI was found.
@@ -19,24 +20,29 @@ class CliAvailabilityService extends ChangeNotifier {
   /// Whether the Codex CLI was found.
   bool get codexAvailable => _codexAvailable;
 
+  /// Whether the ACP agent executable was found.
+  bool get acpAvailable => _acpAvailable;
+
   /// Whether the initial check has completed.
   bool get checked => _checked;
 
   /// Checks both CLIs for availability.
   ///
-  /// [claudePath] and [codexPath] are custom paths from settings.
+  /// [claudePath], [codexPath], and [acpPath] are custom paths from settings.
   /// Pass an empty string to use the default PATH lookup.
   Future<void> checkAll({
     String claudePath = '',
     String codexPath = '',
+    String acpPath = '',
   }) async {
     _claudeAvailable = await _checkExecutable('claude', claudePath);
     _codexAvailable = await _checkExecutable('codex', codexPath);
+    _acpAvailable = await _checkExecutable('acp', acpPath);
     _checked = true;
     notifyListeners();
 
     developer.log(
-      'CLI availability: claude=$_claudeAvailable, codex=$_codexAvailable',
+      'CLI availability: claude=$_claudeAvailable, codex=$_codexAvailable, acp=$_acpAvailable',
       name: 'CliAvailabilityService',
     );
   }
