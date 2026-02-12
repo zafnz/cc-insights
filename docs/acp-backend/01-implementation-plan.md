@@ -185,10 +185,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for path validation and access policies.
 - Definition of Done:
   - ACP agent can read/write files inside repo root; blocked outside.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 13: Terminal RPC Methods**
 - Description: Implement `terminal/*` operations for ACP.

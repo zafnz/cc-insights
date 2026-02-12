@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart';
+import 'package:path/path.dart' as p;
 
 import 'acp_process.dart';
 import 'json_rpc.dart';
@@ -13,10 +15,15 @@ class AcpSession implements AgentSession {
     required String sessionId,
     required String cwd,
     bool includePartialMessages = false,
+    List<String> allowedDirectories = const [],
   })  : _process = process,
         _sessionId = sessionId,
         _cwd = cwd,
-        _includePartialMessages = includePartialMessages {
+        _includePartialMessages = includePartialMessages,
+        _rootDir = p.normalize(p.absolute(cwd)),
+        _allowedDirectories = allowedDirectories
+            .map((dir) => p.normalize(p.absolute(dir)))
+            .toList(growable: false) {
     _notificationSub = _process.notifications.listen(_handleNotification);
     _serverRequestSub = _process.serverRequests.listen(_handleServerRequest);
   }
@@ -25,6 +32,8 @@ class AcpSession implements AgentSession {
   final String _sessionId;
   final String _cwd;
   final bool _includePartialMessages;
+  final String _rootDir;
+  final List<String> _allowedDirectories;
 
   int _eventIdCounter = 0;
   bool _active = true;
@@ -194,6 +203,10 @@ class AcpSession implements AgentSession {
     switch (request.method) {
       case 'session/request_permission':
         _handlePermissionRequest(request, params);
+      case 'fs/read_text_file':
+        unawaited(_handleReadTextFile(request, params));
+      case 'fs/write_text_file':
+        unawaited(_handleWriteTextFile(request, params));
       default:
         _process.sendError(
           request.id,
@@ -315,6 +328,127 @@ class AcpSession implements AgentSession {
     final id =
         option['optionId'] ?? option['id'] ?? option['option_id'] ?? '';
     return id is String && id.isNotEmpty ? id : null;
+  }
+
+  Future<void> _handleReadTextFile(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) async {
+    final path = params['path'];
+    if (path is! String || path.isEmpty) {
+      _process.sendError(request.id, -32602, 'Missing path');
+      return;
+    }
+    if (!p.isAbsolute(path)) {
+      _process.sendError(request.id, -32602, 'Path must be absolute');
+      return;
+    }
+
+    final normalized = p.normalize(p.absolute(path));
+    final allowed = await _ensurePathAccess(
+      'Read',
+      normalized,
+      {'file_path': normalized},
+    );
+    if (!allowed) {
+      _process.sendError(request.id, -32000, 'Permission denied');
+      return;
+    }
+
+    try {
+      final file = File(normalized);
+      if (!await file.exists()) {
+        _process.sendError(request.id, -32001, 'File not found');
+        return;
+      }
+
+      var content = await file.readAsString();
+      final line = (params['line'] as num?)?.toInt();
+      final limit = (params['limit'] as num?)?.toInt();
+      if (line != null || limit != null) {
+        final lines = content.split('\n');
+        var start = (line ?? 1) - 1;
+        if (start < 0) start = 0;
+        if (start > lines.length) start = lines.length;
+        var end = limit != null ? start + limit : lines.length;
+        if (end > lines.length) end = lines.length;
+        content = lines.sublist(start, end).join('\n');
+      }
+
+      _process.sendResponse(request.id, {'content': content});
+    } catch (e) {
+      _process.sendError(request.id, -32002, 'Failed to read file: $e');
+    }
+  }
+
+  Future<void> _handleWriteTextFile(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) async {
+    final path = params['path'];
+    if (path is! String || path.isEmpty) {
+      _process.sendError(request.id, -32602, 'Missing path');
+      return;
+    }
+    if (!p.isAbsolute(path)) {
+      _process.sendError(request.id, -32602, 'Path must be absolute');
+      return;
+    }
+
+    final normalized = p.normalize(p.absolute(path));
+    final content = params['content'] as String? ?? '';
+    final allowed = await _ensurePathAccess(
+      'Write',
+      normalized,
+      {'file_path': normalized, 'content': content},
+    );
+    if (!allowed) {
+      _process.sendError(request.id, -32000, 'Permission denied');
+      return;
+    }
+
+    try {
+      final file = File(normalized);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(content);
+      _process.sendResponse(request.id, {});
+    } catch (e) {
+      _process.sendError(request.id, -32003, 'Failed to write file: $e');
+    }
+  }
+
+  Future<bool> _ensurePathAccess(
+    String toolName,
+    String path,
+    Map<String, dynamic> toolInput,
+  ) async {
+    if (_isPathAllowed(path)) return true;
+
+    final completer = Completer<PermissionResponse>();
+    final permission = PermissionRequest(
+      id: _nextEventId(),
+      sessionId: _sessionId,
+      toolName: toolName,
+      toolInput: toolInput,
+      completer: completer,
+    );
+    _permissionController.add(permission);
+
+    final response = await completer.future;
+    return response is PermissionAllowResponse;
+  }
+
+  bool _isPathAllowed(String path) {
+    if (_isWithin(path, _rootDir)) return true;
+    for (final allowed in _allowedDirectories) {
+      if (_isWithin(path, allowed)) return true;
+    }
+    return false;
+  }
+
+  bool _isWithin(String path, String root) {
+    if (path == root) return true;
+    return p.isWithin(root, path);
   }
 
   void _emitTextOrDelta(

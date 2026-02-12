@@ -94,6 +94,7 @@ class AcpBackend implements AgentBackend {
         sessionId: sessionId,
         cwd: cwd,
         includePartialMessages: options?.includePartialMessages ?? false,
+        allowedDirectories: options?.additionalDirectories ?? const [],
       );
       _sessions[sessionId] = session;
       session.emitSessionInit(
