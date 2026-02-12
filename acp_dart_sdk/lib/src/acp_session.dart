@@ -28,6 +28,7 @@ class AcpSession implements AgentSession {
   int _eventIdCounter = 0;
   bool _active = true;
   StreamSubscription<JsonRpcNotification>? _notificationSub;
+  final Set<String> _emittedToolCalls = {};
 
   @override
   String get sessionId => _sessionId;
@@ -176,6 +177,11 @@ class AcpSession implements AgentSession {
           text: _planEntriesToText(entryMaps),
           kind: TextKind.plan,
         ));
+      case 'tool_call':
+      case 'tool_call_update':
+        final toolCall =
+            update['toolCall'] as Map<String, dynamic>? ?? update;
+        _handleToolCall(toolCall, raw: update);
     }
   }
 
@@ -252,6 +258,173 @@ class AcpSession implements AgentSession {
       sessionId: _sessionId,
       kind: StreamDeltaKind.messageStop,
     ));
+  }
+
+  void _handleToolCall(
+    Map<String, dynamic> toolCall, {
+    Map<String, dynamic>? raw,
+  }) {
+    final callId = toolCall['toolCallId'] as String? ??
+        toolCall['id'] as String? ??
+        '';
+    if (callId.isEmpty) return;
+
+    final title = toolCall['title'] as String?;
+    final kindRaw = toolCall['kind'] as String?;
+    final statusRaw = toolCall['status'] as String?;
+    final toolName = title ?? kindRaw ?? 'tool';
+    final toolKind = _mapToolKind(kindRaw);
+    final rawInput = toolCall['rawInput'];
+    final input = rawInput is Map
+        ? Map<String, dynamic>.from(rawInput)
+        : <String, dynamic>{};
+    final rawOutput = toolCall['rawOutput'];
+    final locations = (toolCall['locations'] as List<dynamic>?)
+        ?.whereType<String>()
+        .toList();
+
+    final contentRaw = toolCall['content'] as Map<String, dynamic>?;
+    final contentParse = contentRaw != null ? _parseToolContent(contentRaw) : null;
+
+    final completionStatus = _mapToolStatus(statusRaw);
+    if (completionStatus != null) {
+      if (!_emittedToolCalls.contains(callId)) {
+        _emitToolInvocation(
+          callId,
+          toolName,
+          toolKind,
+          title,
+          input,
+          locations,
+          raw,
+        );
+      }
+      final output = rawOutput ??
+          contentParse?.output ??
+          (contentRaw != null ? contentRaw : null);
+      _eventsController.add(ToolCompletionEvent(
+        id: _nextEventId(),
+        timestamp: DateTime.now(),
+        provider: BackendProvider.acp,
+        raw: raw,
+        extensions: contentParse?.extensions,
+        callId: callId,
+        sessionId: _sessionId,
+        status: completionStatus,
+        output: output,
+        isError: completionStatus == ToolCallStatus.failed,
+        content: contentParse?.content,
+        locations: locations,
+      ));
+      return;
+    }
+
+    if (_emittedToolCalls.contains(callId)) {
+      return;
+    }
+
+    _emitToolInvocation(
+      callId,
+      toolName,
+      toolKind,
+      title,
+      input,
+      locations,
+      raw,
+    );
+  }
+
+  void _emitToolInvocation(
+    String callId,
+    String toolName,
+    ToolKind kind,
+    String? title,
+    Map<String, dynamic> input,
+    List<String>? locations,
+    Map<String, dynamic>? raw,
+  ) {
+    _emittedToolCalls.add(callId);
+    _eventsController.add(ToolInvocationEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: raw,
+      callId: callId,
+      sessionId: _sessionId,
+      kind: kind,
+      toolName: toolName,
+      title: title,
+      input: input,
+      locations: locations,
+    ));
+  }
+
+  ToolCallStatus? _mapToolStatus(String? status) {
+    return switch (status) {
+      'completed' => ToolCallStatus.completed,
+      'failed' => ToolCallStatus.failed,
+      'cancelled' => ToolCallStatus.cancelled,
+      'canceled' => ToolCallStatus.cancelled,
+      _ => null,
+    };
+  }
+
+  ToolKind _mapToolKind(String? kind) {
+    return switch (kind) {
+      'read' => ToolKind.read,
+      'edit' => ToolKind.edit,
+      'delete' => ToolKind.delete,
+      'move' => ToolKind.move,
+      'search' => ToolKind.search,
+      'execute' => ToolKind.execute,
+      'fetch' => ToolKind.fetch,
+      'browse' => ToolKind.browse,
+      'think' => ToolKind.think,
+      'ask' => ToolKind.ask,
+      'memory' => ToolKind.memory,
+      'mcp' => ToolKind.mcp,
+      _ => ToolKind.other,
+    };
+  }
+
+  _ToolContentParse _parseToolContent(Map<String, dynamic> content) {
+    final type = content['type'] as String?;
+    final extensions = <String, dynamic>{
+      'acp.toolContent': content,
+    };
+
+    if (type == 'content') {
+      final inner = content['content'];
+      final blocks = <ContentBlock>[];
+      if (inner is Map) {
+        blocks.add(ContentBlock.fromJson(Map<String, dynamic>.from(inner)));
+      } else if (inner is List) {
+        for (final item in inner) {
+          if (item is Map) {
+            blocks.add(ContentBlock.fromJson(Map<String, dynamic>.from(item)));
+          }
+        }
+      }
+      return _ToolContentParse(
+        content: blocks.isEmpty ? null : blocks,
+        output: null,
+        extensions: extensions,
+      );
+    }
+
+    if (type == 'diff' || type == 'terminal') {
+      return _ToolContentParse(
+        content: null,
+        output: content,
+        extensions: extensions,
+      );
+    }
+
+    return _ToolContentParse(
+      content: null,
+      output: content,
+      extensions: extensions,
+    );
   }
 
   String _contentToText(Object? content) {
@@ -353,4 +526,16 @@ class AcpSession implements AgentSession {
       throw StateError('Session has been disposed');
     }
   }
+}
+
+class _ToolContentParse {
+  const _ToolContentParse({
+    required this.content,
+    required this.output,
+    required this.extensions,
+  });
+
+  final List<ContentBlock>? content;
+  final dynamic output;
+  final Map<String, dynamic> extensions;
 }

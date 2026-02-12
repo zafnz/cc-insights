@@ -155,10 +155,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for tool call lifecycle and completion status mapping.
 - Definition of Done:
   - Tool cards show ACP tool activity and results reliably.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 11: ACP Permissions Mapping**
 - Description: Handle `session/request_permission` and respond with ACP outcomes.
