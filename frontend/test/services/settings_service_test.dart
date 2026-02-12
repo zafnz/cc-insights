@@ -343,6 +343,97 @@ void main() {
       });
     });
 
+    group('file watcher', () {
+      test('reloads values when file is changed externally', () async {
+        await service.load();
+
+        // Set an initial value so the file exists
+        await service.setValue('appearance.showTimestamps', false);
+        // Wait for the self-write guard to clear
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
+        // Simulate an external edit
+        final file = File(configPath);
+        file.writeAsStringSync(jsonEncode({
+          'appearance.showTimestamps': true,
+          'appearance.bashToolSummary': 'command',
+        }));
+
+        // Give the file watcher time to fire
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        expect(service.getValue<bool>('appearance.showTimestamps'), true);
+        expect(
+          service.getValue<String>('appearance.bashToolSummary'),
+          'command',
+        );
+      });
+
+      test('syncs RuntimeConfig on external change', () async {
+        await service.load();
+        // Wait for self-write guard from load's _startWatching
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
+        // External edit
+        final file = File(configPath);
+        file.writeAsStringSync(jsonEncode({
+          'appearance.bashToolSummary': 'command',
+        }));
+
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        expect(
+          RuntimeConfig.instance.bashToolSummary,
+          BashToolSummary.command,
+        );
+      });
+
+      test('notifies listeners on external change', () async {
+        await service.load();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
+        var notifyCount = 0;
+        service.addListener(() => notifyCount++);
+
+        final file = File(configPath);
+        file.writeAsStringSync(jsonEncode({
+          'appearance.showTimestamps': true,
+        }));
+
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        expect(notifyCount, greaterThan(0));
+      });
+
+      test('does not reload during self-write', () async {
+        await service.load();
+
+        // Set a value — this triggers _save with _selfWriting = true
+        await service.setValue('appearance.showTimestamps', true);
+
+        // Immediately check — should still be our value, not reverted
+        expect(service.getValue<bool>('appearance.showTimestamps'), true);
+      });
+
+      test('cleans up watcher on dispose', () async {
+        // Create a separate service for this test so we can dispose
+        // it without conflicting with tearDown.
+        final extraService = SettingsService(configPath: configPath);
+        await extraService.load();
+        // Dispose should cancel the subscription without error
+        extraService.dispose();
+
+        // Writing after dispose should not cause issues
+        final file = File(configPath);
+        file.writeAsStringSync(jsonEncode({
+          'appearance.showTimestamps': true,
+        }));
+
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        // No assertion needed — just verify no crash
+      });
+    });
+
     group('layout tree persistence', () {
       test('savedLayoutTree returns null when not saved', () {
         expect(service.savedLayoutTree, isNull);

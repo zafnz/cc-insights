@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -32,6 +33,12 @@ class SettingsService extends ChangeNotifier {
 
   /// Whether settings have been loaded from disk.
   bool get loaded => _loaded;
+
+  /// Subscription for file system events on the config file's directory.
+  StreamSubscription<FileSystemEvent>? _fileWatchSub;
+
+  /// Set to true while [_save] is writing so we can ignore our own writes.
+  bool _selfWriting = false;
 
   // ---------------------------------------------------------------------------
   // Setting Categories
@@ -591,10 +598,66 @@ class SettingsService extends ChangeNotifier {
     _loaded = true;
     _syncAllToRuntimeConfig();
     notifyListeners();
+    _startWatching();
+  }
+
+  /// Starts watching the config file for external modifications.
+  void _startWatching() {
+    _fileWatchSub?.cancel();
+
+    final file = File(_configPath);
+    final dir = file.parent;
+    if (!dir.existsSync()) return;
+
+    try {
+      _fileWatchSub = dir
+          .watch(events: FileSystemEvent.modify | FileSystemEvent.create)
+          .where((event) => event.path == _configPath)
+          .listen((_) => _onFileChanged());
+    } catch (e) {
+      developer.log(
+        'Failed to watch config file: $e',
+        name: 'SettingsService',
+        error: e,
+      );
+    }
+  }
+
+  /// Called when the config file is modified on disk.
+  Future<void> _onFileChanged() async {
+    if (_selfWriting) return;
+
+    final file = File(_configPath);
+    if (!file.existsSync()) return;
+
+    try {
+      final content = await file.readAsString();
+      if (content.trim().isEmpty) return;
+
+      final json = jsonDecode(content) as Map<String, dynamic>;
+      _values
+        ..clear()
+        ..addAll(json);
+      _syncAllToRuntimeConfig();
+      notifyListeners();
+    } catch (e) {
+      developer.log(
+        'Failed to reload settings after external change: $e',
+        name: 'SettingsService',
+        error: e,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _fileWatchSub?.cancel();
+    super.dispose();
   }
 
   /// Saves current values to disk.
   Future<void> _save() async {
+    _selfWriting = true;
     try {
       final file = File(_configPath);
       final dir = file.parent;
@@ -609,6 +672,13 @@ class SettingsService extends ChangeNotifier {
         'Failed to save settings: $e',
         name: 'SettingsService',
         error: e,
+      );
+    } finally {
+      // Delay resetting the flag so any pending file system events
+      // from our own write are delivered (and ignored) first.
+      Future<void>.delayed(
+        const Duration(milliseconds: 1000),
+        () => _selfWriting = false,
       );
     }
   }
