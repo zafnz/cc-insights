@@ -22,6 +22,12 @@ sealed class ContentBlock {
         return ToolResultBlock.fromJson(json);
       case 'image':
         return ImageBlock.fromJson(json);
+      case 'audio':
+        return AudioBlock.fromJson(json);
+      case 'resource':
+        return ResourceBlock.fromJson(json);
+      case 'resource_link':
+        return ResourceLinkBlock.fromJson(json);
       default:
         return UnknownBlock.fromJson(json);
     }
@@ -138,23 +144,83 @@ class ToolResultBlock extends ContentBlock {
 
 /// Image content block.
 class ImageBlock extends ContentBlock {
-  const ImageBlock({required this.source});
+  const ImageBlock({
+    required this.source,
+    this.format = ImageBlockFormat.anthropic,
+  });
 
   @override
   String get type => 'image';
   final ImageSource source;
+  final ImageBlockFormat format;
 
   factory ImageBlock.fromJson(Map<String, dynamic> json) {
+    final sourceRaw = json['source'];
+    if (sourceRaw is Map<String, dynamic>) {
+      return ImageBlock(
+        source: ImageSource.fromJson(sourceRaw),
+        format: ImageBlockFormat.anthropic,
+      );
+    }
+    if (sourceRaw is Map) {
+      return ImageBlock(
+        source: ImageSource.fromJson(Map<String, dynamic>.from(sourceRaw)),
+        format: ImageBlockFormat.anthropic,
+      );
+    }
+
+    final data = json['data'] as String?;
+    final uri = json['uri'] as String?;
+    final mimeType =
+        json['mimeType'] as String? ?? json['mime_type'] as String?;
+
+    if (data != null && data.isNotEmpty) {
+      return ImageBlock(
+        source: ImageSource(
+          type: 'base64',
+          mediaType: mimeType,
+          data: data,
+        ),
+        format: ImageBlockFormat.acp,
+      );
+    }
+    if (uri != null && uri.isNotEmpty) {
+      return ImageBlock(
+        source: ImageSource(
+          type: 'url',
+          mediaType: mimeType,
+          url: uri,
+        ),
+        format: ImageBlockFormat.acp,
+      );
+    }
+
     return ImageBlock(
-      source: ImageSource.fromJson(json['source'] as Map<String, dynamic>? ?? {}),
+      source: ImageSource.fromJson(const {}),
+      format: ImageBlockFormat.anthropic,
     );
   }
 
   @override
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson() {
+    if (format == ImageBlockFormat.acp) {
+      return {
         'type': type,
-        'source': source.toJson(),
+        if (source.data != null) 'data': source.data,
+        if (source.url != null) 'uri': source.url,
+        if (source.mediaType != null) 'mimeType': source.mediaType,
       };
+    }
+    return {
+      'type': type,
+      'source': source.toJson(),
+    };
+  }
+}
+
+enum ImageBlockFormat {
+  anthropic,
+  acp,
 }
 
 /// Image source (base64 or URL).
@@ -185,6 +251,103 @@ class ImageSource {
         if (mediaType != null) 'media_type': mediaType,
         if (data != null) 'data': data,
         if (url != null) 'url': url,
+      };
+}
+
+/// Audio content block.
+class AudioBlock extends ContentBlock {
+  const AudioBlock({
+    this.data,
+    this.mimeType,
+    this.uri,
+  });
+
+  @override
+  String get type => 'audio';
+  final String? data;
+  final String? mimeType;
+  final String? uri;
+
+  factory AudioBlock.fromJson(Map<String, dynamic> json) {
+    return AudioBlock(
+      data: json['data'] as String?,
+      mimeType: json['mimeType'] as String? ?? json['mime_type'] as String?,
+      uri: json['uri'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        if (data != null) 'data': data,
+        if (mimeType != null) 'mimeType': mimeType,
+        if (uri != null) 'uri': uri,
+      };
+}
+
+/// Resource content block.
+class ResourceBlock extends ContentBlock {
+  const ResourceBlock({
+    required this.uri,
+    required this.name,
+    this.size,
+    this.title,
+    this.contents,
+  });
+
+  @override
+  String get type => 'resource';
+  final String uri;
+  final String name;
+  final int? size;
+  final String? title;
+  final dynamic contents;
+
+  factory ResourceBlock.fromJson(Map<String, dynamic> json) {
+    return ResourceBlock(
+      uri: json['uri'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      size: (json['size'] as num?)?.toInt(),
+      title: json['title'] as String?,
+      contents: json['contents'],
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'uri': uri,
+        'name': name,
+        if (size != null) 'size': size,
+        if (title != null) 'title': title,
+        if (contents != null) 'contents': contents,
+      };
+}
+
+/// Resource link content block.
+class ResourceLinkBlock extends ContentBlock {
+  const ResourceLinkBlock({
+    required this.uri,
+    this.mimeType,
+  });
+
+  @override
+  String get type => 'resource_link';
+  final String uri;
+  final String? mimeType;
+
+  factory ResourceLinkBlock.fromJson(Map<String, dynamic> json) {
+    return ResourceLinkBlock(
+      uri: json['uri'] as String? ?? '',
+      mimeType: json['mimeType'] as String? ?? json['mime_type'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'uri': uri,
+        if (mimeType != null) 'mimeType': mimeType,
       };
 }
 

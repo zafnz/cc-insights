@@ -243,10 +243,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for content block parsing and JSON serialization.
 - Definition of Done:
   - ACP content blocks render without crashing; text content still primary.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 17: Toolbar UI for ACP Config Options**
 - Description: Display ACP config selectors on the conversation toolbar.

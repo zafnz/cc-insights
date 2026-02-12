@@ -71,13 +71,46 @@ class TaskResultWidget extends StatelessWidget {
   String _extractResultText(dynamic contentBlocks) {
     if (contentBlocks is List) {
       final texts = <String>[];
+      final fallbacks = <String>[];
       for (final item in contentBlocks) {
-        if (item is Map && item['type'] == 'text') {
+        if (item is! Map) continue;
+        final type = item['type'] as String?;
+        if (type == 'text') {
           final text = item['text'] as String?;
           if (text != null) texts.add(text);
+          continue;
+        }
+        if (type == 'resource_link') {
+          final uri = item['uri'] as String? ?? '';
+          if (uri.isNotEmpty) {
+            fallbacks.add('Resource link: $uri');
+          }
+          continue;
+        }
+        if (type == 'resource') {
+          final label = item['title'] ?? item['name'] ?? item['uri'];
+          if (label is String && label.isNotEmpty) {
+            fallbacks.add('Resource: $label');
+          }
+          continue;
+        }
+        if (type == 'audio') {
+          final mime = item['mimeType'] ?? item['mime_type'];
+          if (mime is String && mime.isNotEmpty) {
+            fallbacks.add('Audio: $mime');
+          } else {
+            fallbacks.add('Audio content');
+          }
+          continue;
+        }
+        if (type == 'image') {
+          fallbacks.add('Image content');
         }
       }
-      return texts.join('\n\n');
+      if (texts.isNotEmpty) {
+        return texts.join('\n\n');
+      }
+      return fallbacks.join('\n');
     }
     if (contentBlocks is String) return contentBlocks;
     return '';
