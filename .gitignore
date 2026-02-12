@@ -51,3 +51,5 @@ agent_sdk_core/.dart_tool/
 agent_sdk_core/pubspec.lock
 codex_dart_sdk/.dart_tool/
 codex_dart_sdk/build/
+acp_dart_sdk/.dart_tool/
+acp_dart_sdk/pubspec.lock
