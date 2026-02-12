@@ -294,6 +294,18 @@ class ChatState extends ChangeNotifier {
   /// sent to the backend.
   sdk.BackendCapabilities _capabilities = const sdk.BackendCapabilities();
 
+  /// ACP session configuration options, if provided.
+  List<Map<String, dynamic>>? _acpConfigOptions;
+
+  /// ACP available commands, if provided.
+  List<Map<String, dynamic>>? _acpAvailableCommands;
+
+  /// ACP current mode ID, if provided.
+  String? _acpCurrentModeId;
+
+  /// ACP available modes, if provided.
+  List<Map<String, dynamic>>? _acpAvailableModes;
+
   /// The last SDK session ID for this chat, used for session resume.
   ///
   /// Set when a session is created successfully.
@@ -552,6 +564,19 @@ class ChatState extends ChangeNotifier {
   /// an empty capabilities object (all false).
   sdk.BackendCapabilities get capabilities => _capabilities;
 
+  /// ACP session config options (if provided by the backend).
+  List<Map<String, dynamic>>? get acpConfigOptions => _acpConfigOptions;
+
+  /// ACP available commands (if provided by the backend).
+  List<Map<String, dynamic>>? get acpAvailableCommands =>
+      _acpAvailableCommands;
+
+  /// ACP current mode ID (if provided by the backend).
+  String? get acpCurrentModeId => _acpCurrentModeId;
+
+  /// ACP available modes (if provided by the backend).
+  List<Map<String, dynamic>>? get acpAvailableModes => _acpAvailableModes;
+
   /// The last SDK session ID for this chat, used for session resume.
   ///
   /// Null if no session has been started, or if the last session ended.
@@ -707,6 +732,45 @@ class ChatState extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  /// Updates ACP config options from the backend.
+  void setAcpConfigOptions(List<Map<String, dynamic>> options) {
+    _acpConfigOptions = _freezeMapList(options);
+    notifyListeners();
+  }
+
+  /// Updates ACP available commands from the backend.
+  void setAcpAvailableCommands(List<Map<String, dynamic>> commands) {
+    _acpAvailableCommands = _freezeMapList(commands);
+    notifyListeners();
+  }
+
+  /// Updates ACP session modes from the backend.
+  void setAcpSessionMode({
+    required String currentModeId,
+    List<Map<String, dynamic>>? availableModes,
+  }) {
+    _acpCurrentModeId = currentModeId;
+    if (availableModes != null) {
+      _acpAvailableModes = _freezeMapList(availableModes);
+    }
+    notifyListeners();
+  }
+
+  void _clearAcpSessionMetadata() {
+    _acpConfigOptions = null;
+    _acpAvailableCommands = null;
+    _acpCurrentModeId = null;
+    _acpAvailableModes = null;
+  }
+
+  List<Map<String, dynamic>> _freezeMapList(
+    List<Map<String, dynamic>> input,
+  ) {
+    return List.unmodifiable(
+      input.map((entry) => Map<String, dynamic>.from(entry)).toList(),
+    );
   }
 
   /// Describes a security configuration change.
@@ -1259,6 +1323,7 @@ class ChatState extends ChangeNotifier {
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();
+    _clearAcpSessionMetadata();
 
     _t('ChatState', 'Session stopped');
     notifyListeners();
@@ -1565,6 +1630,7 @@ class ChatState extends ChangeNotifier {
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();
+    _clearAcpSessionMetadata();
 
     // Note: We intentionally do NOT clear _lastSessionId here.
     // The session ID can still be used to resume a conversation even after
@@ -1638,6 +1704,7 @@ class ChatState extends ChangeNotifier {
     _permissionSubscription = null;
     _pendingPermissions.clear();
     _activeAgents.clear();
+    _clearAcpSessionMetadata();
     notifyListeners();
   }
 

@@ -238,6 +238,9 @@ sealed class InsightsEvent {
       'turn_complete' => TurnCompleteEvent.fromJson(json),
       'context_compaction' => ContextCompactionEvent.fromJson(json),
       'permission_request' => PermissionRequestEvent.fromJson(json),
+      'config_options' => ConfigOptionsEvent.fromJson(json),
+      'available_commands' => AvailableCommandsEvent.fromJson(json),
+      'session_mode' => SessionModeEvent.fromJson(json),
       'stream_delta' => StreamDeltaEvent.fromJson(json),
       'usage_update' => UsageUpdateEvent.fromJson(json),
       'rate_limit_update' => RateLimitUpdateEvent.fromJson(json),
@@ -355,6 +358,130 @@ class SessionInitEvent extends InsightsEvent {
           'slashCommands': slashCommands!.map((c) => c.toJson()).toList(),
         if (availableModels != null)
           'availableModels': availableModels!.map((m) => m.toJson()).toList(),
+      };
+}
+
+/// Session configuration options (ACP-specific).
+class ConfigOptionsEvent extends InsightsEvent {
+  final String sessionId;
+  final List<Map<String, dynamic>> configOptions;
+
+  const ConfigOptionsEvent({
+    required super.id,
+    required super.timestamp,
+    required super.provider,
+    super.raw,
+    super.extensions,
+    required this.sessionId,
+    required this.configOptions,
+  });
+
+  factory ConfigOptionsEvent.fromJson(Map<String, dynamic> json) {
+    final base = InsightsEvent.parseBase(json);
+    return ConfigOptionsEvent(
+      id: base.id,
+      timestamp: base.timestamp,
+      provider: base.provider,
+      raw: base.raw,
+      extensions: base.extensions,
+      sessionId: json['sessionId'] as String,
+      configOptions:
+          (json['configOptions'] as List<dynamic>? ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...baseJson('config_options'),
+        'sessionId': sessionId,
+        'configOptions': configOptions,
+      };
+}
+
+/// Available commands update (ACP-specific).
+class AvailableCommandsEvent extends InsightsEvent {
+  final String sessionId;
+  final List<Map<String, dynamic>> availableCommands;
+
+  const AvailableCommandsEvent({
+    required super.id,
+    required super.timestamp,
+    required super.provider,
+    super.raw,
+    super.extensions,
+    required this.sessionId,
+    required this.availableCommands,
+  });
+
+  factory AvailableCommandsEvent.fromJson(Map<String, dynamic> json) {
+    final base = InsightsEvent.parseBase(json);
+    return AvailableCommandsEvent(
+      id: base.id,
+      timestamp: base.timestamp,
+      provider: base.provider,
+      raw: base.raw,
+      extensions: base.extensions,
+      sessionId: json['sessionId'] as String,
+      availableCommands:
+          (json['availableCommands'] as List<dynamic>? ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...baseJson('available_commands'),
+        'sessionId': sessionId,
+        'availableCommands': availableCommands,
+      };
+}
+
+/// Session mode update (ACP-specific).
+class SessionModeEvent extends InsightsEvent {
+  final String sessionId;
+  final String currentModeId;
+  final List<Map<String, dynamic>> availableModes;
+
+  const SessionModeEvent({
+    required super.id,
+    required super.timestamp,
+    required super.provider,
+    super.raw,
+    super.extensions,
+    required this.sessionId,
+    required this.currentModeId,
+    required this.availableModes,
+  });
+
+  factory SessionModeEvent.fromJson(Map<String, dynamic> json) {
+    final base = InsightsEvent.parseBase(json);
+    return SessionModeEvent(
+      id: base.id,
+      timestamp: base.timestamp,
+      provider: base.provider,
+      raw: base.raw,
+      extensions: base.extensions,
+      sessionId: json['sessionId'] as String,
+      currentModeId: json['currentModeId'] as String,
+      availableModes:
+          (json['availableModes'] as List<dynamic>? ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...baseJson('session_mode'),
+        'sessionId': sessionId,
+        'currentModeId': currentModeId,
+        'availableModes': availableModes,
       };
 }
 

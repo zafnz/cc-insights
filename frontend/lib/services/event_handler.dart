@@ -13,6 +13,9 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
         UsageUpdateEvent,
         RateLimitUpdateEvent,
         SessionInitEvent,
+        ConfigOptionsEvent,
+        AvailableCommandsEvent,
+        SessionModeEvent,
         SessionStatusEvent,
         ContextCompactionEvent,
         SubagentSpawnEvent,
@@ -157,6 +160,12 @@ class EventHandler {
         _handleTurnComplete(chat, e);
       case final SessionInitEvent e:
         _handleSessionInit(chat, e);
+      case final ConfigOptionsEvent e:
+        _handleConfigOptions(chat, e);
+      case final AvailableCommandsEvent e:
+        _handleAvailableCommands(chat, e);
+      case final SessionModeEvent e:
+        _handleSessionMode(chat, e);
       case final SessionStatusEvent e:
         _handleSessionStatus(chat, e);
       case final ContextCompactionEvent e:
@@ -389,6 +398,21 @@ class EventHandler {
     if (effort != null && effort != chat.reasoningEffort) {
       chat.syncReasoningEffortFromServer(effort);
     }
+  }
+
+  void _handleConfigOptions(ChatState chat, ConfigOptionsEvent event) {
+    chat.setAcpConfigOptions(event.configOptions);
+  }
+
+  void _handleAvailableCommands(ChatState chat, AvailableCommandsEvent event) {
+    chat.setAcpAvailableCommands(event.availableCommands);
+  }
+
+  void _handleSessionMode(ChatState chat, SessionModeEvent event) {
+    chat.setAcpSessionMode(
+      currentModeId: event.currentModeId,
+      availableModes: event.availableModes,
+    );
   }
 
   void _handleSessionStatus(ChatState chat, SessionStatusEvent event) {

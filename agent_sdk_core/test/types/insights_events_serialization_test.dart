@@ -98,6 +98,82 @@ void main() {
       });
     });
 
+    group('ConfigOptionsEvent', () {
+      test('round-trip serialization', () {
+        final event = ConfigOptionsEvent(
+          id: 'evt-config',
+          timestamp: _ts,
+          provider: BackendProvider.acp,
+          sessionId: 'session-1',
+          configOptions: [
+            {
+              'id': 'model',
+              'name': 'Model',
+              'values': ['alpha', 'beta'],
+            },
+          ],
+        );
+
+        final json = event.toJson();
+        expect(json['event'], 'config_options');
+        expect(json['sessionId'], 'session-1');
+
+        final restored =
+            InsightsEvent.fromJson(json) as ConfigOptionsEvent;
+        expect(restored.sessionId, 'session-1');
+        expect(restored.configOptions, hasLength(1));
+        expect(restored.configOptions.first['id'], 'model');
+      });
+    });
+
+    group('AvailableCommandsEvent', () {
+      test('round-trip serialization', () {
+        final event = AvailableCommandsEvent(
+          id: 'evt-cmds',
+          timestamp: _ts,
+          provider: BackendProvider.acp,
+          sessionId: 'session-2',
+          availableCommands: [
+            {'name': 'help', 'description': 'Show help'},
+          ],
+        );
+
+        final json = event.toJson();
+        expect(json['event'], 'available_commands');
+        expect(json['sessionId'], 'session-2');
+
+        final restored =
+            InsightsEvent.fromJson(json) as AvailableCommandsEvent;
+        expect(restored.availableCommands, hasLength(1));
+        expect(restored.availableCommands.first['name'], 'help');
+      });
+    });
+
+    group('SessionModeEvent', () {
+      test('round-trip serialization', () {
+        final event = SessionModeEvent(
+          id: 'evt-mode',
+          timestamp: _ts,
+          provider: BackendProvider.acp,
+          sessionId: 'session-3',
+          currentModeId: 'edit',
+          availableModes: [
+            {'id': 'edit', 'name': 'Edit'},
+            {'id': 'plan', 'name': 'Plan'},
+          ],
+        );
+
+        final json = event.toJson();
+        expect(json['event'], 'session_mode');
+        expect(json['currentModeId'], 'edit');
+
+        final restored =
+            InsightsEvent.fromJson(json) as SessionModeEvent;
+        expect(restored.currentModeId, 'edit');
+        expect(restored.availableModes, hasLength(2));
+      });
+    });
+
     group('SessionStatusEvent', () {
       test('with all fields', () {
         final event = SessionStatusEvent(

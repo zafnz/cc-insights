@@ -48,10 +48,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - None initially (smoke build later in Task 6/7).
 - Definition of Done:
   - Package compiles in isolation and is importable by `frontend`.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 4: Implement ACP JSON-RPC Client (stdio)**
 - Description: Implement line-delimited JSON-RPC client for ACP transport.
@@ -63,10 +63,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for request/response pairing, notification parsing, and error handling.
 - Definition of Done:
   - JSON-RPC client passes tests and can parse/send ACP messages in isolation.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 5: Implement `AcpProcess`**
 - Description: Spawn ACP agent subprocess and run `initialize`.
@@ -79,10 +79,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit test with a fake process stream to validate `initialize` request format.
 - Definition of Done:
   - `AcpProcess.start()` returns a ready process and stores negotiated capabilities.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 6: Implement `AcpBackend`**
 - Description: ACP backend implementing `AgentBackend`.
@@ -94,10 +94,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit test for session creation path calling `session/new`.
 - Definition of Done:
   - Backend can create a session and emit a `SessionInitEvent`.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 7: Implement `AcpSession` Core**
 - Description: Session lifecycle methods and messaging.
@@ -108,10 +108,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for request payload shapes for `session/prompt`, `session/cancel`.
 - Definition of Done:
   - ACP session executes a prompt and accepts cancel.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 8: Add New InsightsEvent Types**
 - Description: Add events for ACP config options, modes, and commands.
@@ -123,10 +123,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for JSON round-trip in `agent_sdk_core`.
 - Definition of Done:
   - New event types are usable in frontend with no runtime errors.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 9: ACP `session/update` Mapping (Text + Plan)**
 - Description: Map ACP message chunks and plan updates to InsightsEvents.
@@ -139,10 +139,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for each session update variant mapping.
 - Definition of Done:
   - All ACP text/plan updates appear in the conversation view and streaming respects config.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 10: ACP Tool Call Mapping**
 - Description: Map `tool_call` and `tool_call_update` updates to tool events.
