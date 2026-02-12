@@ -42,6 +42,7 @@ class AcpSession implements AgentSession {
   final Set<String> _emittedToolCalls = {};
   final Map<String, _TerminalSession> _terminals = {};
   int _terminalCounter = 0;
+  List<Map<String, dynamic>>? _configOptions;
 
   @override
   String get sessionId => _sessionId;
@@ -105,26 +106,37 @@ class AcpSession implements AgentSession {
   }
 
   @override
-  Future<void> setModel(String? model) {
-    if (!_active) return Future.value();
-    SdkLogger.instance.warning(
-      'ACP setModel is not supported yet.',
-      sessionId: _sessionId,
-      data: {'model': model},
-    );
-    return Future.value();
+  Future<void> setModel(String? model) async {
+    if (!_active) return;
+    if (model == null || model.isEmpty) return;
+    final configId = _resolveConfigIdForCategory('model') ?? 'model';
+    try {
+      final response = await _process.sendRequest('session/set_config_option', {
+        'sessionId': _sessionId,
+        'configId': configId,
+        'value': model,
+      });
+      _maybeEmitConfigOptions(response, raw: response);
+    } catch (e) {
+      SdkLogger.instance.warning(
+        'ACP setModel failed.',
+        sessionId: _sessionId,
+        data: {'model': model, 'error': e.toString()},
+      );
+    }
   }
 
   @override
-  Future<void> setPermissionMode(String? mode) {
+  Future<void> setPermissionMode(String? mode) async {
     _ensureActive();
     if (mode == null || mode.isEmpty) {
-      return Future.value();
+      return;
     }
-    return _process.sendRequest('session/set_mode', {
+    final response = await _process.sendRequest('session/set_mode', {
       'sessionId': _sessionId,
       'modeId': mode,
     });
+    _maybeEmitSessionMode(response, raw: response);
   }
 
   @override
@@ -195,6 +207,10 @@ class AcpSession implements AgentSession {
         final toolCall =
             update['toolCall'] as Map<String, dynamic>? ?? update;
         _handleToolCall(toolCall, raw: update);
+      case 'config_option_update':
+        _maybeEmitConfigOptions(update, raw: update);
+      case 'current_mode_update':
+        _maybeEmitSessionMode(update, raw: update);
     }
   }
 
@@ -913,6 +929,8 @@ class AcpSession implements AgentSession {
     Future<void>.delayed(Duration.zero, () {
       if (!_active) return;
       _eventsController.add(event);
+      _maybeEmitConfigOptions(sessionInfo, raw: sessionInfo);
+      _maybeEmitSessionMode(sessionInfo, raw: sessionInfo);
     });
   }
 
@@ -939,6 +957,113 @@ class AcpSession implements AgentSession {
     if (!_active) {
       throw StateError('Session has been disposed');
     }
+  }
+
+  void _maybeEmitConfigOptions(
+    Map<String, dynamic> payload, {
+    Map<String, dynamic>? raw,
+  }) {
+    final options = _readConfigOptions(payload);
+    if (options.isEmpty) return;
+    _configOptions = options;
+    _eventsController.add(ConfigOptionsEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      configOptions: options,
+    ));
+  }
+
+  List<Map<String, dynamic>> _readConfigOptions(
+    Map<String, dynamic> payload,
+  ) {
+    final rawOptions = payload['configOptions'] ??
+        payload['config_options'] ??
+        payload['configOption'] ??
+        payload['config_option'] ??
+        payload['options'];
+    if (rawOptions is List) {
+      return rawOptions
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (rawOptions is Map) {
+      return [Map<String, dynamic>.from(rawOptions)];
+    }
+    return const [];
+  }
+
+  void _maybeEmitSessionMode(
+    Map<String, dynamic> payload, {
+    Map<String, dynamic>? raw,
+  }) {
+    final currentModeId = _readCurrentModeId(payload);
+    if (currentModeId == null || currentModeId.isEmpty) return;
+    final modes = _readAvailableModes(payload);
+    _eventsController.add(SessionModeEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      currentModeId: currentModeId,
+      availableModes: modes,
+    ));
+  }
+
+  String? _readCurrentModeId(Map<String, dynamic> payload) {
+    final current = payload['currentModeId'] ??
+        payload['current_mode_id'] ??
+        payload['currentMode'] ??
+        payload['modeId'];
+    return current is String ? current : null;
+  }
+
+  List<Map<String, dynamic>> _readAvailableModes(
+    Map<String, dynamic> payload,
+  ) {
+    final rawModes = payload['availableModes'] ??
+        payload['modes'] ??
+        payload['modeOptions'] ??
+        payload['available_modes'];
+    if (rawModes is List) {
+      return rawModes
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (rawModes is Map) {
+      return [Map<String, dynamic>.from(rawModes)];
+    }
+    return const [];
+  }
+
+  String? _resolveConfigIdForCategory(String category) {
+    final options = _configOptions;
+    if (options == null || options.isEmpty) return null;
+    String? fallback;
+    for (final option in options) {
+      final id = _readConfigOptionId(option);
+      if (id == null) continue;
+      if (id == category) return id;
+      final optionCategory = option['category'] ?? option['group'];
+      if (optionCategory is String && optionCategory == category) {
+        return id;
+      }
+      final name = option['name'];
+      if (fallback == null && name is String && name.toLowerCase() == category) {
+        fallback = id;
+      }
+    }
+    return fallback;
+  }
+
+  String? _readConfigOptionId(Map<String, dynamic> option) {
+    final id = option['configId'] ?? option['id'];
+    return id is String && id.isNotEmpty ? id : null;
   }
 }
 

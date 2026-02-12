@@ -215,10 +215,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for config update response parsing and event emission.
 - Definition of Done:
   - Config options and modes appear in the UI via new events.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 15: Available Commands Handling**
 - Description: Emit `AvailableCommandsEvent` and store for UI.
