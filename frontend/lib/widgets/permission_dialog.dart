@@ -234,6 +234,7 @@ class _PermissionDialogState extends State<PermissionDialog> {
     // Determine if this is a Codex backend
     // When provider is explicitly set, use it. Otherwise default to Claude.
     final isCodex = widget.provider == BackendProvider.codex;
+    final isAcp = widget.provider == BackendProvider.acp;
 
     // Parse suggestions (Claude only)
     final suggestions = permission.parsedSuggestions;
@@ -292,6 +293,8 @@ class _PermissionDialogState extends State<PermissionDialog> {
                 ),
                 child: isCodex
                     ? _buildCodexFooter(context, colorScheme)
+                    : isAcp
+                        ? _buildAcpFooter(context, colorScheme)
                     : _buildClaudeFooter(
                         context,
                         colorScheme,
@@ -306,6 +309,88 @@ class _PermissionDialogState extends State<PermissionDialog> {
         );
       },
     );
+  }
+
+  Widget _buildAcpFooter(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
+    final options = _readAcpOptions();
+    if (options.isEmpty) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          TextButton(
+            onPressed: () => widget.onDeny('Cancelled'),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => widget.onAllow(),
+            child: const Text('Allow'),
+          ),
+        ],
+      );
+    }
+
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final option in options) _buildAcpOptionButton(option, colorScheme),
+        TextButton(
+          onPressed: () => widget.onDeny('Cancelled'),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAcpOptionButton(
+    _AcpPermissionOption option,
+    ColorScheme colorScheme,
+  ) {
+    final isReject = option.kind != null &&
+        (option.kind!.startsWith('reject') ||
+            option.kind!.startsWith('deny'));
+    final onPressed = () => widget.onAllow(
+          updatedInput: {'optionId': option.id},
+        );
+    if (isReject) {
+      return OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colorScheme.error,
+          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.6)),
+        ),
+        child: Text(option.label),
+      );
+    }
+    return FilledButton(
+      onPressed: onPressed,
+      child: Text(option.label),
+    );
+  }
+
+  List<_AcpPermissionOption> _readAcpOptions() {
+    final raw = widget.request.rawJson?['options'];
+    if (raw is! List) return const [];
+    final options = <_AcpPermissionOption>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final map = Map<String, dynamic>.from(entry);
+      final id = map['optionId'] ?? map['id'];
+      if (id is! String || id.isEmpty) continue;
+      final label =
+          map['name'] ?? map['label'] ?? map['title'] ?? id;
+      options.add(_AcpPermissionOption(
+        id: id,
+        label: label.toString(),
+        kind: map['kind'] as String?,
+      ));
+    }
+    return options;
   }
 
   /// Builds the footer for Claude backend with suggestions and buttons.
@@ -1478,4 +1563,16 @@ class _PlanButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AcpPermissionOption {
+  const _AcpPermissionOption({
+    required this.id,
+    required this.label,
+    this.kind,
+  });
+
+  final String id;
+  final String label;
+  final String? kind;
 }

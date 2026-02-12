@@ -272,10 +272,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Widget test for ACP permission dialog with options.
 - Definition of Done:
   - ACP permission prompts render with correct option labels and outcomes.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 19: Update Mapping Documentation**
 - Description: Update `docs/insights-protocol/05-gemini-acp-mapping.md` to ACP v1 field names and current mapping strategy.

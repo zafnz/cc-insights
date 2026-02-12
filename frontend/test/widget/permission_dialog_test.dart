@@ -18,6 +18,7 @@ void main() {
       String toolName = 'Bash',
       Map<String, dynamic> toolInput = const {'command': 'ls -la'},
       String? decisionReason,
+      Map<String, dynamic>? rawJson,
     }) {
       final completer = Completer<sdk.PermissionResponse>();
       return sdk.PermissionRequest(
@@ -26,6 +27,7 @@ void main() {
         toolName: toolName,
         toolInput: toolInput,
         decisionReason: decisionReason,
+        rawJson: rawJson,
         completer: completer,
       );
     }
@@ -995,6 +997,46 @@ void main() {
 
         // Verify SelectableText is used for the command
         expect(find.byType(SelectableText), findsWidgets);
+      });
+    });
+
+    group('ACP options', () {
+      testWidgets('renders ACP option buttons and selects option', (tester) async {
+        Map<String, dynamic>? selectedInput;
+        final request = createFakeRequest(
+          toolName: 'Bash',
+          rawJson: {
+            'options': [
+              {
+                'optionId': 'allow_once',
+                'name': 'Allow Once',
+                'kind': 'allow_once',
+              },
+              {
+                'optionId': 'reject_once',
+                'name': 'Reject Once',
+                'kind': 'reject_once',
+              },
+            ],
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(
+          request: request,
+          provider: BackendProvider.acp,
+          onAllow: ({updatedInput, updatedPermissions}) {
+            selectedInput = updatedInput;
+          },
+        ));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Allow Once'), findsOneWidget);
+        expect(find.text('Reject Once'), findsOneWidget);
+
+        await tester.tap(find.text('Allow Once'));
+        await safePumpAndSettle(tester);
+
+        expect(selectedInput?['optionId'], 'allow_once');
       });
     });
   });
