@@ -381,6 +381,14 @@ class _CliSessionAdapter implements AgentSession {
   }
 
   @override
+  Future<void> setConfigOption(String configId, dynamic value) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    await _cliSession.setConfigOption(configId, value);
+  }
+
+  @override
   Future<void> setReasoningEffort(String? effort) async {
     throw UnsupportedError(
       'Claude CLI does not support reasoning effort. '

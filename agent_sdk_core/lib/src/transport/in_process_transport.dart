@@ -121,6 +121,8 @@ class InProcessTransport implements EventTransport {
         await _session.setModel(model);
       case SetPermissionModeCommand(:final mode):
         await _session.setPermissionMode(mode);
+      case SetConfigOptionCommand(:final configId, :final value):
+        await _session.setConfigOption(configId, value);
       case SetReasoningEffortCommand(:final effort):
         await _session.setReasoningEffort(effort);
       case CreateSessionCommand():

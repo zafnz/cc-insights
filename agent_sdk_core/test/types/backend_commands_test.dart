@@ -149,6 +149,25 @@ void main() {
       expect(restored.mode, 'acceptEdits');
     });
 
+    test('SetConfigOptionCommand', () {
+      final cmd = SetConfigOptionCommand(
+        sessionId: 'session-abc',
+        configId: 'model',
+        value: 'acp-1',
+      );
+
+      final json = cmd.toJson();
+      expect(json['command'], 'set_config_option');
+      expect(json['sessionId'], 'session-abc');
+      expect(json['configId'], 'model');
+      expect(json['value'], 'acp-1');
+
+      final restored = BackendCommand.fromJson(json) as SetConfigOptionCommand;
+      expect(restored.sessionId, 'session-abc');
+      expect(restored.configId, 'model');
+      expect(restored.value, 'acp-1');
+    });
+
     test('SetReasoningEffortCommand', () {
       final cmd = SetReasoningEffortCommand(
         sessionId: 'session-abc',

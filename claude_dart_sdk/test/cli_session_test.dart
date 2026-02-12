@@ -1511,6 +1511,14 @@ class CliSessionForTestingImpl implements CliSession {
   }
 
   @override
+  Future<void> setConfigOption(String configId, dynamic value) async {
+    if (_disposed) {
+      throw StateError('Session has been disposed');
+    }
+    // No-op for testing
+  }
+
+  @override
   Future<void> setReasoningEffort(String? effort) async {
     // No-op for testing
   }

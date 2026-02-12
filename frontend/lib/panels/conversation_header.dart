@@ -92,6 +92,9 @@ class ConversationHeader extends StatelessWidget {
     final backendService = context.watch<BackendService>();
 
     final isSubagent = !conversation.isPrimary;
+    final isAcp = chat.model.backend == sdk.BackendType.acp;
+    final acpConfigWidgets =
+        isAcp ? _buildAcpConfigWidgets(chat) : const <Widget>[];
 
     // Don't show the toolbar for subagent conversations (title is in panel header)
     if (isSubagent) {
@@ -164,34 +167,37 @@ class ConversationHeader extends StatelessWidget {
                     );
                   },
                 ),
-                Builder(
-                  builder: (context) {
-                    final models = ChatModelCatalog.forBackend(
-                      chat.model.backend,
-                    );
-                    final selected = models.firstWhere(
-                      (m) => m.id == chat.model.id,
-                      orElse: () => chat.model,
-                    );
-                    final isModelLoading = caps.supportsModelListing &&
-                        backendService.isModelListLoadingFor(
-                          chat.model.backend,
-                        );
-                    return CompactDropdown(
-                      value: selected.label,
-                      items: models.map((m) => m.label).toList(),
-                      isLoading: isModelLoading,
-                      tooltip: 'Model',
-                      onChanged: (value) {
-                        final model = models.firstWhere(
-                          (m) => m.label == value,
-                          orElse: () => selected,
-                        );
-                        chat.setModel(model);
-                      },
-                    );
-                  },
-                ),
+                if (!isAcp)
+                  Builder(
+                    builder: (context) {
+                      final models = ChatModelCatalog.forBackend(
+                        chat.model.backend,
+                      );
+                      final selected = models.firstWhere(
+                        (m) => m.id == chat.model.id,
+                        orElse: () => chat.model,
+                      );
+                      final isModelLoading = caps.supportsModelListing &&
+                          backendService.isModelListLoadingFor(
+                            chat.model.backend,
+                          );
+                      return CompactDropdown(
+                        value: selected.label,
+                        items: models.map((m) => m.label).toList(),
+                        isLoading: isModelLoading,
+                        tooltip: 'Model',
+                        onChanged: (value) {
+                          final model = models.firstWhere(
+                            (m) => m.label == value,
+                            orElse: () => selected,
+                          );
+                          chat.setModel(model);
+                        },
+                      );
+                    },
+                  )
+                else
+                  ...acpConfigWidgets,
                 // Backend-specific security controls
                 if (chat.model.backend == sdk.BackendType.codex) ...[
                   Builder(
@@ -211,7 +217,7 @@ class ConversationHeader extends StatelessWidget {
                       );
                     },
                   ),
-                ] else ...[
+                ] else if (!isAcp) ...[
                   // Claude: existing single dropdown (unchanged)
                   CompactDropdown(
                     value: chat.permissionMode.label,
@@ -296,6 +302,275 @@ class ConversationHeader extends StatelessWidget {
   void _showBackendSwitchError(BuildContext context, String message) {
     showErrorSnackBar(context, message);
   }
+}
+
+// -----------------------------------------------------------------------------
+// ACP config option helpers
+// -----------------------------------------------------------------------------
+
+List<Widget> _buildAcpConfigWidgets(ChatState chat) {
+  final options = _parseAcpConfigOptions(chat.acpConfigOptions);
+  if (options.isEmpty &&
+      (chat.acpAvailableModes == null ||
+          (chat.acpAvailableModes?.length ?? 0) <= 1)) {
+    return const [];
+  }
+
+  final widgets = <Widget>[];
+  final modelOptions =
+      options.where((o) => o.category == 'model').toList();
+  final modeOptions = options.where((o) => o.category == 'mode').toList();
+  final otherOptions =
+      options.where((o) => o.category != 'model' && o.category != 'mode')
+          .toList();
+
+  for (final option in modelOptions) {
+    final widget = _buildAcpOptionDropdown(option, chat);
+    if (widget != null) widgets.add(widget);
+  }
+
+  for (final option in modeOptions) {
+    final widget = _buildAcpOptionDropdown(option, chat);
+    if (widget != null) widgets.add(widget);
+  }
+
+  if (modeOptions.isEmpty) {
+    final fallback = _buildAcpModeFallback(chat);
+    if (fallback != null) widgets.add(fallback);
+  }
+
+  final overflow = _buildAcpOverflowDropdown(otherOptions, chat);
+  if (overflow != null) widgets.add(overflow);
+
+  return widgets;
+}
+
+Widget? _buildAcpOptionDropdown(_AcpConfigOption option, ChatState chat) {
+  if (option.values.length <= 1) return null;
+  final items = option.values.map((v) => v.label).toList();
+  final selectedLabel = option.selectedLabel();
+  return CompactDropdown(
+    value: selectedLabel,
+    items: items,
+    tooltip: option.name,
+    onChanged: (valueLabel) {
+      final selectedValue = option.valueForLabel(valueLabel) ??
+          option.values.first.value;
+      chat.setAcpConfigOption(
+        configId: option.id,
+        value: selectedValue,
+      );
+    },
+  );
+}
+
+Widget? _buildAcpModeFallback(ChatState chat) {
+  final modes = _parseAcpModes(chat.acpAvailableModes);
+  if (modes.length <= 1) return null;
+  final currentMode = chat.acpCurrentModeId;
+  final selectedLabel = _resolveSelectedLabel(modes, currentMode);
+  return CompactDropdown(
+    value: selectedLabel,
+    items: modes.map((m) => m.label).toList(),
+    tooltip: 'Mode',
+    onChanged: (valueLabel) {
+      final selected = modes.firstWhere(
+        (mode) => mode.label == valueLabel,
+        orElse: () => modes.first,
+      );
+      chat.setAcpMode(selected.value.toString());
+    },
+  );
+}
+
+Widget? _buildAcpOverflowDropdown(
+  List<_AcpConfigOption> options,
+  ChatState chat,
+) {
+  final items = <String>[];
+  final selectionMap = <String, _AcpConfigSelection>{};
+
+  for (final option in options) {
+    if (option.values.length <= 1) continue;
+    for (final value in option.values) {
+      var label = '${option.name}: ${value.label}';
+      if (selectionMap.containsKey(label)) {
+        label = '$label (${option.id})';
+      }
+      selectionMap[label] =
+          _AcpConfigSelection(configId: option.id, value: value.value);
+      items.add(label);
+    }
+  }
+
+  if (items.isEmpty) return null;
+
+  return CompactDropdown(
+    value: 'More',
+    items: items,
+    tooltip: 'More',
+    onChanged: (label) {
+      final selection = selectionMap[label];
+      if (selection == null) return;
+      chat.setAcpConfigOption(
+        configId: selection.configId,
+        value: selection.value,
+      );
+    },
+  );
+}
+
+List<_AcpConfigOption> _parseAcpConfigOptions(
+  List<Map<String, dynamic>>? rawOptions,
+) {
+  if (rawOptions == null || rawOptions.isEmpty) return const [];
+  final parsed = <_AcpConfigOption>[];
+
+  for (final option in rawOptions) {
+    final id = _readString(option, const ['id', 'configId']);
+    if (id == null || id.isEmpty) continue;
+    final name =
+        _readString(option, const ['name', 'title', 'label']) ?? id;
+    final category =
+        (_readString(option, const ['category', 'group']) ?? 'other')
+            .toLowerCase();
+    final values = _parseAcpValues(
+      option['values'] ?? option['options'] ?? option['choices'],
+    );
+    if (values.isEmpty) continue;
+    final currentValue = option['value'] ??
+        option['currentValue'] ??
+        option['selectedValue'] ??
+        option['defaultValue'];
+
+    parsed.add(_AcpConfigOption(
+      id: id,
+      name: name,
+      category: category,
+      values: values,
+      currentValue: currentValue,
+    ));
+  }
+
+  return parsed;
+}
+
+List<_AcpConfigValue> _parseAcpValues(Object? rawValues) {
+  if (rawValues is List) {
+    final values = <_AcpConfigValue>[];
+    for (final entry in rawValues) {
+      if (entry is Map) {
+        final map = Map<String, dynamic>.from(entry);
+        final value = map['value'] ?? map['id'] ?? map['name'];
+        final label = map['label'] ?? map['name'] ?? map['title'] ?? value;
+        if (label != null) {
+          values.add(_AcpConfigValue(
+            value: value ?? label.toString(),
+            label: label.toString(),
+          ));
+        }
+      } else if (entry != null) {
+        values.add(_AcpConfigValue(
+          value: entry,
+          label: entry.toString(),
+        ));
+      }
+    }
+    return values;
+  }
+  return const [];
+}
+
+List<_AcpConfigValue> _parseAcpModes(
+  List<Map<String, dynamic>>? rawModes,
+) {
+  if (rawModes == null || rawModes.isEmpty) return const [];
+  final values = <_AcpConfigValue>[];
+  for (final mode in rawModes) {
+    final id = _readString(mode, const ['id', 'modeId', 'value']) ?? '';
+    final label = _readString(mode, const ['name', 'label', 'title']) ?? id;
+    if (id.isEmpty || label.isEmpty) continue;
+    values.add(_AcpConfigValue(value: id, label: label));
+  }
+  return values;
+}
+
+String _resolveSelectedLabel(
+  List<_AcpConfigValue> values,
+  dynamic currentValue,
+) {
+  if (values.isEmpty) return '';
+  if (currentValue == null) return values.first.label;
+  final currentKey = _valueKey(currentValue);
+  for (final value in values) {
+    if (_valueKey(value.value) == currentKey) {
+      return value.label;
+    }
+  }
+  return values.first.label;
+}
+
+String? _readString(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
+}
+
+String _valueKey(dynamic value) {
+  if (value is Map) {
+    final id = value['id'] ?? value['value'] ?? value['name'];
+    if (id != null) return id.toString();
+  }
+  return value?.toString() ?? '';
+}
+
+class _AcpConfigOption {
+  const _AcpConfigOption({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.values,
+    required this.currentValue,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final List<_AcpConfigValue> values;
+  final dynamic currentValue;
+
+  String selectedLabel() => _resolveSelectedLabel(values, currentValue);
+
+  dynamic valueForLabel(String label) {
+    for (final value in values) {
+      if (value.label == label) return value.value;
+    }
+    return null;
+  }
+}
+
+class _AcpConfigValue {
+  const _AcpConfigValue({
+    required this.value,
+    required this.label,
+  });
+
+  final dynamic value;
+  final String label;
+}
+
+class _AcpConfigSelection {
+  const _AcpConfigSelection({
+    required this.configId,
+    required this.value,
+  });
+
+  final String configId;
+  final dynamic value;
 }
 
 // -----------------------------------------------------------------------------

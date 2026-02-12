@@ -182,6 +182,12 @@ abstract class AgentSession {
   /// Check the specific implementation for availability.
   Future<void> setPermissionMode(String? mode);
 
+  /// Set a backend-specific configuration option for this session.
+  ///
+  /// ACP backends use this for session config options (e.g. model, mode, etc).
+  /// Other backends may ignore it.
+  Future<void> setConfigOption(String configId, dynamic value);
+
   /// Set the reasoning effort level for this session.
   ///
   /// Only applicable to Codex backends with reasoning-capable models.

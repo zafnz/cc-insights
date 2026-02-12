@@ -404,6 +404,9 @@ class MockAgentSession implements AgentSession {
   Future<void> setPermissionMode(String? mode) async {}
 
   @override
+  Future<void> setConfigOption(String configId, dynamic value) async {}
+
+  @override
   Future<void> setReasoningEffort(String? effort) async {}
 
   @override

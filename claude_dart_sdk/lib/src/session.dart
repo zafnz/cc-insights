@@ -110,6 +110,10 @@ class TestSession implements AgentSession {
   @override
   Future<void> setPermissionMode(String? mode) async {}
 
+  /// Set a backend-specific config option (no-op for test sessions).
+  @override
+  Future<void> setConfigOption(String configId, dynamic value) async {}
+
   /// Set the reasoning effort level (no-op for test sessions).
   @override
   Future<void> setReasoningEffort(String? effort) async {}

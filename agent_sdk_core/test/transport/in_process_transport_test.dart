@@ -36,6 +36,7 @@ class FakeAgentSession implements AgentSession {
   final List<String> sendCalls = [];
   final List<String?> setModelCalls = [];
   final List<String?> setPermissionModeCalls = [];
+  final List<Map<String, dynamic>> setConfigOptionCalls = [];
   final List<String?> setReasoningEffortCalls = [];
   int interruptCount = 0;
   int killCount = 0;
@@ -66,6 +67,11 @@ class FakeAgentSession implements AgentSession {
   @override
   Future<void> setPermissionMode(String? mode) async {
     setPermissionModeCalls.add(mode);
+  }
+
+  @override
+  Future<void> setConfigOption(String configId, dynamic value) async {
+    setConfigOptionCalls.add({'configId': configId, 'value': value});
   }
 
   @override
@@ -264,6 +270,17 @@ void main() {
           mode: 'acceptEdits',
         ));
         expect(session.setPermissionModeCalls, ['acceptEdits']);
+      });
+
+      test('SetConfigOptionCommand calls session.setConfigOption()', () async {
+        await transport.send(SetConfigOptionCommand(
+          sessionId: 'fake-session-id',
+          configId: 'model',
+          value: 'acp-1',
+        ));
+        expect(session.setConfigOptionCalls, [
+          {'configId': 'model', 'value': 'acp-1'},
+        ]);
       });
 
       test('SetReasoningEffortCommand calls session.setReasoningEffort()',

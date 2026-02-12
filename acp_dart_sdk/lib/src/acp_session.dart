@@ -110,20 +110,7 @@ class AcpSession implements AgentSession {
     if (!_active) return;
     if (model == null || model.isEmpty) return;
     final configId = _resolveConfigIdForCategory('model') ?? 'model';
-    try {
-      final response = await _process.sendRequest('session/set_config_option', {
-        'sessionId': _sessionId,
-        'configId': configId,
-        'value': model,
-      });
-      _maybeEmitConfigOptions(response, raw: response);
-    } catch (e) {
-      SdkLogger.instance.warning(
-        'ACP setModel failed.',
-        sessionId: _sessionId,
-        data: {'model': model, 'error': e.toString()},
-      );
-    }
+    await setConfigOption(configId, model);
   }
 
   @override
@@ -137,6 +124,26 @@ class AcpSession implements AgentSession {
       'modeId': mode,
     });
     _maybeEmitSessionMode(response, raw: response);
+  }
+
+  @override
+  Future<void> setConfigOption(String configId, dynamic value) async {
+    _ensureActive();
+    if (configId.isEmpty) return;
+    try {
+      final response = await _process.sendRequest('session/set_config_option', {
+        'sessionId': _sessionId,
+        'configId': configId,
+        'value': value,
+      });
+      _maybeEmitConfigOptions(response, raw: response);
+    } catch (e) {
+      SdkLogger.instance.warning(
+        'ACP setConfigOption failed.',
+        sessionId: _sessionId,
+        data: {'configId': configId, 'value': value, 'error': e.toString()},
+      );
+    }
   }
 
   @override

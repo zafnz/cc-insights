@@ -143,6 +143,45 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {}
 }
 
+class FakeTransport implements sdk.EventTransport {
+  FakeTransport({this.sessionId = 'test-session'});
+
+  final List<sdk.BackendCommand> sentCommands = [];
+
+  @override
+  final String? sessionId;
+
+  @override
+  String? get resolvedSessionId => sessionId;
+
+  @override
+  sdk.BackendCapabilities? get capabilities => null;
+
+  @override
+  Stream<sdk.InsightsEvent> get events => const Stream.empty();
+
+  @override
+  Stream<sdk.TransportStatus> get status => const Stream.empty();
+
+  @override
+  Stream<sdk.PermissionRequest> get permissionRequests =>
+      const Stream.empty();
+
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
+
+  @override
+  Future<void> send(sdk.BackendCommand command) async {
+    sentCommands.add(command);
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
 // =============================================================================
 // TESTS
 // =============================================================================
@@ -265,6 +304,115 @@ void main() {
 
       // Verify permission mode changed
       check(chat.permissionMode).equals(chat_model.PermissionMode.acceptEdits);
+    });
+
+    testWidgets('ACP config options show model and mode selectors',
+        (tester) async {
+      final chat = resources.track(
+        chat_model.ChatState.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
+      );
+      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null));
+      chat.setAcpConfigOptions([
+        {
+          'id': 'model',
+          'name': 'Model',
+          'category': 'model',
+          'values': [
+            {'value': 'model-a', 'label': 'Model A'},
+            {'value': 'model-b', 'label': 'Model B'},
+          ],
+          'value': 'model-a',
+        },
+        {
+          'id': 'mode',
+          'name': 'Mode',
+          'category': 'mode',
+          'values': [
+            {'value': 'fast', 'label': 'Fast'},
+            {'value': 'accurate', 'label': 'Accurate'},
+          ],
+          'value': 'fast',
+        },
+      ]);
+
+      await tester.pumpWidget(buildTestWidget(chat));
+      await safePumpAndSettle(tester);
+
+      final modelDropdown = find.byWidgetPredicate(
+        (widget) => widget is CompactDropdown && widget.tooltip == 'Model',
+      );
+      check(modelDropdown.evaluate()).isNotEmpty();
+
+      final modeDropdown = find.byWidgetPredicate(
+        (widget) => widget is CompactDropdown && widget.tooltip == 'Mode',
+      );
+      check(modeDropdown.evaluate()).isNotEmpty();
+    });
+
+    testWidgets('ACP config options show overflow menu for other categories',
+        (tester) async {
+      final chat = resources.track(
+        chat_model.ChatState.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
+      );
+      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null));
+      chat.setAcpConfigOptions([
+        {
+          'id': 'temperature',
+          'name': 'Temperature',
+          'category': 'sampling',
+          'values': ['0.2', '0.7'],
+          'value': '0.2',
+        },
+      ]);
+
+      await tester.pumpWidget(buildTestWidget(chat));
+      await safePumpAndSettle(tester);
+
+      final overflowDropdown = find.byWidgetPredicate(
+        (widget) => widget is CompactDropdown && widget.value == 'More',
+      );
+      check(overflowDropdown.evaluate()).isNotEmpty();
+    });
+
+    testWidgets('ACP dropdown selection sends SetConfigOptionCommand',
+        (tester) async {
+      final chat = resources.track(
+        chat_model.ChatState.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
+      );
+      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null));
+      chat.setAcpConfigOptions([
+        {
+          'id': 'model',
+          'name': 'Model',
+          'category': 'model',
+          'values': [
+            {'value': 'model-a', 'label': 'Model A'},
+            {'value': 'model-b', 'label': 'Model B'},
+          ],
+          'value': 'model-a',
+        },
+      ]);
+
+      final transport = FakeTransport();
+      chat.setTransport(transport);
+
+      await tester.pumpWidget(buildTestWidget(chat));
+      await safePumpAndSettle(tester);
+
+      final modelDropdown = find.byWidgetPredicate(
+        (widget) => widget is CompactDropdown && widget.tooltip == 'Model',
+      );
+      await tester.tap(modelDropdown);
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Model B').last);
+      await safePumpAndSettle(tester);
+
+      check(transport.sentCommands).isNotEmpty();
+      final command = transport.sentCommands.last;
+      check(command).isA<sdk.SetConfigOptionCommand>();
+      final setConfig = command as sdk.SetConfigOptionCommand;
+      check(setConfig.configId).equals('model');
+      check(setConfig.value).equals('model-b');
     });
 
     testWidgets('Codex group changes call setSecurityConfig', (tester) async {

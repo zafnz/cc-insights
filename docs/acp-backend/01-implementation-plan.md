@@ -258,10 +258,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Widget tests for selector rendering and update actions.
 - Definition of Done:
   - Users can change ACP config options from toolbar and see updates reflected.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 18: Permission Dialog for ACP Options**
 - Description: Render ACP permission options in the dialog.

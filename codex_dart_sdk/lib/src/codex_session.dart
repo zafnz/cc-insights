@@ -871,6 +871,14 @@ class CodexSession implements AgentSession {
   }
 
   @override
+  Future<void> setConfigOption(String configId, dynamic value) async {
+    throw UnsupportedError(
+      'Codex does not support session config options. '
+      'Check backend capabilities before calling.',
+    );
+  }
+
+  @override
   Future<void> setReasoningEffort(String? effort) async {
     if (_disposed) {
       throw StateError('Session has been disposed');

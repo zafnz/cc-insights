@@ -18,6 +18,7 @@ sealed class BackendCommand {
       'kill' => KillCommand.fromJson(json),
       'set_model' => SetModelCommand.fromJson(json),
       'set_permission_mode' => SetPermissionModeCommand.fromJson(json),
+      'set_config_option' => SetConfigOptionCommand.fromJson(json),
       'set_reasoning_effort' => SetReasoningEffortCommand.fromJson(json),
       'create_session' => CreateSessionCommand.fromJson(json),
       _ => throw ArgumentError('Unknown command type: $command'),
@@ -187,6 +188,35 @@ class SetPermissionModeCommand extends BackendCommand {
         'command': 'set_permission_mode',
         'sessionId': sessionId,
         'mode': mode,
+      };
+}
+
+/// Change a backend-specific configuration option for a session.
+class SetConfigOptionCommand extends BackendCommand {
+  const SetConfigOptionCommand({
+    required this.sessionId,
+    required this.configId,
+    required this.value,
+  });
+
+  final String sessionId;
+  final String configId;
+  final dynamic value;
+
+  factory SetConfigOptionCommand.fromJson(Map<String, dynamic> json) {
+    return SetConfigOptionCommand(
+      sessionId: json['sessionId'] as String,
+      configId: json['configId'] as String,
+      value: json['value'],
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'command': 'set_config_option',
+        'sessionId': sessionId,
+        'configId': configId,
+        'value': value,
       };
 }
 

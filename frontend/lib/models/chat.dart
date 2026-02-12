@@ -740,6 +740,25 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sends an ACP config option update to the backend.
+  void setAcpConfigOption({
+    required String configId,
+    required dynamic value,
+  }) {
+    if (_transport != null) {
+      final sessionId = _transport!.sessionId ?? '';
+      _transport!.send(sdk.SetConfigOptionCommand(
+        sessionId: sessionId,
+        configId: configId,
+        value: value,
+      ));
+      return;
+    }
+    if (_session != null) {
+      _session!.setConfigOption(configId, value);
+    }
+  }
+
   /// Updates ACP available commands from the backend.
   void setAcpAvailableCommands(List<Map<String, dynamic>> commands) {
     _acpAvailableCommands = _freezeMapList(commands);
@@ -756,6 +775,21 @@ class ChatState extends ChangeNotifier {
       _acpAvailableModes = _freezeMapList(availableModes);
     }
     notifyListeners();
+  }
+
+  /// Sends an ACP mode update to the backend.
+  void setAcpMode(String modeId) {
+    if (_transport != null) {
+      final sessionId = _transport!.sessionId ?? '';
+      _transport!.send(sdk.SetPermissionModeCommand(
+        sessionId: sessionId,
+        mode: modeId,
+      ));
+      return;
+    }
+    if (_session != null) {
+      _session!.setPermissionMode(modeId);
+    }
   }
 
   void _clearAcpSessionMetadata() {

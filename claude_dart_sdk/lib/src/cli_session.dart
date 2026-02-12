@@ -1258,6 +1258,13 @@ class CliSession {
     });
   }
 
+  /// Set a backend-specific config option.
+  ///
+  /// Note: Claude CLI does not support ACP config options.
+  Future<void> setConfigOption(String configId, dynamic value) async {
+    // No-op: Claude CLI does not support config options.
+  }
+
   /// Set the reasoning effort level for this session.
   ///
   /// Note: This is a no-op for Claude CLI sessions. Reasoning effort is only
