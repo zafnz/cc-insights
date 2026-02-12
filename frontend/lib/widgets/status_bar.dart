@@ -391,14 +391,17 @@ class _RateLimitStats extends StatelessWidget {
   /// Builds a single usage bar for graph mode.
   Widget _buildBar(RateLimitWindow window, ColorScheme colorScheme) {
     final percent = window.usedPercent;
-    return SizedBox(
-      width: 40,
-      height: 4,
-      child: LinearProgressIndicator(
-        value: (percent / 100).clamp(0.0, 1.0),
-        backgroundColor:
-            colorScheme.onSurfaceVariant.withValues(alpha: 0.15),
-        valueColor: AlwaysStoppedAnimation<Color>(_barColor(percent)),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(2),
+      child: SizedBox(
+        width: 40,
+        height: 4,
+        child: LinearProgressIndicator(
+          value: (percent / 100).clamp(0.0, 1.0),
+          backgroundColor:
+              colorScheme.onSurfaceVariant.withValues(alpha: 0.15),
+          valueColor: AlwaysStoppedAnimation<Color>(_barColor(percent)),
+        ),
       ),
     );
   }
