@@ -229,10 +229,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit test for command update mapping.
 - Definition of Done:
   - Commands are visible to UI for toolbar/menu integration.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 16: Content Block Support (ACP/MCP)**
 - Description: Extend content blocks to cover ACP content types.

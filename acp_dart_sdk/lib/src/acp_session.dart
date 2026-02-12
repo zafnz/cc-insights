@@ -211,6 +211,8 @@ class AcpSession implements AgentSession {
         _maybeEmitConfigOptions(update, raw: update);
       case 'current_mode_update':
         _maybeEmitSessionMode(update, raw: update);
+      case 'available_commands_update':
+        _maybeEmitAvailableCommands(update, raw: update);
     }
   }
 
@@ -1014,6 +1016,22 @@ class AcpSession implements AgentSession {
     ));
   }
 
+  void _maybeEmitAvailableCommands(
+    Map<String, dynamic> payload, {
+    Map<String, dynamic>? raw,
+  }) {
+    final commands = _readAvailableCommands(payload);
+    if (commands.isEmpty) return;
+    _eventsController.add(AvailableCommandsEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      availableCommands: commands,
+    ));
+  }
+
   String? _readCurrentModeId(Map<String, dynamic> payload) {
     final current = payload['currentModeId'] ??
         payload['current_mode_id'] ??
@@ -1037,6 +1055,25 @@ class AcpSession implements AgentSession {
     }
     if (rawModes is Map) {
       return [Map<String, dynamic>.from(rawModes)];
+    }
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _readAvailableCommands(
+    Map<String, dynamic> payload,
+  ) {
+    final rawCommands = payload['availableCommands'] ??
+        payload['available_commands'] ??
+        payload['commands'] ??
+        payload['availableCommandsUpdate'];
+    if (rawCommands is List) {
+      return rawCommands
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (rawCommands is Map) {
+      return [Map<String, dynamic>.from(rawCommands)];
     }
     return const [];
   }
