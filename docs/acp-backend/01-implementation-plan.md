@@ -300,7 +300,7 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Integration test running the stub agent.
 - Definition of Done:
   - ACP session runs end-to-end and passes integration test.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
