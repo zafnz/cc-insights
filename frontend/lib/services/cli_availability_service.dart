@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 /// Service that checks whether CLI executables (claude, codex, acp) are available.
 ///
@@ -55,9 +56,10 @@ class CliAvailabilityService extends ChangeNotifier {
   Future<bool> _checkExecutable(String name, String customPath) async {
     // 1. If a custom path is configured, check that file directly.
     if (customPath.isNotEmpty) {
-      final found = await _verifyExecutable(customPath);
+      final resolvedPath = await _resolveCustomPath(name, customPath);
+      final found = await _verifyExecutable(resolvedPath);
       developer.log(
-        '$name CLI ${found ? 'found' : 'not found'} at custom path: $customPath',
+        '$name CLI ${found ? 'found' : 'not found'} at custom path: $resolvedPath',
         name: 'CliAvailabilityService',
       );
       return found;
@@ -113,5 +115,37 @@ class CliAvailabilityService extends ChangeNotifier {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<String> _resolveCustomPath(String name, String customPath) async {
+    final trimmed = customPath.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    final expanded = _expandTilde(trimmed);
+    final file = File(expanded);
+    if (await file.exists()) {
+      return expanded;
+    }
+
+    final dir = Directory(expanded);
+    if (await dir.exists()) {
+      final candidate = p.join(expanded, name);
+      if (await File(candidate).exists()) {
+        return candidate;
+      }
+    }
+
+    return expanded;
+  }
+
+  String _expandTilde(String path) {
+    if (!path.startsWith('~')) return path;
+    final home = Platform.environment['HOME'];
+    if (home == null || home.isEmpty) return path;
+    if (path == '~') return home;
+    if (path.startsWith('~/')) {
+      return home + path.substring(1);
+    }
+    return path;
   }
 }
