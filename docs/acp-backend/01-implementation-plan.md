@@ -200,10 +200,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for create/output/wait flow and truncation behavior.
 - Definition of Done:
   - ACP agent can run a command and retrieve output through ACP terminal APIs.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 14: Config Options and Modes Handling**
 - Description: Emit events for ACP config options and mode updates.

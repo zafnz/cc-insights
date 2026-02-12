@@ -40,6 +40,8 @@ class AcpSession implements AgentSession {
   StreamSubscription<JsonRpcNotification>? _notificationSub;
   StreamSubscription<JsonRpcServerRequest>? _serverRequestSub;
   final Set<String> _emittedToolCalls = {};
+  final Map<String, _TerminalSession> _terminals = {};
+  int _terminalCounter = 0;
 
   @override
   String get sessionId => _sessionId;
@@ -207,6 +209,16 @@ class AcpSession implements AgentSession {
         unawaited(_handleReadTextFile(request, params));
       case 'fs/write_text_file':
         unawaited(_handleWriteTextFile(request, params));
+      case 'terminal/create':
+        unawaited(_handleTerminalCreate(request, params));
+      case 'terminal/output':
+        _handleTerminalOutput(request, params);
+      case 'terminal/wait_for_exit':
+        unawaited(_handleTerminalWait(request, params));
+      case 'terminal/kill':
+        _handleTerminalKill(request, params);
+      case 'terminal/release':
+        _handleTerminalRelease(request, params);
       default:
         _process.sendError(
           request.id,
@@ -449,6 +461,136 @@ class AcpSession implements AgentSession {
   bool _isWithin(String path, String root) {
     if (path == root) return true;
     return p.isWithin(root, path);
+  }
+
+  Future<void> _handleTerminalCreate(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) async {
+    final command = params['command'];
+    if (command is! String || command.isEmpty) {
+      _process.sendError(request.id, -32602, 'Missing command');
+      return;
+    }
+
+    final args = (params['args'] as List<dynamic>?)
+            ?.map((arg) => arg.toString())
+            .toList() ??
+        const <String>[];
+    final outputByteLimit = (params['outputByteLimit'] as num?)?.toInt();
+
+    final cwdParam = params['cwd'] as String?;
+    final cwd = cwdParam == null || cwdParam.isEmpty ? _cwd : cwdParam;
+    if (!p.isAbsolute(cwd)) {
+      _process.sendError(request.id, -32602, 'cwd must be absolute');
+      return;
+    }
+
+    final normalized = p.normalize(p.absolute(cwd));
+    final allowed = await _ensurePathAccess(
+      'Bash',
+      normalized,
+      {
+        'command': command,
+        'args': args,
+        'cwd': normalized,
+      },
+    );
+    if (!allowed) {
+      _process.sendError(request.id, -32000, 'Permission denied');
+      return;
+    }
+
+    final envRaw = params['env'] as Map<dynamic, dynamic>?;
+    final env = envRaw?.map(
+      (key, value) => MapEntry(key.toString(), value.toString()),
+    );
+
+    try {
+      final process = await Process.start(
+        command,
+        args,
+        workingDirectory: normalized,
+        environment: env,
+        runInShell: false,
+      );
+      final terminalId = 'term-${_terminalCounter++}';
+      _terminals[terminalId] = _TerminalSession(
+        id: terminalId,
+        process: process,
+        outputByteLimit: outputByteLimit,
+      );
+      _process.sendResponse(request.id, {'terminalId': terminalId});
+    } catch (e) {
+      _process.sendError(request.id, -32004, 'Failed to start command: $e');
+    }
+  }
+
+  void _handleTerminalOutput(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) {
+    final terminalId = params['terminalId'] as String?;
+    final terminal = terminalId != null ? _terminals[terminalId] : null;
+    if (terminal == null) {
+      _process.sendError(request.id, -32004, 'Unknown terminal');
+      return;
+    }
+
+    final output = terminal.readOutput();
+    final response = <String, dynamic>{
+      'output': output.output,
+      'truncated': output.truncated,
+    };
+    if (terminal.exitCode != null) {
+      response['exitStatus'] = terminal.exitCode;
+    }
+    _process.sendResponse(request.id, response);
+  }
+
+  Future<void> _handleTerminalWait(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) async {
+    final terminalId = params['terminalId'] as String?;
+    final terminal = terminalId != null ? _terminals[terminalId] : null;
+    if (terminal == null) {
+      _process.sendError(request.id, -32004, 'Unknown terminal');
+      return;
+    }
+
+    final exitCode = await terminal.process.exitCode;
+    terminal.exitCode ??= exitCode;
+    _process.sendResponse(request.id, {'exitCode': exitCode});
+  }
+
+  void _handleTerminalKill(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) {
+    final terminalId = params['terminalId'] as String?;
+    final terminal = terminalId != null ? _terminals[terminalId] : null;
+    if (terminal == null) {
+      _process.sendError(request.id, -32004, 'Unknown terminal');
+      return;
+    }
+
+    terminal.process.kill();
+    _process.sendResponse(request.id, {});
+  }
+
+  void _handleTerminalRelease(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) {
+    final terminalId = params['terminalId'] as String?;
+    final terminal = terminalId != null ? _terminals.remove(terminalId) : null;
+    if (terminal == null) {
+      _process.sendError(request.id, -32004, 'Unknown terminal');
+      return;
+    }
+    terminal.dispose();
+    _process.sendResponse(request.id, {});
   }
 
   void _emitTextOrDelta(
@@ -776,6 +918,11 @@ class AcpSession implements AgentSession {
 
   Future<void> dispose() async {
     _active = false;
+    for (final terminal in _terminals.values) {
+      terminal.process.kill();
+      terminal.dispose();
+    }
+    _terminals.clear();
     await _notificationSub?.cancel();
     await _serverRequestSub?.cancel();
     await _eventsController.close();
@@ -793,6 +940,72 @@ class AcpSession implements AgentSession {
       throw StateError('Session has been disposed');
     }
   }
+}
+
+class _TerminalSession {
+  _TerminalSession({
+    required this.id,
+    required this.process,
+    int? outputByteLimit,
+  }) : _outputByteLimit = outputByteLimit {
+    _stdoutSub = process.stdout.listen(_appendOutput);
+    _stderrSub = process.stderr.listen(_appendOutput);
+    process.exitCode.then((code) {
+      exitCode ??= code;
+    });
+  }
+
+  final String id;
+  final Process process;
+  final int? _outputByteLimit;
+  final List<int> _buffer = <int>[];
+  StreamSubscription<List<int>>? _stdoutSub;
+  StreamSubscription<List<int>>? _stderrSub;
+  int? exitCode;
+
+  void _appendOutput(List<int> data) {
+    if (data.isEmpty) return;
+    _buffer.addAll(data);
+  }
+
+  _TerminalOutput readOutput() {
+    if (_buffer.isEmpty) {
+      return const _TerminalOutput(output: '', truncated: false);
+    }
+
+    final limit = _outputByteLimit;
+    if (limit != null && limit <= 0) {
+      final hadOutput = _buffer.isNotEmpty;
+      _buffer.clear();
+      return _TerminalOutput(output: '', truncated: hadOutput);
+    }
+
+    if (limit == null || _buffer.length <= limit) {
+      final output = utf8.decode(_buffer, allowMalformed: true);
+      _buffer.clear();
+      return _TerminalOutput(output: output, truncated: false);
+    }
+
+    final chunk = _buffer.sublist(0, limit);
+    _buffer.removeRange(0, limit);
+    final output = utf8.decode(chunk, allowMalformed: true);
+    return _TerminalOutput(output: output, truncated: true);
+  }
+
+  void dispose() {
+    _stdoutSub?.cancel();
+    _stderrSub?.cancel();
+  }
+}
+
+class _TerminalOutput {
+  const _TerminalOutput({
+    required this.output,
+    required this.truncated,
+  });
+
+  final String output;
+  final bool truncated;
 }
 
 class _ToolContentParse {
