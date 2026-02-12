@@ -286,10 +286,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - None.
 - Definition of Done:
   - Document matches ACP v1 and this implementation plan.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 20: End-to-End ACP Session Smoke Test**
 - Description: Validate the full ACP session lifecycle with a stub ACP agent.

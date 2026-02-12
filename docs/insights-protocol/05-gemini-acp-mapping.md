@@ -26,13 +26,13 @@ Client sends capabilities, agent responds with its capabilities.
 ```json
 // Request (Client → Agent)
 {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-  "protocolVersion": "0.1",
+  "protocolVersion": 1,
   "clientCapabilities": {"fileSystem": true, "terminals": true}
 }}
 
 // Response (Agent → Client)
 {"jsonrpc": "2.0", "id": 1, "result": {
-  "protocolVersion": "0.1",
+  "protocolVersion": 1,
   "agentCapabilities": {"streaming": true, "loadSession": true}
 }}
 ```
@@ -46,7 +46,8 @@ Creates a conversation session.
 ```json
 // Request
 {"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {
-  "cwd": "/Users/zaf/project"
+  "cwd": "/Users/zaf/project",
+  "mcpServers": []
 }}
 
 // Response
@@ -73,7 +74,7 @@ The core conversation flow. Client sends a prompt, agent streams updates, then r
 ```json
 {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {
   "sessionId": "sess-abc-123",
-  "content": [{"type": "text", "text": "Fix the login bug"}]
+  "prompt": [{"type": "text", "text": "Fix the login bug"}]
 }}
 ```
 
@@ -88,9 +89,9 @@ The agent streams progress via notifications. These carry different update kinds
 ```json
 {"jsonrpc": "2.0", "method": "session/update", "params": {
   "sessionId": "sess-abc-123",
-  "sessionUpdate": {
-    "type": "agent_message_chunk",
-    "content": [{"type": "text", "text": "I'll fix the login..."}]
+  "update": {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {"type": "text", "text": "I'll fix the login..."}
   }
 }}
 ```
@@ -99,7 +100,7 @@ The agent streams progress via notifications. These carry different update kinds
 
 | ACP field | InsightsEvent field |
 |-----------|---------------------|
-| `content[].text` | `text` |
+| `content.text` | `text` |
 | — | `kind` = `TextKind.text` |
 
 ACP message chunks are partial — they arrive incrementally. The SDK can either:
@@ -112,14 +113,85 @@ ACP message chunks are partial — they arrive incrementally. The SDK can either
 ```json
 {"jsonrpc": "2.0", "method": "session/update", "params": {
   "sessionId": "sess-abc-123",
-  "sessionUpdate": {
-    "type": "agent_thought_chunk",
-    "content": [{"type": "text", "text": "Let me analyze the auth flow..."}]
+  "update": {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {"type": "text", "text": "Let me analyze the auth flow..."}
   }
 }}
 ```
 
 **→ `TextEvent`** with `kind: TextKind.thinking`
+
+##### `user_message_chunk`
+
+```json
+{"jsonrpc": "2.0", "method": "session/update", "params": {
+  "sessionId": "sess-abc-123",
+  "update": {
+    "sessionUpdate": "user_message_chunk",
+    "content": {"type": "text", "text": "Replaying a prior user turn"}
+  }
+}}
+```
+
+**→ `UserInputEvent`** with `isSynthetic: true`
+
+##### `plan`
+
+```json
+{"jsonrpc": "2.0", "method": "session/update", "params": {
+  "sessionId": "sess-abc-123",
+  "update": {
+    "sessionUpdate": "plan",
+    "entries": [{"text": "Step 1"}, {"text": "Step 2"}]
+  }
+}}
+```
+
+**→ `TextEvent`** with `kind: TextKind.plan` and full entries in
+`extensions['acp.planEntries']`.
+
+##### `config_option_update`
+
+```json
+{"jsonrpc": "2.0", "method": "session/update", "params": {
+  "sessionId": "sess-abc-123",
+  "update": {
+    "sessionUpdate": "config_option_update",
+    "configOptions": [{"id": "model", "values": ["model-a", "model-b"]}]
+  }
+}}
+```
+
+**→ `ConfigOptionsEvent`**
+
+##### `available_commands_update`
+
+```json
+{"jsonrpc": "2.0", "method": "session/update", "params": {
+  "sessionId": "sess-abc-123",
+  "update": {
+    "sessionUpdate": "available_commands_update",
+    "availableCommands": [{"id": "help", "name": "Help"}]
+  }
+}}
+```
+
+**→ `AvailableCommandsEvent`**
+
+##### `current_mode_update`
+
+```json
+{"jsonrpc": "2.0", "method": "session/update", "params": {
+  "sessionId": "sess-abc-123",
+  "update": {
+    "sessionUpdate": "current_mode_update",
+    "currentModeId": "fast"
+  }
+}}
+```
+
+**→ `SessionModeEvent`**
 
 ##### `tool_call_update`
 
@@ -128,15 +200,17 @@ The richest ACP event type — reports tool invocations and their progress.
 ```json
 {"jsonrpc": "2.0", "method": "session/update", "params": {
   "sessionId": "sess-abc-123",
-  "sessionUpdate": {
-    "type": "tool_call_update",
-    "toolCallId": "call-001",
-    "title": "Reading login controller",
-    "kind": "read",
-    "status": "in_progress",
-    "content": [{"type": "text", "text": "Reading /src/auth/login.dart..."}],
-    "locations": ["/src/auth/login.dart"],
-    "rawInput": {"path": "/src/auth/login.dart"}
+  "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCall": {
+      "toolCallId": "call-001",
+      "title": "Reading login controller",
+      "kind": "read",
+      "status": "in_progress",
+      "content": {"type": "content", "content": {"type": "text", "text": "Reading /src/auth/login.dart..."}},
+      "locations": ["/src/auth/login.dart"],
+      "rawInput": {"path": "/src/auth/login.dart"}
+    }
   }
 }}
 ```
@@ -181,24 +255,19 @@ ACP tool call updates can report multiple status transitions:
 | `execute` | `execute` | Direct match |
 | `think` | `think` | Direct match |
 | `fetch` | `fetch` | Direct match |
+| `browse` | `browse` | Direct match |
+| `ask` | `ask` | Direct match |
+| `memory` | `memory` | Direct match |
+| `mcp` | `mcp` | Direct match |
 | `other` | `other` | Direct match |
 
 This is why InsightsEvent's `ToolKind` was designed to align with ACP — the mapping is trivial.
 
-##### `mode_change`
+**Tool content mapping:**
 
-```json
-{"jsonrpc": "2.0", "method": "session/update", "params": {
-  "sessionId": "sess-abc-123",
-  "sessionUpdate": {
-    "type": "mode_change",
-    "mode": "edit",
-    "state": "active"
-  }
-}}
-```
-
-**→ `SessionStatusEvent`** or `extensions['acp.mode']` on the relevant event.
+- `content.type == "content"` → parse `content.content` into `ContentBlock` list.
+- `content.type == "diff"` or `content.type == "terminal"` → stored in
+  `ToolCompletionEvent.output` and `extensions['acp.toolContent']`.
 
 #### Prompt response
 
@@ -218,17 +287,22 @@ This is why InsightsEvent's `ToolKind` was designed to align with ACP — the ma
 
 ### `session/request_permission` (Agent → Client)
 
-ACP's permission model.
+ACP's permission model. The request uses a `ToolCallUpdate` payload.
 
 ```json
 {"jsonrpc": "2.0", "id": 100, "method": "session/request_permission", "params": {
-  "kind": "execute_command",
-  "message": "Agent wants to run: npm test",
+  "sessionId": "sess-abc-123",
+  "toolCall": {
+    "toolCallId": "call-77",
+    "title": "Run tests",
+    "kind": "execute",
+    "rawInput": {"command": "npm test"}
+  },
   "options": [
-    {"id": "opt-1", "name": "Allow", "kind": "allow_once"},
-    {"id": "opt-2", "name": "Always Allow", "kind": "allow_always"},
-    {"id": "opt-3", "name": "Deny", "kind": "reject_once"},
-    {"id": "opt-4", "name": "Always Deny", "kind": "reject_always"}
+    {"optionId": "allow_once", "name": "Allow once", "kind": "allow_once"},
+    {"optionId": "allow_always", "name": "Always allow", "kind": "allow_always"},
+    {"optionId": "reject_once", "name": "Reject once", "kind": "reject_once"},
+    {"optionId": "reject_always", "name": "Always reject", "kind": "reject_always"}
   ]
 }}
 ```
@@ -238,33 +312,28 @@ ACP's permission model.
 | ACP field | InsightsEvent field |
 |-----------|---------------------|
 | `id` (JSON-RPC) | `requestId` |
-| `kind` → tool name | `toolName` (derived from permission kind) |
-| `kind` → ToolKind | `toolKind` |
-| Extracted from message | `toolInput` |
-| — | `toolUseId` = null (ACP doesn't correlate to specific tool call) |
-| `message` | `reason` |
-| — | `blockedPath` = null |
-| — | `suggestions` = null (ACP uses `options` instead) |
-| `options` | `extensions['acp.permissionOptions']` |
+| `toolCall.title` / `toolCall.kind` | `toolName` |
+| `toolCall.kind` | `toolKind` |
+| `toolCall.rawInput` | `toolInput` |
+| `toolCall.toolCallId` | `toolUseId` |
+| `options` | `extensions['acp.options']` |
 
-**Response:**
+**Response (selected option):**
 ```json
-{"jsonrpc": "2.0", "id": 100, "result": {"optionId": "opt-1"}}
-```
-or
-```json
-{"jsonrpc": "2.0", "id": 100, "result": {"outcome": "cancelled"}}
+{"jsonrpc": "2.0", "id": 100, "result": {
+  "outcome": {"outcome": "selected", "optionId": "allow_once"}
+}}
 ```
 
-**ACP permission option kinds → PermissionResponse:**
+**Response (cancelled):**
+```json
+{"jsonrpc": "2.0", "id": 100, "result": {
+  "outcome": {"outcome": "cancelled"}
+}}
+```
 
-| ACP option kind | Maps to |
-|----------------|---------|
-| `allow_once` | `PermissionAllowResponse()` |
-| `allow_always` | `PermissionAllowResponse(updatedPermissions: ...)` |
-| `reject_once` | `PermissionDenyResponse(interrupt: false)` |
-| `reject_always` | `PermissionDenyResponse(interrupt: false, ...)` |
-| `"cancelled"` outcome | `PermissionDenyResponse(interrupt: true)` |
+The UI renders the ACP options list and returns the chosen `optionId` via
+`updatedInput` so the backend can send `outcome: selected`.
 
 ### File System Operations (Agent → Client)
 
@@ -272,15 +341,16 @@ ACP agents can request file operations from the client.
 
 ```json
 {"jsonrpc": "2.0", "id": 101, "method": "fs/read_text_file", "params": {
+  "sessionId": "sess-abc-123",
   "path": "/src/auth/login.dart",
-  "startLine": 1,
-  "endLine": 50
+  "line": 1,
+  "limit": 50
 }}
 ```
 
 These are **not InsightsEvents** — they are handled by the ACP SDK internally (the SDK reads the file and responds). However, they could optionally emit a `ToolInvocationEvent` with `kind: ToolKind.read` for visibility.
 
-Similarly for `fs/write_text_file` and `terminal/*` operations.
+Similarly for `fs/write_text_file` (with `content`) and `terminal/*` operations.
 
 ### Terminal Operations (Agent → Client)
 
@@ -288,8 +358,10 @@ ACP agents can create and manage terminals.
 
 ```json
 {"jsonrpc": "2.0", "id": 102, "method": "terminal/create", "params": {
+  "sessionId": "sess-abc-123",
   "command": "npm test",
-  "cwd": "/project"
+  "cwd": "/project",
+  "outputByteLimit": 65536
 }}
 ```
 
