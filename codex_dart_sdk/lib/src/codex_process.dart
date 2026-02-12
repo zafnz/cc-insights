@@ -10,10 +10,14 @@ import 'json_rpc.dart';
 class CodexProcessConfig {
   const CodexProcessConfig({
     this.executablePath,
+    this.workingDirectory,
   });
 
   /// Path to the codex executable (defaults to 'codex').
   final String? executablePath;
+
+  /// Working directory for the codex process.
+  final String? workingDirectory;
 
   String get resolvedExecutablePath => executablePath ?? 'codex';
 }
@@ -64,6 +68,7 @@ class CodexProcess {
     final process = await Process.start(
       config.resolvedExecutablePath,
       ['app-server'],
+      workingDirectory: config.workingDirectory,
       mode: ProcessStartMode.normal,
     );
 

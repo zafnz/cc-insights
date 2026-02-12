@@ -55,6 +55,7 @@ class FakeBackendService extends BackendService {
   Future<void> start({
     BackendType type = BackendType.directCli,
     String? executablePath,
+    String? workingDirectory,
   }) async {
     // No-op in fake - use simulateStart() to control state
   }

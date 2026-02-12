@@ -12,6 +12,7 @@ class AcpProcessConfig {
   const AcpProcessConfig({
     this.executablePath,
     this.arguments = const [],
+    this.workingDirectory,
   });
 
   /// Path to the ACP executable (defaults to 'acp').
@@ -19,6 +20,9 @@ class AcpProcessConfig {
 
   /// Additional arguments passed to the ACP executable.
   final List<String> arguments;
+
+  /// Working directory for the ACP process.
+  final String? workingDirectory;
 
   String get resolvedExecutablePath => executablePath ?? 'acp';
 }
@@ -71,14 +75,31 @@ class AcpProcess {
   AcpProcess._({
     required Process process,
     required JsonRpcClient client,
+    required String executablePath,
+    required List<String> arguments,
+    String? workingDirectory,
+    Stream<String>? stderrLines,
   })  : _process = process,
-        _client = client {
+        _client = client,
+        _executablePath = executablePath,
+        _arguments = List<String>.from(arguments),
+        _workingDirectory = workingDirectory,
+        _stderrLines = stderrLines ??
+            process.stderr
+                .transform(utf8.decoder)
+                .transform(const LineSplitter()) {
     _setupStderr();
     _setupProtocolLogs();
   }
 
+  static const int _maxInitLogLines = 80;
+
   final Process _process;
   final JsonRpcClient _client;
+  final String _executablePath;
+  final List<String> _arguments;
+  final String? _workingDirectory;
+  final Stream<String> _stderrLines;
 
   final _logsController = StreamController<String>.broadcast();
   final _logEntriesController = StreamController<LogEntry>.broadcast();
@@ -125,27 +146,70 @@ class AcpProcess {
     final process = await Process.start(
       config.resolvedExecutablePath,
       args,
+      workingDirectory: config.workingDirectory,
       mode: ProcessStartMode.normal,
     );
 
-    final lines = process.stdout
+    final stdoutLines = process.stdout
         .transform(utf8.decoder)
-        .transform(const LineSplitter());
+        .transform(const LineSplitter())
+        .asBroadcastStream();
+
+    final stderrLines = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .asBroadcastStream();
+
+    final recentStdout = <String>[];
+    final recentStderr = <String>[];
+
+    void appendRecent(List<String> buffer, String line) {
+      if (line.isEmpty) return;
+      buffer.add(line);
+      if (buffer.length > _maxInitLogLines) {
+        buffer.removeRange(0, buffer.length - _maxInitLogLines);
+      }
+    }
+
+    final stdoutBufferSub =
+        stdoutLines.listen((line) => appendRecent(recentStdout, line));
+    final stderrBufferSub =
+        stderrLines.listen((line) => appendRecent(recentStderr, line));
 
     final client = JsonRpcClient(
-      input: lines,
+      input: stdoutLines,
       output: (line) => process.stdin.writeln(line),
     );
 
-    final acp = AcpProcess._(process: process, client: client);
-    acp._initializeResult = await _initialize(
+    final acp = AcpProcess._(
+      process: process,
       client: client,
-      clientName: clientName,
-      clientVersion: clientVersion,
-      clientCapabilities: clientCapabilities,
-      protocolVersion: protocolVersion,
-      timeout: timeout,
+      executablePath: config.resolvedExecutablePath,
+      arguments: args,
+      workingDirectory: config.workingDirectory,
+      stderrLines: stderrLines,
     );
+    acp._logSpawn();
+    try {
+      acp._initializeResult = await _initialize(
+        client: client,
+        clientName: clientName,
+        clientVersion: clientVersion,
+        clientCapabilities: clientCapabilities,
+        protocolVersion: protocolVersion,
+        timeout: timeout,
+      );
+    } on TimeoutException {
+      acp._logInitializeTimeout(
+        timeout: timeout,
+        stdoutLines: recentStdout,
+        stderrLines: recentStderr,
+      );
+      rethrow;
+    } finally {
+      await stdoutBufferSub.cancel();
+      await stderrBufferSub.cancel();
+    }
 
     stdout.writeln('[ACP READY]');
     stdout.flush();
@@ -215,10 +279,7 @@ class AcpProcess {
   }
 
   void _setupStderr() {
-    _stderrSub = _process.stderr
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen((line) {
+    _stderrSub = _stderrLines.listen((line) {
           SdkLogger.instance.logStderr(line);
           _logsController.add(line);
           _logEntriesController.add(LogEntry(
@@ -236,6 +297,69 @@ class AcpProcess {
       _logsController.add(entry.toString());
       _logEntriesController.add(entry);
     });
+  }
+
+  void _logSpawn() {
+    final data = <String, dynamic>{
+      'pid': _process.pid,
+      'executable': _executablePath,
+      if (_arguments.isNotEmpty) 'args': _arguments,
+      if (_workingDirectory != null) 'cwd': _workingDirectory,
+    };
+
+    SdkLogger.instance.info(
+      'ACP process spawned (pid=${_process.pid})',
+      data: data,
+    );
+    _logsController.add('[ACP SPAWN] pid=${_process.pid}');
+    _logEntriesController.add(LogEntry(
+      level: LogLevel.info,
+      message: 'ACP process spawned',
+      timestamp: DateTime.now(),
+      direction: LogDirection.internal,
+      data: data,
+    ));
+  }
+
+  void _logInitializeTimeout({
+    required Duration timeout,
+    required List<String> stdoutLines,
+    required List<String> stderrLines,
+  }) {
+    final data = <String, dynamic>{
+      'timeoutSeconds': timeout.inSeconds,
+      'pid': _process.pid,
+      'executable': _executablePath,
+      if (_arguments.isNotEmpty) 'args': _arguments,
+      if (_workingDirectory != null) 'cwd': _workingDirectory,
+      if (stdoutLines.isNotEmpty) 'stdout': stdoutLines,
+      if (stderrLines.isNotEmpty) 'stderr': stderrLines,
+    };
+
+    SdkLogger.instance.error('ACP initialize timed out', data: data);
+
+    final buffer = StringBuffer()
+      ..writeln('ACP initialize timed out after ${timeout.inSeconds}s.');
+    if (stdoutLines.isNotEmpty) {
+      buffer.writeln('STDOUT (last ${stdoutLines.length} lines):');
+      for (final line in stdoutLines) {
+        buffer.writeln(line);
+      }
+    }
+    if (stderrLines.isNotEmpty) {
+      buffer.writeln('STDERR (last ${stderrLines.length} lines):');
+      for (final line in stderrLines) {
+        buffer.writeln(line);
+      }
+    }
+    _logsController.add(buffer.toString().trimRight());
+    _logEntriesController.add(LogEntry(
+      level: LogLevel.error,
+      message: 'ACP initialize timed out',
+      timestamp: DateTime.now(),
+      direction: LogDirection.internal,
+      data: data,
+    ));
   }
 
   Future<void> dispose() async {

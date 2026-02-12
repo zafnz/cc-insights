@@ -82,9 +82,15 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
   }
 
   /// Spawn a Codex app-server backend.
-  static Future<CodexBackend> create({String? executablePath}) async {
+  static Future<CodexBackend> create({
+    String? executablePath,
+    String? workingDirectory,
+  }) async {
     final process = await CodexProcess.start(
-      CodexProcessConfig(executablePath: executablePath),
+      CodexProcessConfig(
+        executablePath: executablePath,
+        workingDirectory: workingDirectory,
+      ),
     );
     final backend = CodexBackend._(process: process);
     await backend._readInitialConfig();

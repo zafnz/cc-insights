@@ -291,6 +291,16 @@ class SettingsService extends ChangeNotifier {
         placeholder: '/usr/local/bin/acp',
       ),
       SettingDefinition(
+        key: 'session.acpCliArgs',
+        title: 'ACP Agent Arguments',
+        description:
+            'Command line arguments for the ACP agent. Use quotes to '
+            'group arguments with spaces.',
+        type: SettingType.text,
+        defaultValue: '',
+        placeholder: '--stdio',
+      ),
+      SettingDefinition(
         key: 'session.defaultModel',
         title: 'Default Model',
         description:
@@ -758,6 +768,8 @@ class SettingsService extends ChangeNotifier {
         config.codexCliPath = value as String;
       case 'session.acpCliPath':
         config.acpCliPath = value as String;
+      case 'session.acpCliArgs':
+        config.acpCliArgs = value as String;
       case 'session.defaultModel':
         final composite = value as String;
         config.defaultModel = composite;

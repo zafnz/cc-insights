@@ -167,6 +167,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Custom path to the ACP agent executable (empty = use PATH lookup).
   String _acpCliPath = '';
 
+  /// Command line arguments for the ACP agent executable.
+  String _acpCliArgs = '';
+
   /// Whether the Codex CLI is available on this system.
   bool _codexAvailable = true;
 
@@ -646,6 +649,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Command line arguments for the ACP agent executable.
+  String get acpCliArgs => _acpCliArgs;
+
+  set acpCliArgs(String value) {
+    if (_acpCliArgs != value) {
+      _acpCliArgs = value;
+      notifyListeners();
+    }
+  }
+
   /// Whether the Codex CLI is available on this system.
   bool get codexAvailable => _codexAvailable;
 
@@ -718,6 +731,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._claudeCliPath = '';
     _instance._codexCliPath = '';
     _instance._acpCliPath = '';
+    _instance._acpCliArgs = '';
     _instance._codexAvailable = true;
     _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;

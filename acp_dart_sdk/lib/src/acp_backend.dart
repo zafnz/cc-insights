@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 
 import 'acp_process.dart';
 import 'acp_session.dart';
+import 'json_rpc.dart';
 
 /// Backend that communicates with ACP-compatible agents.
 class AcpBackend implements AgentBackend {
@@ -37,11 +38,13 @@ class AcpBackend implements AgentBackend {
   static Future<AcpBackend> create({
     String? executablePath,
     List<String> arguments = const [],
+    String? workingDirectory,
   }) async {
     final process = await AcpProcess.start(
       AcpProcessConfig(
         executablePath: executablePath,
         arguments: arguments,
+        workingDirectory: workingDirectory,
       ),
     );
     return AcpBackend._(process: process);
@@ -103,9 +106,9 @@ class AcpBackend implements AgentBackend {
       );
 
       if (content != null && content.isNotEmpty) {
-        await session.sendWithContent(content);
+        _sendInitialPrompt(() => session.sendWithContent(content));
       } else if (prompt.isNotEmpty) {
-        await session.send(prompt);
+        _sendInitialPrompt(() => session.send(prompt));
       }
 
       return session;
@@ -113,8 +116,9 @@ class AcpBackend implements AgentBackend {
       final error = e is BackendError
           ? e
           : BackendError(
-              'Failed to create session: $e',
+              _formatSessionCreateError(e),
               code: 'SESSION_CREATE_ERROR',
+              details: e is JsonRpcError ? e.data : null,
             );
       _errorsController.add(error);
       rethrow;
@@ -140,5 +144,44 @@ class AcpBackend implements AgentBackend {
               ...entry.value.toJson(),
             })
         .toList(growable: false);
+  }
+
+  void _sendInitialPrompt(Future<void> Function() send) {
+    Future<void>.delayed(Duration.zero, () async {
+      if (_disposed) return;
+      try {
+        await send();
+      } catch (e) {
+        final error = e is BackendError
+            ? e
+            : BackendError(
+                'Failed to send initial prompt: $e',
+                code: 'SESSION_PROMPT_ERROR',
+              );
+        _errorsController.add(error);
+      }
+    });
+  }
+
+  String _formatSessionCreateError(Object error) {
+    if (error is JsonRpcError) {
+      final details = _formatRpcDetails(error.data);
+      if (details.isEmpty) {
+        return 'Failed to create session: ${error.message}';
+      }
+      return 'Failed to create session: ${error.message} ($details)';
+    }
+    return 'Failed to create session: $error';
+  }
+
+  String _formatRpcDetails(dynamic data) {
+    if (data == null) return '';
+    if (data is Map) {
+      final details = data['details'];
+      if (details != null) {
+        return details.toString();
+      }
+    }
+    return data.toString();
   }
 }

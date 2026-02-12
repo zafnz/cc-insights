@@ -128,6 +128,7 @@ class MockBackendService extends BackendService {
   Future<void> start({
     BackendType type = BackendType.directCli,
     String? executablePath,
+    String? workingDirectory,
   }) async {
     if (_disposed) {
       throw StateError('MockBackendService has been disposed');

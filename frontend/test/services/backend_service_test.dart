@@ -648,6 +648,7 @@ class _TestableBackendService extends BackendService {
   Future<void> start({
     BackendType type = BackendType.directCli,
     String? executablePath,
+    String? workingDirectory,
   }) async {
     if (_isDisposed) return;
     if (isReady || isStarting) return;
@@ -746,6 +747,8 @@ class _SwitchableBackendService extends BackendService {
   Future<AgentBackend> createBackend({
     required BackendType type,
     String? executablePath,
+    List<String> arguments = const [],
+    String? workingDirectory,
   }) async {
     final fake = _fakeBackends[type];
     if (fake == null) {

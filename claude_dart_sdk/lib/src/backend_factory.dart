@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:acp_sdk/acp_sdk.dart' as acp;
 import 'package:codex_sdk/codex_sdk.dart' as codex;
 
 import 'backend_interface.dart';
@@ -47,10 +48,12 @@ class BackendFactory {
   /// [executablePath] - Path to claude-cli, codex, or ACP executable
   ///   (depending on backend).
   ///   Defaults to `CLAUDE_CODE_PATH` env var or 'claude' for Claude, and
-  ///   'codex' for Codex.
+  ///   'codex' for Codex, and 'acp' for ACP.
   static Future<AgentBackend> create({
     BackendType type = BackendType.directCli,
     String? executablePath,
+    List<String> arguments = const [],
+    String? workingDirectory,
   }) async {
     // Check for environment variable override
     final effectiveType = _getEffectiveType(type);
@@ -60,9 +63,16 @@ class BackendFactory {
         return ClaudeCliBackend(executablePath: executablePath);
 
       case BackendType.codex:
-        return codex.CodexBackend.create(executablePath: executablePath);
+        return codex.CodexBackend.create(
+          executablePath: executablePath,
+          workingDirectory: workingDirectory,
+        );
       case BackendType.acp:
-        throw UnsupportedError('ACP backend is not implemented yet.');
+        return acp.AcpBackend.create(
+          executablePath: executablePath,
+          arguments: arguments,
+          workingDirectory: workingDirectory,
+        );
     }
   }
 

@@ -94,6 +94,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   Future<void> start({
     sdk.BackendType type = sdk.BackendType.directCli,
     String? executablePath,
+    String? workingDirectory,
   }) async {
     _isReady = true;
     _backendType = type;
@@ -112,6 +113,8 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   Future<sdk.AgentBackend> createBackend({
     required sdk.BackendType type,
     String? executablePath,
+    List<String> arguments = const [],
+    String? workingDirectory,
   }) async {
     throw UnimplementedError();
   }

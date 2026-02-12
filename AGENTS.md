@@ -323,6 +323,8 @@ The SDK evaluates tool permissions in this order (first match wins):
 
 **See `TESTING.md` for comprehensive testing guidelines, helpers, and patterns.**
 
+When finishing a task, always run the relevant tests unless explicitly told not to.
+
 ### Critical Rules
 
 1. **Never use `pumpAndSettle()` without timeout** - Use `safePumpAndSettle()` from `test/test_helpers.dart`

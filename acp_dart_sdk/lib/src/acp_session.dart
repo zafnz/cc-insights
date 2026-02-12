@@ -716,8 +716,8 @@ class AcpSession implements AgentSession {
         ?.whereType<String>()
         .toList();
 
-    final contentRaw = toolCall['content'] as Map<String, dynamic>?;
-    final contentParse = contentRaw != null ? _parseToolContent(contentRaw) : null;
+    final contentRaw = toolCall['content'];
+    final contentParse = _parseToolContentAny(contentRaw);
 
     final completionStatus = _mapToolStatus(statusRaw);
     if (completionStatus != null) {
@@ -858,6 +858,36 @@ class AcpSession implements AgentSession {
       output: content,
       extensions: extensions,
     );
+  }
+
+  _ToolContentParse? _parseToolContentAny(Object? content) {
+    if (content == null) return null;
+    if (content is Map) {
+      return _parseToolContent(Map<String, dynamic>.from(content));
+    }
+    if (content is List) {
+      final contentBlocks = <ContentBlock>[];
+      final outputs = <dynamic>[];
+      for (final item in content) {
+        if (item is Map) {
+          final parsed = _parseToolContent(Map<String, dynamic>.from(item));
+          if (parsed.content != null) {
+            contentBlocks.addAll(parsed.content!);
+          }
+          if (parsed.output != null) {
+            outputs.add(parsed.output);
+          }
+        }
+      }
+      return _ToolContentParse(
+        content: contentBlocks.isEmpty ? null : contentBlocks,
+        output: outputs.isEmpty
+            ? null
+            : (outputs.length == 1 ? outputs.first : outputs),
+        extensions: {'acp.toolContent': content},
+      );
+    }
+    return null;
   }
 
   String _contentToText(Object? content) {

@@ -134,8 +134,15 @@ class BackendService extends ChangeNotifier {
   Future<AgentBackend> createBackend({
     required BackendType type,
     String? executablePath,
+    List<String> arguments = const [],
+    String? workingDirectory,
   }) {
-    return BackendFactory.create(type: type, executablePath: executablePath);
+    return BackendFactory.create(
+      type: type,
+      executablePath: executablePath,
+      arguments: arguments,
+      workingDirectory: workingDirectory,
+    );
   }
 
   /// Registers a backend for testing purposes.
@@ -174,12 +181,89 @@ class BackendService extends ChangeNotifier {
     };
   }
 
+  List<String> _resolveExecutableArguments(BackendType type) {
+    final config = RuntimeConfig.instance;
+    return switch (type) {
+      BackendType.acp => _parseCliArguments(config.acpCliArgs),
+      _ => const [],
+    };
+  }
+
+  String _resolveWorkingDirectory(String? workingDirectory) {
+    if (workingDirectory != null && workingDirectory.isNotEmpty) {
+      return workingDirectory;
+    }
+    return RuntimeConfig.instance.workingDirectory;
+  }
+
+  List<String> _parseCliArguments(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return const [];
+
+    final args = <String>[];
+    var buffer = StringBuffer();
+    var inSingle = false;
+    var inDouble = false;
+    var escaped = false;
+
+    void flush() {
+      if (buffer.length == 0) return;
+      args.add(buffer.toString());
+      buffer = StringBuffer();
+    }
+
+    for (final rune in trimmed.runes) {
+      final char = String.fromCharCode(rune);
+      if (escaped) {
+        buffer.write(char);
+        escaped = false;
+        continue;
+      }
+
+      if (char == '\\' && !inSingle) {
+        escaped = true;
+        continue;
+      }
+
+      if (char == '\'' && !inDouble) {
+        inSingle = !inSingle;
+        continue;
+      }
+
+      if (char == '"' && !inSingle) {
+        inDouble = !inDouble;
+        continue;
+      }
+
+      final isWhitespace = char.trim().isEmpty;
+      if (isWhitespace && !inSingle && !inDouble) {
+        flush();
+        continue;
+      }
+
+      buffer.write(char);
+    }
+
+    if (escaped) {
+      buffer.write('\\');
+    }
+    flush();
+    return args;
+  }
+
   Future<void> start({
     BackendType type = BackendType.directCli,
     String? executablePath,
+    String? workingDirectory,
   }) async {
     final effectivePath = executablePath ?? _resolveExecutablePath(type);
-    _t('BackendService', 'start() called, type=${type.name}, executablePath=${effectivePath ?? 'default'}');
+    final arguments = _resolveExecutableArguments(type);
+    final effectiveCwd = _resolveWorkingDirectory(workingDirectory);
+    final argsLabel = arguments.isEmpty ? 'none' : arguments.join(' ');
+    _t(
+      'BackendService',
+      'start() called, type=${type.name}, executablePath=${effectivePath ?? 'default'}, arguments=$argsLabel, cwd=$effectiveCwd',
+    );
     _backendType = type;
     final existing = _backends[type];
     if (existing != null) {
@@ -200,7 +284,12 @@ class BackendService extends ChangeNotifier {
 
     try {
       _t('BackendService', 'Creating backend for ${type.name}...');
-      final backend = await createBackend(type: type, executablePath: effectivePath);
+      final backend = await createBackend(
+        type: type,
+        executablePath: effectivePath,
+        arguments: arguments,
+        workingDirectory: effectiveCwd,
+      );
       _backends[type] = backend;
       _t('BackendService', 'Backend created for ${type.name}, capabilities: ${backend.capabilities}');
 
