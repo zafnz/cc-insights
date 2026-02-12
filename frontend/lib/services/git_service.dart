@@ -528,7 +528,7 @@ class RealGitService implements GitService {
     String? workingDirectory,
   }) async {
     final command = 'git ${args.join(' ')}';
-    LogService.instance.debug('Git', command, meta: {'cwd': workingDirectory ?? '.'});
+    LogService.instance.trace('Git', command, meta: {'cwd': workingDirectory ?? '.'});
     try {
       final result = await Process.run(
         'git',
@@ -1211,7 +1211,7 @@ class RealGitService implements GitService {
       final toplevel = lines.length > 2 ? lines[2].trim() : '';
       final prefix = lines.length > 3 ? lines[3].trim() : '';
 
-      LogService.instance.debug(log, 'git rev-parse output', meta: {
+      LogService.instance.trace(log, 'git rev-parse output', meta: {
         'git-dir': gitDir,
         'git-common-dir': gitCommonDir,
         'toplevel': toplevel,

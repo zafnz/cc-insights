@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -159,15 +160,9 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
                         style: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
                     )
-                  : SelectionArea(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        itemCount: _filteredEntries.length,
-                        itemExtent: null,
-                        itemBuilder: (context, index) {
-                          return _LogEntryRow(entry: _filteredEntries[index]);
-                        },
-                      ),
+                  : _LogListView(
+                      scrollController: _scrollController,
+                      entries: _filteredEntries,
                     ),
               // Jump to bottom FAB
               if (!_isAtBottom && _filteredEntries.isNotEmpty)
@@ -430,11 +425,213 @@ class _CompactDropdown<T> extends StatelessWidget {
   }
 }
 
+/// Log list with row-based drag selection and Cmd+C copy support.
+class _LogListView extends StatefulWidget {
+  const _LogListView({
+    required this.scrollController,
+    required this.entries,
+  });
+
+  final ScrollController scrollController;
+  final List<LogEntry> entries;
+
+  @override
+  State<_LogListView> createState() => _LogListViewState();
+}
+
+class _LogListViewState extends State<_LogListView> {
+  late final FocusNode _focusNode;
+
+  // Selection range (inclusive indices into widget.entries)
+  int? _anchorIndex;
+  int? _extentIndex;
+  bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Set<int> get _selectedIndices {
+    if (_anchorIndex == null || _extentIndex == null) return {};
+    final lo =
+        _anchorIndex! < _extentIndex! ? _anchorIndex! : _extentIndex!;
+    final hi =
+        _anchorIndex! > _extentIndex! ? _anchorIndex! : _extentIndex!;
+    return {for (var i = lo; i <= hi; i++) i};
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _anchorIndex = null;
+      _extentIndex = null;
+    });
+  }
+
+  void _copySelection() {
+    final indices = _selectedIndices;
+    if (indices.isEmpty) return;
+    final sorted = indices.toList()..sort();
+    final buffer = StringBuffer();
+    for (final i in sorted) {
+      final entry = widget.entries[i];
+      final levelLabel = switch (entry.level) {
+        LogLevel.trace => 'TRC',
+        LogLevel.debug => 'DBG',
+        LogLevel.info => 'INF',
+        LogLevel.notice => 'NTC',
+        LogLevel.warn => 'WRN',
+        LogLevel.error => 'ERR',
+      };
+      buffer.writeln(
+        '${_formatTimestamp(entry.timestamp)}  $levelLabel  ${entry.source}  ${entry.message}',
+      );
+      if (entry.meta != null && entry.meta!.isNotEmpty) {
+        final metaJson =
+            const JsonEncoder.withIndent('  ').convert(entry.meta);
+        for (final line in metaJson.split('\n')) {
+          buffer.writeln('    $line');
+        }
+      }
+    }
+    Clipboard.setData(ClipboardData(text: buffer.toString().trimRight()));
+  }
+
+  int? _indexAtPosition(Offset globalPosition) {
+    for (final entry in _rowKeys.entries) {
+      final key = entry.value;
+      if (key.currentContext == null) continue;
+      final rowBox = key.currentContext!.findRenderObject() as RenderBox?;
+      if (rowBox == null || !rowBox.attached) continue;
+      final rowPos = rowBox.localToGlobal(Offset.zero);
+      if (globalPosition.dy >= rowPos.dy &&
+          globalPosition.dy < rowPos.dy + rowBox.size.height) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  // GlobalKeys for visible rows to enable hit-testing
+  final Map<int, GlobalKey> _rowKeys = {};
+
+  GlobalKey _keyForIndex(int index) {
+    return _rowKeys.putIfAbsent(index, () => GlobalKey());
+  }
+
+  @override
+  void didUpdateWidget(_LogListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entries != widget.entries) {
+      _rowKeys.clear();
+    }
+  }
+
+  void _handlePointerDown(Offset globalPosition) {
+    _focusNode.requestFocus();
+    final idx = _indexAtPosition(globalPosition);
+    if (idx == null) return;
+    setState(() {
+      if (HardwareKeyboard.instance.isShiftPressed &&
+          _anchorIndex != null) {
+        _extentIndex = idx;
+      } else {
+        _anchorIndex = idx;
+        _extentIndex = idx;
+      }
+      _isDragging = true;
+    });
+  }
+
+  void _handlePointerMove(Offset globalPosition) {
+    if (!_isDragging) return;
+    final idx = _indexAtPosition(globalPosition);
+    if (idx != null && idx != _extentIndex) {
+      setState(() {
+        _extentIndex = idx;
+      });
+    }
+  }
+
+  void _handlePointerUp() {
+    _isDragging = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = _selectedIndices;
+
+    return Actions(
+      actions: <Type, Action<Intent>>{
+        CopySelectionTextIntent: CallbackAction<CopySelectionTextIntent>(
+          onInvoke: (_) {
+            _copySelection();
+            return null;
+          },
+        ),
+        DismissIntent: CallbackAction<DismissIntent>(
+          onInvoke: (_) {
+            _clearSelection();
+            return null;
+          },
+        ),
+      },
+      child: Focus(
+        focusNode: _focusNode,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) =>
+              _handlePointerDown(event.position),
+          onPointerMove: (event) =>
+              _handlePointerMove(event.position),
+          onPointerUp: (_) => _handlePointerUp(),
+          child: ListView.builder(
+            controller: widget.scrollController,
+            itemCount: widget.entries.length,
+            itemBuilder: (context, index) {
+              return _LogEntryRow(
+                key: _keyForIndex(index),
+                entry: widget.entries[index],
+                isSelected: selected.contains(index),
+                selectedColor:
+                    colorScheme.primary.withValues(alpha: 0.12),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _formatTimestamp(DateTime ts) {
+    final h = ts.hour.toString().padLeft(2, '0');
+    final m = ts.minute.toString().padLeft(2, '0');
+    final s = ts.second.toString().padLeft(2, '0');
+    final ms = ts.millisecond.toString().padLeft(3, '0');
+    return '$h:$m:$s.$ms';
+  }
+}
+
 /// Individual log entry row.
 class _LogEntryRow extends StatefulWidget {
-  const _LogEntryRow({required this.entry});
+  const _LogEntryRow({
+    super.key,
+    required this.entry,
+    this.isSelected = false,
+    this.selectedColor,
+  });
 
   final LogEntry entry;
+  final bool isSelected;
+  final Color? selectedColor;
 
   @override
   State<_LogEntryRow> createState() => _LogEntryRowState();
@@ -456,6 +653,7 @@ class _LogEntryRowState extends State<_LogEntryRow> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
+        color: widget.isSelected ? widget.selectedColor : null,
         border: Border(
           bottom: BorderSide(
             color: colorScheme.outlineVariant.withValues(alpha: 0.15),
@@ -502,7 +700,7 @@ class _LogEntryRowState extends State<_LogEntryRow> {
               // Message
               Expanded(
                 child: Text(
-                  '${entry.message}\n',
+                  entry.message,
                   style: monoStyle,
                   maxLines: _expanded ? null : 1,
                   overflow: _expanded ? null : TextOverflow.ellipsis,
@@ -528,8 +726,8 @@ class _LogEntryRowState extends State<_LogEntryRow> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color:
-                      colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  color: colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
