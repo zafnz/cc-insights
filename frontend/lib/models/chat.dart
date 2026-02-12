@@ -248,11 +248,12 @@ class ChatState extends ChangeNotifier {
   /// error is received.
   bool _isWorking = false;
 
-  /// The time when Claude started working.
+  /// Stopwatch tracking how long Claude has been working.
   ///
-  /// Set when [_isWorking] becomes true, cleared when it becomes false.
-  /// Used by the UI to show elapsed time in the working indicator.
-  DateTime? _workingStartTime;
+  /// Started when [_isWorking] becomes true, stopped and cleared when it
+  /// becomes false. Uses monotonic clock time so it doesn't count time
+  /// spent in system sleep/suspend.
+  Stopwatch? _workingStopwatch;
 
   /// Whether the context is currently being compacted.
   ///
@@ -488,10 +489,11 @@ class ChatState extends ChangeNotifier {
   /// True when a session is active and Claude is generating a response.
   bool get isWorking => _isWorking;
 
-  /// The time when Claude started working, or null if not working.
+  /// Stopwatch tracking active working time, or null if not working.
   ///
-  /// Used by the UI to calculate and display elapsed time in the working indicator.
-  DateTime? get workingStartTime => _workingStartTime;
+  /// Uses monotonic clock so elapsed time excludes system sleep/suspend.
+  /// Used by the UI to display elapsed time in the working indicator.
+  Stopwatch? get workingStopwatch => _workingStopwatch;
 
   /// Whether the context is currently being compacted.
   ///
@@ -1188,7 +1190,7 @@ class ChatState extends ChangeNotifier {
 
     // Mark as working since we're starting with a prompt
     _isWorking = true;
-    _workingStartTime = DateTime.now();
+    _workingStopwatch = Stopwatch()..start();
 
     _t('ChatState', '========== Session fully set up, working=true ==========');
     notifyListeners();
@@ -1286,7 +1288,8 @@ class ChatState extends ChangeNotifier {
     // Clear the working/compacting state - Claude will stop generating
     _isWorking = false;
     _isCompacting = false;
-    _workingStartTime = null;
+    _workingStopwatch?.stop();
+    _workingStopwatch = null;
 
     // Update all active agents to error state since they were interrupted
     for (final sdkAgentId in _activeAgents.keys.toList()) {
@@ -1346,20 +1349,28 @@ class ChatState extends ChangeNotifier {
   /// Sets the working state.
   ///
   /// Called by [EventHandler] when starting/stopping work.
-  /// When [working] is true, records the current time as [_workingStartTime].
-  /// When [working] is false, calculates elapsed time and adds it to
-  /// [_timingStats], then clears [_workingStartTime].
+  /// When [working] is true, starts a new [Stopwatch] to track elapsed time.
+  /// When [working] is false, reads elapsed time from the stopwatch, adds it
+  /// to [_timingStats], and clears the stopwatch.
+  ///
+  /// Uses [Stopwatch] (monotonic clock) instead of wall-clock time so that
+  /// system sleep/suspend is not counted as working time.
   void setWorking(bool working) {
     if (_isWorking != working) {
       // When transitioning from working to not working, record the elapsed time
-      if (!working && _workingStartTime != null) {
-        final elapsed = DateTime.now().difference(_workingStartTime!);
+      if (!working && _workingStopwatch != null) {
+        _workingStopwatch!.stop();
+        final elapsed = _workingStopwatch!.elapsed;
         _timingStats = _timingStats.addClaudeWorkingTime(elapsed);
         _scheduleMetaSave();
       }
 
       _isWorking = working;
-      _workingStartTime = working ? DateTime.now() : null;
+      if (working) {
+        _workingStopwatch = Stopwatch()..start();
+      } else {
+        _workingStopwatch = null;
+      }
       notifyListeners();
     }
   }
@@ -1548,7 +1559,8 @@ class ChatState extends ChangeNotifier {
     _eventHandler = null;
     _isWorking = false;
     _isCompacting = false;
-    _workingStartTime = null;
+    _workingStopwatch?.stop();
+    _workingStopwatch = null;
     _eventSubscription = null;
     _permissionSubscription = null;
     _pendingPermissions.clear();
@@ -1617,7 +1629,8 @@ class ChatState extends ChangeNotifier {
     _testHasActiveSession = false;
     _isWorking = false;
     _isCompacting = false;
-    _workingStartTime = null;
+    _workingStopwatch?.stop();
+    _workingStopwatch = null;
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();
     _eventHandler = null;
@@ -1640,7 +1653,8 @@ class ChatState extends ChangeNotifier {
     _testHasActiveSession = false;
     _isWorking = false;
     _isCompacting = false;
-    _workingStartTime = null;
+    _workingStopwatch?.stop();
+    _workingStopwatch = null;
     resetContext();
     addEntry(ContextClearedEntry(timestamp: DateTime.now()));
     notifyListeners();

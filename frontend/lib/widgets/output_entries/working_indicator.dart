@@ -26,14 +26,15 @@ class WorkingIndicatorKeys {
 /// When [isCompacting] is true, shows "Compacting context..." instead of
 /// the default "Claude is working..." message.
 ///
-/// If [startTime] is provided, the elapsed time is calculated from that time.
-/// Otherwise, a new timer starts when the widget is created.
+/// If [stopwatch] is provided, the elapsed time is read from it.
+/// The stopwatch uses monotonic clock time, so system sleep/suspend
+/// is not counted as working time.
 class WorkingIndicator extends StatefulWidget {
   const WorkingIndicator({
     super.key,
     this.agentName = 'Claude',
     this.isCompacting = false,
-    this.startTime,
+    this.stopwatch,
   });
 
   /// The name of the agent (e.g. "Claude" or "Codex").
@@ -45,11 +46,11 @@ class WorkingIndicator extends StatefulWidget {
   /// `<Agent> is working...` message.
   final bool isCompacting;
 
-  /// The time when Claude started working.
+  /// Stopwatch tracking active working time.
   ///
-  /// If provided, elapsed time is calculated from this time.
-  /// Otherwise, the timer starts when this widget is created.
-  final DateTime? startTime;
+  /// Uses monotonic clock so elapsed time excludes system sleep/suspend.
+  /// If null, elapsed time shows as zero.
+  final Stopwatch? stopwatch;
 
   @override
   State<WorkingIndicator> createState() => _WorkingIndicatorState();
@@ -73,15 +74,12 @@ class _WorkingIndicatorState extends State<WorkingIndicator> {
     super.dispose();
   }
 
-  /// Calculates the elapsed duration since work started.
+  /// Returns the elapsed duration from the stopwatch.
   ///
-  /// If [widget.startTime] is provided, calculates from that time.
-  /// Otherwise, returns zero duration (timer just started).
+  /// Uses the stopwatch's monotonic clock, which does not advance
+  /// during system sleep/suspend.
   Duration get _elapsed {
-    if (widget.startTime != null) {
-      return DateTime.now().difference(widget.startTime!);
-    }
-    return Duration.zero;
+    return widget.stopwatch?.elapsed ?? Duration.zero;
   }
 
   /// Formats elapsed duration as "Xs", "Xm", "XmYs".

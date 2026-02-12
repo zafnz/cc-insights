@@ -646,7 +646,7 @@ class _ConversationPanelState extends State<ConversationPanel>
           return WorkingIndicator(
             agentName: agentName,
             isCompacting: isCompacting,
-            startTime: chat?.workingStartTime,
+            stopwatch: chat?.workingStopwatch,
           );
         }
 

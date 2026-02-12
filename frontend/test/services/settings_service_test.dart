@@ -349,8 +349,8 @@ void main() {
 
         // Set an initial value so the file exists
         await service.setValue('appearance.showTimestamps', false);
-        // Wait for the self-write guard to clear
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        // Wait for the self-write guard to clear (guard lasts 1000ms)
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
 
         // Simulate an external edit
         final file = File(configPath);
