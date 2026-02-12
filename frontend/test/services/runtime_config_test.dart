@@ -464,5 +464,75 @@ void main() {
       check(config.cliOverrides['logging.filePath'])
           .equals('~/path=with=equals.log');
     });
+
+    group('validation warnings', () {
+      test('rejects invalid dropdown value and adds warning', () {
+        RuntimeConfig.initialize(
+          ['--appearance.themeMode=Light'],
+          settingDefinitions: defs,
+        );
+
+        check(config.isOverridden('appearance.themeMode')).isFalse();
+        check(config.cliWarnings.length).equals(1);
+        check(config.cliWarnings.first).contains('invalid value "Light"');
+        check(config.cliWarnings.first).contains('light, dark, system');
+      });
+
+      test('accepts valid dropdown value without warning', () {
+        RuntimeConfig.initialize(
+          ['--appearance.themeMode=light'],
+          settingDefinitions: defs,
+        );
+
+        check(config.isOverridden('appearance.themeMode')).isTrue();
+        check(config.cliWarnings).isEmpty();
+      });
+
+      test('rejects non-numeric value for number setting', () {
+        RuntimeConfig.initialize(
+          ['--appearance.timestampIdleThreshold=abc'],
+          settingDefinitions: defs,
+        );
+
+        check(config.isOverridden('appearance.timestampIdleThreshold'))
+            .isFalse();
+        check(config.cliWarnings.length).equals(1);
+        check(config.cliWarnings.first).contains('expected a number');
+      });
+
+      test('rejects invalid toggle value', () {
+        RuntimeConfig.initialize(
+          ['--appearance.showTimestamps=yes'],
+          settingDefinitions: defs,
+        );
+
+        check(config.isOverridden('appearance.showTimestamps')).isFalse();
+        check(config.cliWarnings.length).equals(1);
+        check(config.cliWarnings.first).contains('expected true/false/1/0');
+      });
+
+      test('text settings accept any value without warning', () {
+        RuntimeConfig.initialize(
+          ['--logging.filePath=anything goes here'],
+          settingDefinitions: defs,
+        );
+
+        check(config.isOverridden('logging.filePath')).isTrue();
+        check(config.cliWarnings).isEmpty();
+      });
+
+      test('resetForTesting clears warnings', () {
+        RuntimeConfig.initialize(
+          ['--appearance.themeMode=INVALID'],
+          settingDefinitions: defs,
+        );
+
+        check(config.cliWarnings).isNotEmpty();
+
+        RuntimeConfig.resetForTesting();
+
+        check(config.cliWarnings).isEmpty();
+      });
+    });
   });
 }

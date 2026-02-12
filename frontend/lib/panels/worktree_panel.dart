@@ -875,7 +875,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     final restoreService = context.read<ProjectRestoreService>();
     final scriptService = context.read<ScriptExecutionService>();
     final settings = context.read<SettingsService>();
-    final archive = settings.getValue<bool>('behavior.archiveChats');
+    final archive = settings.getEffectiveValue<bool>('behavior.archiveChats');
 
     // Save cost tracking for all chats in this worktree before deletion
     final projectId = PersistenceService.generateProjectId(repoRoot);
@@ -892,7 +892,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     }
 
     final deleteBranch =
-        settings.getValue<bool>('behavior.deleteBranchWithWorktree');
+        settings.getEffectiveValue<bool>('behavior.deleteBranchWithWorktree');
 
     if (!context.mounted) return;
     final result = await showDeleteWorktreeDialog(

@@ -13,6 +13,7 @@ import '../services/git_service.dart';
 import '../services/menu_action_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
+import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
@@ -93,6 +94,7 @@ class _MainScreenState extends State<MainScreen> {
       _setupUnhandledErrorListener();
       _setupTicketBoardListener();
       _syncMergeStateToMenu();
+      _showCliWarnings();
     });
   }
 
@@ -146,6 +148,14 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     });
+  }
+
+  void _showCliWarnings() {
+    final warnings = RuntimeConfig.instance.cliWarnings;
+    if (warnings.isEmpty || !mounted) return;
+    for (final warning in warnings) {
+      showErrorSnackBar(context, warning);
+    }
   }
 
   void _setupTicketBoardListener() {

@@ -73,7 +73,7 @@ class _CliRequiredScreenState extends State<CliRequiredScreen> {
     await widget.cliAvailability.checkAll(
       claudePath: path,
       codexPath:
-          widget.settingsService.getValue<String>('session.codexCliPath'),
+          widget.settingsService.getEffectiveValue<String>('session.codexCliPath'),
     );
 
     if (!mounted) return;
@@ -97,7 +97,7 @@ class _CliRequiredScreenState extends State<CliRequiredScreen> {
     // Re-check without custom path (maybe user just installed it)
     await widget.cliAvailability.checkAll(
       codexPath:
-          widget.settingsService.getValue<String>('session.codexCliPath'),
+          widget.settingsService.getEffectiveValue<String>('session.codexCliPath'),
     );
 
     if (!mounted) return;

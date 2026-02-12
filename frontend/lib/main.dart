@@ -434,15 +434,15 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   void _syncThemeFromSettings() {
     if (_settingsService == null || _themeState == null) return;
     final colorValue = _settingsService!
-        .getValue<int>('appearance.seedColor');
+        .getEffectiveValue<int>('appearance.seedColor');
     _themeState!.setSeedColor(Color(colorValue));
     final modeStr = _settingsService!
-        .getValue<String>('appearance.themeMode');
+        .getEffectiveValue<String>('appearance.themeMode');
     _themeState!.setThemeMode(
       ThemeState.parseThemeMode(modeStr),
     );
     final inputColorValue = _settingsService!
-        .getValue<int>('appearance.inputTextColor');
+        .getEffectiveValue<int>('appearance.inputTextColor');
     _themeState!.setInputTextColor(
       inputColorValue == 0 ? null : Color(inputColorValue),
     );
@@ -1078,7 +1078,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             // Wire up the event handler for ticket status transitions
             context.read<EventHandler>().ticketBoard = ticketBoardState;
             // Register internal MCP tools with the ticket board
-            if (context.read<SettingsService>().getValue<bool>(
+            if (context.read<SettingsService>().getEffectiveValue<bool>(
               'projectMgmt.agentTicketTools',
             )) {
               context.read<InternalToolsService>().registerTicketTools(
@@ -1101,7 +1101,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             // Wire up the event handler for ticket status transitions
             context.read<EventHandler>().ticketBoard = ticketBoardState;
             // Register internal MCP tools with the ticket board
-            if (context.read<SettingsService>().getValue<bool>(
+            if (context.read<SettingsService>().getEffectiveValue<bool>(
               'projectMgmt.agentTicketTools',
             )) {
               context.read<InternalToolsService>().registerTicketTools(

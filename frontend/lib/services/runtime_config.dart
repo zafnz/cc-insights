@@ -51,8 +51,14 @@ class RuntimeConfig extends ChangeNotifier {
   /// but are never persisted to disk.
   final Map<String, dynamic> _cliOverrides = {};
 
+  /// Warnings generated during CLI override parsing (e.g. invalid values).
+  final List<String> _cliWarnings = [];
+
   /// Returns an unmodifiable view of CLI overrides.
   Map<String, dynamic> get cliOverrides => Map.unmodifiable(_cliOverrides);
+
+  /// Returns warnings from CLI override parsing. Empty if all overrides valid.
+  List<String> get cliWarnings => List.unmodifiable(_cliWarnings);
 
   /// Whether the given setting key is overridden via CLI or environment variable.
   bool isOverridden(String key) => _cliOverrides.containsKey(key);
@@ -241,7 +247,12 @@ class RuntimeConfig extends ChangeNotifier {
         final rawValue = arg.substring(eqIdx + 1);
         final def = defsByKey[key];
         if (def != null) {
-          _instance._cliOverrides[key] = _coerceValue(rawValue, def.type);
+          final warning = _validateValue(rawValue, def);
+          if (warning != null) {
+            _instance._cliWarnings.add(warning);
+          } else {
+            _instance._cliOverrides[key] = _coerceValue(rawValue, def.type);
+          }
         }
       } else if (!arg.startsWith('-')) {
         positionalArgs.add(arg);
@@ -254,7 +265,12 @@ class RuntimeConfig extends ChangeNotifier {
       final envKey = _settingKeyToEnvVar(def.key);
       final envVal = Platform.environment[envKey];
       if (envVal != null) {
-        _instance._cliOverrides[def.key] = _coerceValue(envVal, def.type);
+        final warning = _validateValue(envVal, def);
+        if (warning != null) {
+          _instance._cliWarnings.add(warning);
+        } else {
+          _instance._cliOverrides[def.key] = _coerceValue(envVal, def.type);
+        }
       }
     }
 
@@ -294,6 +310,35 @@ class RuntimeConfig extends ChangeNotifier {
       SettingType.colorPicker => int.tryParse(raw) ?? 0,
       SettingType.dropdown || SettingType.text => raw,
     };
+  }
+
+  /// Validates a raw CLI/env value against a setting definition.
+  ///
+  /// Returns a human-readable warning string if invalid, or null if valid.
+  static String? _validateValue(String raw, SettingDefinition def) {
+    switch (def.type) {
+      case SettingType.dropdown:
+        final validValues = def.options?.map((o) => o.value).toList() ?? [];
+        if (!validValues.contains(raw)) {
+          return '--${def.key} has invalid value "$raw"'
+              ' (valid: ${validValues.join(", ")})';
+        }
+      case SettingType.number:
+        final parsed = int.tryParse(raw);
+        if (parsed == null) {
+          return '--${def.key} has invalid value "$raw" (expected a number)';
+        }
+      case SettingType.toggle:
+        final lower = raw.toLowerCase();
+        if (lower != 'true' && lower != 'false' && raw != '1' && raw != '0') {
+          return '--${def.key} has invalid value "$raw"'
+              ' (expected true/false/1/0)';
+        }
+      case SettingType.text:
+      case SettingType.colorPicker:
+        break; // No validation needed
+    }
+    return null;
   }
 
   /// Converts a setting key to an environment variable name.
@@ -615,6 +660,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._workingDirectory = Directory.current.path;
     _instance._configDir = null;
     _instance._cliOverrides.clear();
+    _instance._cliWarnings.clear();
     _instance._bashToolSummary = BashToolSummary.description;
     _instance._toolSummaryRelativeFilePaths = true;
     _instance._monoFontFamily = 'JetBrains Mono';

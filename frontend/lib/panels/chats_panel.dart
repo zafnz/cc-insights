@@ -88,7 +88,7 @@ class _ChatsListContentState extends State<_ChatsListContent> {
   ) async {
     final restoreService = context.read<ProjectRestoreService>();
     final settings = context.read<SettingsService>();
-    final archive = settings.getValue<bool>('behavior.archiveChats');
+    final archive = settings.getEffectiveValue<bool>('behavior.archiveChats');
     await selection.closeChat(chat, restoreService, archive: archive);
   }
 

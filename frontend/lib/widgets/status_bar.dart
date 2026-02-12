@@ -281,7 +281,7 @@ class _RateLimitStats extends StatelessWidget {
     String displayMode = 'summary';
     try {
       final settings = context.watch<SettingsService>();
-      displayMode = settings.getValue<String>('appearance.codexUsageDisplay');
+      displayMode = settings.getEffectiveValue<String>('appearance.codexUsageDisplay');
     } on ProviderNotFoundException {
       // No settings provider in tests — use default.
     }
