@@ -170,10 +170,10 @@ This plan breaks the ACP backend into manageable tasks. Each task includes requi
   - Unit tests for permission request parsing and response formatting.
 - Definition of Done:
   - Permission dialog renders ACP options and responses are accepted by stub ACP agent.
-- [ ] Implemented
-- [ ] Tests written
-- [ ] Review passed
-- [ ] Done
+- [x] Implemented
+- [x] Tests written
+- [x] Review passed
+- [x] Done
 
 **Task 12: Filesystem RPC Methods**
 - Description: Implement `fs/read_text_file` and `fs/write_text_file` server-side in the client.

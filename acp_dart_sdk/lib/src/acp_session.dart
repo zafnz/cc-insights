@@ -18,6 +18,7 @@ class AcpSession implements AgentSession {
         _cwd = cwd,
         _includePartialMessages = includePartialMessages {
     _notificationSub = _process.notifications.listen(_handleNotification);
+    _serverRequestSub = _process.serverRequests.listen(_handleServerRequest);
   }
 
   final AcpProcess _process;
@@ -28,6 +29,7 @@ class AcpSession implements AgentSession {
   int _eventIdCounter = 0;
   bool _active = true;
   StreamSubscription<JsonRpcNotification>? _notificationSub;
+  StreamSubscription<JsonRpcServerRequest>? _serverRequestSub;
   final Set<String> _emittedToolCalls = {};
 
   @override
@@ -183,6 +185,136 @@ class AcpSession implements AgentSession {
             update['toolCall'] as Map<String, dynamic>? ?? update;
         _handleToolCall(toolCall, raw: update);
     }
+  }
+
+  void _handleServerRequest(JsonRpcServerRequest request) {
+    if (!_active) return;
+    final params = request.params ?? const <String, dynamic>{};
+
+    switch (request.method) {
+      case 'session/request_permission':
+        _handlePermissionRequest(request, params);
+      default:
+        _process.sendError(
+          request.id,
+          -32601,
+          'Unsupported request: ${request.method}',
+        );
+    }
+  }
+
+  void _handlePermissionRequest(
+    JsonRpcServerRequest request,
+    Map<String, dynamic> params,
+  ) {
+    final sessionId = params['sessionId'] as String? ?? _sessionId;
+    if (sessionId != _sessionId) return;
+
+    final toolCall = params['toolCall'] as Map<String, dynamic>? ?? const {};
+    final options = (params['options'] as List<dynamic>?)
+            ?.whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList() ??
+        const <Map<String, dynamic>>[];
+
+    final toolName =
+        toolCall['title'] as String? ?? toolCall['kind'] as String? ?? 'tool';
+    final toolKind = _mapToolKind(toolCall['kind'] as String?);
+    final toolInputRaw = toolCall['rawInput'];
+    final toolInput = toolInputRaw is Map
+        ? Map<String, dynamic>.from(toolInputRaw)
+        : <String, dynamic>{};
+    final toolUseId = toolCall['toolCallId'] as String?;
+
+    _eventsController.add(PermissionRequestEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: params,
+      extensions: {
+        'acp.options': options,
+        'acp.toolCall': toolCall,
+      },
+      sessionId: _sessionId,
+      requestId: request.id.toString(),
+      toolName: toolName,
+      toolKind: toolKind,
+      toolInput: toolInput,
+      toolUseId: toolUseId,
+    ));
+
+    final completer = Completer<PermissionResponse>();
+    final permission = PermissionRequest(
+      id: request.id.toString(),
+      sessionId: _sessionId,
+      toolName: toolName,
+      toolInput: toolInput,
+      toolUseId: toolUseId,
+      rawJson: params,
+      completer: completer,
+    );
+
+    _permissionController.add(permission);
+
+    completer.future.then((response) {
+      if (!_active) return;
+      final outcome = _mapPermissionOutcome(response, options);
+      _process.sendResponse(request.id, {'outcome': outcome});
+    });
+  }
+
+  Map<String, dynamic> _mapPermissionOutcome(
+    PermissionResponse response,
+    List<Map<String, dynamic>> options,
+  ) {
+    if (response is PermissionAllowResponse) {
+      final optionId =
+              _extractOptionId(response.updatedInput, options) ??
+          _defaultOptionId(options);
+      if (optionId != null) {
+        return {
+          'outcome': 'selected',
+          'optionId': optionId,
+        };
+      }
+    }
+
+    return {
+      'outcome': 'cancelled',
+    };
+  }
+
+  String? _extractOptionId(
+    Map<String, dynamic>? updatedInput,
+    List<Map<String, dynamic>> options,
+  ) {
+    if (updatedInput == null) return null;
+    final optionId = updatedInput['optionId'] ??
+        updatedInput['option_id'] ??
+        updatedInput['option'];
+    if (optionId is String && optionId.isNotEmpty) return optionId;
+    if (optionId is Map) {
+      final id = optionId['optionId'] ?? optionId['id'];
+      if (id is String && id.isNotEmpty) return id;
+    }
+    final optionIndex = updatedInput['optionIndex'];
+    if (optionIndex is int &&
+        optionIndex >= 0 &&
+        optionIndex < options.length) {
+      return _readOptionId(options[optionIndex]);
+    }
+    return null;
+  }
+
+  String? _defaultOptionId(List<Map<String, dynamic>> options) {
+    if (options.isEmpty) return null;
+    return _readOptionId(options.first);
+  }
+
+  String? _readOptionId(Map<String, dynamic> option) {
+    final id =
+        option['optionId'] ?? option['id'] ?? option['option_id'] ?? '';
+    return id is String && id.isNotEmpty ? id : null;
   }
 
   void _emitTextOrDelta(
@@ -511,6 +643,7 @@ class AcpSession implements AgentSession {
   Future<void> dispose() async {
     _active = false;
     await _notificationSub?.cancel();
+    await _serverRequestSub?.cancel();
     await _eventsController.close();
     await _permissionController.close();
     await _hookController.close();
