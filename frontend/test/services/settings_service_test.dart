@@ -349,7 +349,7 @@ void main() {
 
         // Set an initial value so the file exists
         await service.setValue('appearance.showTimestamps', false);
-        // Wait for the self-write guard to clear (guard lasts 1000ms)
+        // Wait for the self-write guard to clear (guard is 1000ms)
         await Future<void>.delayed(const Duration(milliseconds: 1200));
 
         // Simulate an external edit
@@ -431,6 +431,163 @@ void main() {
 
         await Future<void>.delayed(const Duration(milliseconds: 300));
         // No assertion needed — just verify no crash
+      });
+    });
+
+    group('CLI overrides', () {
+      test('isOverridden delegates to RuntimeConfig', () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          ['--logging.filePath=~/override.log'],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        expect(service.isOverridden('logging.filePath'), isTrue);
+        expect(service.isOverridden('logging.minimumLevel'), isFalse);
+      });
+
+      test('getEffectiveValue returns override when present', () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          ['--logging.filePath=~/override.log'],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        // Set a different value in config
+        await service.setValue('logging.filePath', '~/config.log');
+
+        // getEffectiveValue should return the CLI override
+        expect(
+          service.getEffectiveValue<String>('logging.filePath'),
+          '~/override.log',
+        );
+
+        // getValue should return the config value
+        expect(
+          service.getValue<String>('logging.filePath'),
+          '~/config.log',
+        );
+      });
+
+      test('getEffectiveValue returns config value when not overridden',
+          () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          [],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        await service.setValue('logging.filePath', '~/config.log');
+
+        expect(
+          service.getEffectiveValue<String>('logging.filePath'),
+          '~/config.log',
+        );
+      });
+
+      test('syncToRuntimeConfig skips overridden keys', () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          ['--logging.filePath=~/override.log'],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        // Load config with a different logging.filePath
+        final file = File(configPath);
+        file.writeAsStringSync(jsonEncode({
+          'logging.filePath': '~/config.log',
+        }));
+
+        await service.load();
+
+        // RuntimeConfig should have the CLI override, not the config value
+        expect(
+          RuntimeConfig.instance.loggingFilePath,
+          '~/override.log',
+        );
+      });
+
+      test('setValue on overridden key persists to _values but does not '
+          'sync to RuntimeConfig', () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          ['--logging.filePath=~/override.log'],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        await service.load();
+
+        // Set the value through the normal API
+        await service.setValue('logging.filePath', '~/user-value.log');
+
+        // getValue returns the user-set value (for persistence)
+        expect(
+          service.getValue<String>('logging.filePath'),
+          '~/user-value.log',
+        );
+
+        // RuntimeConfig still has the CLI override
+        expect(
+          RuntimeConfig.instance.loggingFilePath,
+          '~/override.log',
+        );
+
+        // The persisted file should have the user value, not the override
+        final file = File(configPath);
+        final json = jsonDecode(file.readAsStringSync())
+            as Map<String, dynamic>;
+        expect(json['logging.filePath'], '~/user-value.log');
+      });
+
+      test('_save does not include CLI override values', () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          ['--logging.filePath=~/override.log'],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        // Set a non-overridden value and save
+        await service.setValue('appearance.showTimestamps', true);
+
+        final file = File(configPath);
+        final json = jsonDecode(file.readAsStringSync())
+            as Map<String, dynamic>;
+
+        // The override key should not appear in the saved file
+        // (unless the user explicitly set it)
+        expect(json.containsKey('logging.filePath'), isFalse);
+        expect(json['appearance.showTimestamps'], isTrue);
+      });
+
+      test('syncAllToRuntimeConfig applies overrides over config values',
+          () async {
+        RuntimeConfig.resetForTesting();
+        RuntimeConfig.initialize(
+          ['--appearance.showTimestamps=true'],
+          settingDefinitions: SettingsService.allDefinitions,
+        );
+
+        // Config file has showTimestamps = false
+        final file = File(configPath);
+        file.writeAsStringSync(jsonEncode({
+          'appearance.showTimestamps': false,
+        }));
+
+        await service.load();
+
+        // RuntimeConfig should have the CLI override value
+        expect(RuntimeConfig.instance.showTimestamps, isTrue);
+      });
+
+      test('allDefinitions returns all setting definitions', () {
+        final defs = SettingsService.allDefinitions;
+        expect(defs, isNotEmpty);
+
+        // Should contain settings from multiple categories
+        final keys = defs.map((d) => d.key).toSet();
+        expect(keys.contains('logging.filePath'), isTrue);
+        expect(keys.contains('appearance.themeMode'), isTrue);
+        expect(keys.contains('developer.debugSdkLogging'), isTrue);
       });
     });
 

@@ -403,8 +403,9 @@ class _SettingsContent extends StatelessWidget {
     SettingDefinition definition,
   ) {
     var effectiveDefinition = definition;
-    var value = settings.getValue(definition.key);
+    var value = settings.getEffectiveValue(definition.key);
     var isLoading = false;
+    final isOverridden = settings.isOverridden(definition.key);
 
     // CLI path settings get a file picker button
     if (definition.key == 'session.claudeCliPath' ||
@@ -427,6 +428,7 @@ class _SettingsContent extends StatelessWidget {
       return _CliPathSettingRow(
         definition: cliDefinition,
         value: value as String,
+        isOverridden: isOverridden,
         onChanged: (value) {
           _handleSettingChanged(
             context,
@@ -463,6 +465,7 @@ class _SettingsContent extends StatelessWidget {
       definition: effectiveDefinition,
       value: value,
       isLoading: isLoading,
+      isOverridden: isOverridden,
       onChanged: (value) {
         _handleSettingChanged(
           context,
@@ -501,12 +504,14 @@ class _SettingRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.isLoading = false,
+    this.isOverridden = false,
   });
 
   final SettingDefinition definition;
   final dynamic value;
   final ValueChanged<dynamic> onChanged;
   final bool isLoading;
+  final bool isOverridden;
 
   @override
   Widget build(BuildContext context) {
@@ -530,6 +535,7 @@ class _SettingRow extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             InsightsDescriptionText(definition.description),
+            if (isOverridden) _buildOverrideIndicator(context),
             const SizedBox(height: 12),
             _buildInput(context),
           ],
@@ -568,12 +574,39 @@ class _SettingRow extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (isOverridden) _buildOverrideIndicator(context),
               ],
             ),
           ),
           const SizedBox(width: 24),
           // Right: input widget
           _buildInput(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverrideIndicator(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline,
+            size: 12,
+            color: colorScheme.primary.withValues(alpha: 0.7),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Overridden via CLI',
+            style: TextStyle(
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+              color: colorScheme.primary.withValues(alpha: 0.7),
+            ),
+          ),
         ],
       ),
     );
@@ -587,16 +620,19 @@ class _SettingRow extends StatelessWidget {
           value: (value as num).toInt(),
           min: definition.min ?? 0,
           max: definition.max ?? 999,
-          onChanged: (v) => onChanged(v),
+          onChanged: isOverridden ? null : (v) => onChanged(v),
         ),
-      SettingType.colorPicker => _ColorPickerInput(
-          value: (value as num).toInt(),
-          onChanged: onChanged,
-          allowDefault: definition.defaultValue == 0,
-        ),
+      SettingType.colorPicker => isOverridden
+          ? _buildDisabledColorPreview(context)
+          : _ColorPickerInput(
+              value: (value as num).toInt(),
+              onChanged: onChanged,
+              allowDefault: definition.defaultValue == 0,
+            ),
       SettingType.text => _TextSettingInput(
           value: value as String,
           placeholder: definition.placeholder,
+          enabled: !isOverridden,
           onChanged: onChanged,
         ),
     };
@@ -607,7 +643,7 @@ class _SettingRow extends StatelessWidget {
       scale: 0.75,
       child: Switch(
         value: value as bool,
-        onChanged: (v) => onChanged(v),
+        onChanged: isOverridden ? null : (v) => onChanged(v),
       ),
     );
   }
@@ -619,7 +655,9 @@ class _SettingRow extends StatelessWidget {
     final dropdown = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: isOverridden
+            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+            : colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.5),
@@ -631,7 +669,9 @@ class _SettingRow extends StatelessWidget {
           isDense: true,
           style: TextStyle(
             fontSize: 13,
-            color: colorScheme.onSurface,
+            color: isOverridden
+                ? colorScheme.onSurface.withValues(alpha: 0.5)
+                : colorScheme.onSurface,
           ),
           dropdownColor: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
@@ -643,9 +683,11 @@ class _SettingRow extends StatelessWidget {
                 ),
               )
               .toList(),
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
+          onChanged: isOverridden
+              ? null
+              : (v) {
+                  if (v != null) onChanged(v);
+                },
         ),
       ),
     );
@@ -668,6 +710,25 @@ class _SettingRow extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildDisabledColorPreview(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final colorValue = (value as num).toInt();
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: colorValue == 0 ? null : Color(colorValue),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.3),
+        ),
+      ),
+      child: colorValue == 0
+          ? Icon(Icons.auto_awesome, size: 14, color: colorScheme.onSurfaceVariant)
+          : null,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -678,11 +739,13 @@ class _TextSettingInput extends StatefulWidget {
   const _TextSettingInput({
     required this.value,
     this.placeholder,
+    this.enabled = true,
     required this.onChanged,
   });
 
   final String value;
   final String? placeholder;
+  final bool enabled;
   final ValueChanged<dynamic> onChanged;
 
   @override
@@ -725,8 +788,9 @@ class _TextSettingInputState extends State<_TextSettingInput> {
         controller: _controller,
         hintText: widget.placeholder,
         monospace: true,
-        onSubmitted: _submit,
-        onTapOutside: (_) => _submit(_controller.text),
+        enabled: widget.enabled,
+        onSubmitted: widget.enabled ? _submit : null,
+        onTapOutside: widget.enabled ? (_) => _submit(_controller.text) : null,
       ),
     );
   }
@@ -741,11 +805,13 @@ class _CliPathSettingRow extends StatefulWidget {
     required this.definition,
     required this.value,
     required this.onChanged,
+    this.isOverridden = false,
   });
 
   final SettingDefinition definition;
   final String value;
   final ValueChanged<dynamic> onChanged;
+  final bool isOverridden;
 
   @override
   State<_CliPathSettingRow> createState() => _CliPathSettingRowState();
@@ -798,6 +864,7 @@ class _CliPathSettingRowState extends State<_CliPathSettingRow> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final mono = GoogleFonts.jetBrainsMono(fontSize: 13);
+    final enabled = !widget.isOverridden;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 700),
@@ -829,6 +896,29 @@ class _CliPathSettingRowState extends State<_CliPathSettingRow> {
                     ),
                   ),
                 ],
+                if (widget.isOverridden)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 12,
+                          color: colorScheme.primary.withValues(alpha: 0.7),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Overridden via CLI',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: colorScheme.primary.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -841,6 +931,7 @@ class _CliPathSettingRowState extends State<_CliPathSettingRow> {
                 width: 240,
                 child: TextField(
                   controller: _controller,
+                  enabled: enabled,
                   style: mono,
                   decoration: InputDecoration(
                     hintText: widget.definition.placeholder,
@@ -857,8 +948,10 @@ class _CliPathSettingRowState extends State<_CliPathSettingRow> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onSubmitted: _submit,
-                  onTapOutside: (_) => _submit(_controller.text),
+                  onSubmitted: enabled ? _submit : null,
+                  onTapOutside: enabled
+                      ? (_) => _submit(_controller.text)
+                      : null,
                 ),
               ),
               const SizedBox(width: 4),
@@ -870,7 +963,7 @@ class _CliPathSettingRowState extends State<_CliPathSettingRow> {
                   minHeight: 32,
                 ),
                 padding: EdgeInsets.zero,
-                onPressed: _pickFile,
+                onPressed: enabled ? _pickFile : null,
               ),
             ],
           ),

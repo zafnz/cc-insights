@@ -4,6 +4,8 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../models/setting_definition.dart';
+
 /// How to summarize bash tool usage in the UI.
 enum BashToolSummary {
   /// Show the command that was executed.
@@ -41,6 +43,19 @@ class RuntimeConfig extends ChangeNotifier {
 
   /// Whether the config has been initialized with command line args.
   bool _initialized = false;
+
+  /// Setting values overridden via CLI flags or environment variables.
+  ///
+  /// Keys are setting keys (e.g. 'logging.filePath'), values are coerced
+  /// to the correct type. These overrides take precedence over config.json
+  /// but are never persisted to disk.
+  final Map<String, dynamic> _cliOverrides = {};
+
+  /// Returns an unmodifiable view of CLI overrides.
+  Map<String, dynamic> get cliOverrides => Map.unmodifiable(_cliOverrides);
+
+  /// Whether the given setting key is overridden via CLI or environment variable.
+  bool isOverridden(String key) => _cliOverrides.containsKey(key);
 
   /// Whether to use mock data (--mock flag).
   bool _useMockData = false;
@@ -176,13 +191,30 @@ class RuntimeConfig extends ChangeNotifier {
   /// Args format:
   /// - `--mock`: Use mock data instead of real backend
   /// - `--config-dir <path>`: Override the default ~/.ccinsights directory
+  /// - `--<setting.key>=<value>`: Override a setting (e.g. `--logging.filePath=~/app.log`)
   /// - Positional arg 0: working directory (defaults to current directory)
-  static void initialize(List<String> args) {
+  ///
+  /// The [settingDefinitions] parameter provides known setting keys and their
+  /// types for CLI override parsing and type coercion.
+  ///
+  /// Environment variables with the pattern `CCI_<CATEGORY>_<KEY>` (e.g.
+  /// `CCI_LOGGING_FILEPATH`) are also checked. CLI flags take precedence
+  /// over environment variables.
+  static void initialize(
+    List<String> args, {
+    List<SettingDefinition> settingDefinitions = const [],
+  }) {
     if (_instance._initialized) {
       return;
     }
 
     _instance._initialized = true;
+
+    // Build a lookup map from setting key to definition for CLI parsing.
+    final defsByKey = <String, SettingDefinition>{};
+    for (final def in settingDefinitions) {
+      defsByKey[def.key] = def;
+    }
 
     // Detect if launched from CLI by checking TERM env var
     // FORCE_WELCOME=1 overrides this to show welcome screen
@@ -202,8 +234,27 @@ class RuntimeConfig extends ChangeNotifier {
           _instance._configDir = args[i + 1];
           i++; // Skip the next arg since we consumed it
         }
+      } else if (arg.startsWith('--') && arg.contains('=')) {
+        // Setting override: --key=value
+        final eqIdx = arg.indexOf('=');
+        final key = arg.substring(2, eqIdx);
+        final rawValue = arg.substring(eqIdx + 1);
+        final def = defsByKey[key];
+        if (def != null) {
+          _instance._cliOverrides[key] = _coerceValue(rawValue, def.type);
+        }
       } else if (!arg.startsWith('-')) {
         positionalArgs.add(arg);
+      }
+    }
+
+    // Check environment variables for settings not already overridden by CLI.
+    for (final def in settingDefinitions) {
+      if (_instance._cliOverrides.containsKey(def.key)) continue;
+      final envKey = _settingKeyToEnvVar(def.key);
+      final envVal = Platform.environment[envKey];
+      if (envVal != null) {
+        _instance._cliOverrides[def.key] = _coerceValue(envVal, def.type);
       }
     }
 
@@ -233,6 +284,23 @@ class RuntimeConfig extends ChangeNotifier {
         _instance._workingDirectory = p.canonicalize(dir.absolute.path);
       }
     }
+  }
+
+  /// Coerces a raw string value to the appropriate type for a setting.
+  static dynamic _coerceValue(String raw, SettingType type) {
+    return switch (type) {
+      SettingType.toggle => raw.toLowerCase() == 'true' || raw == '1',
+      SettingType.number => int.tryParse(raw) ?? 0,
+      SettingType.colorPicker => int.tryParse(raw) ?? 0,
+      SettingType.dropdown || SettingType.text => raw,
+    };
+  }
+
+  /// Converts a setting key to an environment variable name.
+  ///
+  /// E.g. `logging.filePath` -> `CCI_LOGGING_FILEPATH`.
+  static String _settingKeyToEnvVar(String key) {
+    return 'CCI_${key.replaceAll('.', '_').toUpperCase()}'.replaceAll(' ', '_');
   }
 
   /// Verify the working directory is a valid git repository.
@@ -546,6 +614,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._launchedFromCli = false;
     _instance._workingDirectory = Directory.current.path;
     _instance._configDir = null;
+    _instance._cliOverrides.clear();
     _instance._bashToolSummary = BashToolSummary.description;
     _instance._toolSummaryRelativeFilePaths = true;
     _instance._monoFontFamily = 'JetBrains Mono';

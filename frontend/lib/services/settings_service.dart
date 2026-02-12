@@ -59,6 +59,10 @@ class SettingsService extends ChangeNotifier {
     _projectMgmtCategory,
   ];
 
+  /// Flattened list of all setting definitions across all categories.
+  static List<SettingDefinition> get allDefinitions =>
+      categories.expand((c) => c.settings).toList();
+
   static const _tagsCategory = SettingCategory(
     id: 'tags',
     label: 'Tags',
@@ -488,6 +492,20 @@ class SettingsService extends ChangeNotifier {
   // Value access
   // ---------------------------------------------------------------------------
 
+  /// Whether the given setting key is overridden via CLI flag or env var.
+  bool isOverridden(String key) => RuntimeConfig.instance.isOverridden(key);
+
+  /// Gets the effective value for a setting, considering CLI overrides.
+  ///
+  /// If the key is overridden via CLI/env, returns the override value.
+  /// Otherwise returns the config value (or default).
+  T getEffectiveValue<T>(String key) {
+    if (RuntimeConfig.instance.isOverridden(key)) {
+      return RuntimeConfig.instance.cliOverrides[key] as T;
+    }
+    return getValue<T>(key);
+  }
+
   /// Gets a setting value, falling back to its default.
   T getValue<T>(String key) {
     if (_values.containsKey(key)) {
@@ -688,7 +706,18 @@ class SettingsService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Syncs a single setting value to RuntimeConfig.
+  ///
+  /// Skips the sync if the key is overridden via CLI/env, since CLI
+  /// overrides must not be clobbered by config.json values.
   void _syncToRuntimeConfig(String key, dynamic value) {
+    if (RuntimeConfig.instance.isOverridden(key)) return;
+    _doSyncToRuntimeConfig(key, value);
+  }
+
+  /// Unconditionally syncs a setting value to RuntimeConfig.
+  ///
+  /// Used by [_syncAllToRuntimeConfig] to apply CLI overrides.
+  void _doSyncToRuntimeConfig(String key, dynamic value) {
     final config = RuntimeConfig.instance;
     switch (key) {
       case 'appearance.bashToolSummary':
@@ -756,16 +785,25 @@ class SettingsService extends ChangeNotifier {
   }
 
   /// Syncs all settings to RuntimeConfig using current or default values.
+  ///
+  /// For each setting, the priority is:
+  /// 1. CLI override (if present) — always wins
+  /// 2. Config value from disk (if present)
+  /// 3. Default value from the setting definition
   void _syncAllToRuntimeConfig() {
     // Migrate legacy separate backend/model settings to composite format.
     _migrateLegacyModelSetting();
 
+    final overrides = RuntimeConfig.instance.cliOverrides;
+
     for (final category in categories) {
       for (final setting in category.settings) {
-        final value = _values.containsKey(setting.key)
-            ? _values[setting.key]
-            : setting.defaultValue;
-        _syncToRuntimeConfig(setting.key, value);
+        final value = overrides.containsKey(setting.key)
+            ? overrides[setting.key]
+            : _values.containsKey(setting.key)
+                ? _values[setting.key]
+                : setting.defaultValue;
+        _doSyncToRuntimeConfig(setting.key, value);
       }
     }
 
@@ -776,7 +814,7 @@ class SettingsService extends ChangeNotifier {
     if (_values.containsKey('session.defaultBackend')) {
       final model = _values['session.defaultModel'] ?? 'last_used';
       if (model == 'last_used') {
-        _syncToRuntimeConfig(
+        _doSyncToRuntimeConfig(
           'session.defaultBackend',
           _values['session.defaultBackend'],
         );

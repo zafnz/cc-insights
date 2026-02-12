@@ -91,6 +91,7 @@ class InsightsTextField extends StatelessWidget {
     this.controller,
     this.hintText,
     this.monospace = false,
+    this.enabled = true,
     this.onSubmitted,
     this.onTapOutside,
     this.textAlign = TextAlign.start,
@@ -102,6 +103,7 @@ class InsightsTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? hintText;
   final bool monospace;
+  final bool enabled;
   final ValueChanged<String>? onSubmitted;
   final TapRegionCallback? onTapOutside;
   final TextAlign textAlign;
@@ -116,6 +118,7 @@ class InsightsTextField extends StatelessWidget {
       textAlign: textAlign,
       autofocus: autofocus,
       focusNode: focusNode,
+      enabled: enabled,
       style: insightsInputTextStyle(context, monospace: monospace),
       decoration: insightsInputDecoration(
         context,
@@ -135,13 +138,13 @@ class InsightsNumberField extends StatefulWidget {
   const InsightsNumberField({
     super.key,
     required this.value,
-    required this.onChanged,
+    this.onChanged,
     this.min = 0,
     this.max = 999,
   });
 
   final int value;
-  final ValueChanged<int> onChanged;
+  final ValueChanged<int>? onChanged;
   final int min;
   final int max;
 
@@ -176,7 +179,7 @@ class _InsightsNumberFieldState extends State<InsightsNumberField> {
     final parsed = int.tryParse(text);
     if (parsed != null) {
       final clamped = parsed.clamp(widget.min, widget.max);
-      widget.onChanged(clamped);
+      widget.onChanged?.call(clamped);
       _controller.text = clamped.toString();
     } else {
       _controller.text = widget.value.toString();
@@ -185,11 +188,13 @@ class _InsightsNumberFieldState extends State<InsightsNumberField> {
 
   @override
   Widget build(BuildContext context) {
+    final enabled = widget.onChanged != null;
     return SizedBox(
       width: 80,
       child: TextField(
         controller: _controller,
         textAlign: TextAlign.center,
+        enabled: enabled,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         style: insightsInputTextStyle(context),
@@ -199,8 +204,8 @@ class _InsightsNumberFieldState extends State<InsightsNumberField> {
             vertical: 8,
           ),
         ),
-        onSubmitted: _submit,
-        onTapOutside: (_) => _submit(_controller.text),
+        onSubmitted: enabled ? _submit : null,
+        onTapOutside: enabled ? (_) => _submit(_controller.text) : null,
       ),
     );
   }

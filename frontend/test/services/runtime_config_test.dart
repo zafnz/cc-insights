@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cc_insights_v2/services/runtime_config.dart';
+import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -291,6 +292,177 @@ void main() {
       check(BashToolSummary.values.length).equals(2);
       check(BashToolSummary.values).contains(BashToolSummary.command);
       check(BashToolSummary.values).contains(BashToolSummary.description);
+    });
+  });
+
+  // ===========================================================================
+  // CLI OVERRIDES
+  // ===========================================================================
+
+  group('CLI overrides', () {
+    final defs = SettingsService.allDefinitions;
+
+    setUp(() {
+      RuntimeConfig.resetForTesting();
+    });
+
+    tearDown(() {
+      RuntimeConfig.resetForTesting();
+    });
+
+    test('parses --key=value for a known text setting', () {
+      RuntimeConfig.initialize(
+        ['--logging.filePath=~/test.log'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('logging.filePath')).isTrue();
+      check(config.cliOverrides['logging.filePath'])
+          .equals('~/test.log');
+    });
+
+    test('parses --key=value for a known toggle setting', () {
+      RuntimeConfig.initialize(
+        ['--appearance.showTimestamps=true'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('appearance.showTimestamps')).isTrue();
+      check(config.cliOverrides['appearance.showTimestamps']).equals(true);
+    });
+
+    test('coerces "1" to true for toggle settings', () {
+      RuntimeConfig.initialize(
+        ['--appearance.showTimestamps=1'],
+        settingDefinitions: defs,
+      );
+
+      check(config.cliOverrides['appearance.showTimestamps']).equals(true);
+    });
+
+    test('coerces "false" to false for toggle settings', () {
+      RuntimeConfig.initialize(
+        ['--appearance.showTimestamps=false'],
+        settingDefinitions: defs,
+      );
+
+      check(config.cliOverrides['appearance.showTimestamps']).equals(false);
+    });
+
+    test('parses number setting', () {
+      RuntimeConfig.initialize(
+        ['--appearance.timestampIdleThreshold=10'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('appearance.timestampIdleThreshold')).isTrue();
+      check(config.cliOverrides['appearance.timestampIdleThreshold'])
+          .equals(10);
+    });
+
+    test('parses dropdown setting', () {
+      RuntimeConfig.initialize(
+        ['--logging.minimumLevel=error'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('logging.minimumLevel')).isTrue();
+      check(config.cliOverrides['logging.minimumLevel']).equals('error');
+    });
+
+    test('ignores unknown setting keys', () {
+      RuntimeConfig.initialize(
+        ['--nonexistent.key=value'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('nonexistent.key')).isFalse();
+      check(config.cliOverrides).isEmpty();
+    });
+
+    test('handles multiple overrides', () {
+      RuntimeConfig.initialize(
+        [
+          '--logging.filePath=~/test.log',
+          '--logging.minimumLevel=error',
+          '--appearance.showTimestamps=true',
+        ],
+        settingDefinitions: defs,
+      );
+
+      check(config.cliOverrides.length).equals(3);
+      check(config.cliOverrides['logging.filePath']).equals('~/test.log');
+      check(config.cliOverrides['logging.minimumLevel']).equals('error');
+      check(config.cliOverrides['appearance.showTimestamps']).equals(true);
+    });
+
+    test('coexists with other flags and positional args', () {
+      RuntimeConfig.initialize(
+        [
+          '--mock',
+          '--logging.filePath=~/test.log',
+          '/some/path',
+        ],
+        settingDefinitions: defs,
+      );
+
+      check(config.useMockData).isTrue();
+      check(config.isOverridden('logging.filePath')).isTrue();
+    });
+
+    test('isOverridden returns false for non-overridden keys', () {
+      RuntimeConfig.initialize(
+        ['--logging.filePath=~/test.log'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('logging.minimumLevel')).isFalse();
+    });
+
+    test('cliOverrides is unmodifiable', () {
+      RuntimeConfig.initialize(
+        ['--logging.filePath=~/test.log'],
+        settingDefinitions: defs,
+      );
+
+      expect(
+        () => config.cliOverrides['foo'] = 'bar',
+        throwsUnsupportedError,
+      );
+    });
+
+    test('resetForTesting clears overrides', () {
+      RuntimeConfig.initialize(
+        ['--logging.filePath=~/test.log'],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('logging.filePath')).isTrue();
+
+      RuntimeConfig.resetForTesting();
+
+      check(config.isOverridden('logging.filePath')).isFalse();
+      check(config.cliOverrides).isEmpty();
+    });
+
+    test('handles empty value after equals sign', () {
+      RuntimeConfig.initialize(
+        ['--logging.filePath='],
+        settingDefinitions: defs,
+      );
+
+      check(config.isOverridden('logging.filePath')).isTrue();
+      check(config.cliOverrides['logging.filePath']).equals('');
+    });
+
+    test('handles value with equals sign in it', () {
+      RuntimeConfig.initialize(
+        ['--logging.filePath=~/path=with=equals.log'],
+        settingDefinitions: defs,
+      );
+
+      check(config.cliOverrides['logging.filePath'])
+          .equals('~/path=with=equals.log');
     });
   });
 }

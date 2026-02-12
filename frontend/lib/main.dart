@@ -93,8 +93,12 @@ void main(List<String> args) async {
 
   // Initialize runtime config from command line arguments.
   // First positional arg is the working directory.
+  // Pass setting definitions so CLI overrides can be parsed and type-coerced.
   debugPrint('main() args: $args');
-  RuntimeConfig.initialize(args);
+  RuntimeConfig.initialize(
+    args,
+    settingDefinitions: SettingsService.allDefinitions,
+  );
   debugPrint(
     'RuntimeConfig.useMockData: ${RuntimeConfig.instance.useMockData}',
   );
