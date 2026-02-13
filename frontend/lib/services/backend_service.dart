@@ -40,6 +40,7 @@ class BackendService extends ChangeNotifier {
   final Map<BackendType, StreamSubscription<BackendError>>
       _errorSubscriptions = {};
   final Map<BackendType, String?> _errors = {};
+  final Map<BackendType, bool> _errorIsAgent = {};
   final Set<BackendType> _starting = {};
   final Set<BackendType> _modelListLoading = {};
 
@@ -71,6 +72,13 @@ class BackendService extends ChangeNotifier {
     return _errors[backendType];
   }
 
+  /// Whether the current error came from an agent response.
+  bool get isAgentError {
+    final backendType = _backendType;
+    if (backendType == null) return false;
+    return _errorIsAgent[backendType] ?? false;
+  }
+
   /// The currently active backend type, if any.
   BackendType? get backendType => _backendType;
 
@@ -88,6 +96,9 @@ class BackendService extends ChangeNotifier {
 
   /// Error message for a specific backend, if any.
   String? errorFor(BackendType type) => _errors[type];
+
+  /// Whether a specific backend error came from an agent response.
+  bool isAgentErrorFor(BackendType type) => _errorIsAgent[type] ?? false;
 
   /// Capabilities of the currently active backend.
   ///
@@ -280,6 +291,7 @@ class BackendService extends ChangeNotifier {
 
     _starting.add(type);
     _errors[type] = null;
+    _errorIsAgent.remove(type);
     notifyListeners();
 
     try {
@@ -297,6 +309,7 @@ class BackendService extends ChangeNotifier {
       _errorSubscriptions[type] = backend.errors.listen((error) {
         _t('BackendService', 'Backend error (${type.name}): $error');
         _errors[type] = error.toString();
+        _errorIsAgent[type] = true;
         notifyListeners();
       });
 
@@ -316,6 +329,7 @@ class BackendService extends ChangeNotifier {
     } catch (e) {
       _t('BackendService', 'ERROR starting backend ${type.name}: $e');
       _errors[type] = e.toString();
+      _errorIsAgent[type] = false;
       _backends.remove(type);
     } finally {
       _starting.remove(type);
@@ -490,6 +504,7 @@ class BackendService extends ChangeNotifier {
     final backend = _backends.remove(type);
     await backend?.dispose();
     _errors.remove(type);
+    _errorIsAgent.remove(type);
     _starting.remove(type);
   }
 
@@ -510,6 +525,7 @@ class BackendService extends ChangeNotifier {
     }
     _backends.clear();
     _errors.clear();
+    _errorIsAgent.clear();
     _starting.clear();
     _backendType = null;
     super.dispose();

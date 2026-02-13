@@ -106,9 +106,9 @@ class AcpBackend implements AgentBackend {
       );
 
       if (content != null && content.isNotEmpty) {
-        _sendInitialPrompt(() => session.sendWithContent(content));
+        _sendInitialPrompt(session, () => session.sendWithContent(content));
       } else if (prompt.isNotEmpty) {
-        _sendInitialPrompt(() => session.send(prompt));
+        _sendInitialPrompt(session, () => session.send(prompt));
       }
 
       return session;
@@ -146,18 +146,35 @@ class AcpBackend implements AgentBackend {
         .toList(growable: false);
   }
 
-  void _sendInitialPrompt(Future<void> Function() send) {
+  void _sendInitialPrompt(
+    AcpSession session,
+    Future<void> Function() send,
+  ) {
     Future<void>.delayed(Duration.zero, () async {
       if (_disposed) return;
       try {
         await send();
       } catch (e) {
         final error = e is BackendError
-            ? e
+            ? BackendError(
+                e.message,
+                code: e.code ?? 'SESSION_PROMPT_ERROR',
+                details: e.details,
+              )
             : BackendError(
-                'Failed to send initial prompt: $e',
+                _formatSessionPromptError(e),
                 code: 'SESSION_PROMPT_ERROR',
+                details: e is JsonRpcError ? e.data : null,
               );
+        session.emitError(
+          error.message,
+          raw: e is JsonRpcError
+              ? {
+                  'error': e.toString(),
+                  if (e.data != null) 'data': e.data,
+                }
+              : null,
+        );
         _errorsController.add(error);
       }
     });
@@ -172,6 +189,20 @@ class AcpBackend implements AgentBackend {
       return 'Failed to create session: ${error.message} ($details)';
     }
     return 'Failed to create session: $error';
+  }
+
+  String _formatSessionPromptError(Object error) {
+    if (error is JsonRpcError) {
+      final details = _formatRpcDetails(error.data);
+      if (details.isEmpty) {
+        return 'Failed to send initial prompt: ${error.message}';
+      }
+      return 'Failed to send initial prompt: ${error.message} ($details)';
+    }
+    if (error is BackendError) {
+      return error.message;
+    }
+    return 'Failed to send initial prompt: $error';
   }
 
   String _formatRpcDetails(dynamic data) {

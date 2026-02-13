@@ -110,7 +110,7 @@ class _MainScreenState extends State<MainScreen> {
 
     // Check if there's already an error
     if (backend.error != null) {
-      _showBackendError(backend.error!);
+      _handleBackendError(backend, backend.error!);
     }
   }
 
@@ -118,16 +118,24 @@ class _MainScreenState extends State<MainScreen> {
     if (!mounted) return;
     final backend = context.read<BackendService>();
     if (backend.error != null && backend.error != _lastShownError) {
-      _showBackendError(backend.error!);
+      _handleBackendError(backend, backend.error!);
     }
   }
 
-  void _showBackendError(String error) {
+  void _handleBackendError(BackendService backend, String error) {
     _lastShownError = error;
 
     // Log to console
     debugPrint('Backend error: $error');
 
+    if (backend.isAgentError) {
+      return;
+    }
+
+    _showBackendError(error);
+  }
+
+  void _showBackendError(String error) {
     // Show snackbar
     if (mounted) {
       showErrorSnackBar(context, 'Backend error: $error');

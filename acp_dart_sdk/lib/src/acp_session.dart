@@ -43,6 +43,9 @@ class AcpSession implements AgentSession {
   final Map<String, _TerminalSession> _terminals = {};
   int _terminalCounter = 0;
   List<Map<String, dynamic>>? _configOptions;
+  bool _streamingActive = false;
+  TextKind? _streamingKind;
+  int _streamingBlockIndex = 0;
 
   @override
   String get sessionId => _sessionId;
@@ -70,12 +73,9 @@ class AcpSession implements AgentSession {
   @override
   Future<void> send(String message) {
     _ensureActive();
-    return _process.sendRequest('session/prompt', {
-      'sessionId': _sessionId,
-      'prompt': [
-        {'type': 'text', 'text': message},
-      ],
-    });
+    return _sendPrompt([
+      {'type': 'text', 'text': message},
+    ]);
   }
 
   @override
@@ -85,10 +85,85 @@ class AcpSession implements AgentSession {
     if (prompt.isEmpty) {
       return send('');
     }
-    return _process.sendRequest('session/prompt', {
-      'sessionId': _sessionId,
-      'prompt': prompt,
-    });
+    return _sendPrompt(prompt);
+  }
+
+  Future<void> _sendPrompt(List<Map<String, dynamic>> prompt) async {
+    try {
+      final response = await _process.sendRequest('session/prompt', {
+        'sessionId': _sessionId,
+        'prompt': prompt,
+      });
+      _maybeEmitTurnComplete(response);
+    } on JsonRpcError catch (e) {
+      emitError(
+        _formatPromptError(e),
+        raw: {
+          'error': e.toString(),
+          if (e.data != null) 'data': e.data,
+        },
+      );
+    }
+  }
+
+  void _maybeEmitTurnComplete(Map<String, dynamic> response) {
+    final stopReason = response['stopReason'] ?? response['stop_reason'];
+    if (stopReason is! String || stopReason.isEmpty) {
+      return;
+    }
+    _endStreamingMessage(response);
+    _eventsController.add(TurnCompleteEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: response,
+      sessionId: _sessionId,
+      isError: false,
+      subtype: stopReason,
+    ));
+  }
+
+  String _formatPromptError(JsonRpcError error) {
+    final details = _formatRpcDetails(error.data);
+    if (details.isEmpty) {
+      return 'Agent error: ${error.message}';
+    }
+    return 'Agent error: ${error.message} ($details)';
+  }
+
+  String _formatRpcDetails(dynamic data) {
+    if (data == null) return '';
+    if (data is Map) {
+      final details = data['details'];
+      if (details != null) {
+        return details.toString();
+      }
+    }
+    return data.toString();
+  }
+
+  void emitError(String message, {Map<String, dynamic>? raw}) {
+    if (!_active) return;
+    _endStreamingMessage(raw);
+    final now = DateTime.now();
+    _eventsController.add(TextEvent(
+      id: _nextEventId(),
+      timestamp: now,
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      text: message,
+      kind: TextKind.error,
+    ));
+    _eventsController.add(TurnCompleteEvent(
+      id: _nextEventId(),
+      timestamp: now,
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      isError: true,
+      errors: [message],
+    ));
   }
 
   @override
@@ -623,45 +698,27 @@ class AcpSession implements AgentSession {
     TextKind kind,
     Map<String, dynamic>? raw,
   ) {
-    if (_includePartialMessages) {
-      _emitStreamDelta(text, kind, raw);
-      return;
-    }
-    _eventsController.add(TextEvent(
-      id: _nextEventId(),
-      timestamp: DateTime.now(),
-      provider: BackendProvider.acp,
-      raw: raw,
-      sessionId: _sessionId,
-      text: text,
-      kind: kind,
-    ));
+    _emitStreamingChunk(text, kind, raw);
   }
 
-  void _emitStreamDelta(
+  void _emitStreamingChunk(
     String text,
     TextKind kind,
     Map<String, dynamic>? raw,
   ) {
-    const blockIndex = 0;
-    _eventsController.add(StreamDeltaEvent(
-      id: _nextEventId(),
-      timestamp: DateTime.now(),
-      provider: BackendProvider.acp,
-      raw: raw,
-      sessionId: _sessionId,
-      kind: StreamDeltaKind.messageStart,
-    ));
-    _eventsController.add(StreamDeltaEvent(
-      id: _nextEventId(),
-      timestamp: DateTime.now(),
-      provider: BackendProvider.acp,
-      raw: raw,
-      sessionId: _sessionId,
-      kind: StreamDeltaKind.blockStart,
-      blockIndex: blockIndex,
-      extensions: kind == TextKind.thinking ? {'block_type': 'thinking'} : null,
-    ));
+    if (!_streamingActive) {
+      _startStreamingMessage(raw);
+    }
+
+    if (_streamingKind != kind) {
+      if (_streamingKind != null) {
+        _endStreamingBlock(raw);
+        _streamingBlockIndex += 1;
+      }
+      _startStreamingBlock(kind, raw);
+      _streamingKind = kind;
+    }
+
     _eventsController.add(StreamDeltaEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -671,9 +728,39 @@ class AcpSession implements AgentSession {
       kind: kind == TextKind.thinking
           ? StreamDeltaKind.thinking
           : StreamDeltaKind.text,
-      blockIndex: blockIndex,
+      blockIndex: _streamingBlockIndex,
       textDelta: text,
     ));
+  }
+
+  void _startStreamingMessage(Map<String, dynamic>? raw) {
+    _streamingActive = true;
+    _streamingBlockIndex = 0;
+    _streamingKind = null;
+    _eventsController.add(StreamDeltaEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      kind: StreamDeltaKind.messageStart,
+    ));
+  }
+
+  void _startStreamingBlock(TextKind kind, Map<String, dynamic>? raw) {
+    _eventsController.add(StreamDeltaEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.acp,
+      raw: raw,
+      sessionId: _sessionId,
+      kind: StreamDeltaKind.blockStart,
+      blockIndex: _streamingBlockIndex,
+      extensions: kind == TextKind.thinking ? {'block_type': 'thinking'} : null,
+    ));
+  }
+
+  void _endStreamingBlock(Map<String, dynamic>? raw) {
     _eventsController.add(StreamDeltaEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -681,8 +768,15 @@ class AcpSession implements AgentSession {
       raw: raw,
       sessionId: _sessionId,
       kind: StreamDeltaKind.blockStop,
-      blockIndex: blockIndex,
+      blockIndex: _streamingBlockIndex,
     ));
+  }
+
+  void _endStreamingMessage(Map<String, dynamic>? raw) {
+    if (!_streamingActive) return;
+    if (_streamingKind != null) {
+      _endStreamingBlock(raw);
+    }
     _eventsController.add(StreamDeltaEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
@@ -691,6 +785,9 @@ class AcpSession implements AgentSession {
       sessionId: _sessionId,
       kind: StreamDeltaKind.messageStop,
     ));
+    _streamingActive = false;
+    _streamingKind = null;
+    _streamingBlockIndex = 0;
   }
 
   void _handleToolCall(
@@ -705,12 +802,15 @@ class AcpSession implements AgentSession {
     final title = toolCall['title'] as String?;
     final kindRaw = toolCall['kind'] as String?;
     final statusRaw = toolCall['status'] as String?;
-    final toolName = title ?? kindRaw ?? 'tool';
+    final toolName = _deriveToolName(callId, kindRaw, title);
     final toolKind = _mapToolKind(kindRaw);
     final rawInput = toolCall['rawInput'];
     final input = rawInput is Map
         ? Map<String, dynamic>.from(rawInput)
         : <String, dynamic>{};
+    if (input.isEmpty && title != null && title.isNotEmpty) {
+      input['title'] = title;
+    }
     final rawOutput = toolCall['rawOutput'];
     final locations = (toolCall['locations'] as List<dynamic>?)
         ?.whereType<String>()
@@ -765,6 +865,37 @@ class AcpSession implements AgentSession {
       locations,
       raw,
     );
+  }
+
+  String _deriveToolName(
+    String callId,
+    String? kindRaw,
+    String? title,
+  ) {
+    final trimmed = callId.trim();
+    if (trimmed.isNotEmpty) {
+      final dashIndex = trimmed.indexOf('-');
+      if (dashIndex > 0) {
+        final prefix = trimmed.substring(0, dashIndex);
+        if (!_isGenericToolId(prefix)) {
+          return prefix;
+        }
+      } else {
+        if (!_isGenericToolId(trimmed)) {
+          return trimmed;
+        }
+      }
+    }
+    if (title != null && title.isNotEmpty && title != '.') return title;
+    if (kindRaw != null && kindRaw.isNotEmpty) return kindRaw;
+    return 'tool';
+  }
+
+  bool _isGenericToolId(String value) {
+    return value == 'call' ||
+        value == 'tool' ||
+        value == 'tool_call' ||
+        value == 'toolcall';
   }
 
   void _emitToolInvocation(

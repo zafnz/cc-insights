@@ -4,7 +4,7 @@ import 'package:acp_sdk/acp_sdk.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('agent_message_chunk maps to TextEvent', () async {
+  test('agent_message_chunk emits stream deltas', () async {
     final process = _MockAcpProcess();
     final session = AcpSession(
       process: process,
@@ -25,16 +25,18 @@ void main() {
 
     await Future<void>.delayed(Duration.zero);
 
-    expect(events, hasLength(1));
-    final event = events.first as TextEvent;
-    expect(event.kind, TextKind.text);
-    expect(event.text, 'Hello');
+    expect(events, hasLength(3));
+    expect((events[0] as StreamDeltaEvent).kind, StreamDeltaKind.messageStart);
+    expect((events[1] as StreamDeltaEvent).kind, StreamDeltaKind.blockStart);
+    final textEvent = events[2] as StreamDeltaEvent;
+    expect(textEvent.kind, StreamDeltaKind.text);
+    expect(textEvent.textDelta, 'Hello');
 
     await sub.cancel();
     await session.dispose();
   });
 
-  test('agent_thought_chunk maps to thinking TextEvent', () async {
+  test('agent_thought_chunk emits thinking stream deltas', () async {
     final process = _MockAcpProcess();
     final session = AcpSession(
       process: process,
@@ -55,10 +57,14 @@ void main() {
 
     await Future<void>.delayed(Duration.zero);
 
-    expect(events, hasLength(1));
-    final event = events.first as TextEvent;
-    expect(event.kind, TextKind.thinking);
-    expect(event.text, 'Thinking...');
+    expect(events, hasLength(3));
+    expect((events[0] as StreamDeltaEvent).kind, StreamDeltaKind.messageStart);
+    final blockStart = events[1] as StreamDeltaEvent;
+    expect(blockStart.kind, StreamDeltaKind.blockStart);
+    expect(blockStart.extensions?['block_type'], 'thinking');
+    final textEvent = events[2] as StreamDeltaEvent;
+    expect(textEvent.kind, StreamDeltaKind.thinking);
+    expect(textEvent.textDelta, 'Thinking...');
 
     await sub.cancel();
     await session.dispose();
@@ -150,12 +156,10 @@ void main() {
 
     await Future<void>.delayed(Duration.zero);
 
-    expect(events, hasLength(5));
+    expect(events, hasLength(3));
     expect((events[0] as StreamDeltaEvent).kind, StreamDeltaKind.messageStart);
     expect((events[1] as StreamDeltaEvent).kind, StreamDeltaKind.blockStart);
     expect((events[2] as StreamDeltaEvent).kind, StreamDeltaKind.text);
-    expect((events[3] as StreamDeltaEvent).kind, StreamDeltaKind.blockStop);
-    expect((events[4] as StreamDeltaEvent).kind, StreamDeltaKind.messageStop);
 
     await sub.cancel();
     await session.dispose();

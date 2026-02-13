@@ -95,6 +95,8 @@ class ConversationHeader extends StatelessWidget {
     final isAcp = chat.model.backend == sdk.BackendType.acp;
     final acpConfigWidgets =
         isAcp ? _buildAcpConfigWidgets(chat) : const <Widget>[];
+    final startingBackend =
+        backendService.isStarting ? backendService.backendType : null;
 
     // Don't show the toolbar for subagent conversations (title is in panel header)
     if (isSubagent) {
@@ -167,6 +169,11 @@ class ConversationHeader extends StatelessWidget {
                     );
                   },
                 ),
+                if (startingBackend != null)
+                  _buildBackendStartingIndicator(
+                    context,
+                    startingBackend,
+                  ),
                 if (!isAcp)
                   Builder(
                     builder: (context) {
@@ -291,7 +298,9 @@ class ConversationHeader extends StatelessWidget {
     final error = backendService.errorFor(backendType);
     if (error != null) {
       if (!context.mounted) return;
-      _showBackendSwitchError(context, error);
+      if (!backendService.isAgentErrorFor(backendType)) {
+        _showBackendSwitchError(context, error);
+      }
       return;
     }
 
@@ -301,6 +310,44 @@ class ConversationHeader extends StatelessWidget {
 
   void _showBackendSwitchError(BuildContext context, String message) {
     showErrorSnackBar(context, message);
+  }
+
+  Widget _buildBackendStartingIndicator(
+    BuildContext context,
+    sdk.BackendType backend,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Starting ${agentLabel(backend)}...',
+            style: TextStyle(
+              fontSize: 12,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

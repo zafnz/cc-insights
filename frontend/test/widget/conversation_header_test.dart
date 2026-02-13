@@ -30,6 +30,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   bool get isStarting => false;
 
   @override
+  bool get isAgentError => false;
+
+  @override
   String? get error => null;
 
   @override
@@ -46,6 +49,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
 
   @override
   String? errorFor(sdk.BackendType type) => null;
+
+  @override
+  bool isAgentErrorFor(sdk.BackendType type) => false;
 
   @override
   sdk.BackendCapabilities get capabilities => const sdk.BackendCapabilities(
