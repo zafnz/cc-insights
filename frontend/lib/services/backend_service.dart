@@ -148,7 +148,7 @@ class BackendService extends ChangeNotifier {
     List<String> arguments = const [],
     String? workingDirectory,
   }) {
-    return BackendFactory.create(
+    return BackendRegistry.create(
       type: type,
       executablePath: executablePath,
       arguments: arguments,

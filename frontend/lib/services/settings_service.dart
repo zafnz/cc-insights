@@ -780,7 +780,7 @@ class SettingsService extends ChangeNotifier {
       case 'session.defaultBackend':
         // Legacy: kept for loading old config files.
         final backend =
-            BackendFactory.parseType(value as String?) ??
+            parseBackendType(value as String?) ??
                 BackendType.directCli;
         config.defaultBackend = backend;
       case 'session.defaultPermissionMode':

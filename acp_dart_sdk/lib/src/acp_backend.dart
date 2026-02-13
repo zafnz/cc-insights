@@ -34,6 +34,27 @@ class AcpBackend implements AgentBackend {
   @override
   List<AgentSession> get sessions => _sessions.values.toList(growable: false);
 
+  /// Register this backend with the [BackendRegistry].
+  ///
+  /// Call this once during app initialization to make
+  /// [BackendType.acp] available via [BackendRegistry.create].
+  static void register() {
+    BackendRegistry.register(
+      BackendType.acp,
+      ({
+        String? executablePath,
+        List<String> arguments = const [],
+        String? workingDirectory,
+      }) async {
+        return AcpBackend.create(
+          executablePath: executablePath,
+          arguments: arguments,
+          workingDirectory: workingDirectory,
+        );
+      },
+    );
+  }
+
   /// Spawn an ACP backend.
   static Future<AcpBackend> create({
     String? executablePath,

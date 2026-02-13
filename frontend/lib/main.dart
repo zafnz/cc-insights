@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:acp_sdk/acp_sdk.dart' show AcpBackend;
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
+import 'package:codex_sdk/codex_sdk.dart' show CodexBackend;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -311,6 +313,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// not on every hot reload.
   void _initializeServices() {
     final shouldUseMock = _shouldUseMockData();
+
+    // Register available backend factories
+    sdk.ClaudeCliBackend.register();
+    CodexBackend.register();
+    AcpBackend.register();
 
     // Initialize application logging
     _initializeLogging();

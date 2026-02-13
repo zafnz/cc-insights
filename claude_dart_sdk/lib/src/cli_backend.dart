@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'backend_interface.dart';
+import 'backend_type.dart';
 import 'cli_process.dart';
 import 'cli_session.dart';
 import 'internal_tool_registry.dart';
@@ -35,6 +36,23 @@ class ClaudeCliBackend implements AgentBackend {
   /// [executablePath] - Path to claude-cli executable.
   ///   Defaults to `CLAUDE_CODE_PATH` environment variable or 'claude'.
   ClaudeCliBackend({String? executablePath}) : _executablePath = executablePath;
+
+  /// Register this backend with the [BackendRegistry].
+  ///
+  /// Call this once during app initialization to make
+  /// [BackendType.directCli] available via [BackendRegistry.create].
+  static void register() {
+    BackendRegistry.register(
+      BackendType.directCli,
+      ({
+        String? executablePath,
+        List<String> arguments = const [],
+        String? workingDirectory,
+      }) async {
+        return ClaudeCliBackend(executablePath: executablePath);
+      },
+    );
+  }
 
   final String? _executablePath;
 

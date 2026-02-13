@@ -20,8 +20,8 @@ export 'src/cli_session.dart';
 // CLI backend (direct claude-cli backend implementation)
 export 'src/cli_backend.dart';
 
-// Backend factory (unified backend creation)
-export 'src/backend_factory.dart';
+// Backend type and registry (re-exported from agent_sdk_core)
+export 'src/backend_type.dart';
 
 // Single request (one-shot CLI)
 export 'src/single_request.dart';

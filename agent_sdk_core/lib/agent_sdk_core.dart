@@ -18,5 +18,6 @@ export 'src/types/security_config.dart';
 export 'src/types/session_options.dart';
 export 'src/transport/event_transport.dart';
 export 'src/transport/in_process_transport.dart';
+export 'src/types/backend_type.dart';
 export 'src/types/tool_kind.dart';
 export 'src/types/usage.dart';

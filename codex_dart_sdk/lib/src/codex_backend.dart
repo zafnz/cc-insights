@@ -81,6 +81,26 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
     });
   }
 
+  /// Register this backend with the [BackendRegistry].
+  ///
+  /// Call this once during app initialization to make
+  /// [BackendType.codex] available via [BackendRegistry.create].
+  static void register() {
+    BackendRegistry.register(
+      BackendType.codex,
+      ({
+        String? executablePath,
+        List<String> arguments = const [],
+        String? workingDirectory,
+      }) async {
+        return CodexBackend.create(
+          executablePath: executablePath,
+          workingDirectory: workingDirectory,
+        );
+      },
+    );
+  }
+
   /// Spawn a Codex app-server backend.
   static Future<CodexBackend> create({
     String? executablePath,
