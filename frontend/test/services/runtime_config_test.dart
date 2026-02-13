@@ -370,7 +370,7 @@ void main() {
       check(config.cliOverrides['logging.minimumLevel']).equals('error');
     });
 
-    test('ignores unknown setting keys', () {
+    test('warns on unknown --key=value setting keys', () {
       RuntimeConfig.initialize(
         ['--nonexistent.key=value'],
         settingDefinitions: defs,
@@ -378,6 +378,28 @@ void main() {
 
       check(config.isOverridden('nonexistent.key')).isFalse();
       check(config.cliOverrides).isEmpty();
+      check(config.cliWarnings.length).equals(1);
+      check(config.cliWarnings.first).equals('Unknown argument: --nonexistent.key');
+    });
+
+    test('warns on unknown flag-style arguments', () {
+      RuntimeConfig.initialize(
+        ['--unknown-flag'],
+        settingDefinitions: defs,
+      );
+
+      check(config.cliWarnings.length).equals(1);
+      check(config.cliWarnings.first).equals('Unknown argument: --unknown-flag');
+    });
+
+    test('warns on unknown short flag arguments', () {
+      RuntimeConfig.initialize(
+        ['-x'],
+        settingDefinitions: defs,
+      );
+
+      check(config.cliWarnings.length).equals(1);
+      check(config.cliWarnings.first).equals('Unknown argument: -x');
     });
 
     test('handles multiple overrides', () {

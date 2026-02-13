@@ -253,8 +253,12 @@ class RuntimeConfig extends ChangeNotifier {
           } else {
             _instance._cliOverrides[key] = _coerceValue(rawValue, def.type);
           }
+        } else {
+          _instance._cliWarnings.add('Unknown argument: --$key');
         }
-      } else if (!arg.startsWith('-')) {
+      } else if (arg.startsWith('-')) {
+        _instance._cliWarnings.add('Unknown argument: $arg');
+      } else {
         positionalArgs.add(arg);
       }
     }
