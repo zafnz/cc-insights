@@ -674,7 +674,27 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   }
 
   /// Builds the appropriate content based on current state.
+  ///
+  /// Returns a single [MaterialApp] wrapping the content for the current
+  /// screen state. Theme, navigator observers, debug banner, and routes
+  /// are configured once here rather than per-screen.
   Widget _buildContent(bool shouldUseMock) {
+    return MaterialApp(
+      title: 'CC Insights',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeState?.themeMode ?? ThemeMode.system,
+      navigatorObservers: [_dialogObserver],
+      routes: {'/replay': (context) => const ReplayDemoScreen()},
+      home: _buildScreen(shouldUseMock),
+    );
+  }
+
+  /// Returns the plain screen widget for the current app state.
+  ///
+  /// Unlike [_buildContent], this does NOT wrap in a [MaterialApp].
+  Widget _buildScreen(bool shouldUseMock) {
     if (shouldUseMock) {
       // Synchronous path for mock data
       _project = _mockProject!;
@@ -749,52 +769,31 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Builds the welcome screen content (before a project is selected).
   Widget _buildWelcomeContent() {
-    return MaterialApp(
-      title: 'CC Insights',
-      debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: _themeState?.themeMode ?? ThemeMode.system,
-      home: WelcomeScreen(
-        onProjectSelected: _onProjectSelected,
-      ),
+    return WelcomeScreen(
+      onProjectSelected: _onProjectSelected,
     );
   }
 
   /// Builds the CLI required screen (Claude CLI not found).
   Widget _buildCliRequiredContent() {
-    return MaterialApp(
-      title: 'CC Insights',
-      debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: _themeState?.themeMode ?? ThemeMode.system,
-      home: CliRequiredScreen(
-        cliAvailability: _cliAvailability!,
-        settingsService: _settingsService!,
-        onCliFound: () {
-          // Start backends for all agents now that CLI is available
-          if (widget.backendService == null) {
-            _backend?.discoverModelsForAllAgents();
-          }
-          setState(() {});
-        },
-      ),
+    return CliRequiredScreen(
+      cliAvailability: _cliAvailability!,
+      settingsService: _settingsService!,
+      onCliFound: () {
+        // Start backends for all agents now that CLI is available
+        if (widget.backendService == null) {
+          _backend?.discoverModelsForAllAgents();
+        }
+        setState(() {});
+      },
     );
   }
 
   /// Builds the validation screen content that shows the directory validation message.
   Widget _buildValidationContent() {
-    return MaterialApp(
-      title: 'CC Insights',
-      debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: _themeState?.themeMode ?? ThemeMode.system,
-      home: DirectoryValidationScreen(
-        gitInfo: _pendingValidationInfo!,
-        onResult: _handleValidationResult,
-      ),
+    return DirectoryValidationScreen(
+      gitInfo: _pendingValidationInfo!,
+      onResult: _handleValidationResult,
     );
   }
 
@@ -970,22 +969,15 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Builds the loading screen content shown while restoring project.
   Widget _buildLoadingContent() {
-    return MaterialApp(
-      title: 'CC Insights',
-      debugShowCheckedModeBanner: false,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
-      themeMode: _themeState?.themeMode ?? ThemeMode.system,
-      home: const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading project...'),
-            ],
-          ),
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading project...'),
+          ],
         ),
       ),
     );
@@ -1136,16 +1128,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ),
       ],
       child: _NotificationNavigationListener(
-        child: MaterialApp(
-          title: 'CC Insights',
-          debugShowCheckedModeBanner: false,
-          theme: _buildTheme(Brightness.light),
-          darkTheme: _buildTheme(Brightness.dark),
-          themeMode: _themeState?.themeMode ?? ThemeMode.system,
-          navigatorObservers: [_dialogObserver],
-          home: const MainScreen(),
-          routes: {'/replay': (context) => const ReplayDemoScreen()},
-        ),
+        child: const MainScreen(),
       ),
     );
   }
