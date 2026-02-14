@@ -88,6 +88,7 @@ TextEvent makeText({
   String? parentCallId,
   String? model,
   Map<String, dynamic>? raw,
+  Map<String, dynamic>? extensions,
 }) {
   return TextEvent(
     id: _nextId(),
@@ -99,6 +100,7 @@ TextEvent makeText({
     parentCallId: parentCallId,
     model: model,
     raw: raw,
+    extensions: extensions,
   );
 }
 
@@ -607,6 +609,88 @@ void main() {
         final hasSystemNotification = entries.any((e) => e is SystemNotificationEntry);
         check(hasSystemNotification).isTrue();
       });
+
+      test('creates ContextSummaryEntry when expecting compaction summary and synthetic', () {
+        // Trigger compaction without inline summary
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          preTokens: 50000,
+          summary: null,
+        ));
+
+        // Now send a synthetic TextEvent (as the new protocol does)
+        handler.handleEvent(chat, makeText(
+          text: 'This is the compaction summary',
+          extensions: {'claude.isSynthetic': true},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        // AutoCompactionEntry + ContextSummaryEntry
+        check(entries.length).equals(2);
+        check(entries[0]).isA<AutoCompactionEntry>();
+        check(entries[1]).isA<ContextSummaryEntry>();
+
+        final summary = entries[1] as ContextSummaryEntry;
+        check(summary.summary).equals('This is the compaction summary');
+      });
+
+      test('synthetic TextEvent without prior compaction creates normal TextOutputEntry', () {
+        // No compaction event first — just a synthetic text
+        handler.handleEvent(chat, makeText(
+          text: 'Some synthetic text',
+          extensions: {'claude.isSynthetic': true},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        check(entries.length).equals(1);
+        check(entries.first).isA<TextOutputEntry>();
+      });
+
+      test('non-synthetic TextEvent after compaction creates normal TextOutputEntry', () {
+        // Trigger compaction without summary
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          preTokens: 50000,
+          summary: null,
+        ));
+
+        // Send a non-synthetic TextEvent — both conditions not met
+        handler.handleEvent(chat, makeText(
+          text: 'Normal assistant response',
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        // AutoCompactionEntry + TextOutputEntry (not ContextSummaryEntry)
+        check(entries.length).equals(2);
+        check(entries[0]).isA<AutoCompactionEntry>();
+        check(entries[1]).isA<TextOutputEntry>();
+      });
+
+      test('resets expectingContextSummary flag after synthetic TextEvent', () {
+        // Trigger compaction without summary
+        handler.handleEvent(chat, makeCompaction(
+          trigger: CompactionTrigger.auto,
+          summary: null,
+        ));
+
+        // First synthetic text creates summary
+        handler.handleEvent(chat, makeText(
+          text: 'Summary',
+          extensions: {'claude.isSynthetic': true},
+        ));
+
+        // Second synthetic text should be normal (flag was reset)
+        handler.handleEvent(chat, makeText(
+          text: 'Not a summary',
+          extensions: {'claude.isSynthetic': true},
+        ));
+
+        final entries = chat.data.primaryConversation.entries;
+        // AutoCompactionEntry + ContextSummaryEntry + TextOutputEntry
+        check(entries.length).equals(3);
+        check(entries[1]).isA<ContextSummaryEntry>();
+        check(entries[2]).isA<TextOutputEntry>();
+      });
     });
 
     group('_handleUserInput', () {
@@ -783,8 +867,11 @@ void main() {
           summary: null,
         ));
 
-        // Now send a user message - should be treated as summary
-        handler.handleEvent(chat, makeUserInput(text: 'Summary text'));
+        // Send synthetic TextEvent (matches real protocol flow)
+        handler.handleEvent(chat, makeText(
+          text: 'Summary text',
+          extensions: {'claude.isSynthetic': true},
+        ));
 
         final entries = chat.data.primaryConversation.entries;
         // AutoCompactionEntry + ContextSummaryEntry

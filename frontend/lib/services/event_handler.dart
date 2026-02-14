@@ -274,6 +274,22 @@ class EventHandler {
 
   // Task 4c methods
   void _handleText(ChatState chat, TextEvent event) {
+    final chatId = chat.data.id;
+
+    // Check if this is a context summary (after compaction).
+    // Requires both: we're expecting a summary AND the message is synthetic.
+    final isSynthetic = event.extensions?['claude.isSynthetic'] == true;
+    if ((_expectingContextSummary[chatId] ?? false) && isSynthetic) {
+      _expectingContextSummary[chatId] = false;
+      if (event.text.isNotEmpty) {
+        chat.addEntry(ContextSummaryEntry(
+          timestamp: DateTime.now(),
+          summary: event.text,
+        ));
+      }
+      return;
+    }
+
     final conversationId = _resolveConversationId(chat, event.parentCallId);
 
     // Check for streaming entries to finalize: when a non-streaming event arrives
