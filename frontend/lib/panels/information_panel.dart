@@ -483,6 +483,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final result = await showBaseSelectorDialog(
       context,
       currentBase: previousValue,
+      branchName: data.branch,
     );
 
     if (!context.mounted) return;
@@ -490,11 +491,13 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     // Cancel returns null - don't change anything.
     if (result == null) return;
 
-    // Only apply if the result differs from the previous value.
-    if (result == previousValue) return;
+    final newBase = result.base;
 
-    LogService.instance.notice('Worktree', 'Base changed: ${data.branch} ${previousValue ?? "none"} -> $result');
-    worktree.setBase(result);
+    // Only apply if the result differs from the previous value.
+    if (newBase == previousValue) return;
+
+    LogService.instance.notice('Worktree', 'Base changed: ${data.branch} ${previousValue ?? "none"} -> $newBase');
+    worktree.setBase(newBase);
 
     try {
       final project = context.read<ProjectState>();
@@ -502,13 +505,47 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       persistence.updateWorktreeBase(
         projectRoot: project.data.repoRoot,
         worktreePath: worktreeRoot,
-        base: result,
+        base: newBase,
       );
     } catch (_) {
       // PersistenceService may not be available in tests
     }
 
     onStatusChanged();
+
+    // Rebase onto the new base if requested.
+    if (result.rebase && context.mounted) {
+      LogService.instance.info('InfoPanel', 'Rebase onto new base: ${data.branch} -> $newBase');
+      final gitService = context.read<GitService>();
+
+      final conflictResult = await showConflictResolutionDialog(
+        context: context,
+        worktreePath: worktreeRoot,
+        branch: data.branch,
+        mainBranch: newBase,
+        operation: MergeOperationType.rebase,
+        gitService: gitService,
+      );
+
+      if (!context.mounted) return;
+
+      if (conflictResult == ConflictResolutionResult.resolveWithClaude) {
+        final project = context.read<ProjectState>();
+        final mainWorktreePath =
+            project.primaryWorktree.data.worktreeRoot;
+
+        await _openConflictManagerChat(
+          context,
+          branch: data.branch,
+          mainBranch: newBase,
+          worktreePath: worktreeRoot,
+          mainWorktreePath: mainWorktreePath,
+          operation: MergeOperationType.rebase,
+        );
+      }
+
+      onStatusChanged();
+    }
   }
 
   Future<void> _openConflictManagerChat(

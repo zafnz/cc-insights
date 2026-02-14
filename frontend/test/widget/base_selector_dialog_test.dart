@@ -11,6 +11,7 @@ void main() {
   Future<void> pumpDialog(
     WidgetTester tester, {
     String? currentBase,
+    String? branchName,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -19,10 +20,11 @@ void main() {
             builder: (context) {
               return ElevatedButton(
                 onPressed: () async {
-                  await showDialog<String?>(
+                  await showDialog<BaseSelectorResult?>(
                     context: context,
                     builder: (_) => BaseSelectorDialog(
                       currentBase: currentBase,
+                      branchName: branchName,
                     ),
                   );
                 },
@@ -57,6 +59,23 @@ void main() {
       // Verify action buttons.
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Apply'), findsOneWidget);
+    });
+
+    testWidgets('shows rebase checkbox checked by default', (tester) async {
+      await pumpDialog(tester);
+
+      final checkbox = tester.widget<CheckboxListTile>(
+        find.byKey(BaseSelectorDialogKeys.rebaseCheckbox),
+      );
+      check(checkbox.value).equals(true);
+    });
+
+    testWidgets('rebase checkbox label and info icon are shown',
+        (tester) async {
+      await pumpDialog(tester);
+
+      expect(find.text('Rebase onto new base'), findsOneWidget);
+      expect(find.byIcon(Icons.info_outline), findsOneWidget);
     });
 
     testWidgets('pre-selects "main" when value is null', (tester) async {
@@ -110,9 +129,9 @@ void main() {
       check(textField.controller!.text).equals('develop');
     });
 
-    testWidgets('selecting "main" and applying returns "main"',
+    testWidgets('selecting "main" and applying returns result with rebase true',
         (tester) async {
-      String? result;
+      BaseSelectorResult? result;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -144,12 +163,15 @@ void main() {
       await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
       await safePumpAndSettle(tester);
 
-      check(result).equals('main');
+      check(result).isNotNull();
+      check(result!.base).equals('main');
+      check(result!.rebase).equals(true);
     });
 
-    testWidgets('selecting "origin/main" and applying returns "origin/main"',
+    testWidgets(
+        'selecting "origin/main" and applying returns result with rebase true',
         (tester) async {
-      String? result;
+      BaseSelectorResult? result;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -179,7 +201,51 @@ void main() {
       await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
       await safePumpAndSettle(tester);
 
-      check(result).equals('origin/main');
+      check(result).isNotNull();
+      check(result!.base).equals('origin/main');
+      check(result!.rebase).equals(true);
+    });
+
+    testWidgets('unchecking rebase returns result with rebase false',
+        (tester) async {
+      BaseSelectorResult? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    result = await showBaseSelectorDialog(
+                      context,
+                      currentBase: 'main',
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await safePumpAndSettle(tester);
+      await tester.tap(find.text('Open'));
+      await safePumpAndSettle(tester);
+
+      // Uncheck the rebase checkbox.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.rebaseCheckbox));
+      await tester.pump();
+
+      // Select origin/main.
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.originMainOption));
+      await tester.pump();
+
+      await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
+      await safePumpAndSettle(tester);
+
+      check(result).isNotNull();
+      check(result!.base).equals('origin/main');
+      check(result!.rebase).equals(false);
     });
 
     testWidgets('tapping custom field selects custom option', (tester) async {
@@ -249,7 +315,7 @@ void main() {
 
     testWidgets('custom field value is returned when applying',
         (tester) async {
-      String? result;
+      BaseSelectorResult? result;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -288,11 +354,16 @@ void main() {
       await tester.tap(find.byKey(BaseSelectorDialogKeys.applyButton));
       await safePumpAndSettle(tester);
 
-      check(result).equals('origin/develop');
+      check(result).isNotNull();
+      check(result!.base).equals('origin/develop');
+      check(result!.rebase).equals(true);
     });
 
     testWidgets('cancel closes dialog and returns null', (tester) async {
-      String? result = 'sentinel';
+      BaseSelectorResult? result = const BaseSelectorResult(
+        base: 'sentinel',
+        rebase: false,
+      );
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -332,7 +403,7 @@ void main() {
 
     testWidgets('submitting custom field via keyboard applies',
         (tester) async {
-      String? result;
+      BaseSelectorResult? result;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -368,7 +439,27 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await safePumpAndSettle(tester);
 
-      check(result).equals('release/v2');
+      check(result).isNotNull();
+      check(result!.base).equals('release/v2');
+      check(result!.rebase).equals(true);
+    });
+
+    testWidgets('branchName appears in tooltip text', (tester) async {
+      await pumpDialog(tester, branchName: 'feat/my-branch');
+
+      // The info icon tooltip should contain the branch name.
+      final tooltipFinder = find.byType(Tooltip);
+      // Find the tooltip that contains the branch name.
+      bool foundBranchTooltip = false;
+      for (final element in tooltipFinder.evaluate()) {
+        final tooltip = element.widget as Tooltip;
+        if (tooltip.message != null &&
+            tooltip.message!.contains('feat/my-branch')) {
+          foundBranchTooltip = true;
+          break;
+        }
+      }
+      check(foundBranchTooltip).equals(true);
     });
   });
 }

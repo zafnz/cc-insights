@@ -19,6 +19,9 @@ class BaseSelectorDialogKeys {
   /// Text field for custom ref input.
   static const customField = Key('base_selector_custom_field');
 
+  /// Checkbox for "Rebase onto new base".
+  static const rebaseCheckbox = Key('base_selector_rebase_checkbox');
+
   /// The cancel button.
   static const cancelButton = Key('base_selector_cancel');
 
@@ -26,38 +29,57 @@ class BaseSelectorDialogKeys {
   static const applyButton = Key('base_selector_apply');
 }
 
+/// Result from the base selector dialog.
+class BaseSelectorResult {
+  const BaseSelectorResult({required this.base, required this.rebase});
+
+  /// The selected base ref (e.g. "main", "origin/main", or a custom ref).
+  final String base;
+
+  /// Whether to rebase the current branch onto the new base.
+  final bool rebase;
+}
+
 /// Shows a dialog to select a base ref for a worktree.
 ///
 /// [currentBase] is the current per-worktree base value,
 /// or null if using the default (main).
 ///
-/// Returns the new base value: a ref string like "main" or
-/// "origin/main", or null if cancelled.
-Future<String?> showBaseSelectorDialog(
+/// [branchName] is the name of the branch being configured, used in the
+/// rebase tooltip text.
+///
+/// Returns a [BaseSelectorResult] with the selected base and rebase flag,
+/// or null if cancelled.
+Future<BaseSelectorResult?> showBaseSelectorDialog(
   BuildContext context, {
   String? currentBase,
+  String? branchName,
 }) async {
-  return showDialog<String?>(
+  return showDialog<BaseSelectorResult?>(
     context: context,
     builder: (context) => BaseSelectorDialog(
       currentBase: currentBase,
+      branchName: branchName,
     ),
   );
 }
 
 /// Dialog for selecting a base ref for a worktree.
 ///
-/// Presents radio options for common base refs plus a custom text field.
-/// The dialog returns a ref string, [_projectDefaultSentinel] for
-/// "use project default", or null if cancelled.
+/// Presents radio options for common base refs plus a custom text field,
+/// and a checkbox to optionally rebase onto the new base.
 class BaseSelectorDialog extends StatefulWidget {
   const BaseSelectorDialog({
     super.key,
     this.currentBase,
+    this.branchName,
   });
 
   /// The current per-worktree base, or null if using project default.
   final String? currentBase;
+
+  /// The branch name, used in tooltip text.
+  final String? branchName;
 
   @override
   State<BaseSelectorDialog> createState() => _BaseSelectorDialogState();
@@ -69,6 +91,7 @@ enum _BaseOption { main, originMain, custom }
 class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
   late _BaseOption _selected;
   late final TextEditingController _customController;
+  bool _rebase = true;
 
   @override
   void initState() {
@@ -114,13 +137,17 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
 
   void _handleApply() {
     final value = _resolveValue();
-    Navigator.of(context).pop(value);
+    if (value == null) return;
+    Navigator.of(context).pop(
+      BaseSelectorResult(base: value, rebase: _rebase),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final branch = widget.branchName ?? 'this branch';
 
     return AlertDialog(
       key: BaseSelectorDialogKeys.dialog,
@@ -132,13 +159,43 @@ class _BaseSelectorDialogState extends State<BaseSelectorDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Select the branch used for merge and diff comparisons '
-              'in this worktree.',
+              'Select the branch used as the base for this branch.',
               style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            // Rebase checkbox
+            CheckboxListTile(
+              key: BaseSelectorDialogKeys.rebaseCheckbox,
+              value: _rebase,
+              onChanged: (value) {
+                if (value != null) setState(() => _rebase = value);
+              },
+              title: Row(
+                children: [
+                  Text(
+                    'Rebase onto new base',
+                    style: textTheme.bodyMedium,
+                  ),
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: 'Take commits in $branch that happened after '
+                        'the old base and replay them on the new base.',
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 8),
             _buildRadioTile(
               key: BaseSelectorDialogKeys.mainOption,
               title: 'main',

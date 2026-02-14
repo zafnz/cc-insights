@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worktree Tree Panel Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+
+    --green: #4caf50;
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 32px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+  }
+
+  /* ── Panel shell ── */
+  .panel {
+    width: 320px;
+    background: var(--surface);
+    border-radius: 4px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--surface-container-highest);
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .panel-header .mi { font-size: 14px; color: var(--on-surface-variant); }
+  .panel-header .title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.7);
+  }
+  .panel-header .drag-handle { font-size: 14px; color: rgba(202,196,208,0.5); }
+
+  /* ── Worktree list ── */
+  .worktree-list { flex: 1; overflow-y: auto; }
+
+  /* ── Worktree item (3-line card) ── */
+  .wt-item {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--surface-container-highest);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .wt-item:hover { background: rgba(208,188,255,0.04); }
+  .wt-item.selected { background: rgba(79,55,139,0.3); }
+  .wt-item.primary { }
+
+  /* Row 1: branch name + indicators */
+  .wt-row1 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .wt-branch {
+    flex: 1;
+    font-size: 13px;
+    color: var(--on-surface);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wt-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid transparent;
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .wt-permission-bell {
+    font-size: 14px;
+    color: var(--orange);
+    flex-shrink: 0;
+  }
+
+  /* Row 2: tag pills */
+  .wt-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+  }
+  .tag-pill {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .tag-pill.blue { background: rgba(66,165,245,0.15); border: 0.5px solid rgba(66,165,245,0.4); color: var(--blue); }
+  .tag-pill.green { background: rgba(76,175,80,0.15); border: 0.5px solid rgba(76,175,80,0.4); color: var(--green); }
+  .tag-pill.orange { background: rgba(255,167,38,0.15); border: 0.5px solid rgba(255,167,38,0.4); color: var(--orange); }
+  .tag-pill.purple { background: rgba(206,147,216,0.15); border: 0.5px solid rgba(206,147,216,0.4); color: var(--purple); }
+  .tag-pill.teal { background: rgba(77,182,172,0.15); border: 0.5px solid rgba(77,182,172,0.4); color: var(--teal); }
+  .tag-pill.red { background: rgba(239,83,80,0.15); border: 0.5px solid rgba(239,83,80,0.4); color: var(--red); }
+
+  /* Row 3: path/cost + status badges */
+  .wt-row3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .wt-path {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+  }
+  .wt-cost {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Status indicators (inline after path/cost) — matches real app style */
+  .status-indicators {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    align-items: center;
+  }
+  /* Badge container: surfaceContainerHighest @ 0.5 alpha, rounded, thin border */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    border-radius: 6px;
+    background: rgba(54,52,59,0.5);
+    border: 0.5px solid rgba(148,143,153,0.3);
+    font-size: 10px;
+    white-space: nowrap;
+    line-height: 16px;
+  }
+  .badge .emoji { font-style: normal; }
+  .badge .val-green { color: var(--green); }
+  .badge .val-orange { color: var(--orange); }
+  .badge .val-muted { color: var(--grey-dark); }
+  /* Extra indicators (no badge container) */
+  .extra-uncommitted {
+    font-size: 10px;
+    color: var(--blue);
+    white-space: nowrap;
+  }
+  .extra-conflict {
+    font-size: 10px;
+    color: var(--red);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  /* ── Tree indentation ── */
+  .tree-indent {
+    display: flex;
+    align-items: stretch;
+  }
+  .indent-guide {
+    width: 20px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  /* Vertical line running down left side of indent */
+  .indent-guide::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--outline-variant);
+  }
+  /* The branch connector: horizontal tick from the vertical line */
+  .indent-guide.has-tick::after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    background: var(--outline-variant);
+  }
+  /* Last child: vertical line stops at the tick */
+  .indent-guide.last::before {
+    bottom: 50%;
+  }
+
+  .tree-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── Base marker (non-worktree placeholder) — solid bar across full width ── */
+  .base-marker {
+    display: flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: rgba(158,158,158,0.12);
+    border-bottom: 1px solid var(--surface-container-highest);
+  }
+  .base-marker-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--grey);
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Ghost card (new worktree) ── */
+  .ghost-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 8px;
+    gap: 6px;
+    border: 1px dashed rgba(73,69,79,0.4);
+    border-radius: 4px;
+    margin: 6px 8px;
+    cursor: pointer;
+    color: var(--on-surface-variant);
+    font-size: 11px;
+    transition: background 0.1s;
+  }
+  .ghost-card:hover { background: rgba(208,188,255,0.04); }
+  .ghost-card .mi { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- VARIANT 1: All local — flat tree, everything off main         -->
+<!-- ============================================================ -->
+<div class="variant-label">Variant 1 — All local, flat tree (everything based off main)</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="mi material-icons">account_tree</span>
+    <span class="title">Worktrees</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <div class="worktree-list">
+
+    <!-- main (primary, root) -->
+    <div class="wt-item primary">
+      <div class="wt-row1">
+        <span class="wt-branch"><strong>main</strong></span>
+      </div>
+      <div class="wt-row3">
+        <span class="wt-path">/Users/zaf/projects/cc-insights</span>
+        <div class="status-indicators">
+          <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-muted">=</span></span>
+          <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">=</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- worktree1 — child of main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item selected">
+          <div class="wt-row1">
+            <div class="wt-spinner"></div>
+            <span class="wt-branch">feat/auth-flow</span>
+            <span class="mi material-icons wt-permission-bell">notifications_active</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+            <span class="tag-pill green">v2</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$3.40 — Claude &#x1FA99;2.1M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+3</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- worktree2 — child of main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">fix/login-bug</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill red">bugfix</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$1.20 — Claude &#x1FA99;0.8M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+1</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- worktree3 — last child of main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick last"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <div class="wt-spinner"></div>
+            <span class="wt-branch">refactor/state-mgmt</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$7.85 — Claude &#x1FA99;4.2M</span>
+            <div class="status-indicators">
+              <span class="extra-uncommitted">~3</span>
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+12</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;12</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ghost-card">
+      <span class="mi material-icons">add</span>
+      New Worktree
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- VARIANT 2: Nested — main with children and grandchildren      -->
+<!-- ============================================================ -->
+<div class="variant-label">Variant 2 — Nested tree (worktrees based off other worktrees)</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="mi material-icons">account_tree</span>
+    <span class="title">Worktrees</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <div class="worktree-list">
+
+    <!-- main (primary, root) -->
+    <div class="wt-item primary">
+      <div class="wt-row1">
+        <span class="wt-branch"><strong>main</strong></span>
+      </div>
+      <div class="wt-row3">
+        <span class="wt-path">/Users/zaf/projects/cc-insights</span>
+        <div class="status-indicators">
+          <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-muted">=</span></span>
+          <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">=</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/auth-flow — child of main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">feat/auth-flow</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$5.20 — Claude &#x1FA99;3.1M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+8</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;8</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/auth-oauth — grandchild (child of feat/auth-flow) -->
+    <div class="tree-indent">
+      <div class="indent-guide"></div><!-- continues vertical from main -->
+      <div class="tree-content">
+        <div class="tree-indent">
+          <div class="indent-guide has-tick"></div>
+          <div class="tree-content">
+            <div class="wt-item selected">
+              <div class="wt-row1">
+                <div class="wt-spinner"></div>
+                <span class="wt-branch">feat/auth-oauth</span>
+                <span class="mi material-icons wt-permission-bell">notifications_active</span>
+              </div>
+              <div class="wt-row3">
+                <span class="wt-cost">$2.10 — Claude &#x1FA99;1.4M</span>
+                <div class="status-indicators">
+                  <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+3</span></span>
+                  <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/auth-jwt — grandchild (child of feat/auth-flow) -->
+    <div class="tree-indent">
+      <div class="indent-guide"></div>
+      <div class="tree-content">
+        <div class="tree-indent">
+          <div class="indent-guide has-tick"></div>
+          <div class="tree-content">
+            <div class="wt-item">
+              <div class="wt-row1">
+                <span class="wt-branch">feat/auth-jwt</span>
+              </div>
+              <div class="wt-row3">
+                <span class="wt-cost">$0.80 — Claude &#x1FA99;0.5M</span>
+                <div class="status-indicators">
+                  <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+2</span></span>
+                  <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/auth-tests — grandchild (last child of feat/auth-flow) -->
+    <div class="tree-indent">
+      <div class="indent-guide"></div>
+      <div class="tree-content">
+        <div class="tree-indent">
+          <div class="indent-guide has-tick last"></div>
+          <div class="tree-content">
+            <div class="wt-item">
+              <div class="wt-row1">
+                <span class="wt-branch">feat/auth-tests</span>
+              </div>
+              <div class="wt-tags">
+                <span class="tag-pill teal">tests</span>
+              </div>
+              <div class="wt-row3">
+                <span class="wt-cost">$1.50 — Claude &#x1FA99;0.9M</span>
+                <div class="status-indicators">
+                  <span class="extra-uncommitted">~1</span>
+                  <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+5</span></span>
+                  <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;5</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- fix/login-bug — child of main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick last"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">fix/login-bug</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill red">bugfix</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$0.40 — Claude &#x1FA99;0.3M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+1</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ghost-card">
+      <span class="mi material-icons">add</span>
+      New Worktree
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- VARIANT 3: Mixed bases — 3 off main, 2 off origin/main       -->
+<!-- ============================================================ -->
+<div class="variant-label">Variant 3 — Mixed bases (3 off main, 2 off origin/main)</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="mi material-icons">account_tree</span>
+    <span class="title">Worktrees</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <div class="worktree-list">
+
+    <!-- main (primary, root) -->
+    <div class="wt-item primary">
+      <div class="wt-row1">
+        <span class="wt-branch"><strong>main</strong></span>
+      </div>
+      <div class="wt-row3">
+        <span class="wt-path">/Users/zaf/projects/cc-insights</span>
+        <div class="status-indicators">
+          <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-muted">=</span></span>
+          <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">=</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 children off main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item selected">
+          <div class="wt-row1">
+            <div class="wt-spinner"></div>
+            <span class="wt-branch">feat/worktree-trees</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+            <span class="tag-pill purple">ui</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$4.60 — Claude &#x1FA99;2.8M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+6</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;6</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">feat/persistence-v2</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$2.30 — Claude &#x1FA99;1.5M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+4</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;4</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick last"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">fix/event-handler</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill red">bugfix</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$0.90 — Claude &#x1FA99;0.6M</span>
+            <div class="status-indicators">
+              <span class="extra-uncommitted">~5</span>
+              <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+2</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- origin/main base marker -->
+    <div class="base-marker">
+      <span class="base-marker-label">origin/main</span>
+    </div>
+
+    <!-- 2 children off origin/main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <div class="wt-spinner"></div>
+            <span class="wt-branch">feat/remote-transport</span>
+            <span class="mi material-icons wt-permission-bell">notifications_active</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$6.10 — Claude &#x1FA99;3.7M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+14</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;14</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick last"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">feat/docker-backend</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$3.20 — Claude &#x1FA99;2.0M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+9</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;9</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ghost-card">
+      <span class="mi material-icons">add</span>
+      New Worktree
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- VARIANT 4: Single main, 4 worktrees off origin/main           -->
+<!-- ============================================================ -->
+<div class="variant-label">Variant 4 — Single main, 4 worktrees all based off origin/main</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="mi material-icons">account_tree</span>
+    <span class="title">Worktrees</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <div class="worktree-list">
+
+    <!-- main (primary, root — stands alone) -->
+    <div class="wt-item primary">
+      <div class="wt-row1">
+        <span class="wt-branch"><strong>main</strong></span>
+      </div>
+      <div class="wt-row3">
+        <span class="wt-path">/Users/zaf/projects/cc-insights</span>
+        <div class="status-indicators">
+          <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-muted">=</span></span>
+          <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-orange">&#x2193;2</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- origin/main base marker -->
+    <div class="base-marker">
+      <span class="base-marker-label">origin/main</span>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <div class="wt-spinner"></div>
+            <span class="wt-branch">feat/acp-streaming</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+            <span class="tag-pill orange">wip</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$8.40 — Claude &#x1FA99;5.1M Codex &#x1FA99;2.7M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+11</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;11</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item selected">
+          <div class="wt-row1">
+            <span class="wt-branch">feat/codex-backend</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$5.60 — Codex &#x1FA99;3.4M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+7</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;2</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">refactor/sdk-core</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$2.10 — Claude &#x1FA99;1.3M</span>
+            <div class="status-indicators">
+              <span class="extra-uncommitted">~2</span>
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+5</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;5</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tree-indent">
+      <div class="indent-guide has-tick last"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">fix/session-cleanup</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill red">bugfix</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$0.30 — Claude &#x1FA99;0.2M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+1</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ghost-card">
+      <span class="mi material-icons">add</span>
+      New Worktree
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- VARIANT 5: Complex — main, 4 off origin/main, 2 nested       -->
+<!-- ============================================================ -->
+<div class="variant-label">Variant 5 — Complex: main + 4 off origin/main (one with 2 sub-worktrees)</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="mi material-icons">account_tree</span>
+    <span class="title">Worktrees</span>
+    <span class="drag-handle">&#x2630;</span>
+  </div>
+
+  <div class="worktree-list">
+
+    <!-- main (primary, root — stands alone) -->
+    <div class="wt-item primary">
+      <div class="wt-row1">
+        <span class="wt-branch"><strong>main</strong></span>
+      </div>
+      <div class="wt-row3">
+        <span class="wt-path">/Users/zaf/projects/cc-insights</span>
+        <div class="status-indicators">
+          <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-muted">=</span></span>
+          <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">=</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- origin/main base marker -->
+    <div class="base-marker">
+      <span class="base-marker-label">origin/main</span>
+    </div>
+
+    <!-- feat/panel-system — child of origin/main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <div class="wt-spinner"></div>
+            <span class="wt-branch">feat/panel-system</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+            <span class="tag-pill purple">ui</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$12.30 — Claude &#x1FA99;7.5M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+22</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;22</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/panel-drag — grandchild (child of feat/panel-system) -->
+    <div class="tree-indent">
+      <div class="indent-guide"></div><!-- continues vertical from origin/main -->
+      <div class="tree-content">
+        <div class="tree-indent">
+          <div class="indent-guide has-tick"></div>
+          <div class="tree-content">
+            <div class="wt-item selected">
+              <div class="wt-row1">
+                <div class="wt-spinner"></div>
+                <span class="wt-branch">feat/panel-drag</span>
+                <span class="mi material-icons wt-permission-bell">notifications_active</span>
+              </div>
+              <div class="wt-row3">
+                <span class="wt-cost">$3.40 — Claude &#x1FA99;2.1M</span>
+                <div class="status-indicators">
+                  <span class="extra-uncommitted">~1</span>
+                  <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+4</span></span>
+                  <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/panel-resize — grandchild (last child of feat/panel-system) -->
+    <div class="tree-indent">
+      <div class="indent-guide"></div>
+      <div class="tree-content">
+        <div class="tree-indent">
+          <div class="indent-guide has-tick last"></div>
+          <div class="tree-content">
+            <div class="wt-item">
+              <div class="wt-row1">
+                <span class="wt-branch">feat/panel-resize</span>
+              </div>
+              <div class="wt-row3">
+                <span class="wt-cost">$1.80 — Claude &#x1FA99;1.1M</span>
+                <div class="status-indicators">
+                  <span class="badge"><span class="emoji">&#x1F3E0;</span> <span class="val-green">+2</span></span>
+                  <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- feat/settings-v2 — child of origin/main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">feat/settings-v2</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill blue">feature</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$4.50 — Claude &#x1FA99;2.8M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+8</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- refactor/event-system — child of origin/main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">refactor/event-system</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$6.70 — Claude &#x1FA99;4.1M</span>
+            <div class="status-indicators">
+              <span class="extra-uncommitted">~4</span>
+              <span class="extra-conflict">!</span>
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+15</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-green">&#x2191;15</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- fix/memory-leak — last child of origin/main -->
+    <div class="tree-indent">
+      <div class="indent-guide has-tick last"></div>
+      <div class="tree-content">
+        <div class="wt-item">
+          <div class="wt-row1">
+            <span class="wt-branch">fix/memory-leak</span>
+          </div>
+          <div class="wt-tags">
+            <span class="tag-pill red">bugfix</span>
+          </div>
+          <div class="wt-row3">
+            <span class="wt-cost">$0.60 — Claude &#x1FA99;0.4M</span>
+            <div class="status-indicators">
+              <span class="badge"><span class="emoji">&#x1F310;</span> <span class="val-green">+1</span></span>
+              <span class="badge"><span class="emoji">&#x2601;</span> <span class="val-muted">&#x2014;</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ghost-card">
+      <span class="mi material-icons">add</span>
+      New Worktree
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
