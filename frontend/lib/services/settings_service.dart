@@ -419,51 +419,24 @@ class SettingsService extends ChangeNotifier {
     ],
   );
 
-  // ---------------------------------------------------------------------------
-  // Window persistence
-  // ---------------------------------------------------------------------------
+  /// Returns a snapshot of current values for migration purposes.
+  ///
+  /// Used by [WindowLayoutService] to migrate legacy window/layout keys
+  /// out of config.json on first run.
+  Map<String, dynamic> get valuesSnapshot => Map.unmodifiable(_values);
 
-  /// Keys for window geometry stored in config.json.
-  static const _windowWidthKey = 'window.width';
-  static const _windowHeightKey = 'window.height';
-
-  /// Returns the saved window size, or null if not saved.
-  ({double width, double height})? get savedWindowSize {
-    final w = _values[_windowWidthKey];
-    final h = _values[_windowHeightKey];
-    if (w is num && h is num && w > 0 && h > 0) {
-      return (width: w.toDouble(), height: h.toDouble());
+  /// Removes the legacy window/layout keys from config.json.
+  ///
+  /// Called after [WindowLayoutService] has migrated them to window.json.
+  Future<void> removeLegacyWindowLayoutKeys() async {
+    var changed = false;
+    for (final key in ['window.width', 'window.height', 'layout.tree']) {
+      if (_values.containsKey(key)) {
+        _values.remove(key);
+        changed = true;
+      }
     }
-    return null;
-  }
-
-  /// Saves the window dimensions to config.json.
-  Future<void> saveWindowSize(double width, double height) async {
-    _values[_windowWidthKey] = width;
-    _values[_windowHeightKey] = height;
-    await _save();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Panel layout persistence
-  // ---------------------------------------------------------------------------
-
-  /// Key for layout tree stored in config.json.
-  static const _layoutTreeKey = 'layout.tree';
-
-  /// Returns the saved layout tree JSON, or null if not saved.
-  Map<String, dynamic>? get savedLayoutTree {
-    final raw = _values[_layoutTreeKey];
-    if (raw is Map<String, dynamic>) {
-      return raw;
-    }
-    return null;
-  }
-
-  /// Saves the layout tree JSON to config.json.
-  Future<void> saveLayoutTree(Map<String, dynamic> treeJson) async {
-    _values[_layoutTreeKey] = treeJson;
-    await _save();
+    if (changed) await _save();
   }
 
   // ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
 import 'services/project_config_service.dart';
 import 'services/settings_service.dart';
+import 'services/window_layout_service.dart';
 import 'services/script_execution_service.dart';
 import 'services/codex_pricing_service.dart';
 import 'services/event_handler.dart';
@@ -196,6 +197,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// The settings service for application preferences.
   SettingsService? _settingsService;
 
+  /// The window/layout service for window geometry and panel layout.
+  WindowLayoutService? _windowLayoutService;
+
   /// CLI availability service for checking claude/codex/acp existence.
   CliAvailabilityService? _cliAvailability;
 
@@ -275,9 +279,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Restores the saved window size on startup via window_manager.
   ///
-  /// Called after settings have been loaded.
+  /// Called after window layout service has been loaded.
   Future<void> _restoreWindowSize() async {
-    final saved = _settingsService?.savedWindowSize;
+    final saved = _windowLayoutService?.savedWindowSize;
     if (saved == null) return;
 
     try {
@@ -295,12 +299,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     });
   }
 
-  /// Reads the current window size and saves it to config.json.
+  /// Reads the current window size and saves it to window.json.
   Future<void> _saveCurrentWindowSize() async {
     try {
       final size = await windowManager.getSize();
       if (size.width > 0 && size.height > 0) {
-        await _settingsService?.saveWindowSize(size.width, size.height);
+        await _windowLayoutService?.saveWindowSize(size.width, size.height);
       }
     } catch (e) {
       debugPrint('Failed to save window size: $e');
@@ -375,7 +379,15 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Create and load the settings service (fire-and-forget load)
     _settingsService = SettingsService();
+    _windowLayoutService = WindowLayoutService();
     _settingsService!.load().then((_) async {
+      // Load window/layout service, migrating from config.json if needed
+      await _windowLayoutService!.load(
+        migrationSource: _settingsService!.valuesSnapshot,
+      );
+      // Clean legacy keys from config.json after migration
+      await _settingsService!.removeLegacyWindowLayoutKeys();
+
       // Check CLI availability after settings load (custom paths may be set)
       if (!shouldUseMock && widget.backendService == null) {
         final config = RuntimeConfig.instance;
@@ -1011,6 +1023,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Settings service for application preferences
         ChangeNotifierProvider<SettingsService>.value(
           value: _settingsService!,
+        ),
+        // Window/layout service for window geometry and panel layout
+        ChangeNotifierProvider<WindowLayoutService>.value(
+          value: _windowLayoutService!,
         ),
         // Project state
         ChangeNotifierProvider<ProjectState>.value(value: project),

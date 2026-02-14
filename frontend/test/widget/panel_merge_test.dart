@@ -10,6 +10,7 @@ import 'package:cc_insights_v2/services/menu_action_service.dart';
 import 'package:cc_insights_v2/services/project_config_service.dart';
 import 'package:cc_insights_v2/services/script_execution_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
+import 'package:cc_insights_v2/services/window_layout_service.dart';
 import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -72,6 +73,9 @@ void main() {
           ),
           ChangeNotifierProvider<SettingsService>.value(
             value: SettingsService(),
+          ),
+          ChangeNotifierProvider<WindowLayoutService>.value(
+            value: WindowLayoutService(),
           ),
           ChangeNotifierProvider<MenuActionService>.value(
             value: menuActionService,

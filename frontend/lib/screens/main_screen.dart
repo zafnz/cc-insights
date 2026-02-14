@@ -15,6 +15,7 @@ import '../services/persistence_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
+import '../services/window_layout_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 import '../state/ticket_board_state.dart';
@@ -525,9 +526,9 @@ class _MainScreenState extends State<MainScreen> {
   /// Saves the current panel layout tree immediately.
   void _saveLayoutTree() {
     try {
-      final settings = context.read<SettingsService>();
+      final windowLayout = context.read<WindowLayoutService>();
       final treeJson = _controller.rootNode.toJson();
-      settings.saveLayoutTree(treeJson);
+      windowLayout.saveLayoutTree(treeJson);
     } catch (_) {
       // Provider not available (e.g. during dispose)
     }
@@ -772,9 +773,9 @@ class _MainScreenState extends State<MainScreen> {
   SplitNode _buildInitialLayout() {
     Map<String, dynamic>? savedTree;
     try {
-      savedTree = context.read<SettingsService>().savedLayoutTree;
+      savedTree = context.read<WindowLayoutService>().savedLayoutTree;
     } catch (_) {
-      // Provider not available (e.g. in tests without SettingsService)
+      // Provider not available (e.g. in tests without WindowLayoutService)
     }
 
     // Try to restore from saved tree
