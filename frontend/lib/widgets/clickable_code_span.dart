@@ -209,6 +209,7 @@ class ClickableCodeBuilder extends MarkdownElementBuilder {
   ClickableCodeBuilder({
     required this.projectDir,
     this.defaultColor,
+    this.backgroundColor,
   });
 
   /// The worktree root for resolving relative file paths.
@@ -216,6 +217,9 @@ class ClickableCodeBuilder extends MarkdownElementBuilder {
 
   /// Optional override for the default code text color.
   final Color? defaultColor;
+
+  /// Optional override for the code background color.
+  final Color? backgroundColor;
 
   @override
   Widget visitElementAfterWithContext(
@@ -238,7 +242,7 @@ class ClickableCodeBuilder extends MarkdownElementBuilder {
             fontSize: fontSize,
             color: defaultColor ?? colorScheme.secondary,
           ),
-          backgroundColor: colorScheme.surfaceContainerHighest,
+          backgroundColor: backgroundColor ?? colorScheme.surfaceContainerHighest,
           projectDir: projectDir,
         ),
       ),

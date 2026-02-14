@@ -45,6 +45,7 @@ class UserInputEntryWidget extends StatelessWidget {
                 child: _buildTextContent(
                   textTheme,
                   onBubbleColor,
+                  bubbleColor,
                 ),
               ),
             ],
@@ -65,7 +66,7 @@ class UserInputEntryWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildTextContent(TextTheme textTheme, Color onBubbleColor) {
+  Widget _buildTextContent(TextTheme textTheme, Color onBubbleColor, Color bubbleColor) {
     switch (entry.displayFormat) {
       case DisplayFormat.plain:
         return SelectableText(
@@ -86,6 +87,10 @@ class UserInputEntryWidget extends StatelessWidget {
         return MarkdownRenderer(
           data: entry.text,
           codeColor: onBubbleColor,
+          codeBackground: Color.alphaBlend(
+            Colors.black.withValues(alpha: 0.2),
+            bubbleColor,
+          ),
         );
     }
   }

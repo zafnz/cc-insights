@@ -28,6 +28,9 @@ class FakeCliAvailabilityService extends ChangeNotifier
   Map<String, bool> get agentAvailability =>
       Map.unmodifiable(_agentAvailability);
 
+  @override
+  String? resolvedPathForAgent(String agentId) => null;
+
   set claudeAvailable(bool value) {
     _claudeAvailable = value;
     notifyListeners();

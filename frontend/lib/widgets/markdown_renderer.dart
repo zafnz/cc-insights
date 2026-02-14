@@ -18,6 +18,7 @@ class MarkdownRenderer extends StatelessWidget {
     required this.data,
     this.projectDir,
     this.codeColor,
+    this.codeBackground,
     this.fontSize = 13,
   });
 
@@ -29,6 +30,9 @@ class MarkdownRenderer extends StatelessWidget {
 
   /// Optional custom color for code spans.
   final Color? codeColor;
+
+  /// Optional custom background color for code blocks and inline code.
+  final Color? codeBackground;
 
   /// Base font size for the markdown content.
   final double fontSize;
@@ -57,10 +61,12 @@ class MarkdownRenderer extends StatelessWidget {
         context,
         fontSize: fontSize,
         codeColor: codeColor,
+        codeBackground: codeBackground,
       ),
       builders: buildMarkdownBuilders(
         projectDir: projectDir,
         codeColor: codeColor,
+        codeBackground: codeBackground,
       ),
       onTapLink: (text, href, title) {
         if (href != null) launchUrl(Uri.parse(href));

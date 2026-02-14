@@ -13,10 +13,12 @@ MarkdownStyleSheet buildMarkdownStyleSheet(
   BuildContext context, {
   double fontSize = 13,
   Color? codeColor,
+  Color? codeBackground,
 }) {
   final colorScheme = Theme.of(context).colorScheme;
   final monoFont = RuntimeConfig.instance.monoFontFamily;
   final effectiveCodeColor = codeColor ?? colorScheme.secondary;
+  final effectiveCodeBg = codeBackground ?? colorScheme.surfaceContainerHighest;
 
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     p: TextStyle(fontSize: fontSize, color: colorScheme.onSurface),
@@ -24,10 +26,10 @@ MarkdownStyleSheet buildMarkdownStyleSheet(
       monoFont,
       fontSize: fontSize - 1,
       color: effectiveCodeColor,
-      backgroundColor: colorScheme.surfaceContainerHighest,
+      backgroundColor: effectiveCodeBg,
     ),
     codeblockDecoration: BoxDecoration(
-      color: colorScheme.surfaceContainerHighest,
+      color: effectiveCodeBg,
       borderRadius: BorderRadius.circular(4),
     ),
     blockquote: TextStyle(
@@ -55,11 +57,13 @@ MarkdownStyleSheet buildMarkdownStyleSheet(
 Map<String, MarkdownElementBuilder> buildMarkdownBuilders({
   String? projectDir,
   Color? codeColor,
+  Color? codeBackground,
 }) {
   return {
     'code': ClickableCodeBuilder(
       projectDir: projectDir,
       defaultColor: codeColor,
+      backgroundColor: codeBackground,
     ),
   };
 }
