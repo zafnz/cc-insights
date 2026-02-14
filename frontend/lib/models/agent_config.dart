@@ -206,8 +206,8 @@ class AgentConfig {
           environment: '',
           defaultModel: '',
           defaultPermissions: 'default',
-          codexSandboxMode: 'workspaceWrite',
-          codexApprovalPolicy: 'onRequest',
+          codexSandboxMode: 'workspace-write',
+          codexApprovalPolicy: 'on-request',
         ),
         const AgentConfig(
           id: 'acp-default',

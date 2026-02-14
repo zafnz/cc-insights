@@ -941,8 +941,8 @@ class SettingsService extends ChangeNotifier {
         'environment': '',
         'defaultModel': '',
         'defaultPermissions': 'default',
-        'codexSandboxMode': 'workspaceWrite',
-        'codexApprovalPolicy': 'onRequest',
+        'codexSandboxMode': 'workspace-write',
+        'codexApprovalPolicy': 'on-request',
       },
       {
         'id': 'acp-default',

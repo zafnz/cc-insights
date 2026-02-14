@@ -1456,8 +1456,8 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
   String _driver = 'claude';
   String _defaultModel = 'default';
   String _defaultPermissions = 'default';
-  String _codexSandboxMode = 'workspaceWrite';
-  String _codexApprovalPolicy = 'onRequest';
+  String _codexSandboxMode = 'workspace-write';
+  String _codexApprovalPolicy = 'on-request';
 
   @override
   void initState() {
@@ -1517,8 +1517,8 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
         ? modelOpts.first.$1
         : agent.defaultModel;
     _defaultPermissions = agent.defaultPermissions;
-    _codexSandboxMode = agent.codexSandboxMode ?? 'workspaceWrite';
-    _codexApprovalPolicy = agent.codexApprovalPolicy ?? 'onRequest';
+    _codexSandboxMode = agent.codexSandboxMode ?? 'workspace-write';
+    _codexApprovalPolicy = agent.codexApprovalPolicy ?? 'on-request';
   }
 
   void _clearForm() {
@@ -1529,8 +1529,8 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
     _driver = 'claude';
     _defaultModel = 'default';
     _defaultPermissions = 'default';
-    _codexSandboxMode = 'workspaceWrite';
-    _codexApprovalPolicy = 'onRequest';
+    _codexSandboxMode = 'workspace-write';
+    _codexApprovalPolicy = 'on-request';
   }
 
   void _saveCurrentAgent() {
@@ -1945,15 +1945,17 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                     label: 'Security',
                     child: SecurityConfigGroup(
                       config: CodexSecurityConfig(
-                        sandboxMode: _parseSandboxMode(_codexSandboxMode),
-                        approvalPolicy:
-                            _parseApprovalPolicy(_codexApprovalPolicy),
+                        sandboxMode:
+                            CodexSandboxMode.fromNameOrWire(_codexSandboxMode),
+                        approvalPolicy: CodexApprovalPolicy.fromNameOrWire(
+                            _codexApprovalPolicy),
                       ),
                       capabilities: CodexSecurityCapabilities(),
                       onConfigChanged: (config) {
                         setState(() {
-                          _codexSandboxMode = config.sandboxMode.name;
-                          _codexApprovalPolicy = config.approvalPolicy.name;
+                          _codexSandboxMode = config.sandboxMode.wireValue;
+                          _codexApprovalPolicy =
+                              config.approvalPolicy.wireValue;
                         });
                         _saveCurrentAgent();
                       },
@@ -2008,22 +2010,6 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
         ),
       ],
     );
-  }
-
-  /// Parses a sandbox mode from either enum name or wire value.
-  static CodexSandboxMode _parseSandboxMode(String value) {
-    for (final mode in CodexSandboxMode.values) {
-      if (mode.name == value) return mode;
-    }
-    return CodexSandboxMode.fromWire(value);
-  }
-
-  /// Parses an approval policy from either enum name or wire value.
-  static CodexApprovalPolicy _parseApprovalPolicy(String value) {
-    for (final policy in CodexApprovalPolicy.values) {
-      if (policy.name == value) return policy;
-    }
-    return CodexApprovalPolicy.fromWire(value);
   }
 
   /// Returns dropdown options for the model field based on driver type.

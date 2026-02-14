@@ -453,11 +453,11 @@ class ChatState extends ChangeNotifier {
   void _initSecurityConfigFromAgent(AgentConfig config) {
     if (config.driver == 'codex') {
       _securityConfig = sdk.CodexSecurityConfig(
-        sandboxMode: _parseSandboxMode(
-          config.codexSandboxMode ?? 'workspaceWrite',
+        sandboxMode: sdk.CodexSandboxMode.fromNameOrWire(
+          config.codexSandboxMode ?? 'workspace-write',
         ),
-        approvalPolicy: _parseApprovalPolicy(
-          config.codexApprovalPolicy ?? 'onRequest',
+        approvalPolicy: sdk.CodexApprovalPolicy.fromNameOrWire(
+          config.codexApprovalPolicy ?? 'on-request',
         ),
       );
     } else {
@@ -469,22 +469,6 @@ class ChatState extends ChangeNotifier {
         ),
       );
     }
-  }
-
-  /// Parses a sandbox mode from either enum name or wire value.
-  static sdk.CodexSandboxMode _parseSandboxMode(String value) {
-    for (final mode in sdk.CodexSandboxMode.values) {
-      if (mode.name == value) return mode;
-    }
-    return sdk.CodexSandboxMode.fromWire(value);
-  }
-
-  /// Parses an approval policy from either enum name or wire value.
-  static sdk.CodexApprovalPolicy _parseApprovalPolicy(String value) {
-    for (final policy in sdk.CodexApprovalPolicy.values) {
-      if (policy.name == value) return policy;
-    }
-    return sdk.CodexApprovalPolicy.fromWire(value);
   }
 
   /// Creates a new [ChatState] with a newly created chat.

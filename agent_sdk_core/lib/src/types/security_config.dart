@@ -19,6 +19,17 @@ enum CodexSandboxMode {
     }
     return workspaceWrite;
   }
+
+  /// Parse from either enum name or wire value.
+  ///
+  /// Tries enum name first (e.g. 'workspaceWrite'), then wire value
+  /// (e.g. 'workspace-write'). Defaults to workspaceWrite if neither matches.
+  static CodexSandboxMode fromNameOrWire(String value) {
+    for (final mode in values) {
+      if (mode.name == value) return mode;
+    }
+    return fromWire(value);
+  }
 }
 
 /// Approval policy for Codex backend.
@@ -39,6 +50,17 @@ enum CodexApprovalPolicy {
       if (policy.wireValue == value) return policy;
     }
     return onRequest;
+  }
+
+  /// Parse from either enum name or wire value.
+  ///
+  /// Tries enum name first (e.g. 'onRequest'), then wire value
+  /// (e.g. 'on-request'). Defaults to onRequest if neither matches.
+  static CodexApprovalPolicy fromNameOrWire(String value) {
+    for (final policy in values) {
+      if (policy.name == value) return policy;
+    }
+    return fromWire(value);
   }
 }
 

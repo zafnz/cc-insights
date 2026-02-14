@@ -261,20 +261,52 @@ class WorktreeState extends ChangeNotifier {
        _base = base,
        _hidden = hidden,
        _selectedChat = null {
-    // Initialize welcome security config based on default backend
-    final defaultBackend = RuntimeConfig.instance.defaultBackend;
-    if (defaultBackend == sdk.BackendType.codex) {
-      _welcomeSecurityConfig = const sdk.CodexSecurityConfig(
-        sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
-        approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
-      );
-    } else {
-      _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(
+    // Initialize welcome security config from the default agent's settings
+    _welcomeSecurityConfig = _resolveSecurityConfigFromAgent();
+  }
+
+  /// Resolves the security config from the default agent's configuration.
+  ///
+  /// Looks up the agent by [agentId] (or the global default) and uses its
+  /// permission / sandbox settings. Falls back to backend-based defaults
+  /// when no agent is configured.
+  static sdk.SecurityConfig _resolveSecurityConfigFromAgent([
+    String? agentId,
+  ]) {
+    final id = agentId ?? RuntimeConfig.instance.defaultAgentId;
+    final agent = RuntimeConfig.instance.agentById(id);
+    if (agent != null) {
+      if (agent.driver == 'codex') {
+        return sdk.CodexSecurityConfig(
+          sandboxMode: sdk.CodexSandboxMode.fromNameOrWire(
+            agent.codexSandboxMode ?? 'workspace-write',
+          ),
+          approvalPolicy: sdk.CodexApprovalPolicy.fromNameOrWire(
+            agent.codexApprovalPolicy ?? 'on-request',
+          ),
+        );
+      }
+      return sdk.ClaudeSecurityConfig(
         permissionMode: sdk.PermissionMode.fromString(
-          RuntimeConfig.instance.defaultPermissionMode,
+          agent.defaultPermissions.isEmpty
+              ? 'default'
+              : agent.defaultPermissions,
         ),
       );
     }
+    // Fallback when no agent is configured
+    final defaultBackend = RuntimeConfig.instance.defaultBackend;
+    if (defaultBackend == sdk.BackendType.codex) {
+      return const sdk.CodexSecurityConfig(
+        sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+        approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+      );
+    }
+    return sdk.ClaudeSecurityConfig(
+      permissionMode: sdk.PermissionMode.fromString(
+        RuntimeConfig.instance.defaultPermissionMode,
+      ),
+    );
   }
 
   /// The immutable data for this worktree.
@@ -307,21 +339,12 @@ class WorktreeState extends ChangeNotifier {
   set welcomeModel(ChatModel value) {
     if (_welcomeModelOverride == value) return;
 
-    // If backend changed, update security config to match new backend
+    // If backend changed, update security config from the agent's settings
     final backendChanged = value.backend != welcomeModel.backend;
     if (backendChanged) {
-      if (value.backend == sdk.BackendType.codex) {
-        _welcomeSecurityConfig = const sdk.CodexSecurityConfig(
-          sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
-          approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
-        );
-      } else {
-        _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(
-          permissionMode: sdk.PermissionMode.fromString(
-            RuntimeConfig.instance.defaultPermissionMode,
-          ),
-        );
-      }
+      _welcomeSecurityConfig = _resolveSecurityConfigFromAgent(
+        _welcomeAgentId,
+      );
     }
 
     _welcomeModelOverride = value;
@@ -376,6 +399,8 @@ class WorktreeState extends ChangeNotifier {
   set welcomeAgentId(String? value) {
     if (_welcomeAgentId == value) return;
     _welcomeAgentId = value;
+    // Update security config to match the new agent's defaults
+    _welcomeSecurityConfig = _resolveSecurityConfigFromAgent(value);
     notifyListeners();
   }
 
