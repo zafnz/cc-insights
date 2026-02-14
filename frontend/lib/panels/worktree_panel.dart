@@ -9,6 +9,7 @@ import '../models/worktree_tag.dart';
 import '../services/ask_ai_service.dart';
 import '../services/file_system_service.dart';
 import '../services/git_service.dart';
+import '../services/log_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_config_service.dart';
 import '../services/project_restore_service.dart';
@@ -16,8 +17,13 @@ import '../services/script_execution_service.dart';
 import '../services/menu_action_service.dart';
 import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
+import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
+import '../widgets/base_selector_dialog.dart';
+import '../widgets/commit_dialog.dart';
+import '../widgets/conflict_resolution_dialog.dart';
 import '../widgets/delete_worktree_dialog.dart';
+import '../widgets/insights_widgets.dart';
 import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
@@ -945,6 +951,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   /// Duration of the double-click detection window.
   static const _doubleClickDuration = Duration(milliseconds: 300);
 
+  /// Controller for the context menu.
+  final _menuController = MenuController();
+
   @override
   void dispose() {
     _doubleClickTimer?.cancel();
@@ -982,255 +991,625 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   String get repoRoot => widget.repoRoot;
   bool get isSelected => widget.isSelected;
 
-  void _showContextMenu(BuildContext context, Offset position) async {
+  /// Refreshes git status for this worktree after an operation.
+  void _refreshStatus() {
+    try {
+      final watcher = context.read<WorktreeWatcherService>();
+      watcher.forceRefresh(worktree);
+    } catch (_) {
+      // Provider not available (e.g., in tests)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Git operation handlers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _handleStageCommit(BuildContext context) async {
+    LogService.instance.info('WorktreeMenu', 'Stage & Commit: ${worktree.data.branch}');
+    final gitService = context.read<GitService>();
+    final askAiService = context.read<AskAiService>();
+    final fileSystemService = context.read<FileSystemService>();
+
+    final committed = await showCommitDialog(
+      context: context,
+      worktreePath: worktree.data.worktreeRoot,
+      gitService: gitService,
+      askAiService: askAiService,
+      fileSystemService: fileSystemService,
+    );
+
+    if (committed) _refreshStatus();
+  }
+
+  Future<void> _handleRebase(BuildContext context) async {
+    final data = worktree.data;
+    final baseRef = data.baseRef ?? 'main';
+    LogService.instance.info('WorktreeMenu', 'Rebase: ${data.branch} onto $baseRef');
+    final gitService = context.read<GitService>();
+
+    await showConflictResolutionDialog(
+      context: context,
+      worktreePath: data.worktreeRoot,
+      branch: data.branch,
+      mainBranch: baseRef,
+      operation: MergeOperationType.rebase,
+      gitService: gitService,
+    );
+
+    _refreshStatus();
+  }
+
+  Future<void> _handleMergeFromBase(BuildContext context) async {
+    final data = worktree.data;
+    final baseRef = data.baseRef ?? 'main';
+    LogService.instance.info('WorktreeMenu', 'Merge from base: $baseRef into ${data.branch}');
+    final gitService = context.read<GitService>();
+
+    await showConflictResolutionDialog(
+      context: context,
+      worktreePath: data.worktreeRoot,
+      branch: data.branch,
+      mainBranch: baseRef,
+      operation: MergeOperationType.merge,
+      gitService: gitService,
+    );
+
+    _refreshStatus();
+  }
+
+  Future<void> _handleChangeBase(BuildContext context) async {
+    final previousValue = worktree.base;
+    final result = await showBaseSelectorDialog(
+      context,
+      currentBase: previousValue,
+      branchName: worktree.data.branch,
+    );
+
+    if (!context.mounted || result == null) return;
+
+    final newBase = result.base;
+    if (newBase == previousValue) return;
+
+    LogService.instance.notice('WorktreeMenu', 'Base changed: ${worktree.data.branch} ${previousValue ?? "none"} -> $newBase');
+    worktree.setBase(newBase);
+
+    try {
+      final project = context.read<ProjectState>();
+      final persistence = context.read<PersistenceService>();
+      persistence.updateWorktreeBase(
+        projectRoot: project.data.repoRoot,
+        worktreePath: worktree.data.worktreeRoot,
+        base: newBase,
+      );
+    } catch (_) {}
+
+    _refreshStatus();
+
+    if (result.rebase && context.mounted) {
+      LogService.instance.info('WorktreeMenu', 'Rebase onto new base: ${worktree.data.branch} -> $newBase');
+      final gitService = context.read<GitService>();
+
+      await showConflictResolutionDialog(
+        context: context,
+        worktreePath: worktree.data.worktreeRoot,
+        branch: worktree.data.branch,
+        mainBranch: newBase,
+        operation: MergeOperationType.rebase,
+        gitService: gitService,
+        oldBase: previousValue ?? 'main',
+      );
+
+      if (context.mounted) _refreshStatus();
+    }
+  }
+
+  Future<void> _handleMergeIntoBase(BuildContext context) async {
+    final data = worktree.data;
+    LogService.instance.info('WorktreeMenu', 'Merge into base: ${data.branch}');
+    final gitService = context.read<GitService>();
+    final project = context.read<ProjectState>();
+
+    String? mainBranch;
+    try {
+      mainBranch = await gitService.getMainBranch(project.data.repoRoot);
+    } catch (e) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, 'Failed to detect main branch: $e');
+      return;
+    }
+
+    if (mainBranch == null) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, 'Could not detect main branch');
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final primaryWorktreePath = project.primaryWorktree.data.worktreeRoot;
+
+    await showConflictResolutionDialog(
+      context: context,
+      worktreePath: primaryWorktreePath,
+      branch: mainBranch,
+      mainBranch: data.branch,
+      operation: MergeOperationType.merge,
+      gitService: gitService,
+    );
+
+    _refreshStatus();
+  }
+
+  Future<void> _handlePush(BuildContext context, {bool setUpstream = false}) async {
+    LogService.instance.info('WorktreeMenu', 'Push: ${worktree.data.branch}${setUpstream ? ' (set upstream)' : ''}');
+    final gitService = context.read<GitService>();
+    try {
+      await gitService.push(worktree.data.worktreeRoot, setUpstream: setUpstream);
+    } catch (e) {
+      if (!context.mounted) return;
+      showErrorSnackBar(context, 'Push failed: $e');
+      return;
+    }
+    _refreshStatus();
+  }
+
+  Future<void> _handlePullFfOnly(BuildContext context) async {
+    LogService.instance.info('WorktreeMenu', 'Pull FF-only: ${worktree.data.branch}');
+    final gitService = context.read<GitService>();
+    final result = await gitService.pullFfOnly(worktree.data.worktreeRoot);
+    if (result.error != null && context.mounted) {
+      showErrorSnackBar(context, 'Pull (FF only) failed: ${result.error}');
+    }
+    _refreshStatus();
+  }
+
+  Future<void> _handlePullMerge(BuildContext context) async {
+    final data = worktree.data;
+    LogService.instance.info('WorktreeMenu', 'Pull merge: ${data.branch}');
+    final gitService = context.read<GitService>();
+
+    final upstream = data.upstreamBranch;
+    if (upstream == null) return;
+
+    await showConflictResolutionDialog(
+      context: context,
+      worktreePath: data.worktreeRoot,
+      branch: data.branch,
+      mainBranch: upstream,
+      operation: MergeOperationType.merge,
+      gitService: gitService,
+      fetchFirst: true,
+    );
+
+    _refreshStatus();
+  }
+
+  Future<void> _handlePullRebase(BuildContext context) async {
+    final data = worktree.data;
+    LogService.instance.info('WorktreeMenu', 'Pull rebase: ${data.branch}');
+    final gitService = context.read<GitService>();
+
+    final upstream = data.upstreamBranch;
+    if (upstream == null) return;
+
+    await showConflictResolutionDialog(
+      context: context,
+      worktreePath: data.worktreeRoot,
+      branch: data.branch,
+      mainBranch: upstream,
+      operation: MergeOperationType.rebase,
+      gitService: gitService,
+      fetchFirst: true,
+    );
+
+    _refreshStatus();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Menu builder
+  // ---------------------------------------------------------------------------
+
+  /// Builds the menu children for the context menu.
+  List<Widget> _buildMenuChildren(BuildContext context) {
     final data = worktree.data;
     final colorScheme = Theme.of(context).colorScheme;
-    final settings = context.read<SettingsService>();
-    final availableTags = settings.availableTags;
 
-    final items = <PopupMenuEntry<String>>[
-      // Project Settings (only for primary worktree)
-      if (data.isPrimary) ...[
-        styledMenuItem(
-          value: 'project_settings',
-          child: Row(
-            children: [
-              Icon(
-                Icons.settings_outlined,
-                size: 16,
-                color: colorScheme.onSurface,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Project Settings',
-                style: TextStyle(color: colorScheme.onSurface),
-              ),
-            ],
+    final hasUncommitted = data.uncommittedFiles > 0;
+    final hasBase = data.baseRef != null;
+    final behindBase = data.commitsBehindMain > 0;
+    final aheadOfBase = data.commitsAheadOfMain > 0;
+    final hasUpstream = data.upstreamBranch != null;
+
+    final menuItems = <Widget>[];
+
+    // Project Settings (only for primary worktree)
+    if (data.isPrimary) {
+      menuItems.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.settings_outlined,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: () {
+            context.read<SelectionState>().showProjectSettingsPanel();
+          },
+          child: Text(
+            'Project Settings',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
           ),
         ),
-        styledMenuItem(
-          value: 'new_worktree',
-          child: Row(
-            children: [
-              Icon(
-                Icons.add,
-                size: 16,
-                color: colorScheme.onSurface,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'New worktree...',
-                style: TextStyle(color: colorScheme.onSurface),
-              ),
-            ],
+      );
+      menuItems.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.add,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: () {
+            context.read<SelectionState>().showCreateWorktreePanel();
+          },
+          child: Text(
+            'New worktree...',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
           ),
         ),
-        const PopupMenuDivider(height: 8),
-      ],
-      // Tags submenu header with arrow indicator
-      styledMenuItem(
-        value: 'tags',
-        child: Row(
-          children: [
-            Icon(
+      );
+      menuItems.add(const Divider(height: 1));
+    }
+
+    // Tags submenu - build submenu children lazily
+    menuItems.add(
+      Builder(
+        builder: (BuildContext menuContext) {
+          final settings = menuContext.read<SettingsService>();
+          final availableTags = settings.availableTags;
+
+          return SubmenuButton(
+            leadingIcon: Icon(
               Icons.label_outlined,
               size: 16,
               color: colorScheme.onSurface,
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Tags',
-                style: TextStyle(color: colorScheme.onSurface),
-              ),
+            menuChildren: availableTags.map((tag) {
+              final isChecked = worktree.tags.contains(tag.name);
+              return MenuItemButton(
+                onPressed: () {
+                  final project = menuContext.read<ProjectState>();
+                  final persistence = menuContext.read<PersistenceService>();
+                  worktree.toggleTag(tag.name);
+                  persistence.updateWorktreeTags(
+                    projectRoot: project.data.repoRoot,
+                    worktreePath: worktree.data.worktreeRoot,
+                    tags: List.of(worktree.tags),
+                  );
+                  setState(() {});
+                },
+                leadingIcon: SizedBox(
+                  width: 20,
+                  child: isChecked
+                      ? Icon(
+                          Icons.check,
+                          size: 14,
+                          color: colorScheme.primary,
+                        )
+                      : null,
+                ),
+                trailingIcon: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: tag.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                child: Text(
+                  tag.name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              );
+            }).toList(),
+            child: Text(
+              'Tags',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
             ),
-            Icon(
-              Icons.chevron_right,
-              size: 16,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ],
+          );
+        },
+      ),
+    );
+
+    // Git submenu
+    menuItems.add(
+      SubmenuButton(
+        leadingIcon: Icon(
+          Icons.source_outlined,
+          size: 16,
+          color: colorScheme.onSurface,
+        ),
+        menuChildren: _buildGitMenuChildren(
+          context,
+          colorScheme: colorScheme,
+          hasUncommitted: hasUncommitted,
+          hasBase: hasBase,
+          behindBase: behindBase,
+          aheadOfBase: aheadOfBase,
+          hasUpstream: hasUpstream,
+        ),
+        child: Text(
+          'Git',
+          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
         ),
       ),
-      if (!data.isPrimary) ...[
-        const PopupMenuDivider(height: 8),
-        styledMenuItem(
-          value: 'branch_off',
-          child: Row(
-            children: [
-              Icon(
-                Icons.fork_right,
-                size: 16,
-                color: colorScheme.onSurface,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Branch off this worktree',
-                style: TextStyle(color: colorScheme.onSurface),
-              ),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(height: 8),
-        if (worktree.hidden)
-          styledMenuItem(
-            value: 'unhide',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.visibility_outlined,
-                  size: 16,
-                  color: colorScheme.onSurface,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Unhide Worktree',
-                  style: TextStyle(color: colorScheme.onSurface),
-                ),
-              ],
-            ),
-          )
-        else
-          styledMenuItem(
-            value: 'hide',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.visibility_off_outlined,
-                  size: 16,
-                  color: colorScheme.onSurface,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Hide Worktree',
-                  style: TextStyle(color: colorScheme.onSurface),
-                ),
-              ],
-            ),
-          ),
-        styledMenuItem(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(Icons.delete_outline, size: 16, color: colorScheme.error),
-              const SizedBox(width: 8),
-              Text(
-                'Delete Worktree',
-                style: TextStyle(color: colorScheme.error),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ];
-
-    final result = await showStyledMenu<String>(
-      context: context,
-      position: menuPositionFromOffset(position),
-      items: items,
     );
 
-    if (!context.mounted) return;
-
-    switch (result) {
-      case 'project_settings':
-        context.read<SelectionState>().showProjectSettingsPanel();
-      case 'new_worktree':
-        context.read<SelectionState>().showCreateWorktreePanel();
-      case 'tags':
-        // Open the tags submenu to the right of the click position.
-        _showTagsSubmenu(context, position, availableTags);
-      case 'branch_off':
-        context
-            .read<SelectionState>()
-            .showCreateWorktreePanel(baseBranch: worktree.data.branch);
-      case 'hide':
-        await _handleHide(context);
-      case 'unhide':
-        await _handleUnhide(context);
-      case 'delete':
-        await _handleDelete(context);
-      default:
-        break;
+    if (!data.isPrimary) {
+      menuItems.add(const Divider(height: 1));
+      menuItems.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.fork_right,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: () {
+            context
+                .read<SelectionState>()
+                .showCreateWorktreePanel(baseBranch: worktree.data.branch);
+          },
+          child: Text(
+            'Branch off this worktree',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          ),
+        ),
+      );
+      menuItems.add(const Divider(height: 1));
+      if (worktree.hidden) {
+        menuItems.add(
+          MenuItemButton(
+            leadingIcon: Icon(
+              Icons.visibility_outlined,
+              size: 16,
+              color: colorScheme.onSurface,
+            ),
+            onPressed: () async {
+              await _handleUnhide(context);
+            },
+            child: Text(
+              'Unhide Worktree',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            ),
+          ),
+        );
+      } else {
+        menuItems.add(
+          MenuItemButton(
+            leadingIcon: Icon(
+              Icons.visibility_off_outlined,
+              size: 16,
+              color: colorScheme.onSurface,
+            ),
+            onPressed: () async {
+              await _handleHide(context);
+            },
+            child: Text(
+              'Hide Worktree',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            ),
+          ),
+        );
+      }
+      menuItems.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.delete_outline,
+            size: 16,
+            color: colorScheme.error,
+          ),
+          onPressed: () async {
+            await _handleDelete(context);
+          },
+          child: Text(
+            'Delete Worktree',
+            style: TextStyle(color: colorScheme.error, fontSize: 13),
+          ),
+        ),
+      );
     }
+
+    return menuItems;
   }
 
-  void _showTagsSubmenu(
-    BuildContext context,
-    Offset position,
-    List<WorktreeTag> availableTags,
-  ) async {
-    final project = context.read<ProjectState>();
-    final persistence = context.read<PersistenceService>();
-    final colorScheme = Theme.of(context).colorScheme;
-    final currentTags = List.of(worktree.tags);
+  /// Builds Git submenu children with conditional visibility and disabled states.
+  List<Widget> _buildGitMenuChildren(
+    BuildContext context, {
+    required ColorScheme colorScheme,
+    required bool hasUncommitted,
+    required bool hasBase,
+    required bool behindBase,
+    required bool aheadOfBase,
+    required bool hasUpstream,
+  }) {
+    final items = <Widget>[];
 
-    if (availableTags.isEmpty) return;
+    // Stage & Commit - disabled when no uncommitted changes
+    items.add(
+      MenuItemButton(
+        leadingIcon: Icon(
+          Icons.commit,
+          size: 16,
+          color: colorScheme.onSurface,
+        ),
+        onPressed: hasUncommitted
+            ? () => _handleStageCommit(context)
+            : null,
+        child: Text(
+          'Stage & Commit...',
+          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+        ),
+      ),
+    );
 
-    final items = availableTags.map((tag) {
-      final isChecked = currentTags.contains(tag.name);
-      return styledMenuItem<String>(
-        value: tag.name,
-        child: Row(
-          children: [
-            SizedBox(
-              width: 20,
-              child: isChecked
-                  ? Icon(
-                      Icons.check,
-                      size: 14,
-                      color: colorScheme.primary,
-                    )
+    // Base operations - only shown when there is a base
+    if (hasBase) {
+      items.add(const Divider(height: 1));
+
+      // Rebase - disabled when already up to date with base
+      items.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.merge,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: behindBase
+              ? () => _handleRebase(context)
+              : null,
+          child: Text(
+            'Rebase',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          ),
+        ),
+      );
+
+      // Merge from base - disabled when already up to date with base
+      items.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.call_merge,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: behindBase
+              ? () => _handleMergeFromBase(context)
+              : null,
+          child: Text(
+            'Merge from base',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          ),
+        ),
+      );
+
+      // Squash commits - disabled (will be wired up later)
+      items.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.compress,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: null,
+          child: Text(
+            'Squash commits',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    // Change base & Merge into base
+    items.add(const Divider(height: 1));
+
+    items.add(
+      MenuItemButton(
+        leadingIcon: Icon(
+          Icons.settings_backup_restore,
+          size: 16,
+          color: colorScheme.onSurface,
+        ),
+        onPressed: () => _handleChangeBase(context),
+        child: Text(
+          'Change base...',
+          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+        ),
+      ),
+    );
+
+    // Merge into base - disabled when no commits ahead
+    items.add(
+      MenuItemButton(
+        leadingIcon: Icon(
+          Icons.merge_type,
+          size: 16,
+          color: colorScheme.onSurface,
+        ),
+        onPressed: aheadOfBase
+            ? () => _handleMergeIntoBase(context)
+            : null,
+        child: Text(
+          'Merge into base',
+          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+        ),
+      ),
+    );
+
+    // Pull/Push - only shown when there is an upstream
+    if (hasUpstream) {
+      items.add(const Divider(height: 1));
+
+      items.add(
+        SubmenuButton(
+          leadingIcon: Icon(
+            Icons.cloud_download,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          menuChildren: [
+            MenuItemButton(
+              onPressed: worktree.data.commitsAhead == 0
+                  ? () => _handlePullFfOnly(context)
                   : null,
-            ),
-            const SizedBox(width: 4),
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: tag.color,
-                shape: BoxShape.circle,
+              child: Text(
+                'FF Only',
+                style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              tag.name,
-              style: TextStyle(
-                fontSize: 12,
-                color: colorScheme.onSurface,
+            MenuItemButton(
+              onPressed: () => _handlePullMerge(context),
+              child: Text(
+                'with Merge',
+                style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+              ),
+            ),
+            MenuItemButton(
+              onPressed: () => _handlePullRebase(context),
+              child: Text(
+                'with Rebase',
+                style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
               ),
             ),
           ],
+          child: Text(
+            'Pull',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          ),
         ),
       );
-    }).toList();
 
-    // Position submenu slightly to the right of the original position.
-    final submenuPosition = Offset(position.dx + 120, position.dy);
-    final result = await showStyledMenu<String>(
-      context: context,
-      position: menuPositionFromOffset(submenuPosition),
-      items: items,
-    );
-
-    if (result == null || !context.mounted) return;
-
-    // Toggle the selected tag
-    worktree.toggleTag(result);
-
-    // Persist
-    persistence.updateWorktreeTags(
-      projectRoot: project.data.repoRoot,
-      worktreePath: worktree.data.worktreeRoot,
-      tags: List.of(worktree.tags),
-    );
-
-    // Re-open the submenu so the user can toggle more tags.
-    if (context.mounted) {
-      final updatedTags =
-          context.read<SettingsService>().availableTags;
-      _showTagsSubmenu(context, position, updatedTags);
+      // Push - disabled when nothing to push (ahead == 0)
+      items.add(
+        MenuItemButton(
+          leadingIcon: Icon(
+            Icons.cloud_upload,
+            size: 16,
+            color: colorScheme.onSurface,
+          ),
+          onPressed: worktree.data.commitsAhead > 0
+              ? () => _handlePush(context)
+              : null,
+          child: Text(
+            'Push',
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          ),
+        ),
+      );
     }
+
+    return items;
   }
 
   Future<void> _handleHide(BuildContext context) async {
@@ -1335,14 +1714,36 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         final hasAnyActiveChat =
             worktree.chats.any((chat) => chat.isWorking);
 
-        final availableTags =
-            context.read<SettingsService>().availableTags;
-
-        Widget item = GestureDetector(
-          onSecondaryTapUp: (details) {
-            _showContextMenu(context, details.globalPosition);
+        Widget item = MenuAnchor(
+          controller: _menuController,
+          builder: (BuildContext context, MenuController controller, Widget? child) {
+            return child!;
           },
-          child: DecoratedBox(
+          menuChildren: _buildMenuChildren(context),
+          alignmentOffset: const Offset(0, 0),
+          style: MenuStyle(
+            backgroundColor: WidgetStateProperty.all(
+              colorScheme.surfaceContainerHigh,
+            ),
+            elevation: WidgetStateProperty.all(8),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+                side: BorderSide(
+                  color: colorScheme.primary.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+              ),
+            ),
+            padding: WidgetStateProperty.all(
+              const EdgeInsets.symmetric(vertical: 4),
+            ),
+          ),
+          child: GestureDetector(
+            onSecondaryTapUp: (details) {
+              _menuController.open(position: details.localPosition);
+            },
+            child: DecoratedBox(
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
@@ -1407,9 +1808,14 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                     if (worktree.tags.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 3),
-                        child: _TagPills(
-                          tagNames: worktree.tags,
-                          availableTags: availableTags,
+                        child: Builder(
+                          builder: (BuildContext tagContext) {
+                            final settings = tagContext.read<SettingsService>();
+                            return _TagPills(
+                              tagNames: worktree.tags,
+                              availableTags: settings.availableTags,
+                            );
+                          },
                         ),
                       ),
                     const SizedBox(height: 2),
@@ -1447,6 +1853,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
               ),
             ),
           ),
+            ),
           ),
         );
 

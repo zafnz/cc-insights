@@ -472,17 +472,26 @@ class FakeGitService implements GitService {
   /// Result for [pull]. Key is path.
   final Map<String, MergeResult> pullResults = {};
 
+  /// Result for [pullFfOnly]. Key is path.
+  final Map<String, MergeResult> pullFfOnlyResults = {};
+
   /// Result for [pullRebase]. Key is path.
   final Map<String, MergeResult> pullRebaseResults = {};
 
   /// Tracks calls to [pull].
   final List<String> pullCalls = [];
 
+  /// Tracks calls to [pullFfOnly].
+  final List<String> pullFfOnlyCalls = [];
+
   /// Tracks calls to [pullRebase].
   final List<String> pullRebaseCalls = [];
 
   /// If set, [pull] will throw this exception.
   GitException? pullError;
+
+  /// If set, [pullFfOnly] will throw this exception.
+  GitException? pullFfOnlyError;
 
   /// If set, [pullRebase] will throw this exception.
   GitException? pullRebaseError;
@@ -494,6 +503,19 @@ class FakeGitService implements GitService {
     _maybeThrow();
     if (pullError != null) throw pullError!;
     return pullResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.merge,
+        );
+  }
+
+  @override
+  Future<MergeResult> pullFfOnly(String path) async {
+    pullFfOnlyCalls.add(path);
+    await _maybeDelay();
+    _maybeThrow();
+    if (pullFfOnlyError != null) throw pullFfOnlyError!;
+    return pullFfOnlyResults[path] ??
         const MergeResult(
           hasConflicts: false,
           operation: MergeOperationType.merge,

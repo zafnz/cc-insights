@@ -393,6 +393,12 @@ abstract class GitService {
   /// in a conflicted state for the user or Claude to resolve.
   Future<MergeResult> pull(String path);
 
+  /// Pulls from the remote with fast-forward only (git pull --ff-only).
+  ///
+  /// Returns a [MergeResult] with [MergeOperationType.merge]. If the pull
+  /// cannot be fast-forwarded, the error field is set and no merge occurs.
+  Future<MergeResult> pullFfOnly(String path);
+
   /// Pulls from the remote with rebase (git pull --rebase).
   ///
   /// Returns a [MergeResult] with [MergeOperationType.rebase] indicating
@@ -1135,6 +1141,43 @@ class RealGitService implements GitService {
         return const MergeResult(
           hasConflicts: true,
           operation: MergeOperationType.merge,
+        );
+      }
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+      );
+    } on TimeoutException {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+        error: 'Pull timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.merge,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<MergeResult> pullFfOnly(String path) async {
+    LogService.instance.info('Git', 'pull --ff-only', meta: {'cwd': path});
+    try {
+      final result = await Process.run(
+        'git',
+        ['pull', '--ff-only'],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        return MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.merge,
+          error: stderr.isNotEmpty ? stderr.trim() : 'Fast-forward not possible',
         );
       }
       return const MergeResult(
