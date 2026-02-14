@@ -92,11 +92,17 @@ class AppMenuBar extends StatelessWidget {
   /// When false, project-specific menu items are disabled.
   final bool hasProject;
 
+  /// Navigator key for showing dialogs from the platform menu bar.
+  /// Because PlatformMenuBar sits above the MaterialApp navigator,
+  /// we need a direct reference to show dialogs.
+  final GlobalKey<NavigatorState>? navigatorKey;
+
   const AppMenuBar({
     super.key,
     required this.child,
     required this.callbacks,
     this.hasProject = false,
+    this.navigatorKey,
   });
 
   @override
@@ -457,18 +463,85 @@ class AppMenuBar extends StatelessWidget {
   }
 
   void _showAboutDialog(BuildContext context) {
-    showAboutDialog(
-      context: context,
-      applicationName: 'CC Insights',
-      applicationVersion: '2.0.0',
-      applicationLegalese: '© 2024 CC Insights',
-      children: [
-        const SizedBox(height: 16),
-        const Text(
-          'Desktop application for monitoring and interacting '
-          'with Claude Code agents.',
+    // PlatformMenuBar sits above MaterialApp's navigator, so the build
+    // context doesn't have one. Use the navigator key if available.
+    final dialogContext = navigatorKey?.currentContext ?? context;
+    final colorScheme = Theme.of(dialogContext).colorScheme;
+    final textTheme = Theme.of(dialogContext).textTheme;
+
+    showDialog(
+      context: dialogContext,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Logo
+                Image.asset(
+                  'assets/title.png',
+                  width: 280,
+                ),
+                const SizedBox(height: 16),
+                // Version
+                Text(
+                  'Version 0.0.17',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Description
+                Text(
+                  'Desktop application for monitoring and interacting '
+                  'with Claude Code agents.',
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                // GitHub link
+                InkWell(
+                  onTap: () => launchUrl(
+                    Uri.parse('https://github.com/zafnz/cc-insights/'),
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      'github.com/zafnz/cc-insights',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                        decorationColor: colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Copyright
+                Text(
+                  '\u00a9 Nick Clifford, nick@nickclifford.com',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Close button
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
         ),
-      ],
+      ),
     );
   }
 

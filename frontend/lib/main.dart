@@ -219,6 +219,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Menu action service for broadcasting menu actions to MainScreen.
   final MenuActionService _menuActionService = MenuActionService();
 
+  /// Navigator key for the MaterialApp, used to show dialogs from the
+  /// platform menu bar (which sits above the navigator).
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   /// Future for project restoration.
   Future<ProjectState>? _projectFuture;
 
@@ -669,6 +673,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     return AppMenuBar(
       callbacks: _createMenuCallbacks(),
       hasProject: hasProject,
+      navigatorKey: _navigatorKey,
       child: _buildContent(shouldUseMock),
     );
   }
@@ -680,6 +685,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// are configured once here rather than per-screen.
   Widget _buildContent(bool shouldUseMock) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'CC Insights',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(Brightness.light),
