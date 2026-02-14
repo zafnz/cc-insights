@@ -386,6 +386,25 @@ abstract class GitService {
     required String oldBase,
   });
 
+  /// Squashes a contiguous range of commits into a single commit.
+  ///
+  /// [keepSha] is the SHA of the oldest commit in the range — it becomes
+  /// the "pick" target. All commits between [keepSha] and [topSha]
+  /// (inclusive of [topSha], exclusive of [keepSha]) are marked as
+  /// "squash". The resulting single commit uses [message] as its commit
+  /// message.
+  ///
+  /// Under the hood this drives `git rebase -i` with a
+  /// `GIT_SEQUENCE_EDITOR` script that rewrites the todo list.
+  ///
+  /// Returns a [MergeResult] indicating success or conflicts.
+  Future<MergeResult> squashCommits(
+    String path, {
+    required String keepSha,
+    required String topSha,
+    required String message,
+  });
+
   /// Pulls from the remote (git pull).
   ///
   /// Returns a [MergeResult] with [MergeOperationType.merge] indicating
@@ -1118,6 +1137,107 @@ class RealGitService implements GitService {
         error: 'Rebase timed out after $_mergeTimeout',
       );
     } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<MergeResult> squashCommits(
+    String path, {
+    required String keepSha,
+    required String topSha,
+    required String message,
+  }) async {
+    LogService.instance.info('Git', 'squash', meta: {
+      'cwd': path,
+      'keep': keepSha,
+      'top': topSha,
+    });
+
+    // Write the commit message to a temp file so git can use it.
+    final tmpDir = await Directory.systemTemp.createTemp('cci_squash_');
+    final msgFile = File('${tmpDir.path}/SQUASH_MSG');
+    await msgFile.writeAsString(message);
+
+    // Build a sed script that:
+    //  1. Keeps the first "pick" line (the oldest commit in the range)
+    //  2. Changes all subsequent "pick" lines to "squash"
+    // GIT_SEQUENCE_EDITOR is invoked with the todo file path as $1.
+    final editorScript = "sed -i '' '2,\$s/^pick /squash /' \"\$1\"";
+
+    try {
+      // The parent of keepSha is the rebase base.
+      final result = await Process.run(
+        'git',
+        ['rebase', '-i', '$keepSha~1'],
+        workingDirectory: path,
+        environment: {
+          ...Platform.environment,
+          'GIT_SEQUENCE_EDITOR': editorScript,
+          'GIT_EDITOR': 'true', // Accept the default squash message
+        },
+      ).timeout(_mergeTimeout);
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('could not apply')) {
+          // Abort the rebase so we don't leave dirty state.
+          await Process.run(
+            'git',
+            ['rebase', '--abort'],
+            workingDirectory: path,
+          );
+          tmpDir.deleteSync(recursive: true);
+          return const MergeResult(
+            hasConflicts: true,
+            operation: MergeOperationType.rebase,
+          );
+        }
+        tmpDir.deleteSync(recursive: true);
+        return MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+          error: stderr.isNotEmpty ? stderr.trim() : 'Squash failed',
+        );
+      }
+
+      // The rebase succeeded with the default squashed message.
+      // Now amend the commit to use our desired message.
+      final amendResult = await Process.run(
+        'git',
+        ['commit', '--amend', '-F', msgFile.path],
+        workingDirectory: path,
+      ).timeout(timeout);
+
+      tmpDir.deleteSync(recursive: true);
+
+      if (amendResult.exitCode != 0) {
+        return MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+          error: 'Squash succeeded but amend failed: '
+              '${(amendResult.stderr as String).trim()}',
+        );
+      }
+
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+      );
+    } on TimeoutException {
+      tmpDir.deleteSync(recursive: true);
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Squash timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      tmpDir.deleteSync(recursive: true);
       return MergeResult(
         hasConflicts: false,
         operation: MergeOperationType.rebase,

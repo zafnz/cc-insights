@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squash Commits Dialog Mockup — CC-Insights</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-container: #211f26;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --surface-container-lowest: #0f0d13;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+    --error-container: #8c1d18;
+
+    --green: #4caf50;
+    --orange: #ff9800;
+    --blue: #64b5f6;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0e0c11;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 32px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+    color: var(--on-surface);
+  }
+
+  .section-title {
+    width: 100%;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--on-surface);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary);
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    margin-top: -16px;
+  }
+
+  .variant-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .mock-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: -16px;
+  }
+
+  /* ---- Dialog chrome ---- */
+  .dialog {
+    width: 600px;
+    background: var(--surface);
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  .dialog-header {
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .dialog-header .material-icons { font-size: 20px; }
+
+  .dialog-header .branch {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.7;
+    margin-left: auto;
+  }
+
+  .dialog-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dialog-footer {
+    padding: 12px 16px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    background: rgba(54, 52, 59, 0.3);
+    border-top: 1px solid var(--outline-variant);
+  }
+
+  .dialog-footer .hint {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    margin-right: auto;
+  }
+
+  .btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--on-surface);
+    cursor: default;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn.ghost {
+    border-color: rgba(73, 69, 79, 0.5);
+    color: var(--on-surface-variant);
+  }
+
+  .btn.primary {
+    background: var(--primary);
+    color: #1b1523;
+  }
+
+  .btn.primary.disabled {
+    opacity: 0.35;
+  }
+
+  .btn .material-icons { font-size: 16px; }
+
+  /* ---- Instruction bar ---- */
+  .instruction-bar {
+    padding: 10px 16px;
+    background: var(--surface-container);
+    border-bottom: 1px solid var(--outline-variant);
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .instruction-bar .material-icons {
+    font-size: 16px;
+    color: var(--primary);
+  }
+
+  /* ---- Commit list ---- */
+  .commit-list {
+    padding: 0;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  .commit-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 0 0 0;
+    border-bottom: 1px solid rgba(73, 69, 79, 0.25);
+    min-height: 38px;
+    position: relative;
+    transition: background 0.1s;
+  }
+
+  .commit-row:last-child { border-bottom: none; }
+
+  .commit-row.in-range {
+    background: rgba(208, 188, 255, 0.06);
+  }
+
+  .commit-row.range-top {
+    border-top: 2px solid rgba(208, 188, 255, 0.35);
+  }
+
+  .commit-row.range-bottom {
+    border-bottom: 2px solid rgba(208, 188, 255, 0.35);
+  }
+
+  /* Gutter with range indicator */
+  .commit-gutter {
+    width: 36px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .commit-row.in-range .commit-gutter::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--primary);
+    border-radius: 1.5px;
+  }
+
+  .commit-row.range-top .commit-gutter::before {
+    top: 50%;
+    border-radius: 1.5px 1.5px 0 0;
+  }
+
+  .commit-row.range-bottom .commit-gutter::before {
+    bottom: 50%;
+    border-radius: 0 0 1.5px 1.5px;
+  }
+
+  .commit-row.range-top.range-bottom .commit-gutter::before {
+    top: 25%;
+    bottom: 25%;
+    border-radius: 1.5px;
+  }
+
+  /* Range handle dots */
+  .range-handle {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--surface);
+    z-index: 2;
+    cursor: ns-resize;
+    position: relative;
+  }
+
+  .range-handle::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--surface);
+  }
+
+  /* Commit content */
+  .commit-content {
+    flex: 1;
+    padding: 8px 12px 8px 0;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .commit-sha {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+    width: 60px;
+  }
+
+  .commit-msg {
+    font-size: 13px;
+    color: var(--on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .commit-age {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+    padding-right: 12px;
+    white-space: nowrap;
+  }
+
+  /* Range bracket labels */
+  .range-label {
+    position: absolute;
+    right: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    opacity: 0.7;
+  }
+
+  /* Squash summary bar */
+  .squash-summary {
+    padding: 8px 16px;
+    background: var(--surface-container);
+    border-top: 1px solid var(--outline-variant);
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .squash-summary strong {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .squash-summary .material-icons {
+    font-size: 16px;
+    color: var(--primary);
+    opacity: 0.7;
+  }
+
+  /* ---- Commit Message Dialog ---- */
+  .dialog.wide { width: 700px; }
+
+  .tab-bar {
+    display: flex;
+    padding: 0 16px;
+    background: var(--surface-container);
+    border-bottom: 1px solid var(--outline-variant);
+  }
+
+  .tab {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    border-bottom: 2px solid transparent;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+
+  .tab .material-icons { font-size: 16px; }
+
+  .message-area {
+    padding: 16px;
+    flex: 1;
+  }
+
+  .message-textarea {
+    width: 100%;
+    min-height: 200px;
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--on-surface);
+    resize: vertical;
+  }
+
+  .message-textarea .comment {
+    color: var(--on-surface-variant);
+  }
+
+  .ai-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 16px;
+    color: var(--on-surface-variant);
+    font-size: 13px;
+  }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--outline-variant);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .ai-generated-msg {
+    padding: 16px;
+  }
+
+  .ai-msg-content {
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--on-surface);
+  }
+
+  .ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--primary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+
+  .ai-badge .material-icons { font-size: 14px; }
+
+  .ai-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .btn.small {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .footnote {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    max-width: 700px;
+    line-height: 1.5;
+  }
+
+  .arrow-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    margin: 8px 0;
+  }
+
+  .arrow-label .material-icons {
+    font-size: 24px;
+    color: var(--primary);
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+
+  <div class="section-title">Squash Commits — Mockup</div>
+  <div class="section-subtitle">Step 1: Select range to squash. Step 2: Write/generate commit message. Squash replaces selected commits with a single commit.</div>
+
+  <!-- ================================================================== -->
+  <!-- STEP 1 — Select commits to squash                                  -->
+  <!-- ================================================================== -->
+
+  <div class="mock-label">Step 1 — Select range to squash</div>
+
+  <div class="variant-row">
+    <div class="dialog">
+      <div class="dialog-header">
+        <span class="material-icons">compress</span>
+        Squash Commits
+        <span class="branch">feat/add-git-menu</span>
+      </div>
+
+      <div class="instruction-bar">
+        <span class="material-icons">info_outline</span>
+        Click a commit to start the range, then click another to set the end. Selected commits will be squashed into one.
+      </div>
+
+      <div class="commit-list">
+        <!-- Commit 8 - HEAD (newest) — outside range -->
+        <div class="commit-row">
+          <div class="commit-gutter"></div>
+          <div class="commit-content">
+            <span class="commit-sha">a3f8c21</span>
+            <span class="commit-msg">Fix lint warnings in context menu</span>
+          </div>
+          <span class="commit-age">2m ago</span>
+        </div>
+
+        <!-- Commit 7 — outside range -->
+        <div class="commit-row">
+          <div class="commit-gutter"></div>
+          <div class="commit-content">
+            <span class="commit-sha">b7e4d09</span>
+            <span class="commit-msg">Wire up push handler with error snackbar</span>
+          </div>
+          <span class="commit-age">8m ago</span>
+        </div>
+
+        <!-- Commit 6 — top of squash range -->
+        <div class="commit-row in-range range-top">
+          <div class="commit-gutter">
+            <div class="range-handle"></div>
+          </div>
+          <div class="commit-content">
+            <span class="commit-sha">c9a1f34</span>
+            <span class="commit-msg">Add pull submenu with FF, merge, rebase options</span>
+          </div>
+          <span class="commit-age">15m ago</span>
+        </div>
+
+        <!-- Commit 5 — in range -->
+        <div class="commit-row in-range">
+          <div class="commit-gutter"></div>
+          <div class="commit-content">
+            <span class="commit-sha">d2b5e78</span>
+            <span class="commit-msg">Add rebase and merge-from-base handlers</span>
+          </div>
+          <span class="commit-age">22m ago</span>
+        </div>
+
+        <!-- Commit 4 — in range -->
+        <div class="commit-row in-range">
+          <div class="commit-gutter"></div>
+          <div class="commit-content">
+            <span class="commit-sha">e6c0a12</span>
+            <span class="commit-msg">Scaffold Git submenu with disabled items</span>
+          </div>
+          <span class="commit-age">35m ago</span>
+        </div>
+
+        <!-- Commit 3 — bottom of squash range -->
+        <div class="commit-row in-range range-bottom">
+          <div class="commit-gutter">
+            <div class="range-handle"></div>
+          </div>
+          <div class="commit-content">
+            <span class="commit-sha">f1d9b56</span>
+            <span class="commit-msg">Replace PopupMenu with MenuAnchor for context menu</span>
+          </div>
+          <span class="commit-age">48m ago</span>
+        </div>
+
+        <!-- Commit 2 — outside range -->
+        <div class="commit-row">
+          <div class="commit-gutter"></div>
+          <div class="commit-content">
+            <span class="commit-sha">a4e3c89</span>
+            <span class="commit-msg">Add tag toggle persistence to worktree panel</span>
+          </div>
+          <span class="commit-age">1h ago</span>
+        </div>
+
+        <!-- Commit 1 - oldest — outside range -->
+        <div class="commit-row">
+          <div class="commit-gutter"></div>
+          <div class="commit-content">
+            <span class="commit-sha">b8f2d01</span>
+            <span class="commit-msg">Initial branch setup from main</span>
+          </div>
+          <span class="commit-age">2h ago</span>
+        </div>
+      </div>
+
+      <div class="squash-summary">
+        <span class="material-icons">compress</span>
+        <strong>4 commits</strong> selected &mdash; will be squashed into 1 commit at position of oldest
+      </div>
+
+      <div class="dialog-footer">
+        <span class="hint">base: main &middot; 8 commits total</span>
+        <button class="btn ghost">Cancel</button>
+        <button class="btn primary">
+          <span class="material-icons">compress</span>
+          Squash 4 commits
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-label">
+    <span class="material-icons">arrow_downward</span>
+    After clicking "Squash 4 commits", the commit message dialog opens
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- STEP 2 — Commit message (two tabs)                                 -->
+  <!-- ================================================================== -->
+
+  <div class="mock-label">Step 2a — Commit message: Auto-generated tab</div>
+
+  <div class="variant-row">
+    <!-- Auto-generated tab (active, message ready) -->
+    <div class="dialog wide">
+      <div class="dialog-header">
+        <span class="material-icons">edit_note</span>
+        Squash Commit Message
+        <span class="branch">feat/add-git-menu</span>
+      </div>
+
+      <div class="tab-bar">
+        <div class="tab active">
+          <span class="material-icons">auto_awesome</span>
+          Auto-generated
+        </div>
+        <div class="tab">
+          <span class="material-icons">edit</span>
+          Manual
+        </div>
+      </div>
+
+      <div class="ai-generated-msg">
+        <div class="ai-badge">
+          <span class="material-icons">auto_awesome</span>
+          AI generated
+        </div>
+        <div class="ai-msg-content">Add Git submenu with MenuAnchor context menu system
+
+Replace the PopupMenuButton-based worktree context menu with Flutter's
+MenuAnchor/SubmenuButton system, enabling proper nested flyout submenus.
+Add a Git submenu with pull (FF, merge, rebase), push, rebase, and
+merge-from-base operations wired to existing dialog infrastructure.</div>
+        <div class="ai-actions">
+          <button class="btn small ghost">
+            <span class="material-icons">refresh</span>
+            Regenerate
+          </button>
+          <button class="btn small ghost">
+            <span class="material-icons">edit</span>
+            Edit
+          </button>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <span class="hint">Squashing commits c9a1f34..f1d9b56</span>
+        <button class="btn ghost">Back</button>
+        <button class="btn primary">
+          <span class="material-icons">check</span>
+          Commit
+        </button>
+      </div>
+    </div>
+
+    <!-- Auto-generated tab (loading state) -->
+    <div class="dialog wide">
+      <div class="dialog-header">
+        <span class="material-icons">edit_note</span>
+        Squash Commit Message
+        <span class="branch">feat/add-git-menu</span>
+      </div>
+
+      <div class="tab-bar">
+        <div class="tab active">
+          <span class="material-icons">auto_awesome</span>
+          Auto-generated
+        </div>
+        <div class="tab">
+          <span class="material-icons">edit</span>
+          Manual
+        </div>
+      </div>
+
+      <div class="ai-loading">
+        <div class="spinner"></div>
+        Generating commit message from 4 squashed commits...
+      </div>
+
+      <div class="dialog-footer">
+        <span class="hint">Squashing commits c9a1f34..f1d9b56</span>
+        <button class="btn ghost">Back</button>
+        <button class="btn primary disabled">
+          <span class="material-icons">check</span>
+          Commit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-label">Step 2b — Commit message: Manual tab</div>
+
+  <div class="variant-row">
+    <div class="dialog wide">
+      <div class="dialog-header">
+        <span class="material-icons">edit_note</span>
+        Squash Commit Message
+        <span class="branch">feat/add-git-menu</span>
+      </div>
+
+      <div class="tab-bar">
+        <div class="tab">
+          <span class="material-icons">auto_awesome</span>
+          Auto-generated
+        </div>
+        <div class="tab active">
+          <span class="material-icons">edit</span>
+          Manual
+        </div>
+      </div>
+
+      <div class="message-area">
+        <div class="message-textarea">Add pull submenu with FF, merge, rebase options
+
+Add rebase and merge-from-base handlers
+
+Scaffold Git submenu with disabled items
+
+Replace PopupMenu with MenuAnchor for context menu
+
+<span class="comment"># This is a combination of 4 commits.
+# Lines starting with '#' will be ignored.
+#
+# Commits being squashed:
+#   c9a1f34 Add pull submenu with FF, merge, rebase options
+#   d2b5e78 Add rebase and merge-from-base handlers
+#   e6c0a12 Scaffold Git submenu with disabled items
+#   f1d9b56 Replace PopupMenu with MenuAnchor for context menu</span></div>
+      </div>
+
+      <div class="dialog-footer">
+        <span class="hint">Squashing commits c9a1f34..f1d9b56</span>
+        <button class="btn ghost">Back</button>
+        <button class="btn primary">
+          <span class="material-icons">check</span>
+          Commit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <strong>Interaction notes:</strong><br>
+    &bull; Step 1: Click any commit to start selection. Click a second commit to define the range endpoint. The range is always contiguous.<br>
+    &bull; Drag the handle dots to adjust the range top/bottom.<br>
+    &bull; The purple bar in the gutter shows the selected range. Handles appear at the top and bottom of the range.<br>
+    &bull; Step 2: Auto-generated tab uses the internal AI service. Manual tab pre-fills with all commit messages concatenated (git rebase -i style).<br>
+    &bull; "Back" returns to step 1 without losing the selection. "Cancel" closes entirely.<br>
+    &bull; Under the hood this performs: git rebase -i (marking selected commits as squash/fixup).
+  </div>
+
+</body>
+</html>

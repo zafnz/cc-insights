@@ -23,6 +23,7 @@ import '../widgets/base_selector_dialog.dart';
 import '../widgets/commit_dialog.dart';
 import '../widgets/conflict_resolution_dialog.dart';
 import '../widgets/delete_worktree_dialog.dart';
+import '../widgets/squash_dialog.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
@@ -1058,6 +1059,25 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     _refreshStatus();
   }
 
+  Future<void> _handleSquash(BuildContext context) async {
+    final data = worktree.data;
+    final baseRef = data.baseRef ?? 'main';
+    LogService.instance.info('WorktreeMenu', 'Squash: ${data.branch}');
+    final gitService = context.read<GitService>();
+    final askAiService = context.read<AskAiService>();
+
+    final squashed = await showSquashDialog(
+      context: context,
+      worktreePath: data.worktreeRoot,
+      branch: data.branch,
+      baseRef: baseRef,
+      gitService: gitService,
+      askAiService: askAiService,
+    );
+
+    if (squashed) _refreshStatus();
+  }
+
   Future<void> _handleChangeBase(BuildContext context) async {
     final previousValue = worktree.base;
     final result = await showBaseSelectorDialog(
@@ -1494,7 +1514,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         ),
       );
 
-      // Squash commits - disabled (will be wired up later)
+      // Squash commits - disabled when fewer than 2 commits ahead of base
       items.add(
         MenuItemButton(
           leadingIcon: Icon(
@@ -1502,7 +1522,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             size: 16,
             color: colorScheme.onSurface,
           ),
-          onPressed: null,
+          onPressed: aheadOfBase && worktree.data.commitsAheadOfMain >= 2
+              ? () => _handleSquash(context)
+              : null,
           child: Text(
             'Squash commits',
             style: TextStyle(color: colorScheme.onSurface, fontSize: 13),

@@ -613,6 +613,39 @@ class FakeGitService implements GitService {
         );
   }
 
+  /// Result for [squashCommits]. Key is path.
+  final Map<String, MergeResult> squashResults = {};
+
+  /// Tracks calls to [squashCommits].
+  final List<({String path, String keepSha, String topSha, String message})>
+      squashCalls = [];
+
+  /// If set, [squashCommits] will throw this exception.
+  GitException? squashError;
+
+  @override
+  Future<MergeResult> squashCommits(
+    String path, {
+    required String keepSha,
+    required String topSha,
+    required String message,
+  }) async {
+    squashCalls.add((
+      path: path,
+      keepSha: keepSha,
+      topSha: topSha,
+      message: message,
+    ));
+    await _maybeDelay();
+    _maybeThrow();
+    if (squashError != null) throw squashError!;
+    return squashResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+        );
+  }
+
   @override
   Future<void> mergeAbort(String path) async {
     mergeAbortCalls.add(path);

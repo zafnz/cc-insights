@@ -285,6 +285,20 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<MergeResult> squashCommits(
+    String path, {
+    required String keepSha,
+    required String topSha,
+    required String message,
+  }) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return const MergeResult(
+      hasConflicts: false,
+      operation: MergeOperationType.rebase,
+    );
+  }
+
+  @override
   Future<MergeResult> pull(String path) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
     return const MergeResult(
