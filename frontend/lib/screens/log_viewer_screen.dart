@@ -272,7 +272,7 @@ class _FilterBar extends StatelessWidget {
                       children: [
                         _LevelBadge(level: l, compact: true),
                         const SizedBox(width: 6),
-                        Text(_levelLabel(l)),
+                        Flexible(child: Text(_levelLabel(l), overflow: TextOverflow.ellipsis)),
                       ],
                     ),
                   ),
