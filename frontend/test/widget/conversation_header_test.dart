@@ -1,9 +1,11 @@
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/models/chat.dart' as chat_model;
 import 'package:cc_insights_v2/models/chat_model.dart';
 import 'package:cc_insights_v2/panels/conversation_header.dart';
 import 'package:cc_insights_v2/panels/compact_dropdown.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
+import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/widgets/security_config_group.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
@@ -70,6 +72,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     return const sdk.BackendCapabilities(
       supportsPermissionModeChange: true,
       supportsModelChange: true,
+      supportsModelListing: true,
     );
   }
 
@@ -150,6 +153,54 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
 
   @override
   void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {}
+
+  // Agent-keyed API stubs
+  @override
+  String? get activeAgentId => null;
+  @override
+  bool isReadyForAgent(String agentId) => false;
+  @override
+  bool isStartingForAgent(String agentId) => false;
+  @override
+  bool isModelListLoadingForAgent(String agentId) => false;
+  @override
+  String? errorForAgent(String agentId) => null;
+  @override
+  bool isAgentErrorForAgent(String agentId) => false;
+  @override
+  sdk.BackendCapabilities capabilitiesForAgent(String agentId) =>
+      const sdk.BackendCapabilities();
+  @override
+  CodexSecurityConfig? codexSecurityConfigForAgent(String agentId) => null;
+  @override
+  CodexSecurityCapabilities codexSecurityCapabilitiesForAgent(String agentId) =>
+      const CodexSecurityCapabilities();
+  @override
+  Future<void> startAgent(String agentId, {AgentConfig? config}) async {}
+  @override
+  Future<sdk.EventTransport> createTransportForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    sdk.InternalToolRegistry? registry,
+  }) async => throw UnimplementedError();
+  @override
+  Future<sdk.AgentSession> createSessionForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    sdk.InternalToolRegistry? registry,
+  }) async => throw UnimplementedError();
+  @override
+  Future<void> disposeAgent(String agentId) async {}
+  @override
+  Future<void> discoverModelsForAllAgents() async {}
+  @override
+  void registerAgentBackendForTesting(String agentId, sdk.AgentBackend backend) {}
 }
 
 class FakeTransport implements sdk.EventTransport {
@@ -202,12 +253,18 @@ void main() {
     late FakeCliAvailabilityService fakeCliAvailability;
 
     setUp(() {
+      RuntimeConfig.resetForTesting();
+
+      // Set up agent registry with default agents
+      RuntimeConfig.instance.agents = AgentConfig.defaults;
+
       fakeBackend = FakeBackendService();
       fakeCliAvailability = FakeCliAvailabilityService();
     });
 
     tearDown(() async {
       await resources.disposeAll();
+      RuntimeConfig.resetForTesting();
     });
 
     Widget buildTestWidget(chat_model.ChatState chat) {
@@ -465,10 +522,9 @@ void main() {
       check(newConfig.approvalPolicy).equals(sdk.CodexApprovalPolicy.onRequest); // unchanged
     });
 
-    testWidgets('Agent dropdown includes ACP when available', (tester) async {
-      fakeCliAvailability.codexAvailable = true;
-      fakeCliAvailability.acpAvailable = true;
-
+    testWidgets('Agent dropdown includes agents from registry when available',
+        (tester) async {
+      // All agents available by default in fake
       final chat = resources.track(
         chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
@@ -483,9 +539,50 @@ void main() {
         ),
       );
 
+      // Check that dropdown contains agent names from registry
+      // (AgentConfig.defaults: 'Claude', 'Codex', 'Gemini')
       check(agentDropdown.items).contains('Claude');
       check(agentDropdown.items).contains('Codex');
-      check(agentDropdown.items).contains('ACP');
+      check(agentDropdown.items).contains('Gemini'); // ACP default is named "Gemini"
+    });
+
+    testWidgets('Selecting different agent sets chat.agentId', (tester) async {
+      // Codex available, ACP not
+      fakeCliAvailability.agentAvailability = {
+        'claude-default': true,
+        'codex-default': true,
+        'gemini-default': false,
+      };
+
+      final chat = resources.track(
+        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+      );
+      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null));
+
+      await tester.pumpWidget(buildTestWidget(chat));
+      await safePumpAndSettle(tester);
+
+      // Initial agent ID should be null (not set yet)
+      check(chat.agentId).isNull();
+
+      // Find the agent dropdown
+      final agentDropdown = find.byWidgetPredicate(
+        (widget) => widget is CompactDropdown && widget.tooltip == 'Agent',
+      );
+      check(agentDropdown.evaluate()).isNotEmpty();
+
+      // Tap the dropdown to open it
+      await tester.tap(agentDropdown);
+      await safePumpAndSettle(tester);
+
+      // Select "Codex"
+      await tester.tap(find.text('Codex').last);
+      await safePumpAndSettle(tester);
+
+      // Verify agent ID changed to codex-default
+      check(chat.agentId).equals('codex-default');
+      // Verify backend changed to Codex
+      check(chat.model.backend).equals(sdk.BackendType.codex);
     });
   });
 }

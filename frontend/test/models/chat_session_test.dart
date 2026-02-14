@@ -89,8 +89,7 @@ class FakeBackendService extends BackendService {
     String? executablePath,
     InternalToolRegistry? registry,
   }) async {
-    final session = await createSessionForBackend(
-      type: type,
+    final session = await createSession(
       prompt: prompt,
       cwd: cwd,
       options: options,
@@ -99,7 +98,29 @@ class FakeBackendService extends BackendService {
     );
     return sdk.InProcessTransport(
       session: session,
-      capabilities: capabilitiesFor(type),
+      capabilities: const sdk.BackendCapabilities(),
+    );
+  }
+
+  @override
+  Future<sdk.EventTransport> createTransportForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    InternalToolRegistry? registry,
+  }) async {
+    final session = await createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+      registry: registry,
+    );
+    return sdk.InProcessTransport(
+      session: session,
+      capabilities: const sdk.BackendCapabilities(),
     );
   }
 }
@@ -297,7 +318,7 @@ void main() {
         check(backend.lastPrompt).equals('Hello Claude');
         check(backend.lastCwd).equals('/path/to/worktree');
         check(backend.lastOptions).isNotNull();
-        check(backend.lastOptions!.model).equals('haiku');
+        check(backend.lastOptions!.model).equals('default');
       });
 
       test('notifies listeners when session starts', () async {

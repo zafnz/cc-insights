@@ -110,17 +110,21 @@ class AskAiService {
   /// Creates an AskAiService.
   ///
   /// [claudePath] is an explicit override for the claude CLI executable.
-  /// If not provided, the path is resolved from [RuntimeConfig.claudeCliPath]
-  /// at request time, falling back to the default PATH lookup.
+  /// If not provided, the path is resolved from the first Claude-driver
+  /// agent's CLI path in the agent config list, falling back to the
+  /// default PATH lookup.
   AskAiService({String? claudePath}) : _explicitPath = claudePath;
 
   final String? _explicitPath;
 
-  /// Returns the effective claude CLI path, resolving from settings.
+  /// Returns the effective claude CLI path, resolving from agent config.
   String? get _effectiveClaudePath {
     if (_explicitPath != null) return _explicitPath;
-    final configPath = RuntimeConfig.instance.claudeCliPath;
-    return configPath.isEmpty ? null : configPath;
+    final agents = RuntimeConfig.instance.agents;
+    final claudeAgent =
+        agents.where((a) => a.driver == 'claude').firstOrNull;
+    final path = claudeAgent?.cliPath ?? '';
+    return path.isEmpty ? null : path;
   }
 
   /// Creates a [ClaudeSingleRequest] with the current effective path.

@@ -5,47 +5,68 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-/// Service that checks whether CLI executables (claude, codex, acp) are available.
+import '../models/agent_config.dart';
+
+/// Service that checks whether CLI executables are available per-agent.
 ///
-/// Call [checkAll] after settings are loaded so that custom paths from
+/// Call [checkAgents] after settings are loaded so that custom paths from
 /// user preferences are taken into account.
 class CliAvailabilityService extends ChangeNotifier {
+  /// Per-agent availability keyed by agent ID.
+  Map<String, bool> _agentAvailability = {};
+
+  /// Whether at least one claude-driver agent is available.
+  ///
+  /// Used by [CliRequiredScreen] to gate app startup.
   bool _claudeAvailable = false;
-  bool _codexAvailable = false;
-  bool _acpAvailable = false;
+
+  /// Whether the initial check has completed.
   bool _checked = false;
 
-  /// Whether the Claude CLI was found.
+  /// Whether a specific agent's CLI is available.
+  bool isAgentAvailable(String agentId) =>
+      _agentAvailability[agentId] ?? false;
+
+  /// Unmodifiable view of per-agent availability.
+  Map<String, bool> get agentAvailability =>
+      Map.unmodifiable(_agentAvailability);
+
+  /// Whether at least one claude-driver agent is available.
   bool get claudeAvailable => _claudeAvailable;
-
-  /// Whether the Codex CLI was found.
-  bool get codexAvailable => _codexAvailable;
-
-  /// Whether the ACP agent executable was found.
-  bool get acpAvailable => _acpAvailable;
 
   /// Whether the initial check has completed.
   bool get checked => _checked;
 
-  /// Checks both CLIs for availability.
+  /// Checks CLI availability for each agent in the list.
   ///
-  /// [claudePath], [codexPath], and [acpPath] are custom paths from settings.
-  /// Pass an empty string to use the default PATH lookup.
-  Future<void> checkAll({
-    String claudePath = '',
-    String codexPath = '',
-    String acpPath = '',
-  }) async {
-    _claudeAvailable = await _checkExecutable('claude', claudePath);
-    _codexAvailable = await _checkExecutable('codex', codexPath);
-    _acpAvailable = await _checkExecutable('acp', acpPath);
+  /// Each agent's [AgentConfig.driver] is used as the executable name
+  /// and [AgentConfig.cliPath] as the custom path override.
+  Future<void> checkAgents(List<AgentConfig> agents) async {
+    final results = <String, bool>{};
+    for (final agent in agents) {
+      results[agent.id] = await _checkExecutable(agent.driver, agent.cliPath);
+    }
+    _agentAvailability = results;
+    // Claude is available if ANY claude-driver agent resolves.
+    _claudeAvailable = agents
+        .where((a) => a.driver == 'claude')
+        .any((a) => results[a.id] == true);
     _checked = true;
     notifyListeners();
 
     developer.log(
-      'CLI availability: claude=$_claudeAvailable, codex=$_codexAvailable, acp=$_acpAvailable',
+      'CLI availability: ${results.entries.map((e) => '${e.key}=${e.value}').join(', ')}',
       name: 'CliAvailabilityService',
     );
+  }
+
+  /// Quick check for Claude CLI availability only.
+  ///
+  /// Used by [CliRequiredScreen] before the full agent list is relevant.
+  Future<void> checkClaude({String customPath = ''}) async {
+    _claudeAvailable = await _checkExecutable('claude', customPath);
+    _checked = true;
+    notifyListeners();
   }
 
   /// Checks whether a single CLI executable is available.

@@ -4,6 +4,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../models/agent_config.dart';
 import '../models/setting_definition.dart';
 
 /// How to summarize bash tool usage in the UI.
@@ -158,6 +159,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Which markdown rendering backend to use.
   MarkdownBackend _markdownBackend = MarkdownBackend.flutterMarkdownPlus;
 
+  /// Configured agent definitions from settings.
+  List<AgentConfig> _agents = [];
+
   /// Custom path to the Claude CLI executable (empty = use PATH lookup).
   String _claudeCliPath = '';
 
@@ -181,6 +185,9 @@ class RuntimeConfig extends ChangeNotifier {
 
   /// Whether the ACP agent executable is available on this system.
   bool _acpAvailable = true;
+
+  /// ID of the default agent for new chats.
+  String _defaultAgentId = 'claude-default';
 
   /// The working directory for this session.
   String get workingDirectory => _workingDirectory;
@@ -636,6 +643,51 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Configured agent definitions from settings.
+  List<AgentConfig> get agents => List.unmodifiable(_agents);
+
+  set agents(List<AgentConfig> value) {
+    _agents = List.of(value);
+    notifyListeners();
+  }
+
+  /// ID of the default agent for new chats.
+  String get defaultAgentId => _defaultAgentId;
+
+  set defaultAgentId(String value) {
+    if (_defaultAgentId != value) {
+      _defaultAgentId = value;
+      notifyListeners();
+    }
+  }
+
+  /// Returns the default agent config, or null if not found.
+  AgentConfig? get defaultAgent {
+    for (final agent in _agents) {
+      if (agent.id == _defaultAgentId) return agent;
+    }
+    return _agents.isNotEmpty ? _agents.first : null;
+  }
+
+  /// Finds an agent by ID.
+  AgentConfig? agentById(String id) {
+    for (final agent in _agents) {
+      if (agent.id == id) return agent;
+    }
+    return null;
+  }
+
+  /// Finds an agent matching both name and driver.
+  ///
+  /// Used for fallback agent resolution when the original agentId is not found
+  /// during chat restore.
+  AgentConfig? agentByNameAndDriver(String name, String driver) {
+    for (final agent in _agents) {
+      if (agent.name == name && agent.driver == driver) return agent;
+    }
+    return null;
+  }
+
   /// Custom path to the Claude CLI executable.
   ///
   /// Empty string means use default PATH lookup.
@@ -708,6 +760,14 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Finds the first agent matching a driver name (e.g., "claude", "codex").
+  AgentConfig? agentByDriver(String driver) {
+    for (final agent in _agents) {
+      if (agent.driver == driver) return agent;
+    }
+    return null;
+  }
+
   /// Updates the working directory.
   ///
   /// This is called when the user selects a project from the welcome screen.
@@ -765,5 +825,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._codexAvailable = true;
     _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;
+    _instance._agents = [];
+    _instance._defaultAgentId = 'claude-default';
   }
 }

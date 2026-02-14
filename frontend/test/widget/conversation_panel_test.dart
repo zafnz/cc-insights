@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
@@ -93,6 +94,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     return const sdk.BackendCapabilities(
       supportsPermissionModeChange: true,
       supportsModelChange: true,
+      supportsModelListing: true,
     );
   }
 
@@ -203,6 +205,66 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {
     // Not needed in these tests
   }
+
+  // Agent-keyed API stubs
+  @override
+  String? get activeAgentId => null;
+  @override
+  bool isReadyForAgent(String agentId) => false;
+  @override
+  bool isStartingForAgent(String agentId) => false;
+  @override
+  bool isModelListLoadingForAgent(String agentId) => false;
+  @override
+  String? errorForAgent(String agentId) => null;
+  @override
+  bool isAgentErrorForAgent(String agentId) => false;
+  @override
+  sdk.BackendCapabilities capabilitiesForAgent(String agentId) =>
+      const sdk.BackendCapabilities();
+  @override
+  CodexSecurityConfig? codexSecurityConfigForAgent(String agentId) => null;
+  @override
+  CodexSecurityCapabilities codexSecurityCapabilitiesForAgent(String agentId) =>
+      const CodexSecurityCapabilities();
+  @override
+  Future<void> startAgent(String agentId, {AgentConfig? config}) async {}
+  @override
+  Future<sdk.EventTransport> createTransportForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    sdk.InternalToolRegistry? registry,
+  }) async {
+    final session = await createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+      registry: registry,
+    );
+    return sdk.InProcessTransport(
+      session: session,
+      capabilities: const sdk.BackendCapabilities(),
+    );
+  }
+  @override
+  Future<sdk.AgentSession> createSessionForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    sdk.SessionOptions? options,
+    List<sdk.ContentBlock>? content,
+    sdk.InternalToolRegistry? registry,
+  }) async => throw UnimplementedError();
+  @override
+  Future<void> disposeAgent(String agentId) async {}
+  @override
+  Future<void> discoverModelsForAllAgents() async {}
+  @override
+  void registerAgentBackendForTesting(String agentId, sdk.AgentBackend backend) {}
 
   void reset() {
     createSessionCalls.clear();
@@ -616,6 +678,41 @@ void main() {
         // Verify tool input is displayed (generic tool shows key-value pairs)
         expect(find.textContaining('file_path'), findsOneWidget);
         expect(find.textContaining('/secret/file.txt'), findsOneWidget);
+      });
+    });
+
+    group('Agent removal', () {
+      testWidgets('shows agent removed banner when chat is terminated',
+          (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Initially no banner
+        expect(find.text('Agent removed \u2014 this chat can no longer send messages'), findsNothing);
+
+        // Terminate the chat
+        await testChat.terminateForAgentRemoval();
+        await safePumpAndSettle(tester);
+
+        // Banner should be visible
+        expect(find.text('Agent removed \u2014 this chat can no longer send messages'), findsOneWidget);
+        expect(find.byIcon(Icons.block), findsOneWidget);
+      });
+
+      testWidgets('hides message input when chat is terminated',
+          (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Initially message input is present
+        expect(find.byType(TextField), findsOneWidget);
+
+        // Terminate the chat
+        await testChat.terminateForAgentRemoval();
+        await safePumpAndSettle(tester);
+
+        // Message input should be gone, replaced by banner
+        expect(find.byType(TextField), findsNothing);
       });
     });
   });

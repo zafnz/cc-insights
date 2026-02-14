@@ -18,7 +18,11 @@ void main() {
         sdk.BackendType.directCli,
         'haiku',
       );
-      check(model).equals(ChatModelCatalog.claudeModels.first);
+      check(model).equals(const ChatModel(
+        id: 'haiku',
+        label: 'Haiku',
+        backend: sdk.BackendType.directCli,
+      ));
     });
 
     test('falls back to first model for unknown', () {
@@ -80,7 +84,11 @@ void main() {
       final chat = ChatState(
         ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
       );
-      check(chat.model).equals(ChatModelCatalog.claudeModels.first);
+      check(chat.model).equals(const ChatModel(
+        id: 'haiku',
+        label: 'Haiku',
+        backend: sdk.BackendType.directCli,
+      ));
       check(chat.permissionMode).equals(PermissionMode.acceptEdits);
     });
   });

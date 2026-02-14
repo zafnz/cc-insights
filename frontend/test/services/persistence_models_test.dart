@@ -156,10 +156,11 @@ void main() {
       final meta = ChatMeta.create();
 
       check(meta.model).equals('opus');
-      check(meta.backendType).equals('direct');
+      check(meta.backendType).equals('claude');
       check(meta.permissionMode).equals('default');
       check(meta.context.currentTokens).equals(0);
       check(meta.usage.inputTokens).equals(0);
+      check(meta.backendName).isNull();
     });
 
     test('create() accepts custom model and permission', () {
@@ -180,7 +181,7 @@ void main() {
       final modified = original.copyWith(model: 'opus');
 
       check(modified.model).equals('opus');
-      check(modified.backendType).equals('direct');
+      check(modified.backendType).equals('claude');
       check(modified.permissionMode).equals('default');
       check(modified.createdAt).equals(original.createdAt);
     });
@@ -284,6 +285,75 @@ void main() {
       check(restored.lastActiveAt).equals(original.lastActiveAt);
       check(restored.context).equals(original.context);
       check(restored.usage).equals(original.usage);
+    });
+
+    test('backendName round-trips through JSON', () {
+      final meta = ChatMeta(
+        model: 'opus',
+        backendType: 'acp',
+        hasStarted: false,
+        permissionMode: 'default',
+        createdAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
+        lastActiveAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
+        context: const ContextInfo.empty(),
+        usage: const UsageInfo.zero(),
+        backendName: 'Gemini',
+      );
+
+      final json = meta.toJson();
+      check(json['backendName']).equals('Gemini');
+
+      final restored = ChatMeta.fromJson(json);
+      check(restored.backendName).equals('Gemini');
+    });
+
+    test('backendName omitted from JSON when null', () {
+      final meta = ChatMeta(
+        model: 'opus',
+        backendType: 'claude',
+        hasStarted: false,
+        permissionMode: 'default',
+        createdAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
+        lastActiveAt: DateTime.utc(2025, 1, 27, 10, 0, 0),
+        context: const ContextInfo.empty(),
+        usage: const UsageInfo.zero(),
+      );
+
+      final json = meta.toJson();
+      check(json.containsKey('backendName')).isFalse();
+    });
+
+    test('fromJson handles missing backendName gracefully', () {
+      final json = {
+        'model': 'opus',
+        'backendType': 'direct',
+        'permissionMode': 'default',
+      };
+
+      final meta = ChatMeta.fromJson(json);
+      check(meta.backendName).isNull();
+    });
+
+    test('copyWith preserves backendName', () {
+      final original = ChatMeta.create(backendName: 'Claude');
+      final modified = original.copyWith(model: 'sonnet');
+
+      check(modified.backendName).equals('Claude');
+    });
+
+    test('copyWith can update backendName', () {
+      final original = ChatMeta.create(backendName: 'Claude');
+      final modified = original.copyWith(backendName: 'Gemini');
+
+      check(modified.backendName).equals('Gemini');
+    });
+
+    test('fromJson reads old "direct" backendType for backward compat', () {
+      final json = <String, dynamic>{};
+      final meta = ChatMeta.fromJson(json);
+
+      // Old chats without backendType default to 'direct' (backward compat)
+      check(meta.backendType).equals('direct');
     });
   });
 

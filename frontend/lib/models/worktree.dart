@@ -227,6 +227,12 @@ class WorktreeState extends ChangeNotifier {
   /// when the user hasn't overridden the global default yet.
   ChatModel? _welcomeModelOverride;
 
+  /// Agent ID selected in the welcome screen for new chats.
+  ///
+  /// When set, overrides the global default agent for this worktree.
+  /// Null means use the global default from RuntimeConfig.
+  String? _welcomeAgentId;
+
   /// Backend-specific security configuration for the welcome screen.
   ///
   /// Initialized based on [RuntimeConfig.instance.defaultBackend]:
@@ -358,6 +364,18 @@ class WorktreeState extends ChangeNotifier {
   set welcomeReasoningEffort(sdk.ReasoningEffort? value) {
     if (_welcomeReasoningEffort == value) return;
     _welcomeReasoningEffort = value;
+    notifyListeners();
+  }
+
+  /// Agent ID selected in the welcome screen.
+  ///
+  /// Returns the user's explicit override if set, otherwise resolves
+  /// the global default from RuntimeConfig.
+  String get welcomeAgentId =>
+      _welcomeAgentId ?? RuntimeConfig.instance.defaultAgentId;
+  set welcomeAgentId(String? value) {
+    if (_welcomeAgentId == value) return;
+    _welcomeAgentId = value;
     notifyListeners();
   }
 

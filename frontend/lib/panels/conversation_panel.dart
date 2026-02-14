@@ -474,8 +474,10 @@ class _ConversationPanelState extends State<ConversationPanel>
                   isCompacting: isCompacting,
                 ),
         ),
-        // Bottom area: either permission widget or message input
-        if (isPrimary)
+        // Bottom area: agent-removed banner, permission widget, or message input
+        if (isPrimary && chat.agentRemoved)
+          _AgentRemovedBanner(message: chat.missingAgentMessage)
+        else if (isPrimary)
           shouldShowPermissionWidget
               ? _buildPermissionWidget(chat)
               : MessageInput(
@@ -787,4 +789,47 @@ class _ScrollPosition {
     required this.offsetInItem,
     required this.wasAtBottom,
   });
+}
+
+/// Banner shown when a chat's agent has been removed from the registry.
+///
+/// Replaces the message input to indicate that no new messages can be sent,
+/// while the chat history remains visible.
+class _AgentRemovedBanner extends StatelessWidget {
+  const _AgentRemovedBanner({this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.3),
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.block, size: 16, color: colorScheme.error),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              message ??
+                  'Agent removed \u2014 this chat can no longer send messages',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

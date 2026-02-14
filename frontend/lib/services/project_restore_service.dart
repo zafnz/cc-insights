@@ -13,6 +13,7 @@ import 'log_service.dart';
 import 'persistence_models.dart';
 import 'persistence_service.dart';
 import 'project_config_service.dart';
+import 'runtime_config.dart';
 
 /// Service for restoring projects, worktrees, and chats from persistence.
 ///
@@ -235,14 +236,45 @@ class ProjectRestoreService {
       ),
     );
 
-    final chatState = ChatState(chatData);
+    // Load the chat meta to restore model, permission, context, and usage
+    var meta = await _persistence.loadChatMeta(projectId, chatRef.chatId);
+
+    // Migrate legacy chats without agentId by matching backendType to first agent
+    if (meta.agentId == null) {
+      meta = meta.migrateAgentId((driver) {
+        final agent = RuntimeConfig.instance.agentByDriver(driver);
+        return agent?.id;
+      });
+    }
+
+    // Validate that the resolved agent still exists in the registry
+    String? missingAgentMessage;
+    if (meta.agentId != null) {
+      final agent = RuntimeConfig.instance.agentById(meta.agentId!);
+      if (agent == null) {
+        // Agent ID not found — try name+driver fallback
+        final name = meta.backendName;
+        final driver = _normalizeDriver(meta.backendType);
+        if (name != null) {
+          final replacement =
+              RuntimeConfig.instance.agentByNameAndDriver(name, driver);
+          if (replacement != null) {
+            meta = meta.copyWith(agentId: replacement.id);
+          } else {
+            missingAgentMessage = 'Missing agent "$name" of type $driver';
+          }
+        } else {
+          missingAgentMessage = 'Missing agent (ID: ${meta.agentId})';
+        }
+      }
+    }
+
+    final chatState = ChatState(chatData, agentId: meta.agentId);
 
     // Initialize persistence with both projectId and projectRoot
     // The projectRoot is needed for updating lastSessionId in projects.json
     await chatState.initPersistence(projectId, projectRoot: projectRoot);
 
-    // Load the chat meta to restore model, permission, context, and usage
-    final meta = await _persistence.loadChatMeta(projectId, chatRef.chatId);
     _applyMetaToChat(chatState, meta);
     chatState.setHasStartedFromRestore(meta.hasStarted);
     chatState.restoreFromMeta(
@@ -261,12 +293,25 @@ class ProjectRestoreService {
       );
     }
 
+    // Mark as missing agent if validation failed
+    if (missingAgentMessage != null) {
+      chatState.markAgentMissing(missingAgentMessage);
+    }
+
     developer.log(
       'Restored chat: ${chatRef.name} (${chatRef.chatId})',
       name: 'ProjectRestoreService',
     );
 
     return chatState;
+  }
+
+  /// Normalizes legacy backendType values to driver names.
+  static String _normalizeDriver(String backendType) {
+    return switch (backendType) {
+      'direct' || 'directCli' || 'directcli' || 'cli' => 'claude',
+      _ => backendType,
+    };
   }
 
   /// Applies ChatMeta settings to a ChatState.

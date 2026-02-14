@@ -66,17 +66,18 @@ class _CliRequiredScreenState extends State<CliRequiredScreen> {
       _verifying = true;
     });
 
-    // Save the custom path to settings
-    await widget.settingsService.setValue('session.claudeCliPath', path);
-
-    // Re-check availability with the new path
-    await widget.cliAvailability.checkAll(
-      claudePath: path,
-      codexPath:
-          widget.settingsService.getEffectiveValue<String>('session.codexCliPath'),
-      acpPath:
-          widget.settingsService.getEffectiveValue<String>('session.acpCliPath'),
+    // Save the custom path to the default Claude agent
+    final agents = widget.settingsService.availableAgents;
+    final claudeAgent = agents.firstWhere(
+      (a) => a.driver == 'claude',
+      orElse: () => agents.first,
     );
+    await widget.settingsService.updateAgent(
+      claudeAgent.copyWith(cliPath: path),
+    );
+
+    // Re-check Claude availability with the new path
+    await widget.cliAvailability.checkClaude(customPath: path);
 
     if (!mounted) return;
 
@@ -97,12 +98,7 @@ class _CliRequiredScreenState extends State<CliRequiredScreen> {
     });
 
     // Re-check without custom path (maybe user just installed it)
-    await widget.cliAvailability.checkAll(
-      codexPath:
-          widget.settingsService.getEffectiveValue<String>('session.codexCliPath'),
-      acpPath:
-          widget.settingsService.getEffectiveValue<String>('session.acpCliPath'),
-    );
+    await widget.cliAvailability.checkClaude();
 
     if (!mounted) return;
 

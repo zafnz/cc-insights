@@ -1,3 +1,4 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart' show AccountInfo;
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
@@ -36,11 +37,42 @@ class ChatModel {
 
 /// Catalog of known models per backend.
 class ChatModelCatalog {
-  static const List<ChatModel> claudeModels = [
-    ChatModel(id: 'haiku', label: 'Haiku', backend: BackendType.directCli),
-    ChatModel(id: 'sonnet', label: 'Sonnet', backend: BackendType.directCli),
-    ChatModel(id: 'opus', label: 'Opus', backend: BackendType.directCli),
+  static const ChatModel _claudeDefaultModel = ChatModel(
+    id: 'default',
+    label: 'Default',
+    backend: BackendType.directCli,
+  );
+
+  static final List<ChatModel> _defaultClaudeModels = [
+    _claudeDefaultModel,
+    const ChatModel(
+        id: 'haiku', label: 'Haiku', backend: BackendType.directCli),
+    const ChatModel(
+        id: 'sonnet', label: 'Sonnet', backend: BackendType.directCli),
+    const ChatModel(
+        id: 'opus', label: 'Opus', backend: BackendType.directCli),
   ];
+
+  static List<ChatModel> _claudeModels = List.of(_defaultClaudeModels);
+
+  static List<ChatModel> get claudeModels => List.unmodifiable(_claudeModels);
+
+  static void updateClaudeModels(List<ChatModel> models) {
+    if (models.isEmpty) return;
+    final updated = <ChatModel>[];
+    final seen = <String>{};
+    for (final model in models) {
+      if (seen.contains(model.id)) continue;
+      seen.add(model.id);
+      updated.add(model);
+    }
+    _claudeModels = updated;
+  }
+
+  /// Account information from the Claude CLI (set during model discovery).
+  static AccountInfo? _accountInfo;
+  static AccountInfo? get accountInfo => _accountInfo;
+  static void updateAccountInfo(AccountInfo? info) => _accountInfo = info;
 
   static const ChatModel _codexDefaultModel = ChatModel(
     id: '',

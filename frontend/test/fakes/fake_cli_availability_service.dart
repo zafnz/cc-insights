@@ -1,42 +1,40 @@
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 
 /// A fake [CliAvailabilityService] for testing.
 ///
-/// Defaults to both CLIs available. Use the setters to configure
-/// different availability states.
+/// Defaults to all agents available. Use [agentAvailability] setter or
+/// [claudeAvailable] setter to configure different availability states.
 class FakeCliAvailabilityService extends ChangeNotifier
     implements CliAvailabilityService {
   bool _claudeAvailable = true;
-  bool _codexAvailable = true;
-  bool _acpAvailable = true;
+  Map<String, bool> _agentAvailability = {};
   bool _checked = true;
-  int checkAllCalls = 0;
+  int checkAgentsCalls = 0;
+  int checkClaudeCalls = 0;
 
   @override
   bool get claudeAvailable => _claudeAvailable;
 
   @override
-  bool get codexAvailable => _codexAvailable;
-
-  @override
-  bool get acpAvailable => _acpAvailable;
-
-  @override
   bool get checked => _checked;
+
+  @override
+  bool isAgentAvailable(String agentId) =>
+      _agentAvailability[agentId] ?? true;
+
+  @override
+  Map<String, bool> get agentAvailability =>
+      Map.unmodifiable(_agentAvailability);
 
   set claudeAvailable(bool value) {
     _claudeAvailable = value;
     notifyListeners();
   }
 
-  set codexAvailable(bool value) {
-    _codexAvailable = value;
-    notifyListeners();
-  }
-
-  set acpAvailable(bool value) {
-    _acpAvailable = value;
+  set agentAvailability(Map<String, bool> value) {
+    _agentAvailability = Map.of(value);
     notifyListeners();
   }
 
@@ -46,11 +44,12 @@ class FakeCliAvailabilityService extends ChangeNotifier
   }
 
   @override
-  Future<void> checkAll({
-    String claudePath = '',
-    String codexPath = '',
-    String acpPath = '',
-  }) async {
-    checkAllCalls++;
+  Future<void> checkAgents(List<AgentConfig> agents) async {
+    checkAgentsCalls++;
+  }
+
+  @override
+  Future<void> checkClaude({String customPath = ''}) async {
+    checkClaudeCalls++;
   }
 }

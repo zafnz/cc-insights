@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -27,9 +28,15 @@ void main() {
 
     final tildePath = executable.path.replaceFirst(home, '~');
     final service = CliAvailabilityService();
-    await service.checkAll(acpPath: tildePath);
+    final agent = AgentConfig(
+      id: 'test-acp',
+      name: 'Test ACP',
+      driver: 'acp',
+      cliPath: tildePath,
+    );
+    await service.checkAgents([agent]);
 
-    expect(service.acpAvailable, isTrue);
+    expect(service.isAgentAvailable('test-acp'), isTrue);
   });
 
   test('custom path can be a directory containing the executable', () async {
@@ -45,8 +52,37 @@ void main() {
     await Process.run('chmod', ['+x', executable.path]);
 
     final service = CliAvailabilityService();
-    await service.checkAll(acpPath: tempDir.path);
+    final agent = AgentConfig(
+      id: 'test-acp',
+      name: 'Test ACP',
+      driver: 'acp',
+      cliPath: tempDir.path,
+    );
+    await service.checkAgents([agent]);
 
-    expect(service.acpAvailable, isTrue);
+    expect(service.isAgentAvailable('test-acp'), isTrue);
+  });
+
+  test('checkClaude sets claudeAvailable', () async {
+    final service = CliAvailabilityService();
+    // Without a valid claude path, this should still work (just may not find it)
+    await service.checkClaude(customPath: '/nonexistent/path');
+    expect(service.claudeAvailable, isFalse);
+    expect(service.checked, isTrue);
+  });
+
+  test('checkAgents sets claudeAvailable from claude-driver agents', () async {
+    final service = CliAvailabilityService();
+    // Non-existent path — claude should not be available
+    final agent = AgentConfig(
+      id: 'test-claude',
+      name: 'Test Claude',
+      driver: 'claude',
+      cliPath: '/nonexistent/claude',
+    );
+    await service.checkAgents([agent]);
+
+    expect(service.claudeAvailable, isFalse);
+    expect(service.isAgentAvailable('test-claude'), isFalse);
   });
 }

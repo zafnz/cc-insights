@@ -379,16 +379,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       // Check CLI availability after settings load (custom paths may be set)
       if (!shouldUseMock && widget.backendService == null) {
         final config = RuntimeConfig.instance;
-        await _cliAvailability!.checkAll(
-          claudePath: config.claudeCliPath,
-          codexPath: config.codexCliPath,
-          acpPath: config.acpCliPath,
-        );
-        config.codexAvailable = _cliAvailability!.codexAvailable;
-        config.acpAvailable = _cliAvailability!.acpAvailable;
+        await _cliAvailability!.checkAgents(config.agents);
 
         if (_cliAvailability!.claudeAvailable) {
-          _backend?.start(type: config.defaultBackend);
+          _backend?.discoverModelsForAllAgents();
         }
       }
       _restoreWindowSize();
@@ -767,14 +761,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         cliAvailability: _cliAvailability!,
         settingsService: _settingsService!,
         onCliFound: () {
-          // Update codex availability
-          RuntimeConfig.instance.codexAvailable =
-              _cliAvailability!.codexAvailable;
-          RuntimeConfig.instance.acpAvailable =
-              _cliAvailability!.acpAvailable;
-          // Start the backend now that claude is available
+          // Start backends for all agents now that CLI is available
           if (widget.backendService == null) {
-            _backend?.start(type: RuntimeConfig.instance.defaultBackend);
+            _backend?.discoverModelsForAllAgents();
           }
           setState(() {});
         },

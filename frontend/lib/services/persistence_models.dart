@@ -145,6 +145,19 @@ class ChatMeta {
   /// Codex web search mode (Codex backend only).
   final String? codexWebSearch;
 
+  /// The agent configuration ID for this chat.
+  ///
+  /// References an [AgentConfig.id] from the agent registry.
+  /// Null for legacy chats that predate the agent system.
+  final String? agentId;
+
+  /// The display name of the agent/backend (e.g., "Claude", "Gemini").
+  ///
+  /// Used for validation when restoring chats: if the original [agentId]
+  /// is not found, the system checks for an agent matching both
+  /// [backendName] and [backendType] (driver).
+  final String? backendName;
+
   /// Creates a [ChatMeta] instance.
   const ChatMeta({
     required this.model,
@@ -161,14 +174,18 @@ class ChatMeta {
     this.codexApprovalPolicy,
     this.codexWorkspaceWriteOptions,
     this.codexWebSearch,
+    this.agentId,
+    this.backendName,
   });
 
   /// Creates a [ChatMeta] with default values for a new chat.
   factory ChatMeta.create({
     String model = 'opus',
     String permissionMode = 'default',
-    String backendType = 'direct',
+    String backendType = 'claude',
     bool hasStarted = false,
+    String? agentId,
+    String? backendName,
   }) {
     final now = DateTime.now();
     return ChatMeta(
@@ -186,6 +203,8 @@ class ChatMeta {
       codexApprovalPolicy: null,
       codexWorkspaceWriteOptions: null,
       codexWebSearch: null,
+      agentId: agentId,
+      backendName: backendName,
     );
   }
 
@@ -205,6 +224,8 @@ class ChatMeta {
     String? codexApprovalPolicy,
     Map<String, dynamic>? codexWorkspaceWriteOptions,
     String? codexWebSearch,
+    String? agentId,
+    String? backendName,
   }) {
     return ChatMeta(
       model: model ?? this.model,
@@ -221,6 +242,8 @@ class ChatMeta {
       codexApprovalPolicy: codexApprovalPolicy ?? this.codexApprovalPolicy,
       codexWorkspaceWriteOptions: codexWorkspaceWriteOptions ?? this.codexWorkspaceWriteOptions,
       codexWebSearch: codexWebSearch ?? this.codexWebSearch,
+      agentId: agentId ?? this.agentId,
+      backendName: backendName ?? this.backendName,
     );
   }
 
@@ -257,6 +280,8 @@ class ChatMeta {
       if (codexApprovalPolicy != null) 'codexApprovalPolicy': codexApprovalPolicy,
       if (codexWorkspaceWriteOptions != null) 'codexWorkspaceWriteOptions': codexWorkspaceWriteOptions,
       if (codexWebSearch != null) 'codexWebSearch': codexWebSearch,
+      if (agentId != null) 'agentId': agentId,
+      if (backendName != null) 'backendName': backendName,
     };
   }
 
@@ -308,7 +333,30 @@ class ChatMeta {
       codexApprovalPolicy: json['codexApprovalPolicy'] as String?,
       codexWorkspaceWriteOptions: json['codexWorkspaceWriteOptions'] as Map<String, dynamic>?,
       codexWebSearch: json['codexWebSearch'] as String?,
+      agentId: json['agentId'] as String?,
+      backendName: json['backendName'] as String?,
     );
+  }
+
+  /// Migrates a legacy [ChatMeta] (without agentId) by matching its
+  /// [backendType] to the first agent with a matching driver.
+  ///
+  /// Returns the same meta with [agentId] set if a match is found.
+  /// The [agentLookup] function maps a driver name to an agent ID.
+  ChatMeta migrateAgentId(String? Function(String driver) agentLookup) {
+    if (agentId != null) return this;
+    // Map backendType values to driver names
+    final driver = switch (backendType) {
+      'direct' || 'directCli' || 'claude' => 'claude',
+      'codex' => 'codex',
+      'acp' => 'acp',
+      _ => backendType,
+    };
+    final resolved = agentLookup(driver);
+    if (resolved != null) {
+      return copyWith(agentId: resolved);
+    }
+    return this;
   }
 
   @override

@@ -48,7 +48,7 @@ void main() {
         expect(backend.capabilities.supportsPermissionModeChange, isTrue);
         expect(backend.capabilities.supportsModelChange, isTrue);
         expect(backend.capabilities.supportsHooks, isFalse);
-        expect(backend.capabilities.supportsModelListing, isFalse);
+        expect(backend.capabilities.supportsModelListing, isTrue);
         expect(backend.capabilities.supportsReasoningEffort, isFalse);
       });
     });

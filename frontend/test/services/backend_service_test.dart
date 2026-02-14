@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -613,6 +615,392 @@ void main() {
         check(service.error).equals('Something went wrong');
       });
     });
+
+    // =========================================================================
+    // AGENT-KEYED API TESTS
+    // =========================================================================
+
+    group('agent-keyed API', () {
+      group('initial state', () {
+        test('activeAgentId is null initially', () {
+          final service = BackendService();
+          addTearDown(service.dispose);
+
+          check(service.activeAgentId).isNull();
+        });
+
+        test('isReadyForAgent returns false for unknown agent', () {
+          final service = BackendService();
+          addTearDown(service.dispose);
+
+          check(service.isReadyForAgent('unknown-agent')).isFalse();
+        });
+
+        test('isStartingForAgent returns false for unknown agent', () {
+          final service = BackendService();
+          addTearDown(service.dispose);
+
+          check(service.isStartingForAgent('unknown-agent')).isFalse();
+        });
+
+        test('errorForAgent returns null for unknown agent', () {
+          final service = BackendService();
+          addTearDown(service.dispose);
+
+          check(service.errorForAgent('unknown-agent')).isNull();
+        });
+      });
+
+      group('startAgent()', () {
+        test('resolves config from RuntimeConfig and creates backend', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+
+          check(service.isReadyForAgent('claude-default')).isTrue();
+          check(service.activeAgentId).equals('claude-default');
+          check(service.errorForAgent('claude-default')).isNull();
+        });
+
+        test('is idempotent (second call does not spawn again)', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+          check(service.createBackendCallCount).equals(1);
+
+          // Second call should not create another backend
+          await service.startAgent('claude-default');
+          check(service.createBackendCallCount).equals(1);
+          check(service.isReadyForAgent('claude-default')).isTrue();
+        });
+
+        test('concurrent calls are deduped', () async {
+          final cliBackend = FakeAgentBackend();
+          cliBackend.createSessionDelay = const Duration(milliseconds: 50);
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          // Start twice concurrently
+          final future1 = service.startAgent('claude-default');
+          final future2 = service.startAgent('claude-default');
+
+          await Future.wait([future1, future2]);
+
+          // Should only have created one backend
+          check(service.createBackendCallCount).equals(1);
+          check(service.isReadyForAgent('claude-default')).isTrue();
+        });
+
+        test('throws StateError for unknown agent ID', () async {
+          final service = _AgentBackendService({});
+          addTearDown(service.dispose);
+
+          try {
+            await service.startAgent('unknown-agent');
+            fail('Expected StateError');
+          } on StateError catch (e) {
+            check(e.message).contains('unknown-agent');
+          }
+        });
+
+        test('handles backend creation errors gracefully', () async {
+          final service = _AgentBackendService({
+            'claude-default': null, // null signals error
+          });
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+
+          check(service.isReadyForAgent('claude-default')).isFalse();
+          check(service.errorForAgent('claude-default')).isNotNull();
+          check(service.errorForAgent('claude-default')!).contains('spawn failed');
+        });
+
+        test('sets activeAgentId when starting', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          check(service.activeAgentId).isNull();
+
+          await service.startAgent('claude-default');
+
+          check(service.activeAgentId).equals('claude-default');
+        });
+
+        test('notifies listeners during state transitions', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          var notificationCount = 0;
+          service.addListener(() {
+            notificationCount++;
+          });
+
+          await service.startAgent('claude-default');
+
+          // Should have notifications for:
+          // 1. isStarting becomes true
+          // 2. backend created, isReady becomes true
+          check(notificationCount).isGreaterOrEqual(2);
+        });
+
+        test('can start multiple agents independently', () async {
+          final cliBackend = FakeAgentBackend();
+          final codexBackend = FakeAgentBackend();
+          final service = _AgentBackendService({
+            'claude-default': cliBackend,
+            'codex-default': codexBackend,
+          });
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+          await service.startAgent('codex-default');
+
+          check(service.isReadyForAgent('claude-default')).isTrue();
+          check(service.isReadyForAgent('codex-default')).isTrue();
+          check(service.activeAgentId).equals('codex-default');
+        });
+      });
+
+      group('createSessionForAgent()', () {
+        test('calls startAgent then delegates to backend', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          final session = await service.createSessionForAgent(
+            agentId: 'claude-default',
+            prompt: 'Hello, Agent!',
+            cwd: '/path/to/project',
+          );
+
+          check(session).isNotNull();
+          check(service.isReadyForAgent('claude-default')).isTrue();
+          check(cliBackend.createdSessions.length).equals(1);
+          check(cliBackend.createdSessions.first.prompt).equals('Hello, Agent!');
+          check(cliBackend.createdSessions.first.cwd).equals('/path/to/project');
+        });
+
+        test('passes options to backend', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          const options = SessionOptions(
+            model: 'claude-sonnet-4-5-20250514',
+            permissionMode: PermissionMode.acceptEdits,
+          );
+
+          await service.createSessionForAgent(
+            agentId: 'claude-default',
+            prompt: 'Test',
+            cwd: '/test',
+            options: options,
+          );
+
+          check(cliBackend.createdSessions.first.options).isNotNull();
+        });
+
+        test('throws if backend fails to start', () async {
+          final service = _AgentBackendService({
+            'claude-default': null, // null signals error
+          });
+          addTearDown(service.dispose);
+
+          try {
+            await service.createSessionForAgent(
+              agentId: 'claude-default',
+              prompt: 'Hello',
+              cwd: '/path',
+            );
+            fail('Expected StateError');
+          } on StateError catch (e) {
+            check(e.message).contains('Backend not started');
+          }
+        });
+      });
+
+      group('createTransportForAgent()', () {
+        test('creates InProcessTransport wrapping the session', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          final transport = await service.createTransportForAgent(
+            agentId: 'claude-default',
+            prompt: 'Hello',
+            cwd: '/test',
+          );
+
+          check(transport).isA<InProcessTransport>();
+          check(cliBackend.createdSessions.length).equals(1);
+        });
+
+        test('transport has capabilities from backend', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          final transport = await service.createTransportForAgent(
+            agentId: 'claude-default',
+            prompt: 'Hello',
+            cwd: '/test',
+          );
+
+          final inProcessTransport = transport as InProcessTransport;
+          check(inProcessTransport.capabilities).isNotNull();
+          check(inProcessTransport.capabilities!.supportsHooks).isTrue();
+        });
+      });
+
+      group('disposeAgent()', () {
+        test('disposes single agent backend', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+          check(cliBackend.disposed).isFalse();
+
+          await service.disposeAgent('claude-default');
+
+          check(cliBackend.disposed).isTrue();
+          check(service.isReadyForAgent('claude-default')).isFalse();
+        });
+
+        test('clears activeAgentId if disposing active agent', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+          check(service.activeAgentId).equals('claude-default');
+
+          await service.disposeAgent('claude-default');
+
+          check(service.activeAgentId).isNull();
+        });
+
+        test('does not affect other agents', () async {
+          final cliBackend = FakeAgentBackend();
+          final codexBackend = FakeAgentBackend();
+          final service = _AgentBackendService({
+            'claude-default': cliBackend,
+            'codex-default': codexBackend,
+          });
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+          await service.startAgent('codex-default');
+
+          await service.disposeAgent('claude-default');
+
+          check(cliBackend.disposed).isTrue();
+          check(codexBackend.disposed).isFalse();
+          check(service.isReadyForAgent('claude-default')).isFalse();
+          check(service.isReadyForAgent('codex-default')).isTrue();
+        });
+
+        test('notifies listeners', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+
+          var notified = false;
+          service.addListener(() {
+            notified = true;
+          });
+
+          await service.disposeAgent('claude-default');
+
+          check(notified).isTrue();
+        });
+      });
+
+      group('agent error monitoring', () {
+        test('updates error when agent backend emits error', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+          check(service.errorForAgent('claude-default')).isNull();
+
+          cliBackend.emitError(const BackendError('Agent runtime error'));
+
+          // Give time for the stream listener
+          await Future<void>.delayed(Duration.zero);
+
+          check(service.errorForAgent('claude-default')).equals('Agent runtime error');
+          check(service.isAgentErrorForAgent('claude-default')).isTrue();
+        });
+
+        test('notifies listeners when agent error is received', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+
+          String? capturedError;
+          service.addListener(() {
+            capturedError = service.errorForAgent('claude-default');
+          });
+
+          cliBackend.emitError(const BackendError('Runtime error'));
+
+          // Give time for the async listener to fire
+          await Future<void>.delayed(Duration.zero);
+
+          check(capturedError).equals('Runtime error');
+        });
+      });
+
+      group('registerAgentBackendForTesting()', () {
+        test('allows injecting a backend for tests', () {
+          final service = BackendService();
+          addTearDown(service.dispose);
+
+          final fakeBackend = FakeAgentBackend();
+          service.registerAgentBackendForTesting('test-agent', fakeBackend);
+
+          check(service.isReadyForAgent('test-agent')).isTrue();
+        });
+      });
+
+      group('agent capabilities', () {
+        test('capabilitiesForAgent returns backend capabilities', () async {
+          final cliBackend = FakeAgentBackend();
+          final service = _AgentBackendService({'claude-default': cliBackend});
+          addTearDown(service.dispose);
+
+          await service.startAgent('claude-default');
+
+          final caps = service.capabilitiesForAgent('claude-default');
+          check(caps.supportsHooks).isTrue();
+          check(caps.supportsPermissionModeChange).isTrue();
+          check(caps.supportsModelChange).isTrue();
+        });
+
+        test('capabilitiesForAgent returns empty for unknown agent', () {
+          final service = BackendService();
+          addTearDown(service.dispose);
+
+          final caps = service.capabilitiesForAgent('unknown-agent');
+          check(caps.supportsHooks).isFalse();
+          check(caps.supportsPermissionModeChange).isFalse();
+          check(caps.supportsModelChange).isFalse();
+        });
+      });
+    });
   });
 }
 
@@ -755,5 +1143,78 @@ class _SwitchableBackendService extends BackendService {
       throw StateError('No fake backend configured for $type');
     }
     return fake;
+  }
+}
+
+/// A backend service subclass for testing agent-keyed API.
+///
+/// Sets up RuntimeConfig with test agent configurations and overrides
+/// [createBackend] to return pre-configured fakes keyed by agent ID.
+class _AgentBackendService extends BackendService {
+  _AgentBackendService(this._fakeBackends) {
+    _setupRuntimeConfig();
+  }
+
+  final Map<String, FakeAgentBackend?> _fakeBackends;
+  int createBackendCallCount = 0;
+
+  void _setupRuntimeConfig() {
+    // Reset RuntimeConfig for testing
+    RuntimeConfig.resetForTesting();
+
+    // Create agent configs for each fake backend
+    final agents = <AgentConfig>[];
+    for (final agentId in _fakeBackends.keys) {
+      // Determine driver based on agent ID
+      String driver = 'claude';
+      if (agentId.startsWith('codex')) {
+        driver = 'codex';
+      } else if (agentId.startsWith('acp')) {
+        driver = 'acp';
+      }
+
+      agents.add(AgentConfig(
+        id: agentId,
+        name: agentId,
+        driver: driver,
+        cliPath: '',
+        cliArgs: '',
+        environment: '',
+        defaultModel: '',
+        defaultPermissions: 'default',
+      ));
+    }
+
+    // Set the agents in RuntimeConfig
+    RuntimeConfig.instance.agents = agents;
+  }
+
+  @override
+  Future<AgentBackend> createBackend({
+    required BackendType type,
+    String? executablePath,
+    List<String> arguments = const [],
+    String? workingDirectory,
+  }) async {
+    createBackendCallCount++;
+
+    // Find which agent ID we're creating for based on activeAgentId
+    final agentId = activeAgentId;
+    if (agentId == null) {
+      throw StateError('No active agent ID');
+    }
+
+    final fake = _fakeBackends[agentId];
+    if (fake == null) {
+      throw Exception('spawn failed');
+    }
+
+    return fake;
+  }
+
+  @override
+  void dispose() {
+    RuntimeConfig.resetForTesting();
+    super.dispose();
   }
 }

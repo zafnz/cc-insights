@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/agent.dart';
+import '../models/agent_config.dart';
 import '../models/chat.dart';
 import '../models/chat_model.dart';
 import '../models/conversation.dart';
 import '../services/backend_service.dart';
 import '../services/cli_availability_service.dart';
+import '../services/runtime_config.dart';
 import '../widgets/context_indicator.dart';
 import '../widgets/cost_indicator.dart';
 import '../widgets/insights_widgets.dart';
@@ -33,8 +35,8 @@ const List<String> reasoningEffortItems = [
   'Extra High',
 ];
 
-/// Returns a display label for a backend type.
-String agentLabel(sdk.BackendType backend) {
+/// Returns a display label for a backend type (fallback for legacy chats).
+String _agentLabel(sdk.BackendType backend) {
   return switch (backend) {
     sdk.BackendType.directCli => 'Claude',
     sdk.BackendType.codex => 'Codex',
@@ -42,13 +44,9 @@ String agentLabel(sdk.BackendType backend) {
   };
 }
 
-/// Converts a display label to a backend type.
-sdk.BackendType backendFromAgent(String value) {
-  return switch (value) {
-    'Codex' => sdk.BackendType.codex,
-    'ACP' => sdk.BackendType.acp,
-    _ => sdk.BackendType.directCli,
-  };
+/// Checks if an agent is available based on CLI availability.
+bool _isAgentAvailable(AgentConfig agent, CliAvailabilityService cli) {
+  return cli.isAgentAvailable(agent.id);
 }
 
 /// Converts a dropdown label to a ReasoningEffort value.
@@ -95,8 +93,12 @@ class ConversationHeader extends StatelessWidget {
     final isAcp = chat.model.backend == sdk.BackendType.acp;
     final acpConfigWidgets =
         isAcp ? _buildAcpConfigWidgets(chat) : const <Widget>[];
-    final startingBackend =
-        backendService.isStarting ? backendService.backendType : null;
+
+    // Check if backend is starting for this chat's agent
+    final startingAgent = (chat.agentId != null &&
+            backendService.isStartingForAgent(chat.agentId!))
+        ? chat.agentName
+        : null;
 
     // Don't show the toolbar for subagent conversations (title is in panel header)
     if (isSubagent) {
@@ -104,8 +106,10 @@ class ConversationHeader extends StatelessWidget {
     }
 
     final isBackendLocked = chat.hasStarted;
-    final caps = backendService.capabilitiesFor(chat.model.backend);
-    final currentAgentLabel = agentLabel(chat.model.backend);
+    // Use agent-keyed capabilities when available
+    final caps = chat.agentId != null
+        ? backendService.capabilitiesForAgent(chat.agentId!)
+        : backendService.capabilitiesFor(chat.model.backend);
     const showCost = true;
     final rightWidgets = <Widget>[
       if (chat.model.backend == sdk.BackendType.codex && chat.hasActiveSession)
@@ -121,7 +125,7 @@ class ConversationHeader extends StatelessWidget {
         usage: chat.cumulativeUsage,
         modelUsage: chat.modelUsage,
         timingStats: chat.timingStats,
-        agentLabel: currentAgentLabel,
+        agentLabel: chat.agentName,
         showCost: showCost,
       ),
     ];
@@ -151,28 +155,46 @@ class ConversationHeader extends StatelessWidget {
                   builder: (context) {
                     final cliAvailability =
                         context.watch<CliAvailabilityService>();
-                    final agentItems = <String>[
-                      'Claude',
-                      if (cliAvailability.codexAvailable) 'Codex',
-                      if (cliAvailability.acpAvailable) 'ACP',
-                    ];
+                    final allAgents = RuntimeConfig.instance.agents;
+                    final availableAgents = allAgents
+                        .where((agent) => _isAgentAvailable(agent, cliAvailability))
+                        .toList();
+
+                    // Handle empty agent list gracefully
+                    if (availableAgents.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    // Get current agent name
+                    final currentAgentName = chat.agentName;
+
+                    final isAgentStarting = chat.agentId != null &&
+                        backendService.isStartingForAgent(chat.agentId!);
+
                     return CompactDropdown(
-                      value: agentLabel(chat.model.backend),
-                      items: agentItems,
+                      value: currentAgentName,
+                      items: availableAgents.map((a) => a.name).toList(),
                       tooltip: 'Agent',
-                      isEnabled: !isBackendLocked && agentItems.length > 1,
-                      onChanged: (value) {
+                      isLoading: isAgentStarting,
+                      isEnabled:
+                          !isBackendLocked && !isAgentStarting && availableAgents.length > 1,
+                      onChanged: (agentName) {
+                        // Find agent by name
+                        final selectedAgent = availableAgents.firstWhere(
+                          (a) => a.name == agentName,
+                          orElse: () => availableAgents.first,
+                        );
                         unawaited(
-                          _handleAgentChange(context, chat, value),
+                          _handleAgentChange(context, chat, selectedAgent.id),
                         );
                       },
                     );
                   },
                 ),
-                if (startingBackend != null)
+                if (startingAgent != null)
                   _buildBackendStartingIndicator(
                     context,
-                    startingBackend,
+                    startingAgent,
                   ),
                 if (!isAcp)
                   Builder(
@@ -185,9 +207,13 @@ class ConversationHeader extends StatelessWidget {
                         orElse: () => chat.model,
                       );
                       final isModelLoading = caps.supportsModelListing &&
-                          backendService.isModelListLoadingFor(
-                            chat.model.backend,
-                          );
+                          (chat.agentId != null
+                              ? backendService.isModelListLoadingForAgent(
+                                  chat.agentId!,
+                                )
+                              : backendService.isModelListLoadingFor(
+                                  chat.model.backend,
+                                ));
                       return CompactDropdown(
                         value: selected.label,
                         items: models.map((m) => m.label).toList(),
@@ -213,10 +239,14 @@ class ConversationHeader extends StatelessWidget {
                       if (config is! sdk.CodexSecurityConfig) {
                         return const SizedBox.shrink();
                       }
+                      final codexCaps = chat.agentId != null
+                          ? backendService.codexSecurityCapabilitiesForAgent(
+                              chat.agentId!,
+                            )
+                          : backendService.codexSecurityCapabilities;
                       return SecurityConfigGroup(
                         config: config,
-                        capabilities:
-                            backendService.codexSecurityCapabilities,
+                        capabilities: codexCaps,
                         isEnabled: true,
                         onConfigChanged: (newConfig) {
                           chat.setSecurityConfig(newConfig);
@@ -272,10 +302,14 @@ class ConversationHeader extends StatelessWidget {
   Future<void> _handleAgentChange(
     BuildContext context,
     ChatState chat,
-    String value,
+    String agentId,
   ) async {
-    final backendType = backendFromAgent(value);
-    if (backendType == chat.model.backend) return;
+    // Look up the agent config from RuntimeConfig
+    final agentConfig = RuntimeConfig.instance.agentById(agentId);
+    if (agentConfig == null) return;
+
+    final backendType = agentConfig.backendType;
+    if (backendType == chat.model.backend && chat.agentId == agentId) return;
 
     if (chat.hasActiveSession) {
       _showBackendSwitchError(
@@ -293,18 +327,29 @@ class ConversationHeader extends StatelessWidget {
       return;
     }
 
+    // Set agent ID optimistically so the dropdown updates immediately
+    // and the loading indicator shows for the correct agent.
+    final previousAgentId = chat.agentId;
+    chat.agentId = agentId;
+
     final backendService = context.read<BackendService>();
-    await backendService.start(type: backendType);
-    final error = backendService.errorFor(backendType);
+    await backendService.startAgent(agentId, config: agentConfig);
+    final error = backendService.errorForAgent(agentId);
     if (error != null) {
+      // Revert to previous agent on failure
+      chat.agentId = previousAgentId;
       if (!context.mounted) return;
-      if (!backendService.isAgentErrorFor(backendType)) {
+      if (!backendService.isAgentErrorForAgent(agentId)) {
         _showBackendSwitchError(context, error);
       }
       return;
     }
 
-    final model = ChatModelCatalog.defaultForBackend(backendType, null);
+    // Set the model from the agent config
+    final model = ChatModelCatalog.defaultForBackend(
+      backendType,
+      agentConfig.defaultModel,
+    );
     chat.setModel(model);
   }
 
@@ -314,7 +359,7 @@ class ConversationHeader extends StatelessWidget {
 
   Widget _buildBackendStartingIndicator(
     BuildContext context,
-    sdk.BackendType backend,
+    String agentName,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -339,7 +384,7 @@ class ConversationHeader extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            'Starting ${agentLabel(backend)}...',
+            'Starting $agentName...',
             style: TextStyle(
               fontSize: 12,
               color: colorScheme.onSurfaceVariant,

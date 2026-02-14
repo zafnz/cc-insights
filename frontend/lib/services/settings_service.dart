@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/material.dart';
 
+import '../models/agent_config.dart';
 import '../models/chat_model.dart';
 import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
@@ -47,12 +48,18 @@ class SettingsService extends ChangeNotifier {
   /// Key for the available tags list in settings.
   static const tagsKey = 'tags.available';
 
+  /// Key for the available agents list in settings.
+  static const agentsKey = 'agents.available';
+
+  /// Key for the default agent ID in settings.
+  static const defaultAgentKey = 'agents.defaultAgent';
 
   /// All setting categories and their definitions.
   static const List<SettingCategory> categories = [
     _appearanceCategory,
     _behaviorCategory,
     _tagsCategory,
+    _agentsCategory,
     _sessionCategory,
     _loggingCategory,
     _developerCategory,
@@ -68,6 +75,14 @@ class SettingsService extends ChangeNotifier {
     label: 'Tags',
     description: 'Manage worktree tags and their colors',
     icon: Icons.label_outlined,
+    settings: [],
+  );
+
+  static const _agentsCategory = SettingCategory(
+    id: 'agents',
+    label: 'Agents',
+    description: 'Configure AI agents and their backend drivers',
+    icon: Icons.smart_toy_outlined,
     settings: [],
   );
 
@@ -261,46 +276,6 @@ class SettingsService extends ChangeNotifier {
     icon: Icons.chat_outlined,
     settings: [
       SettingDefinition(
-        key: 'session.claudeCliPath',
-        title: 'Claude CLI Path',
-        description:
-            'Path to the Claude CLI executable. Leave empty to '
-            'find it automatically via PATH.',
-        type: SettingType.text,
-        defaultValue: '',
-        placeholder: '/usr/local/bin/claude',
-      ),
-      SettingDefinition(
-        key: 'session.codexCliPath',
-        title: 'Codex CLI Path',
-        description:
-            'Path to the Codex CLI executable. Leave empty to '
-            'find it automatically via PATH.',
-        type: SettingType.text,
-        defaultValue: '',
-        placeholder: '/usr/local/bin/codex',
-      ),
-      SettingDefinition(
-        key: 'session.acpCliPath',
-        title: 'ACP Agent Path',
-        description:
-            'Path to the ACP agent executable. Leave empty to '
-            'find it automatically via PATH.',
-        type: SettingType.text,
-        defaultValue: '',
-        placeholder: '/usr/local/bin/acp',
-      ),
-      SettingDefinition(
-        key: 'session.acpCliArgs',
-        title: 'ACP Agent Arguments',
-        description:
-            'Command line arguments for the ACP agent. Use quotes to '
-            'group arguments with spaces.',
-        type: SettingType.text,
-        defaultValue: '',
-        placeholder: '--stdio',
-      ),
-      SettingDefinition(
         key: 'session.defaultModel',
         title: 'Default Model',
         description:
@@ -312,23 +287,6 @@ class SettingsService extends ChangeNotifier {
         // because Codex models are loaded at runtime.
         options: [
           SettingOption(value: 'last_used', label: 'Last used'),
-        ],
-      ),
-      SettingDefinition(
-        key: 'session.defaultPermissionMode',
-        title: 'Default Permission Mode',
-        description:
-            'The permission mode for new chat sessions. `Default` '
-            'requires approval for most operations. `Accept Edits` '
-            'auto-approves file changes. `Plan` restricts tool '
-            'access. `Bypass` approves everything.',
-        type: SettingType.dropdown,
-        defaultValue: 'default',
-        options: [
-          SettingOption(value: 'default', label: 'Default'),
-          SettingOption(value: 'acceptEdits', label: 'Accept Edits'),
-          SettingOption(value: 'plan', label: 'Plan'),
-          SettingOption(value: 'bypassPermissions', label: 'Bypass'),
         ],
       ),
       SettingDefinition(
@@ -610,6 +568,113 @@ class SettingsService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Agents
+  // ---------------------------------------------------------------------------
+
+  /// Returns the list of configured agents.
+  ///
+  /// Falls back to [AgentConfig.defaults] if no agents are configured.
+  List<AgentConfig> get availableAgents {
+    final raw = _values[agentsKey];
+    if (raw is List && raw.isNotEmpty) {
+      try {
+        return raw
+            .map(
+              (e) => AgentConfig.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList();
+      } catch (_) {
+        return AgentConfig.defaults;
+      }
+    }
+    return AgentConfig.defaults;
+  }
+
+  /// Returns the default agent ID, or the first agent's ID.
+  String get defaultAgentId {
+    final raw = _values[defaultAgentKey];
+    if (raw is String && raw.isNotEmpty) return raw;
+    return availableAgents.first.id;
+  }
+
+  /// Finds an agent by its ID, or null if not found.
+  AgentConfig? agentById(String id) {
+    final agents = availableAgents;
+    for (final agent in agents) {
+      if (agent.id == id) return agent;
+    }
+    return null;
+  }
+
+  /// Finds the first agent matching the given driver type.
+  ///
+  /// Used for backward compatibility when migrating from BackendType.
+  AgentConfig? agentByDriver(String driver) {
+    final agents = availableAgents;
+    for (final agent in agents) {
+      if (agent.driver == driver) return agent;
+    }
+    return null;
+  }
+
+  /// Replaces the entire list of agents.
+  Future<void> setAvailableAgents(List<AgentConfig> agents) async {
+    _values[agentsKey] = agents.map((a) => a.toJson()).toList();
+    _syncAgentsToRuntimeConfig();
+    notifyListeners();
+    await _save();
+  }
+
+  /// Adds a new agent.
+  Future<void> addAgent(AgentConfig agent) async {
+    final agents = availableAgents;
+    agents.add(agent);
+    await setAvailableAgents(agents);
+  }
+
+  /// Removes an agent by ID.
+  ///
+  /// Returns the removed agent, or null if not found.
+  Future<AgentConfig?> removeAgent(String id) async {
+    final agents = availableAgents;
+    final index = agents.indexWhere((a) => a.id == id);
+    if (index < 0) return null;
+    final removed = agents.removeAt(index);
+    // If we removed the default agent, reset to first available.
+    if (defaultAgentId == id && agents.isNotEmpty) {
+      _values[defaultAgentKey] = agents.first.id;
+    }
+    await setAvailableAgents(agents);
+    return removed;
+  }
+
+  /// Updates an existing agent by ID.
+  Future<void> updateAgent(AgentConfig agent) async {
+    final agents = availableAgents;
+    final index = agents.indexWhere((a) => a.id == agent.id);
+    if (index >= 0) {
+      agents[index] = agent;
+      await setAvailableAgents(agents);
+    }
+  }
+
+  /// Sets the default agent by ID.
+  Future<void> setDefaultAgent(String agentId) async {
+    _values[defaultAgentKey] = agentId;
+    _syncAgentsToRuntimeConfig();
+    notifyListeners();
+    await _save();
+  }
+
+  /// Syncs the agent list to RuntimeConfig.
+  void _syncAgentsToRuntimeConfig() {
+    RuntimeConfig.instance.agents = availableAgents;
+    RuntimeConfig.instance.defaultAgentId = defaultAgentId;
+  }
+
+  // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
 
@@ -762,14 +827,6 @@ class SettingsService extends ChangeNotifier {
         config.deleteBranchWithWorktree = value as bool;
       case 'appearance.showWorktreeCost':
         config.showWorktreeCost = value as bool;
-      case 'session.claudeCliPath':
-        config.claudeCliPath = value as String;
-      case 'session.codexCliPath':
-        config.codexCliPath = value as String;
-      case 'session.acpCliPath':
-        config.acpCliPath = value as String;
-      case 'session.acpCliArgs':
-        config.acpCliArgs = value as String;
       case 'session.defaultModel':
         final composite = value as String;
         config.defaultModel = composite;
@@ -783,8 +840,6 @@ class SettingsService extends ChangeNotifier {
             parseBackendType(value as String?) ??
                 BackendType.directCli;
         config.defaultBackend = backend;
-      case 'session.defaultPermissionMode':
-        config.defaultPermissionMode = value as String;
       case 'session.streamOfThought':
         config.streamOfThought = value as bool;
       case 'developer.showRawMessages':
@@ -817,6 +872,10 @@ class SettingsService extends ChangeNotifier {
   void _syncAllToRuntimeConfig() {
     // Migrate legacy separate backend/model settings to composite format.
     _migrateLegacyModelSetting();
+    // Migrate legacy per-backend CLI paths to agent configs.
+    _migrateToAgentConfigs();
+    // Sync agent registry.
+    _syncAgentsToRuntimeConfig();
 
     final overrides = RuntimeConfig.instance.cliOverrides;
 
@@ -866,6 +925,72 @@ class SettingsService extends ChangeNotifier {
     _values['session.defaultModel'] = '$prefix:$model';
     // Remove the legacy key so it doesn't interfere on future loads.
     _values.remove('session.defaultBackend');
+  }
+
+  /// Migrates legacy per-backend CLI path settings to agent configurations.
+  ///
+  /// On first load, if `agents.available` is absent but old `session.*` CLI
+  /// path keys exist, creates default agents populated with the old values
+  /// and removes the legacy keys.
+  void _migrateToAgentConfigs() {
+    // Already has agents — nothing to migrate.
+    if (_values.containsKey(agentsKey)) return;
+
+    // Check if any old keys exist that indicate legacy config.
+    final hasLegacyKeys = _values.containsKey('session.claudeCliPath') ||
+        _values.containsKey('session.codexCliPath') ||
+        _values.containsKey('session.acpCliPath') ||
+        _values.containsKey('session.acpCliArgs');
+
+    // If no legacy keys exist either, just use defaults (first launch).
+    if (!hasLegacyKeys) return;
+
+    final permMode =
+        _values['session.defaultPermissionMode'] as String? ?? 'default';
+
+    final agents = <Map<String, dynamic>>[
+      {
+        'id': 'claude-default',
+        'name': 'Claude',
+        'driver': 'claude',
+        'cliPath': _values['session.claudeCliPath'] as String? ?? '',
+        'cliArgs': '',
+        'environment': '',
+        'defaultModel': 'opus',
+        'defaultPermissions': permMode,
+      },
+      {
+        'id': 'codex-default',
+        'name': 'Codex',
+        'driver': 'codex',
+        'cliPath': _values['session.codexCliPath'] as String? ?? '',
+        'cliArgs': '',
+        'environment': '',
+        'defaultModel': '',
+        'defaultPermissions': 'default',
+        'codexSandboxMode': 'workspaceWrite',
+        'codexApprovalPolicy': 'onRequest',
+      },
+      {
+        'id': 'acp-default',
+        'name': 'Gemini',
+        'driver': 'acp',
+        'cliPath': _values['session.acpCliPath'] as String? ?? '',
+        'cliArgs': _values['session.acpCliArgs'] as String? ?? '--stdio',
+        'environment': '',
+        'defaultModel': '',
+        'defaultPermissions': 'default',
+      },
+    ];
+
+    _values[agentsKey] = agents;
+    _values[defaultAgentKey] = 'claude-default';
+
+    // Remove the legacy keys.
+    _values.remove('session.claudeCliPath');
+    _values.remove('session.codexCliPath');
+    _values.remove('session.acpCliPath');
+    _values.remove('session.acpCliArgs');
   }
 
   // ---------------------------------------------------------------------------

@@ -53,7 +53,7 @@ void main() {
       check(backend.capabilities.supportsPermissionModeChange).isTrue();
       check(backend.capabilities.supportsModelChange).isTrue();
       check(backend.capabilities.supportsHooks).isFalse();
-      check(backend.capabilities.supportsModelListing).isFalse();
+      check(backend.capabilities.supportsModelListing).isTrue();
       check(backend.capabilities.supportsReasoningEffort).isFalse();
     });
   });

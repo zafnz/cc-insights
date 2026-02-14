@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'backend_interface.dart';
 import 'backend_type.dart';
@@ -12,6 +14,7 @@ import 'types/errors.dart';
 import 'types/insights_events.dart';
 import 'types/permission_suggestion.dart';
 import 'types/session_options.dart';
+import 'types/usage.dart';
 
 /// Diagnostic trace — only prints when [SdkLogger.debugEnabled] is true.
 void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
@@ -30,7 +33,7 @@ void _t(String tag, String msg) => SdkLogger.instance.trace(tag, msg);
 ///   cwd: '/my/project',
 /// );
 /// ```
-class ClaudeCliBackend implements AgentBackend {
+class ClaudeCliBackend implements AgentBackend, ModelListingBackend {
   /// Create a new CLI backend.
   ///
   /// [executablePath] - Path to claude-cli executable.
@@ -75,6 +78,7 @@ class ClaudeCliBackend implements AgentBackend {
   BackendCapabilities get capabilities => const BackendCapabilities(
         supportsPermissionModeChange: true,
         supportsModelChange: true,
+        supportsModelListing: true,
       );
 
   @override
@@ -226,6 +230,110 @@ class ClaudeCliBackend implements AgentBackend {
 
   void _removeSession(String sessionId) {
     _sessions.remove(sessionId);
+  }
+
+  /// Queries the CLI for available models and account info.
+  ///
+  /// Spawns a lightweight CLI process with `-p` (print mode) and sends an
+  /// initialize control request to extract the models list and account
+  /// information from the control response.
+  Future<(List<ModelInfo>, AccountInfo?)> queryBackendInfo() async {
+    if (_disposed) return (const <ModelInfo>[], null);
+
+    final executable = _executablePath ??
+        Platform.environment['CLAUDE_CODE_PATH'] ??
+        'claude';
+
+    final args = [
+      '--output-format', 'stream-json',
+      '--input-format', 'stream-json',
+      '--model', 'haiku',
+      '--settings', '',
+      '--setting-sources', '',
+      '--verbose',
+      '-p',
+    ];
+
+    Process? process;
+    try {
+      process = await Process.start(
+        executable,
+        args,
+        workingDirectory: Directory.systemTemp.path,
+      );
+
+      // Send initialize request
+      final requestId = 'discovery-${DateTime.now().microsecondsSinceEpoch}';
+      final request = jsonEncode({
+        'type': 'control_request',
+        'request_id': requestId,
+        'request': {
+          'subtype': 'initialize',
+          'mcp_servers': <String, dynamic>{},
+          'agents': <String, dynamic>{},
+          'hooks': <String, dynamic>{},
+        },
+      });
+      process.stdin.writeln(request);
+
+      // Parse stdout JSON lines, looking for control_response
+      final completer = Completer<Map<String, dynamic>>();
+      var partial = '';
+
+      final sub = process.stdout.transform(utf8.decoder).listen((chunk) {
+        final data = partial + chunk;
+        partial = '';
+        for (final line in data.split('\n')) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty) continue;
+          try {
+            final json = jsonDecode(trimmed) as Map<String, dynamic>;
+            if (json['type'] == 'control_response' && !completer.isCompleted) {
+              completer.complete(json);
+            }
+          } catch (_) {
+            partial = trimmed;
+          }
+        }
+      });
+
+      final response = await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => <String, dynamic>{},
+      );
+      await sub.cancel();
+
+      // Extract models + account from nested response
+      final responseData = response['response'] as Map<String, dynamic>?;
+      final innerResponse =
+          responseData?['response'] as Map<String, dynamic>?;
+      final modelsList = innerResponse?['models'] as List? ?? [];
+      final accountJson =
+          innerResponse?['account'] as Map<String, dynamic>?;
+
+      final models = modelsList
+          .whereType<Map<String, dynamic>>()
+          .map((m) => ModelInfo.fromJson(m))
+          .toList();
+      final account =
+          accountJson != null ? AccountInfo.fromJson(accountJson) : null;
+
+      _t('ClaudeCliBackend',
+          'Model discovery found ${models.length} models, account=${account?.email ?? 'none'}');
+
+      return (models, account);
+    } catch (e) {
+      _t('ClaudeCliBackend', 'Model discovery failed: $e');
+      return (const <ModelInfo>[], null);
+    } finally {
+      process?.kill();
+    }
+  }
+
+  @override
+  Future<List<ModelInfo>> listModels() async {
+    final (models, _) = await queryBackendInfo();
+    return models;
   }
 
   @override

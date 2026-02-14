@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents Settings Mockup — CC-Insights</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    /* Material 3 deep purple seed - dark mode derived palette */
+    --surface: #141218;
+    --surface-container: #211f26;
+    --surface-container-highest: #36343b;
+    --surface-container-high: #2b2930;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --tertiary: #efb8c8;
+    --error: #f2b8b5;
+    --error-container: #8c1d18;
+
+    /* Semantic colors */
+    --green: #4caf50;
+    --orange: #ff9800;
+    --blue: #2196f3;
+    --red: #f44336;
+    --yellow: #ffeb3b;
+
+    /* Font */
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: #0e0c11;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 48px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  /* ===== Section Labels ===== */
+  .section-title {
+    width: 100%;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--on-surface);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary);
+    margin-bottom: -16px;
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    margin-top: -12px;
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .callout {
+    font-size: 11px;
+    color: rgba(208, 188, 255, 0.6);
+    font-style: italic;
+    padding: 4px 0;
+  }
+
+  /* ===== Settings Screen Shell ===== */
+  .settings-shell {
+    width: 1000px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    display: flex;
+    min-height: 700px;
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 200px;
+    border-right: 1px solid rgba(73, 69, 79, 0.3);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 16px 16px 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--on-surface);
+  }
+
+  .sidebar-divider {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.3);
+  }
+
+  .sidebar-spacer {
+    height: 8px;
+  }
+
+  .sidebar-item {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+
+  .sidebar-item:hover {
+    background: rgba(208, 188, 255, 0.05);
+  }
+
+  .sidebar-item.selected {
+    background: rgba(208, 188, 255, 0.1);
+    color: var(--primary);
+    border-left-color: var(--primary);
+  }
+
+  .sidebar-item .material-icons {
+    font-size: 16px;
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .sidebar-footer-btn {
+    width: 100%;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--outline-variant);
+    background: transparent;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+    font-family: var(--font-system);
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .sidebar-footer-btn:hover {
+    background: rgba(208, 188, 255, 0.05);
+  }
+
+  /* ===== Content Area ===== */
+  .content {
+    flex: 1;
+    padding: 24px 32px;
+    overflow-y: auto;
+  }
+
+  .content-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--on-surface);
+    margin-bottom: 4px;
+  }
+
+  .content-subtitle {
+    font-size: 14px;
+    color: var(--on-surface-variant);
+    margin-bottom: 24px;
+  }
+
+  /* ===== Agent List ===== */
+  .agent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .agent-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface-container);
+    border: 1px solid rgba(73, 69, 79, 0.4);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .agent-card:hover {
+    background: var(--surface-container-high);
+  }
+
+  .agent-card.selected {
+    border-color: var(--primary);
+    background: rgba(208, 188, 255, 0.08);
+  }
+
+  .agent-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+
+  .agent-icon.claude {
+    background: rgba(208, 188, 255, 0.15);
+    color: var(--primary);
+  }
+
+  .agent-icon.codex {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--green);
+  }
+
+  .agent-icon.gemini {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--blue);
+  }
+
+  .agent-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .agent-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--on-surface);
+  }
+
+  .agent-meta {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .agent-meta .driver-badge {
+    padding: 1px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--outline-variant);
+    font-size: 10px;
+    color: var(--on-surface-variant);
+  }
+
+  .agent-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .agent-actions .material-icons {
+    font-size: 18px;
+    color: var(--on-surface-variant);
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .agent-actions .material-icons:hover {
+    background: rgba(208, 188, 255, 0.1);
+    color: var(--on-surface);
+  }
+
+  /* Add Agent Button */
+  .add-agent-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px dashed var(--outline-variant);
+    border-radius: 8px;
+    color: var(--on-surface-variant);
+    font-size: 13px;
+    font-family: var(--font-system);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .add-agent-btn:hover {
+    background: rgba(208, 188, 255, 0.05);
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .add-agent-btn .material-icons {
+    font-size: 16px;
+  }
+
+  /* ===== Divider ===== */
+  .content-divider {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.3);
+    margin: 24px 0;
+  }
+
+  /* ===== Agent Detail Section ===== */
+  .detail-section {
+    max-width: 600px;
+  }
+
+  .detail-section-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.02em;
+    margin-bottom: 16px;
+  }
+
+  /* Setting Row */
+  .setting-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+
+  .setting-label-col {
+    width: 160px;
+    flex-shrink: 0;
+    padding-top: 6px;
+  }
+
+  .setting-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--on-surface);
+  }
+
+  .setting-desc {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .setting-input-col {
+    flex: 1;
+  }
+
+  /* Text Input */
+  .text-input {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    background: var(--surface-container-highest);
+    color: var(--on-surface);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .text-input:focus {
+    border-color: var(--primary);
+  }
+
+  .text-input::placeholder {
+    color: rgba(202, 196, 208, 0.5);
+  }
+
+  /* Textarea */
+  .text-area {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    background: var(--surface-container-highest);
+    color: var(--on-surface);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    resize: vertical;
+    min-height: 64px;
+    line-height: 1.5;
+  }
+
+  .text-area:focus {
+    border-color: var(--primary);
+  }
+
+  .text-area::placeholder {
+    color: rgba(202, 196, 208, 0.5);
+  }
+
+  /* Text Input + Browse */
+  .input-with-browse {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .input-with-browse .text-input {
+    flex: 1;
+  }
+
+  .browse-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--on-surface-variant);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .browse-btn:hover {
+    background: rgba(208, 188, 255, 0.1);
+    color: var(--on-surface);
+  }
+
+  .browse-btn .material-icons {
+    font-size: 18px;
+  }
+
+  /* Select / Dropdown */
+  .select-input {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    background: var(--surface-container-highest);
+    color: var(--on-surface);
+    font-size: 13px;
+    font-family: var(--font-system);
+    outline: none;
+    cursor: pointer;
+    min-width: 200px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%23cac4d0' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 28px;
+  }
+
+  .select-input:focus {
+    border-color: var(--primary);
+  }
+
+  /* Permissions display */
+  .permissions-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .permission-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(73, 69, 79, 0.4);
+    background: var(--surface-container);
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+
+  .permission-option:hover {
+    background: var(--surface-container-high);
+  }
+
+  .permission-option.selected {
+    border-color: var(--primary);
+    background: rgba(208, 188, 255, 0.08);
+  }
+
+  .permission-radio {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--outline);
+    flex-shrink: 0;
+  }
+
+  .permission-option.selected .permission-radio {
+    border-color: var(--primary);
+    background: radial-gradient(circle, var(--primary) 40%, transparent 40%);
+  }
+
+  .permission-label {
+    font-size: 13px;
+    color: var(--on-surface);
+    flex: 1;
+  }
+
+  .permission-desc {
+    font-size: 10px;
+    color: var(--on-surface-variant);
+  }
+
+  /* Danger permission */
+  .permission-option.danger {
+    border-color: rgba(244, 67, 54, 0.3);
+  }
+
+  .permission-option.danger .permission-label {
+    color: var(--error);
+  }
+
+  /* Badge next to driver */
+  .model-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(208, 188, 255, 0.1);
+    border: 1px solid rgba(208, 188, 255, 0.2);
+    color: var(--on-surface-variant);
+  }
+
+  /* ===== Delete Zone ===== */
+  .delete-zone {
+    margin-top: 32px;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(244, 67, 54, 0.2);
+    background: rgba(244, 67, 54, 0.04);
+  }
+
+  .delete-zone-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--error);
+    margin-bottom: 4px;
+  }
+
+  .delete-zone-desc {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    margin-bottom: 12px;
+  }
+
+  .delete-btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(242, 184, 181, 0.3);
+    background: transparent;
+    color: var(--error);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: var(--font-system);
+    cursor: pointer;
+  }
+
+  .delete-btn:hover {
+    background: rgba(244, 67, 54, 0.1);
+  }
+
+  /* ===== ACP No-Permissions Notice ===== */
+  .no-permissions-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(73, 69, 79, 0.15);
+    border: 1px solid rgba(73, 69, 79, 0.3);
+    font-size: 12px;
+    color: var(--on-surface-variant);
+  }
+
+  .no-permissions-notice .material-icons {
+    font-size: 16px;
+    color: var(--on-surface-variant);
+  }
+
+  /* Hardcoded model label */
+  .hardcoded-model {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--surface-container-highest);
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    font-size: 13px;
+    color: rgba(230, 224, 233, 0.6);
+  }
+
+  .hardcoded-model .material-icons {
+    font-size: 14px;
+    color: var(--on-surface-variant);
+  }
+</style>
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- SECTION 1: Full Settings Screen — Agent List View                    -->
+<!-- ================================================================== -->
+
+<div class="section-title">1. Settings Screen — Agents Category (List View)</div>
+<p class="section-subtitle">The "Agents" category replaces the old "Session" category's CLI paths and model/permission settings. Shows the list of configured agents with add/remove capability.</p>
+
+<div class="settings-shell">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">Settings</div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-item">
+      <span class="material-icons">palette</span>
+      Appearance
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">tune</span>
+      Behavior
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">label</span>
+      Tags
+    </div>
+    <div class="sidebar-item selected">
+      <span class="material-icons">smart_toy</span>
+      Agents
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">chat</span>
+      Session
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">terminal</span>
+      Logging
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">code</span>
+      Developer
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">assignment</span>
+      Project Mgmt
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn">Reset to Defaults</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-title">Agents</div>
+    <div class="content-subtitle">Configure AI agents and their backend drivers. Each agent defines a name, driver, CLI path, and default settings.</div>
+
+    <div class="agent-list">
+      <!-- Claude Agent -->
+      <div class="agent-card selected">
+        <div class="agent-icon claude">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Claude</div>
+          <div class="agent-meta">
+            <span class="driver-badge">claude</span>
+            <span>Opus 4.6</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons" title="Edit">edit</span>
+        </div>
+      </div>
+
+      <!-- Codex Agent -->
+      <div class="agent-card">
+        <div class="agent-icon codex">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Codex</div>
+          <div class="agent-meta">
+            <span class="driver-badge">codex</span>
+            <span>o3</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons" title="Edit">edit</span>
+        </div>
+      </div>
+
+      <!-- Gemini Agent -->
+      <div class="agent-card">
+        <div class="agent-icon gemini">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Gemini</div>
+          <div class="agent-meta">
+            <span class="driver-badge">acp</span>
+            <span>Default</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons" title="Edit">edit</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Agent -->
+    <button class="add-agent-btn">
+      <span class="material-icons">add</span>
+      Add Agent
+    </button>
+
+    <div class="content-divider"></div>
+
+    <!-- Selected Agent Detail -->
+    <div class="detail-section">
+      <div class="detail-section-title">Claude — Configuration</div>
+
+      <!-- Name -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Name</div>
+          <div class="setting-desc">Display name shown in the conversation panel agent list.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="Claude" style="font-family: var(--font-system);">
+        </div>
+      </div>
+
+      <!-- Driver -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Driver</div>
+          <div class="setting-desc">The backend protocol used to communicate with this agent.</div>
+        </div>
+        <div class="setting-input-col">
+          <select class="select-input">
+            <option selected>claude</option>
+            <option>codex</option>
+            <option>acp</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CLI Path -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI</div>
+          <div class="setting-desc">Path to the executable. Leave empty to find it automatically via PATH.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="input-with-browse">
+            <input class="text-input" type="text" value="" placeholder="/usr/local/bin/claude">
+            <button class="browse-btn" title="Browse...">
+              <span class="material-icons">folder_open</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLI Args -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI Args</div>
+          <div class="setting-desc">Additional arguments to pass to the CLI executable.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="" placeholder="--verbose">
+        </div>
+      </div>
+
+      <!-- Environment -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Environment</div>
+          <div class="setting-desc">Environment variables to set when launching the agent. One per line, KEY=VALUE format.</div>
+        </div>
+        <div class="setting-input-col">
+          <textarea class="text-area" rows="3" placeholder="ANTHROPIC_API_KEY=sk-ant-...&#10;CLAUDE_CODE_MAX_TURNS=50"></textarea>
+        </div>
+      </div>
+
+      <!-- Default Model -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Default Model</div>
+          <div class="setting-desc">The model to use for new chat sessions with this agent.</div>
+        </div>
+        <div class="setting-input-col">
+          <select class="select-input">
+            <option>Haiku 4.5</option>
+            <option>Sonnet 4.5</option>
+            <option selected>Opus 4.6</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Default Permissions (Claude) -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Default Permissions</div>
+          <div class="setting-desc">Permission mode for new sessions. Controls what the agent can do without asking.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="permissions-group">
+            <div class="permission-option selected">
+              <div class="permission-radio"></div>
+              <div>
+                <div class="permission-label">Default</div>
+                <div class="permission-desc">Requires approval for most operations</div>
+              </div>
+            </div>
+            <div class="permission-option">
+              <div class="permission-radio"></div>
+              <div>
+                <div class="permission-label">Accept Edits</div>
+                <div class="permission-desc">Auto-approves file changes in project directory</div>
+              </div>
+            </div>
+            <div class="permission-option">
+              <div class="permission-radio"></div>
+              <div>
+                <div class="permission-label">Plan</div>
+                <div class="permission-desc">Restricted tool access, planning mode only</div>
+              </div>
+            </div>
+            <div class="permission-option danger">
+              <div class="permission-radio"></div>
+              <div>
+                <div class="permission-label">Bypass All</div>
+                <div class="permission-desc">Approves everything without asking (dangerous)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete zone -->
+      <div class="delete-zone">
+        <div class="delete-zone-title">Remove Agent</div>
+        <div class="delete-zone-desc">Permanently remove this agent configuration. All active chats using this agent will be terminated.</div>
+        <button class="delete-btn">Remove "Claude"</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 2: Codex Agent Selected — Different Permissions UI           -->
+<!-- ================================================================== -->
+
+<div class="section-title">2. Codex Agent Selected — Richer Permissions</div>
+<p class="section-subtitle">The Codex driver exposes sandbox mode + approval policy instead of a single permission mode. The model list is loaded dynamically from the Codex server.</p>
+
+<div class="settings-shell" style="min-height: 600px;">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">Settings</div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-item">
+      <span class="material-icons">palette</span>
+      Appearance
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">tune</span>
+      Behavior
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">label</span>
+      Tags
+    </div>
+    <div class="sidebar-item selected">
+      <span class="material-icons">smart_toy</span>
+      Agents
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">chat</span>
+      Session
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">terminal</span>
+      Logging
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">code</span>
+      Developer
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">assignment</span>
+      Project Mgmt
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn">Reset to Defaults</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-title">Agents</div>
+    <div class="content-subtitle">Configure AI agents and their backend drivers. Each agent defines a name, driver, CLI path, and default settings.</div>
+
+    <div class="agent-list">
+      <div class="agent-card">
+        <div class="agent-icon claude">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Claude</div>
+          <div class="agent-meta">
+            <span class="driver-badge">claude</span>
+            <span>Opus 4.6</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <div class="agent-card selected">
+        <div class="agent-icon codex">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Codex</div>
+          <div class="agent-meta">
+            <span class="driver-badge">codex</span>
+            <span>o3</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-icon gemini">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Gemini</div>
+          <div class="agent-meta">
+            <span class="driver-badge">acp</span>
+            <span>Default</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="add-agent-btn">
+      <span class="material-icons">add</span>
+      Add Agent
+    </button>
+
+    <div class="content-divider"></div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Codex — Configuration</div>
+
+      <!-- Name -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Name</div>
+          <div class="setting-desc">Display name shown in the conversation panel agent list.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="Codex" style="font-family: var(--font-system);">
+        </div>
+      </div>
+
+      <!-- Driver -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Driver</div>
+          <div class="setting-desc">The backend protocol used to communicate with this agent.</div>
+        </div>
+        <div class="setting-input-col">
+          <select class="select-input">
+            <option>claude</option>
+            <option selected>codex</option>
+            <option>acp</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CLI Path -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI</div>
+          <div class="setting-desc">Path to the executable. Leave empty to find it automatically via PATH.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="input-with-browse">
+            <input class="text-input" type="text" value="" placeholder="/usr/local/bin/codex">
+            <button class="browse-btn" title="Browse...">
+              <span class="material-icons">folder_open</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLI Args -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI Args</div>
+          <div class="setting-desc">Additional arguments to pass to the CLI executable.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="" placeholder="">
+        </div>
+      </div>
+
+      <!-- Environment -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Environment</div>
+          <div class="setting-desc">Environment variables to set when launching the agent. One per line, KEY=VALUE format.</div>
+        </div>
+        <div class="setting-input-col">
+          <textarea class="text-area" rows="3" placeholder="OPENAI_API_KEY=sk-..."></textarea>
+        </div>
+      </div>
+
+      <!-- Default Model (dynamically loaded) -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Default Model</div>
+          <div class="setting-desc">The model to use for new chat sessions. Models are loaded from the Codex server.</div>
+        </div>
+        <div class="setting-input-col">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <select class="select-input">
+              <option>Default (server)</option>
+              <option>o4-mini</option>
+              <option selected>o3</option>
+              <option>codex-1</option>
+            </select>
+            <span class="model-badge">4 models</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Default Permissions (Codex: two-axis) -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Default Permissions</div>
+          <div class="setting-desc">Codex uses a two-axis security model: sandbox restrictions and approval policy.</div>
+        </div>
+        <div class="setting-input-col">
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Sandbox Mode -->
+            <div>
+              <div style="font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Sandbox Mode</div>
+              <div class="permissions-group">
+                <div class="permission-option">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">Read Only</div>
+                    <div class="permission-desc">No edits, no commands</div>
+                  </div>
+                </div>
+                <div class="permission-option selected">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">Workspace Write</div>
+                    <div class="permission-desc">Edits + commands within workspace only</div>
+                  </div>
+                </div>
+                <div class="permission-option danger">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">Full Access</div>
+                    <div class="permission-desc">No restrictions (dangerous)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Approval Policy -->
+            <div>
+              <div style="font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Approval Policy</div>
+              <div class="permissions-group">
+                <div class="permission-option">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">Untrusted</div>
+                    <div class="permission-desc">Prompt before all commands</div>
+                  </div>
+                </div>
+                <div class="permission-option selected">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">On Request</div>
+                    <div class="permission-desc">Prompt for operations outside workspace</div>
+                  </div>
+                </div>
+                <div class="permission-option">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">On Failure</div>
+                    <div class="permission-desc">Only prompt when something fails</div>
+                  </div>
+                </div>
+                <div class="permission-option danger">
+                  <div class="permission-radio"></div>
+                  <div>
+                    <div class="permission-label">Never</div>
+                    <div class="permission-desc">Skip all prompts (dangerous)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="delete-zone">
+        <div class="delete-zone-title">Remove Agent</div>
+        <div class="delete-zone-desc">Permanently remove this agent configuration. All active chats using this agent will be terminated.</div>
+        <button class="delete-btn">Remove "Codex"</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 3: ACP Agent (Gemini) — No Permissions                     -->
+<!-- ================================================================== -->
+
+<div class="section-title">3. ACP Agent (Gemini) — No Permissions, Hardcoded Model</div>
+<p class="section-subtitle">ACP agents have a fixed "Default (agent)" model and no permission configuration. The environment and CLI args fields are prominent since ACP agents often need custom setup.</p>
+
+<div class="settings-shell" style="min-height: 550px;">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">Settings</div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-item">
+      <span class="material-icons">palette</span>
+      Appearance
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">tune</span>
+      Behavior
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">label</span>
+      Tags
+    </div>
+    <div class="sidebar-item selected">
+      <span class="material-icons">smart_toy</span>
+      Agents
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">chat</span>
+      Session
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">terminal</span>
+      Logging
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">code</span>
+      Developer
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">assignment</span>
+      Project Mgmt
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn">Reset to Defaults</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-title">Agents</div>
+    <div class="content-subtitle">Configure AI agents and their backend drivers. Each agent defines a name, driver, CLI path, and default settings.</div>
+
+    <div class="agent-list">
+      <div class="agent-card">
+        <div class="agent-icon claude">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Claude</div>
+          <div class="agent-meta">
+            <span class="driver-badge">claude</span>
+            <span>Opus 4.6</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-icon codex">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Codex</div>
+          <div class="agent-meta">
+            <span class="driver-badge">codex</span>
+            <span>o3</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <div class="agent-card selected">
+        <div class="agent-icon gemini">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Gemini</div>
+          <div class="agent-meta">
+            <span class="driver-badge">acp</span>
+            <span>Default</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="add-agent-btn">
+      <span class="material-icons">add</span>
+      Add Agent
+    </button>
+
+    <div class="content-divider"></div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Gemini — Configuration</div>
+
+      <!-- Name -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Name</div>
+          <div class="setting-desc">Display name shown in the conversation panel agent list.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="Gemini" style="font-family: var(--font-system);">
+        </div>
+      </div>
+
+      <!-- Driver -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Driver</div>
+          <div class="setting-desc">The backend protocol used to communicate with this agent.</div>
+        </div>
+        <div class="setting-input-col">
+          <select class="select-input">
+            <option>claude</option>
+            <option>codex</option>
+            <option selected>acp</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CLI Path -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI</div>
+          <div class="setting-desc">Path to the executable. Leave empty to find it automatically via PATH.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="input-with-browse">
+            <input class="text-input" type="text" value="/usr/local/bin/gemini" placeholder="/usr/local/bin/acp-agent">
+            <button class="browse-btn" title="Browse...">
+              <span class="material-icons">folder_open</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLI Args -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI Args</div>
+          <div class="setting-desc">Additional arguments to pass to the CLI executable.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="--stdio" placeholder="--stdio">
+        </div>
+      </div>
+
+      <!-- Environment -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Environment</div>
+          <div class="setting-desc">Environment variables to set when launching the agent. One per line, KEY=VALUE format.</div>
+        </div>
+        <div class="setting-input-col">
+          <textarea class="text-area" rows="4" placeholder="GOOGLE_API_KEY=...">GOOGLE_API_KEY=AIzaSy...
+GEMINI_MODEL=gemini-2.5-pro</textarea>
+        </div>
+      </div>
+
+      <!-- Default Model (hardcoded for ACP) -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Default Model</div>
+          <div class="setting-desc">ACP agents manage their own model selection. Set via environment variables above.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="hardcoded-model">
+            <span class="material-icons">lock_outline</span>
+            Default (agent-managed)
+          </div>
+        </div>
+      </div>
+
+      <!-- Default Permissions (ACP: none) -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Default Permissions</div>
+          <div class="setting-desc">Permission configuration for this agent.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="no-permissions-notice">
+            <span class="material-icons">info_outline</span>
+            ACP agents do not support permission configuration. The agent manages its own access controls.
+          </div>
+        </div>
+      </div>
+
+      <div class="delete-zone">
+        <div class="delete-zone-title">Remove Agent</div>
+        <div class="delete-zone-desc">Permanently remove this agent configuration. All active chats using this agent will be terminated.</div>
+        <button class="delete-btn">Remove "Gemini"</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 4: Add New Agent — Empty State                              -->
+<!-- ================================================================== -->
+
+<div class="section-title">4. Add New Agent — Empty Form</div>
+<p class="section-subtitle">When "Add Agent" is clicked, a new agent appears at the bottom of the list with an empty configuration form. The driver dropdown determines which fields appear below.</p>
+
+<div class="settings-shell" style="min-height: 450px;">
+  <!-- Sidebar (abbreviated) -->
+  <div class="sidebar">
+    <div class="sidebar-header">Settings</div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-item">
+      <span class="material-icons">palette</span>
+      Appearance
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">tune</span>
+      Behavior
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">label</span>
+      Tags
+    </div>
+    <div class="sidebar-item selected">
+      <span class="material-icons">smart_toy</span>
+      Agents
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">chat</span>
+      Session
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">terminal</span>
+      Logging
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">code</span>
+      Developer
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">assignment</span>
+      Project Mgmt
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn">Reset to Defaults</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-title">Agents</div>
+    <div class="content-subtitle">Configure AI agents and their backend drivers. Each agent defines a name, driver, CLI path, and default settings.</div>
+
+    <div class="agent-list">
+      <div class="agent-card">
+        <div class="agent-icon claude">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Claude</div>
+          <div class="agent-meta">
+            <span class="driver-badge">claude</span>
+            <span>Opus 4.6</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-icon codex">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Codex</div>
+          <div class="agent-meta">
+            <span class="driver-badge">codex</span>
+            <span>o3</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-icon gemini">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name">Gemini</div>
+          <div class="agent-meta">
+            <span class="driver-badge">acp</span>
+            <span>Default</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+
+      <!-- New agent (just added) -->
+      <div class="agent-card selected" style="border-style: dashed;">
+        <div class="agent-icon" style="background: rgba(148, 143, 153, 0.15); color: var(--outline);">
+          <span class="material-icons">smart_toy</span>
+        </div>
+        <div class="agent-info">
+          <div class="agent-name" style="color: var(--on-surface-variant); font-style: italic;">New Agent</div>
+          <div class="agent-meta">
+            <span class="driver-badge">claude</span>
+          </div>
+        </div>
+        <div class="agent-actions">
+          <span class="material-icons">edit</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="add-agent-btn">
+      <span class="material-icons">add</span>
+      Add Agent
+    </button>
+
+    <div class="content-divider"></div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">New Agent — Configuration</div>
+
+      <!-- Name (empty, focused) -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Name</div>
+          <div class="setting-desc">Display name shown in the conversation panel agent list.</div>
+        </div>
+        <div class="setting-input-col">
+          <input class="text-input" type="text" value="" placeholder="My Custom Agent" style="font-family: var(--font-system); border-color: var(--primary);">
+        </div>
+      </div>
+
+      <!-- Driver -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">Driver</div>
+          <div class="setting-desc">The backend protocol used to communicate with this agent.</div>
+        </div>
+        <div class="setting-input-col">
+          <select class="select-input">
+            <option selected>claude</option>
+            <option>codex</option>
+            <option>acp</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CLI Path -->
+      <div class="setting-row">
+        <div class="setting-label-col">
+          <div class="setting-title">CLI</div>
+          <div class="setting-desc">Path to the executable. Leave empty to find it automatically via PATH.</div>
+        </div>
+        <div class="setting-input-col">
+          <div class="input-with-browse">
+            <input class="text-input" type="text" value="" placeholder="/usr/local/bin/claude">
+            <button class="browse-btn" title="Browse...">
+              <span class="material-icons">folder_open</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top: -12px; margin-bottom: 12px;">Remaining fields (CLI Args, Environment, Default Model, Permissions) appear below in the same pattern as Section 1.</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

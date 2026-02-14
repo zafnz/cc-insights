@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:checks/checks.dart';
@@ -555,6 +556,58 @@ void main() {
 
         check(config.cliWarnings).isEmpty();
       });
+    });
+  });
+
+  // ===========================================================================
+  // AGENT LOOKUP
+  // ===========================================================================
+
+  group('Agent lookup', () {
+    setUp(() {
+      RuntimeConfig.resetForTesting();
+      config.agents = [
+        const AgentConfig(id: 'claude-default', name: 'Claude', driver: 'claude'),
+        const AgentConfig(id: 'gemini-acp', name: 'Gemini', driver: 'acp'),
+        const AgentConfig(id: 'codex-1', name: 'Codex', driver: 'codex'),
+      ];
+    });
+
+    tearDown(() {
+      RuntimeConfig.resetForTesting();
+    });
+
+    test('agentById returns matching agent', () {
+      final agent = config.agentById('gemini-acp');
+      check(agent).isNotNull();
+      check(agent!.name).equals('Gemini');
+    });
+
+    test('agentById returns null for unknown ID', () {
+      final agent = config.agentById('nonexistent');
+      check(agent).isNull();
+    });
+
+    test('agentByNameAndDriver returns matching agent', () {
+      final agent = config.agentByNameAndDriver('Gemini', 'acp');
+      check(agent).isNotNull();
+      check(agent!.id).equals('gemini-acp');
+    });
+
+    test('agentByNameAndDriver returns null when name matches but driver differs', () {
+      final agent = config.agentByNameAndDriver('Gemini', 'claude');
+      check(agent).isNull();
+    });
+
+    test('agentByNameAndDriver returns null when driver matches but name differs', () {
+      final agent = config.agentByNameAndDriver('MyAgent', 'acp');
+      check(agent).isNull();
+    });
+
+    test('agentByNameAndDriver returns null when no agents configured', () {
+      config.agents = [];
+      final agent = config.agentByNameAndDriver('Claude', 'claude');
+      check(agent).isNull();
     });
   });
 }

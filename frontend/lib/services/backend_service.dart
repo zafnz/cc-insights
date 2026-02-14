@@ -4,6 +4,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:codex_sdk/codex_sdk.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/agent_config.dart';
 import '../models/chat_model.dart';
 import 'runtime_config.dart';
 
@@ -49,6 +50,32 @@ class BackendService extends ChangeNotifier {
   StreamSubscription<RateLimitUpdateEvent>? _rateLimitSub;
 
   BackendType? _backendType;
+
+  // -------------------------------------------------------------------------
+  // Agent-keyed backend state
+  // -------------------------------------------------------------------------
+
+  /// Backends keyed by agent ID (e.g. 'claude-default', 'codex-default').
+  final Map<String, AgentBackend> _agentBackends = {};
+
+  /// Error subscriptions keyed by agent ID.
+  final Map<String, StreamSubscription<BackendError>>
+      _agentErrorSubscriptions = {};
+
+  /// Error messages keyed by agent ID.
+  final Map<String, String?> _agentErrors = {};
+
+  /// Whether error came from agent response, keyed by agent ID.
+  final Map<String, bool> _agentErrorIsAgent = {};
+
+  /// Agent IDs currently in the process of starting.
+  final Set<String> _agentStarting = {};
+
+  /// Agent IDs currently loading model lists.
+  final Set<String> _agentModelListLoading = {};
+
+  /// The currently active agent ID, if any.
+  String? _activeAgentId;
 
   /// Whether the backend is ready to accept session creation requests.
   bool get isReady {
@@ -140,6 +167,322 @@ class BackendService extends ChangeNotifier {
     return const CodexSecurityCapabilities();
   }
 
+  // -------------------------------------------------------------------------
+  // Agent-keyed query methods
+  // -------------------------------------------------------------------------
+
+  /// The currently active agent ID, if any.
+  String? get activeAgentId => _activeAgentId;
+
+  /// Whether a specific agent's backend is ready.
+  bool isReadyForAgent(String agentId) {
+    return _agentBackends.containsKey(agentId) &&
+        _agentErrors[agentId] == null;
+  }
+
+  /// Whether a specific agent's backend is currently starting.
+  bool isStartingForAgent(String agentId) => _agentStarting.contains(agentId);
+
+  /// Whether model list loading is in progress for an agent.
+  bool isModelListLoadingForAgent(String agentId) =>
+      _agentModelListLoading.contains(agentId);
+
+  /// Error message for a specific agent, if any.
+  String? errorForAgent(String agentId) => _agentErrors[agentId];
+
+  /// Whether a specific agent error came from an agent response.
+  bool isAgentErrorForAgent(String agentId) =>
+      _agentErrorIsAgent[agentId] ?? false;
+
+  /// Capabilities of a specific agent's backend.
+  BackendCapabilities capabilitiesForAgent(String agentId) {
+    return _agentBackends[agentId]?.capabilities ?? const BackendCapabilities();
+  }
+
+  /// Returns the Codex security config for an agent, if it's a Codex backend.
+  CodexSecurityConfig? codexSecurityConfigForAgent(String agentId) {
+    final backend = _agentBackends[agentId];
+    if (backend is CodexBackend) {
+      return backend.currentSecurityConfig;
+    }
+    return null;
+  }
+
+  /// Returns Codex security capabilities for an agent, if it's a Codex backend.
+  CodexSecurityCapabilities codexSecurityCapabilitiesForAgent(String agentId) {
+    final backend = _agentBackends[agentId];
+    if (backend is CodexBackend) {
+      return backend.securityCapabilities;
+    }
+    return const CodexSecurityCapabilities();
+  }
+
+  // -------------------------------------------------------------------------
+  // Agent-keyed lifecycle methods
+  // -------------------------------------------------------------------------
+
+  /// Resolves an [AgentConfig] by ID from the [RuntimeConfig] agent registry.
+  AgentConfig? _resolveAgentConfig(String agentId) {
+    return RuntimeConfig.instance.agentById(agentId);
+  }
+
+  /// Starts a backend for a specific agent configuration.
+  ///
+  /// Resolves the agent config from the registry, then spawns a backend
+  /// using the agent's driver, CLI path, arguments, and environment.
+  ///
+  /// This is idempotent — calling it when the agent is already started
+  /// or starting will return without doing anything extra (but may refresh
+  /// models).
+  Future<void> startAgent(String agentId, {AgentConfig? config}) async {
+    final agentConfig = config ?? _resolveAgentConfig(agentId);
+    if (agentConfig == null) {
+      _t('BackendService', 'ERROR: No agent config found for $agentId');
+      throw StateError('No agent configuration found for "$agentId".');
+    }
+
+    final type = agentConfig.backendType;
+    final effectivePath =
+        agentConfig.cliPath.isEmpty ? null : agentConfig.cliPath;
+    final arguments = _parseCliArguments(agentConfig.cliArgs);
+    final effectiveCwd =
+        _resolveWorkingDirectory(null);
+    final argsLabel = arguments.isEmpty ? 'none' : arguments.join(' ');
+    _t(
+      'BackendService',
+      'startAgent() called, agentId=$agentId, driver=${agentConfig.driver}, '
+      'executablePath=${effectivePath ?? 'default'}, arguments=$argsLabel, cwd=$effectiveCwd',
+    );
+    _activeAgentId = agentId;
+
+    final existing = _agentBackends[agentId];
+    if (existing != null) {
+      _t('BackendService', 'Backend already exists for agent $agentId, refreshing models');
+      unawaited(_refreshModelsForAgent(agentId, type, existing));
+      notifyListeners();
+      return;
+    }
+
+    if (_agentStarting.contains(agentId)) {
+      _t('BackendService', 'Agent $agentId already starting, skipping');
+      return;
+    }
+
+    _agentStarting.add(agentId);
+    _agentErrors[agentId] = null;
+    _agentErrorIsAgent.remove(agentId);
+    notifyListeners();
+
+    try {
+      _t('BackendService', 'Creating backend for agent $agentId (${type.name})...');
+      final backend = await createBackend(
+        type: type,
+        executablePath: effectivePath,
+        arguments: arguments,
+        workingDirectory: effectiveCwd,
+      );
+      _agentBackends[agentId] = backend;
+      _t('BackendService', 'Backend created for agent $agentId, capabilities: ${backend.capabilities}');
+
+      // Monitor backend errors
+      _agentErrorSubscriptions[agentId] = backend.errors.listen((error) {
+        _t('BackendService', 'Backend error (agent $agentId): $error');
+        _agentErrors[agentId] = error.toString();
+        _agentErrorIsAgent[agentId] = true;
+        notifyListeners();
+      });
+
+      // Forward Codex rate limit events
+      if (type == BackendType.codex && backend is CodexBackend) {
+        _rateLimitSub?.cancel();
+        _rateLimitSub = backend.rateLimits.listen(
+          _rateLimitsController.add,
+        );
+      }
+
+      unawaited(_refreshModelsForAgent(agentId, type, backend));
+    } catch (e) {
+      _t('BackendService', 'ERROR starting backend for agent $agentId: $e');
+      _agentErrors[agentId] = e.toString();
+      _agentErrorIsAgent[agentId] = false;
+      _agentBackends.remove(agentId);
+    } finally {
+      _agentStarting.remove(agentId);
+      _t('BackendService', 'startAgent() complete for $agentId, isReady=${isReadyForAgent(agentId)}, error=${_agentErrors[agentId]}');
+      notifyListeners();
+    }
+  }
+
+  /// Creates an [EventTransport] for a specific agent.
+  Future<EventTransport> createTransportForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    InternalToolRegistry? registry,
+  }) async {
+    final session = await createSessionForAgent(
+      agentId: agentId,
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+      registry: registry,
+    );
+    final caps = capabilitiesForAgent(agentId);
+    return InProcessTransport(session: session, capabilities: caps);
+  }
+
+  /// Creates a session for a specific agent.
+  Future<AgentSession> createSessionForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    InternalToolRegistry? registry,
+  }) async {
+    _t('BackendService', 'createSessionForAgent agentId=$agentId cwd=$cwd');
+    await startAgent(agentId);
+    final backend = _agentBackends[agentId];
+    if (backend == null) {
+      _t('BackendService', 'ERROR: Backend for agent $agentId not started after startAgent() call');
+      throw StateError('Backend not started for agent "$agentId".');
+    }
+    _t('BackendService', 'Delegating to backend.createSession for agent $agentId...');
+    final session = await backend.createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+      registry: registry,
+    );
+    _t('BackendService', 'Session created for agent $agentId: ${session.sessionId}');
+    return session;
+  }
+
+  /// Disposes a single agent's backend and its associated subscriptions.
+  Future<void> disposeAgent(String agentId) async {
+    final backend = _agentBackends[agentId];
+    if (backend != null && backend is CodexBackend) {
+      await _rateLimitSub?.cancel();
+      _rateLimitSub = null;
+    }
+    await _agentErrorSubscriptions.remove(agentId)?.cancel();
+    _agentBackends.remove(agentId);
+    await backend?.dispose();
+    _agentErrors.remove(agentId);
+    _agentErrorIsAgent.remove(agentId);
+    _agentStarting.remove(agentId);
+    if (_activeAgentId == agentId) {
+      _activeAgentId = null;
+    }
+    notifyListeners();
+  }
+
+  /// Registers a backend for a specific agent in testing.
+  @visibleForTesting
+  void registerAgentBackendForTesting(String agentId, AgentBackend backend) {
+    _agentBackends[agentId] = backend;
+    notifyListeners();
+  }
+
+  Future<void> _refreshModelsForAgent(
+    String agentId,
+    BackendType type,
+    AgentBackend backend,
+  ) async {
+    if (backend is! ModelListingBackend) return;
+
+    final didStartLoading = _agentModelListLoading.add(agentId);
+    if (didStartLoading) {
+      notifyListeners();
+    }
+
+    try {
+      // For Claude, use queryBackendInfo to get both models and account.
+      if (type == BackendType.directCli && backend is ClaudeCliBackend) {
+        final (models, account) = await backend.queryBackendInfo();
+        ChatModelCatalog.updateAccountInfo(account);
+        if (models.isNotEmpty) {
+          final mapped = models
+              .where((m) => m.value.trim().isNotEmpty)
+              .map((m) {
+            final label = m.displayName.trim().isEmpty
+                ? m.value
+                : m.displayName.trim();
+            return ChatModel(
+              id: m.value.trim(),
+              label: label,
+              backend: BackendType.directCli,
+            );
+          }).toList();
+          if (mapped.isNotEmpty) {
+            ChatModelCatalog.updateClaudeModels(mapped);
+          }
+        }
+        return;
+      }
+
+      // For other backends, use the generic listModels.
+      final modelBackend = backend as ModelListingBackend;
+      final models = await modelBackend.listModels();
+      if (models.isEmpty) return;
+
+      if (type == BackendType.codex) {
+        final mapped = models
+            .where((model) => model.value.trim().isNotEmpty)
+            .map((model) {
+          final label = model.displayName.trim().isEmpty
+              ? model.value
+              : model.displayName.trim();
+          return ChatModel(
+            id: model.value.trim(),
+            label: label,
+            backend: BackendType.codex,
+          );
+        }).toList();
+
+        if (mapped.isNotEmpty) {
+          ChatModelCatalog.updateCodexModels(mapped);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to refresh model list for agent $agentId: $e');
+    } finally {
+      _agentModelListLoading.remove(agentId);
+      notifyListeners();
+    }
+  }
+
+  /// Starts backends and discovers models for all configured agents.
+  ///
+  /// This is typically called once on app startup to ensure model catalogs
+  /// are populated for all agent types (Claude, Codex, etc.), not just the
+  /// default agent.
+  Future<void> discoverModelsForAllAgents() async {
+    final agents = RuntimeConfig.instance.agents;
+    final seen = <BackendType>{};
+
+    for (final agent in agents) {
+      final type = agent.backendType;
+      // Only start one backend per driver type — model discovery is global.
+      if (seen.contains(type)) continue;
+      seen.add(type);
+
+      // Skip if the backend is already started for this agent.
+      if (_agentBackends.containsKey(agent.id)) {
+        unawaited(
+          _refreshModelsForAgent(agent.id, type, _agentBackends[agent.id]!),
+        );
+        continue;
+      }
+
+      unawaited(startAgent(agent.id));
+    }
+  }
+
   /// Creates a backend instance. Override in tests to inject fakes.
   @visibleForTesting
   Future<AgentBackend> createBackend({
@@ -161,43 +504,6 @@ class BackendService extends ChangeNotifier {
   void registerBackendForTesting(BackendType type, AgentBackend backend) {
     _backends[type] = backend;
     notifyListeners();
-  }
-
-  /// Starts the backend.
-  ///
-  /// This spawns a direct connection to the Claude CLI using the stream-json
-  /// protocol. The CLI path can be configured via the `CLAUDE_CODE_PATH`
-  /// environment variable, otherwise it defaults to `claude` in PATH.
-  ///
-  /// This method is idempotent - calling it while already started or starting
-  /// will return immediately without doing anything.
-  ///
-  /// After calling this method, check [isReady] to verify the backend started
-  /// successfully, or [error] to see what went wrong.
-  /// Resolves the CLI executable path from RuntimeConfig for the given backend.
-  ///
-  /// Returns null if no custom path is configured, letting the SDK use its
-  /// default resolution (PATH lookup / environment variable).
-  String? _resolveExecutablePath(BackendType type) {
-    final config = RuntimeConfig.instance;
-    return switch (type) {
-      BackendType.directCli => config.claudeCliPath.isEmpty
-          ? null
-          : config.claudeCliPath,
-      BackendType.codex => config.codexCliPath.isEmpty
-          ? null
-          : config.codexCliPath,
-      BackendType.acp =>
-        config.acpCliPath.isEmpty ? null : config.acpCliPath,
-    };
-  }
-
-  List<String> _resolveExecutableArguments(BackendType type) {
-    final config = RuntimeConfig.instance;
-    return switch (type) {
-      BackendType.acp => _parseCliArguments(config.acpCliArgs),
-      _ => const [],
-    };
   }
 
   String _resolveWorkingDirectory(String? workingDirectory) {
@@ -267,13 +573,10 @@ class BackendService extends ChangeNotifier {
     String? executablePath,
     String? workingDirectory,
   }) async {
-    final effectivePath = executablePath ?? _resolveExecutablePath(type);
-    final arguments = _resolveExecutableArguments(type);
     final effectiveCwd = _resolveWorkingDirectory(workingDirectory);
-    final argsLabel = arguments.isEmpty ? 'none' : arguments.join(' ');
     _t(
       'BackendService',
-      'start() called, type=${type.name}, executablePath=${effectivePath ?? 'default'}, arguments=$argsLabel, cwd=$effectiveCwd',
+      'start() called, type=${type.name}, executablePath=${executablePath ?? 'default'}, cwd=$effectiveCwd',
     );
     _backendType = type;
     final existing = _backends[type];
@@ -298,8 +601,7 @@ class BackendService extends ChangeNotifier {
       _t('BackendService', 'Creating backend for ${type.name}...');
       final backend = await createBackend(
         type: type,
-        executablePath: effectivePath,
-        arguments: arguments,
+        executablePath: executablePath,
         workingDirectory: effectiveCwd,
       );
       _backends[type] = backend;
@@ -345,13 +647,12 @@ class BackendService extends ChangeNotifier {
     required BackendType type,
     String? executablePath,
   }) async {
-    final effectivePath = executablePath ?? _resolveExecutablePath(type);
     // Dispose backends that are not the target type.
     final toRemove = _backends.keys.where((k) => k != type).toList();
     for (final key in toRemove) {
       await _disposeBackend(key);
     }
-    await start(type: type, executablePath: effectivePath);
+    await start(type: type, executablePath: executablePath);
   }
 
   Future<void> _refreshModelsIfSupported(
@@ -366,6 +667,31 @@ class BackendService extends ChangeNotifier {
     }
 
     try {
+      // For Claude, use queryBackendInfo to get both models and account.
+      if (type == BackendType.directCli && backend is ClaudeCliBackend) {
+        final (models, account) = await backend.queryBackendInfo();
+        ChatModelCatalog.updateAccountInfo(account);
+        if (models.isNotEmpty) {
+          final mapped = models
+              .where((m) => m.value.trim().isNotEmpty)
+              .map((m) {
+            final label = m.displayName.trim().isEmpty
+                ? m.value
+                : m.displayName.trim();
+            return ChatModel(
+              id: m.value.trim(),
+              label: label,
+              backend: BackendType.directCli,
+            );
+          }).toList();
+          if (mapped.isNotEmpty) {
+            ChatModelCatalog.updateClaudeModels(mapped);
+          }
+        }
+        return;
+      }
+
+      // For other backends, use the generic listModels.
       final modelBackend = backend as ModelListingBackend;
       final models = await modelBackend.listModels();
       if (models.isEmpty) return;
@@ -433,9 +759,8 @@ class BackendService extends ChangeNotifier {
     String? executablePath,
     InternalToolRegistry? registry,
   }) async {
-    final effectivePath = executablePath ?? _resolveExecutablePath(type);
     _t('BackendService', 'createSessionForBackend type=${type.name} cwd=$cwd');
-    await start(type: type, executablePath: effectivePath);
+    await start(type: type, executablePath: executablePath);
     final backend = _backends[type];
     if (backend == null) {
       _t('BackendService', 'ERROR: Backend ${type.name} not started after start() call');
@@ -516,6 +841,7 @@ class BackendService extends ChangeNotifier {
   void dispose() {
     _rateLimitSub?.cancel();
     _rateLimitsController.close();
+    // Clean up BackendType-keyed state
     for (final sub in _errorSubscriptions.values) {
       sub.cancel();
     }
@@ -528,6 +854,19 @@ class BackendService extends ChangeNotifier {
     _errorIsAgent.clear();
     _starting.clear();
     _backendType = null;
+    // Clean up agent-keyed state
+    for (final sub in _agentErrorSubscriptions.values) {
+      sub.cancel();
+    }
+    _agentErrorSubscriptions.clear();
+    for (final backend in _agentBackends.values) {
+      backend.dispose();
+    }
+    _agentBackends.clear();
+    _agentErrors.clear();
+    _agentErrorIsAgent.clear();
+    _agentStarting.clear();
+    _activeAgentId = null;
     super.dispose();
   }
 }
