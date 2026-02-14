@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orchestration Progress Widget Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container: #211f26;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+
+    --green: #4caf50;
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+    gap: 32px;
+  }
+
+  .variant-label {
+    width: 100%;
+    max-width: 700px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+  }
+
+  /* ── Progress widget (expanded) ── */
+  .progress-widget {
+    width: 700px;
+    background: var(--surface-container);
+    border-radius: 8px;
+    border: 1px solid rgba(73,69,79,0.3);
+    overflow: hidden;
+  }
+
+  /* ── Header row ── */
+  .pw-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 8px;
+    background: var(--surface-container-high);
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    cursor: pointer;
+  }
+  .pw-header .mi { font-size: 16px; color: var(--primary); }
+  .pw-header .title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--on-surface);
+  }
+  .pw-header .spacer { flex: 1; }
+  .pw-header .stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--on-surface-variant);
+  }
+  .pw-header .stat .mi { font-size: 14px; }
+  .pw-header .stat.cost { color: var(--amber); }
+  .pw-header .stat.time { color: var(--on-surface-variant); }
+  .pw-header .stat.agents { color: var(--blue); }
+  .pw-header .chevron {
+    font-size: 18px;
+    color: var(--on-surface-variant);
+    transition: transform 0.2s;
+  }
+  .pw-header .chevron.collapsed { transform: rotate(-90deg); }
+
+  /* ── Progress bar ── */
+  .pw-progress-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .pw-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(73,69,79,0.3);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+  }
+  .pw-progress-fill-done {
+    height: 100%;
+    background: var(--green);
+    transition: width 0.3s;
+  }
+  .pw-progress-fill-active {
+    height: 100%;
+    background: var(--blue);
+    transition: width 0.3s;
+  }
+  .pw-progress-fill-review {
+    height: 100%;
+    background: var(--purple);
+    transition: width 0.3s;
+  }
+  .pw-progress-label {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+    width: 40px;
+    text-align: right;
+  }
+
+  /* ── Ticket pipeline ── */
+  .pw-pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 12px 10px;
+  }
+
+  .pipeline-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+  .pipeline-pill:hover {
+    filter: brightness(1.2);
+  }
+  .pipeline-pill .mi { font-size: 12px; }
+
+  .pipeline-pill.pending {
+    background: rgba(158,158,158,0.12);
+    border-color: rgba(158,158,158,0.3);
+    color: var(--grey);
+  }
+  .pipeline-pill.implementing {
+    background: rgba(66,165,245,0.15);
+    border-color: rgba(66,165,245,0.4);
+    color: var(--blue);
+  }
+  .pipeline-pill.reviewing {
+    background: rgba(206,147,216,0.15);
+    border-color: rgba(206,147,216,0.4);
+    color: var(--purple);
+  }
+  .pipeline-pill.fixing {
+    background: rgba(255,167,38,0.15);
+    border-color: rgba(255,167,38,0.4);
+    color: var(--orange);
+  }
+  .pipeline-pill.merging {
+    background: rgba(77,182,172,0.15);
+    border-color: rgba(77,182,172,0.4);
+    color: var(--teal);
+  }
+  .pipeline-pill.done {
+    background: rgba(76,175,80,0.12);
+    border-color: rgba(76,175,80,0.3);
+    color: var(--green);
+  }
+  .pipeline-pill.failed {
+    background: rgba(239,83,80,0.12);
+    border-color: rgba(239,83,80,0.3);
+    color: var(--red);
+  }
+
+  /* ── Legend ── */
+  .pw-legend {
+    display: flex;
+    gap: 12px;
+    padding: 0 12px 8px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--on-surface-variant);
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+  }
+  .legend-dot.pending { background: var(--grey); }
+  .legend-dot.implementing { background: var(--blue); }
+  .legend-dot.reviewing { background: var(--purple); }
+  .legend-dot.fixing { background: var(--orange); }
+  .legend-dot.done { background: var(--green); }
+
+  /* ── Collapsed variant ── */
+  .progress-widget-collapsed {
+    width: 700px;
+    background: var(--surface-container);
+    border-radius: 8px;
+    border: 1px solid rgba(73,69,79,0.3);
+    overflow: hidden;
+  }
+  .collapsed-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px 0 0;
+  }
+  .collapsed-pills {
+    display: flex;
+    gap: 3px;
+    padding: 0 4px;
+  }
+  .mini-pill {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+  }
+  .mini-pill.done { background: var(--green); }
+  .mini-pill.implementing { background: var(--blue); }
+  .mini-pill.reviewing { background: var(--purple); }
+  .mini-pill.pending { background: rgba(158,158,158,0.4); }
+</style>
+</head>
+<body>
+
+<!-- ═══ EXPANDED STATE ═══ -->
+<div class="variant-label">Progress Widget — Expanded (mid-run: 2 done, 2 active, 1 pending)</div>
+
+<div class="progress-widget">
+  <div class="pw-header">
+    <span class="mi material-icons">smart_toy</span>
+    <span class="title">Orchestrating 5 tickets</span>
+    <span class="spacer"></span>
+    <span class="stat agents"><span class="mi material-icons">group</span> 3 agents</span>
+    <span class="stat cost"><span class="mi material-icons">paid</span> $2.34</span>
+    <span class="stat time"><span class="mi material-icons">schedule</span> 4m 12s</span>
+    <span class="mi material-icons chevron">expand_more</span>
+  </div>
+
+  <div class="pw-progress-row">
+    <div class="pw-progress-bar">
+      <div class="pw-progress-fill-done" style="width: 40%"></div>
+      <div class="pw-progress-fill-review" style="width: 20%"></div>
+      <div class="pw-progress-fill-active" style="width: 20%"></div>
+    </div>
+    <span class="pw-progress-label">2 / 5</span>
+  </div>
+
+  <div class="pw-pipeline">
+    <span class="pipeline-pill done">
+      <span class="mi material-icons">check_circle</span>
+      TKT-008
+    </span>
+    <span class="pipeline-pill done">
+      <span class="mi material-icons">check_circle</span>
+      TKT-009
+    </span>
+    <span class="pipeline-pill reviewing">
+      <span class="mi material-icons">rate_review</span>
+      TKT-010
+    </span>
+    <span class="pipeline-pill implementing">
+      <span class="mi material-icons">code</span>
+      TKT-011
+    </span>
+    <span class="pipeline-pill pending">
+      <span class="mi material-icons">hourglass_empty</span>
+      TKT-012
+    </span>
+  </div>
+
+  <div class="pw-legend">
+    <span class="legend-item"><span class="legend-dot pending"></span> Pending</span>
+    <span class="legend-item"><span class="legend-dot implementing"></span> Implementing</span>
+    <span class="legend-item"><span class="legend-dot reviewing"></span> Reviewing</span>
+    <span class="legend-item"><span class="legend-dot fixing"></span> Fixing</span>
+    <span class="legend-item"><span class="legend-dot done"></span> Done</span>
+  </div>
+</div>
+
+<!-- ═══ EXPANDED STATE — Nearly Complete ═══ -->
+<div class="variant-label">Progress Widget — Expanded (nearly done: 4 done, 1 fixing)</div>
+
+<div class="progress-widget">
+  <div class="pw-header">
+    <span class="mi material-icons">smart_toy</span>
+    <span class="title">Orchestrating 5 tickets</span>
+    <span class="spacer"></span>
+    <span class="stat agents"><span class="mi material-icons">group</span> 1 agent</span>
+    <span class="stat cost"><span class="mi material-icons">paid</span> $8.72</span>
+    <span class="stat time"><span class="mi material-icons">schedule</span> 18m 45s</span>
+    <span class="mi material-icons chevron">expand_more</span>
+  </div>
+
+  <div class="pw-progress-row">
+    <div class="pw-progress-bar">
+      <div class="pw-progress-fill-done" style="width: 80%"></div>
+      <div class="pw-progress-fill-active" style="width: 20%"></div>
+    </div>
+    <span class="pw-progress-label">4 / 5</span>
+  </div>
+
+  <div class="pw-pipeline">
+    <span class="pipeline-pill done">
+      <span class="mi material-icons">check_circle</span>
+      TKT-008
+    </span>
+    <span class="pipeline-pill done">
+      <span class="mi material-icons">check_circle</span>
+      TKT-009
+    </span>
+    <span class="pipeline-pill done">
+      <span class="mi material-icons">check_circle</span>
+      TKT-010
+    </span>
+    <span class="pipeline-pill done">
+      <span class="mi material-icons">check_circle</span>
+      TKT-011
+    </span>
+    <span class="pipeline-pill fixing">
+      <span class="mi material-icons">build</span>
+      TKT-012
+      <span style="font-size:9px; opacity:0.7">(round 2)</span>
+    </span>
+  </div>
+
+  <div class="pw-legend">
+    <span class="legend-item"><span class="legend-dot pending"></span> Pending</span>
+    <span class="legend-item"><span class="legend-dot implementing"></span> Implementing</span>
+    <span class="legend-item"><span class="legend-dot reviewing"></span> Reviewing</span>
+    <span class="legend-item"><span class="legend-dot fixing"></span> Fixing</span>
+    <span class="legend-item"><span class="legend-dot done"></span> Done</span>
+  </div>
+</div>
+
+<!-- ═══ COLLAPSED STATE ═══ -->
+<div class="variant-label">Progress Widget — Collapsed</div>
+
+<div class="progress-widget-collapsed">
+  <div class="pw-header">
+    <span class="mi material-icons">smart_toy</span>
+    <span class="title">Orchestrating 5 tickets</span>
+    <div class="collapsed-pills">
+      <span class="mini-pill done"></span>
+      <span class="mini-pill done"></span>
+      <span class="mini-pill reviewing"></span>
+      <span class="mini-pill implementing"></span>
+      <span class="mini-pill pending"></span>
+    </div>
+    <span class="spacer"></span>
+    <span class="stat" style="color: var(--on-surface-variant);">2/5</span>
+    <span class="stat cost"><span class="mi material-icons">paid</span> $2.34</span>
+    <span class="mi material-icons chevron collapsed">expand_more</span>
+  </div>
+</div>
+
+<!-- ═══ COMPLETED STATE ═══ -->
+<div class="variant-label">Progress Widget — All Complete</div>
+
+<div class="progress-widget">
+  <div class="pw-header" style="border-bottom: none;">
+    <span class="mi material-icons" style="color: var(--green);">check_circle</span>
+    <span class="title">All 5 tickets completed</span>
+    <span class="spacer"></span>
+    <span class="stat cost"><span class="mi material-icons">paid</span> $12.47</span>
+    <span class="stat time"><span class="mi material-icons">schedule</span> 24m 18s</span>
+    <span class="mi material-icons chevron collapsed">expand_more</span>
+  </div>
+</div>
+
+</body>
+</html>

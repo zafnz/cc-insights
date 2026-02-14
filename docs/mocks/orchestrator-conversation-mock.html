@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orchestrator Conversation Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container: #211f26;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+
+    --green: #4caf50;
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+    gap: 24px;
+  }
+
+  .variant-label {
+    width: 100%;
+    max-width: 760px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+  }
+
+  /* ── Conversation container ── */
+  .conversation {
+    width: 760px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Progress widget (embedded at top) ── */
+  .progress-bar-widget {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 8px;
+    background: var(--surface-container-high);
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    cursor: pointer;
+  }
+  .progress-bar-widget .mi { font-size: 16px; color: var(--primary); }
+  .progress-bar-widget .title { font-size: 12px; font-weight: 500; color: var(--on-surface); }
+  .progress-bar-widget .spacer { flex: 1; }
+  .progress-bar-widget .stat {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; font-family: var(--font-mono); color: var(--on-surface-variant);
+  }
+  .progress-bar-widget .stat .mi { font-size: 14px; }
+  .progress-bar-widget .stat.cost { color: var(--amber); }
+
+  .mini-progress {
+    display: flex; gap: 3px; padding: 0 8px;
+  }
+  .mini-dot { width: 6px; height: 6px; border-radius: 3px; }
+  .mini-dot.done { background: var(--green); }
+  .mini-dot.implementing { background: var(--blue); }
+  .mini-dot.reviewing { background: var(--purple); }
+  .mini-dot.pending { background: rgba(158,158,158,0.4); }
+
+  /* ── Messages area ── */
+  .messages {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  /* ── User message ── */
+  .user-msg {
+    align-self: flex-end;
+    max-width: 85%;
+    padding: 10px 14px;
+    background: var(--primary-container);
+    border-radius: 12px 12px 2px 12px;
+    color: var(--on-primary-container);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── Assistant message ── */
+  .assistant-msg {
+    align-self: flex-start;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .assistant-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--on-surface);
+  }
+  .assistant-text strong { color: var(--primary); font-weight: 500; }
+
+  /* ── Tool call card ── */
+  .tool-card {
+    background: var(--surface-container-low);
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .tool-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    gap: 6px;
+    background: var(--surface-container-high);
+    border-bottom: 1px solid rgba(73,69,79,0.2);
+  }
+  .tool-header .mi { font-size: 14px; }
+  .tool-header .tool-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--primary);
+  }
+  .tool-header .tool-badge {
+    margin-left: auto;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 600;
+  }
+  .tool-header .tool-badge.success {
+    background: rgba(76,175,80,0.15);
+    border: 0.5px solid rgba(76,175,80,0.4);
+    color: var(--green);
+  }
+  .tool-header .tool-badge.running {
+    background: rgba(66,165,245,0.15);
+    border: 0.5px solid rgba(66,165,245,0.4);
+    color: var(--blue);
+  }
+  .tool-header .tool-badge.waiting {
+    background: rgba(206,147,216,0.15);
+    border: 0.5px solid rgba(206,147,216,0.4);
+    color: var(--purple);
+  }
+
+  .tool-body {
+    padding: 8px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--on-surface-variant);
+  }
+  .tool-body .param {
+    color: var(--grey);
+  }
+  .tool-body .value {
+    color: var(--on-surface);
+  }
+  .tool-body .string { color: var(--green); }
+  .tool-body .number { color: var(--amber); }
+  .tool-body .result-label {
+    color: var(--grey);
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(73,69,79,0.2);
+  }
+  .tool-body .result-value { color: var(--on-surface); }
+
+  /* ── Tool call group (multiple calls in parallel) ── */
+  .tool-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tool-group-label {
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    padding-left: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tool-group-label .mi { font-size: 12px; color: var(--grey); }
+
+  /* ── Separator ── */
+  .separator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .separator-line {
+    flex: 1;
+    height: 1px;
+    background: rgba(73,69,79,0.3);
+  }
+  .separator-text {
+    font-size: 10px;
+    color: var(--grey);
+    font-family: var(--font-mono);
+  }
+
+  /* ── Working indicator ── */
+  .working-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+  }
+  .working-dots {
+    display: flex;
+    gap: 4px;
+  }
+  .working-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--primary);
+    opacity: 0.3;
+    animation: pulse 1.4s infinite;
+  }
+  .working-dot:nth-child(2) { animation-delay: 0.2s; }
+  .working-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  /* ── Message input ── */
+  .message-input-area {
+    display: flex;
+    align-items: flex-end;
+    padding: 8px 12px;
+    gap: 8px;
+    border-top: 1px solid rgba(73,69,79,0.3);
+    background: var(--surface-container-low);
+  }
+  .input-field {
+    flex: 1;
+    min-height: 36px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 8px;
+    color: var(--on-surface);
+    font-family: var(--font-system);
+    font-size: 13px;
+    resize: none;
+    outline: none;
+  }
+  .input-field::placeholder { color: rgba(202,196,208,0.4); }
+  .input-field:focus { border-color: var(--primary); }
+
+  .stop-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--orange);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .stop-btn .mi { font-size: 18px; color: #1a1a1a; }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Orchestrator Conversation — Active Run</div>
+
+<div class="conversation">
+
+  <!-- Progress widget at top -->
+  <div class="progress-bar-widget">
+    <span class="mi material-icons">smart_toy</span>
+    <span class="title">Orchestrating 5 tickets</span>
+    <div class="mini-progress">
+      <span class="mini-dot done"></span>
+      <span class="mini-dot done"></span>
+      <span class="mini-dot reviewing"></span>
+      <span class="mini-dot implementing"></span>
+      <span class="mini-dot pending"></span>
+    </div>
+    <span class="spacer"></span>
+    <span class="stat">2/5</span>
+    <span class="stat cost"><span class="mi material-icons">paid</span> $2.34</span>
+  </div>
+
+  <div class="messages">
+
+    <!-- User's initial instructions -->
+    <div class="user-msg">
+      Do all tickets needed for TKT-012. Use separate worktrees for each ticket. After each one finishes, have a different agent do a code review. If there are issues, send them back to fix. Merge into main when done.
+    </div>
+
+    <!-- Orchestrator reads tickets -->
+    <div class="assistant-msg">
+      <div class="assistant-text">
+        Let me check the tickets and their dependencies.
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--teal)">list_alt</span>
+          <span class="tool-name">list_tickets</span>
+          <span class="tool-badge success">completed</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">dependency_of:</span> <span class="number">12</span>
+          <div class="result-label">→ result</div>
+          <div class="result-value">5 tickets: TKT-008, TKT-009, TKT-010, TKT-011, TKT-012</div>
+        </div>
+      </div>
+
+      <div class="assistant-text">
+        Found 5 tickets. Dependency chain:<br>
+        &bull; <strong>TKT-008</strong> and <strong>TKT-009</strong> — no dependencies (can start in parallel)<br>
+        &bull; <strong>TKT-010</strong> — depends on TKT-008<br>
+        &bull; <strong>TKT-011</strong> — depends on TKT-008, TKT-009<br>
+        &bull; <strong>TKT-012</strong> — depends on TKT-010, TKT-011<br><br>
+        Starting with TKT-008 and TKT-009 in parallel.
+      </div>
+
+      <!-- Parallel tool calls: create worktrees -->
+      <div class="tool-group">
+        <div class="tool-group-label">
+          <span class="mi material-icons">call_split</span>
+          2 parallel calls
+        </div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="mi material-icons" style="color: var(--teal)">account_tree</span>
+            <span class="tool-name">create_worktree</span>
+            <span class="tool-badge success">completed</span>
+          </div>
+          <div class="tool-body">
+            <span class="param">branch:</span> <span class="string">"tkt-008-user-model"</span>
+            <span class="param"> base:</span> <span class="string">"main"</span>
+            <div class="result-label">→ result</div>
+            <div class="result-value">/projects/cc-insights/cci/tkt-008-user-model</div>
+          </div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="mi material-icons" style="color: var(--teal)">account_tree</span>
+            <span class="tool-name">create_worktree</span>
+            <span class="tool-badge success">completed</span>
+          </div>
+          <div class="tool-body">
+            <span class="param">branch:</span> <span class="string">"tkt-009-auth-routes"</span>
+            <span class="param"> base:</span> <span class="string">"main"</span>
+            <div class="result-label">→ result</div>
+            <div class="result-value">/projects/cc-insights/cci/tkt-009-auth-routes</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Launch agents -->
+      <div class="tool-group">
+        <div class="tool-group-label">
+          <span class="mi material-icons">call_split</span>
+          2 parallel calls
+        </div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="mi material-icons" style="color: var(--blue)">rocket_launch</span>
+            <span class="tool-name">launch_agent</span>
+            <span class="tool-badge success">completed</span>
+          </div>
+          <div class="tool-body">
+            <span class="param">worktree:</span> <span class="string">".../tkt-008-user-model"</span><br>
+            <span class="param">ticket:</span> <span class="number">8</span><br>
+            <span class="param">instructions:</span> <span class="string">"Implement TKT-008: Design user model schema..."</span>
+            <div class="result-label">→ result</div>
+            <div class="result-value">agent_id: <span class="string">"agent-A"</span></div>
+          </div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="mi material-icons" style="color: var(--blue)">rocket_launch</span>
+            <span class="tool-name">launch_agent</span>
+            <span class="tool-badge success">completed</span>
+          </div>
+          <div class="tool-body">
+            <span class="param">worktree:</span> <span class="string">".../tkt-009-auth-routes"</span><br>
+            <span class="param">ticket:</span> <span class="number">9</span><br>
+            <span class="param">instructions:</span> <span class="string">"Implement TKT-009: Implement auth route handlers..."</span>
+            <div class="result-label">→ result</div>
+            <div class="result-value">agent_id: <span class="string">"agent-B"</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="assistant-text">
+        Both agents launched. Waiting for either to finish.
+      </div>
+
+      <!-- Wait for agents -->
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--purple)">hourglass_top</span>
+          <span class="tool-name">wait_for_agents</span>
+          <span class="tool-badge success">completed</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">agent_ids:</span> <span class="string">["agent-A", "agent-B"]</span>
+          <div class="result-label">→ result</div>
+          <div class="result-value">ready: [{ agent_id: <span class="string">"agent-A"</span>, reason: <span class="string">"turn_complete"</span> }]</div>
+        </div>
+      </div>
+
+      <div class="assistant-text">
+        <strong>Agent-A</strong> finished TKT-008. Launching code review.
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--blue)">rocket_launch</span>
+          <span class="tool-name">launch_agent</span>
+          <span class="tool-badge success">completed</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">worktree:</span> <span class="string">".../tkt-008-user-model"</span><br>
+          <span class="param">instructions:</span> <span class="string">"Review the changes for TKT-008. Check correctness, tests, code quality..."</span>
+          <div class="result-label">→ result</div>
+          <div class="result-value">agent_id: <span class="string">"agent-C"</span></div>
+        </div>
+      </div>
+
+      <div class="separator">
+        <div class="separator-line"></div>
+        <span class="separator-text">waiting for agents B, C</span>
+        <div class="separator-line"></div>
+      </div>
+
+      <!-- Review result -->
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--purple)">hourglass_top</span>
+          <span class="tool-name">wait_for_agents</span>
+          <span class="tool-badge success">completed</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">agent_ids:</span> <span class="string">["agent-B", "agent-C"]</span>
+          <div class="result-label">→ result</div>
+          <div class="result-value">ready: [{ agent_id: <span class="string">"agent-C"</span>, reason: <span class="string">"turn_complete"</span> }]</div>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--teal)">question_answer</span>
+          <span class="tool-name">ask_agent</span>
+          <span class="tool-badge success">completed</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">agent_id:</span> <span class="string">"agent-C"</span><br>
+          <span class="param">message:</span> <span class="string">"What is your review verdict?"</span>
+          <div class="result-label">→ response</div>
+          <div class="result-value"><span class="string">"APPROVED. Code is clean, user model schema is well-designed, tests cover all CRUD operations and edge cases."</span></div>
+        </div>
+      </div>
+
+      <div class="assistant-text">
+        TKT-008 review <strong>passed</strong>. Merging into feat-auth-system.
+      </div>
+
+      <!-- Merge -->
+      <div class="tool-group">
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="mi material-icons" style="color: var(--teal)">merge</span>
+            <span class="tool-name">rebase_and_merge</span>
+            <span class="tool-badge success">completed</span>
+          </div>
+          <div class="tool-body">
+            <span class="param">worktree:</span> <span class="string">".../tkt-008-user-model"</span>
+            <div class="result-label">→ result</div>
+            <div class="result-value">{ success: <span class="number">true</span>, merged_commits: <span class="number">3</span> }</div>
+          </div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-header">
+            <span class="mi material-icons" style="color: var(--teal)">task_alt</span>
+            <span class="tool-name">update_ticket</span>
+            <span class="tool-badge success">completed</span>
+          </div>
+          <div class="tool-body">
+            <span class="param">ticket_id:</span> <span class="number">8</span>
+            <span class="param"> status:</span> <span class="string">"completed"</span><br>
+            <span class="param">comment:</span> <span class="string">"Merged to main. Review passed in 1 round."</span>
+            <div class="result-label">→ result</div>
+            <div class="result-value">unblocked: [<span class="number">10</span>, <span class="number">11</span>]</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="assistant-text">
+        TKT-008 merged and completed. TKT-010 and TKT-011 are now unblocked, but TKT-011 still needs TKT-009 (agent-B is still working on it).<br><br>
+        TKT-010 is ready — launching it now while we wait for agent-B.
+      </div>
+
+      <!-- Next ticket -->
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--blue)">rocket_launch</span>
+          <span class="tool-name">launch_agent</span>
+          <span class="tool-badge success">completed</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">worktree:</span> <span class="string">".../tkt-008-user-model"</span> <span style="color:var(--grey)">(reusing worktree)</span><br>
+          <span class="param">ticket:</span> <span class="number">10</span><br>
+          <span class="param">instructions:</span> <span class="string">"Implement TKT-010: Add session management..."</span>
+          <div class="result-label">→ result</div>
+          <div class="result-value">agent_id: <span class="string">"agent-D"</span></div>
+        </div>
+      </div>
+
+      <!-- Currently waiting -->
+      <div class="tool-card">
+        <div class="tool-header">
+          <span class="mi material-icons" style="color: var(--purple)">hourglass_top</span>
+          <span class="tool-name">wait_for_agents</span>
+          <span class="tool-badge waiting">waiting</span>
+        </div>
+        <div class="tool-body">
+          <span class="param">agent_ids:</span> <span class="string">["agent-B", "agent-D"]</span>
+          <div class="result-label" style="border-top: none; margin-top: 0;">
+            <div class="working-indicator">
+              <div class="working-dots">
+                <span class="working-dot"></span>
+                <span class="working-dot"></span>
+                <span class="working-dot"></span>
+              </div>
+              Waiting for agents to finish...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Message input -->
+  <div class="message-input-area">
+    <textarea class="input-field" placeholder="Type to intervene or adjust the run..." rows="1"></textarea>
+    <button class="stop-btn" title="Stop orchestrator">
+      <span class="mi material-icons">stop</span>
+    </button>
+  </div>
+
+</div>
+
+</body>
+</html>

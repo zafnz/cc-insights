@@ -1,10 +1,12 @@
-# UI Mockups — Project Management / Ticket System
+# UI Mockups
 
-Interactive HTML mockups showing the ticket management feature as it would appear
-in CC-Insights V2. They use the same Material 3 dark theme, colors, spacing, and
+Interactive HTML mockups showing CC-Insights V2 features as they would appear
+in the app. They use the same Material 3 dark theme, colors, spacing, and
 typography conventions as the existing app.
 
 ## Files
+
+### Ticket System
 
 | File | Description |
 |------|-------------|
@@ -14,6 +16,19 @@ typography conventions as the existing app.
 | `ticket-graph-view-mock.html` | Dependency DAG visualization with color-coded status nodes and SVG edges |
 | `ticket-bulk-review-mock.html` | Bulk review panel for agent-proposed tickets with inline editing |
 | `ticket-screen-layout-mock.html` | Full app layout showing nav rail, ticket list, and detail panel composed together |
+
+### Orchestration
+
+| File | Description |
+|------|-------------|
+| `orchestration-config-mock.html` | Configuration dialog with ticket summary, dependency info, preset chips, and instructions text area |
+| `orchestration-progress-mock.html` | Progress summary widget in expanded, collapsed, nearly-complete, and all-done states |
+| `orchestrator-conversation-mock.html` | Orchestrator chat showing tool calls (launch_agent, wait_for_agents, ask_agent, rebase_and_merge), progress widget, and user input |
+
+### Other
+
+| File | Description |
+|------|-------------|
 | `information-panel-mock.html` | *(Pre-existing)* Reference mock for the information/content panel |
 
 ## How to view

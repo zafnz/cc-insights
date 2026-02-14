@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orchestration Config Dialog Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container: #211f26;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+    --inverse-surface: #e6e0e9;
+    --inverse-on-surface: #322f35;
+
+    --green: #4caf50;
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  /* ── Dialog overlay ── */
+  .dialog-overlay {
+    width: 640px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dialog {
+    background: var(--surface-container);
+    border-radius: 12px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  /* ── Header ── */
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px 12px;
+    gap: 10px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+  }
+  .dialog-header .mi { font-size: 20px; color: var(--primary); }
+  .dialog-header .title {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--on-surface);
+  }
+  .dialog-header .close-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; border-radius: 6px;
+    cursor: pointer; color: var(--on-surface-variant);
+  }
+  .dialog-header .close-btn:hover { background: rgba(208,188,255,0.08); }
+
+  /* ── Body ── */
+  .dialog-body {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Ticket summary ── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--on-surface-variant);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .ticket-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--surface-container-low);
+    border-radius: 8px;
+    padding: 8px;
+    border: 1px solid rgba(73,69,79,0.3);
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .ticket-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+  }
+  .ticket-row:hover { background: rgba(208,188,255,0.04); }
+
+  .ticket-row .status-icon { font-size: 14px; flex-shrink: 0; }
+  .ticket-row .status-icon.ready { color: var(--grey-dark); }
+  .ticket-row .status-icon.blocked { color: var(--orange); }
+  .ticket-row .status-icon.done { color: var(--green); }
+
+  .ticket-row .tid {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+    width: 52px;
+  }
+  .ticket-row .ttitle {
+    flex: 1;
+    font-size: 12px;
+    color: var(--on-surface);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ticket-row .deps {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--on-surface-variant);
+    flex-shrink: 0;
+  }
+
+  .effort-badge {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .effort-badge.small { background: rgba(76,175,80,0.15); border: 0.5px solid rgba(76,175,80,0.4); color: var(--green); }
+  .effort-badge.medium { background: rgba(255,167,38,0.15); border: 0.5px solid rgba(255,167,38,0.4); color: var(--orange); }
+  .effort-badge.large { background: rgba(239,83,80,0.15); border: 0.5px solid rgba(239,83,80,0.4); color: var(--red); }
+
+  /* ── Dependency note ── */
+  .dep-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(66,165,245,0.08);
+    border: 1px solid rgba(66,165,245,0.2);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--blue);
+  }
+  .dep-note .mi { font-size: 14px; }
+
+  /* ── Branch fields ── */
+  .branch-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-group.flex1 { flex: 1; }
+  .field-group .field-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--on-surface-variant);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .text-field {
+    height: 32px;
+    padding: 0 10px;
+    background: var(--surface-container-low);
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 6px;
+    color: var(--on-surface);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+  }
+  .text-field:focus { border-color: var(--primary); }
+  .text-field::placeholder { color: rgba(202,196,208,0.4); }
+
+  .select-field {
+    height: 32px;
+    padding: 0 8px;
+    background: var(--surface-container-low);
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 6px;
+    color: var(--on-surface);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23cac4d0'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+    cursor: pointer;
+  }
+  .select-field:focus { border-color: var(--primary); }
+
+  .branch-arrow {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    color: var(--on-surface-variant);
+  }
+  .branch-arrow .mi { font-size: 16px; }
+
+  /* ── Preset chips ── */
+  .presets-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .preset-chip {
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 12px;
+    background: var(--surface-container-high);
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 14px;
+    color: var(--on-surface-variant);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-system);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .preset-chip:hover {
+    background: rgba(208,188,255,0.08);
+    border-color: rgba(208,188,255,0.3);
+  }
+  .preset-chip.active {
+    background: rgba(79,55,139,0.4);
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+  .preset-chip .mi { font-size: 14px; }
+
+  /* ── Instructions textarea ── */
+  .instructions-field {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    background: var(--surface-container-low);
+    border: 1px solid rgba(73,69,79,0.3);
+    border-radius: 8px;
+    color: var(--on-surface);
+    font-family: var(--font-system);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+  }
+  .instructions-field:focus {
+    border-color: var(--primary);
+  }
+  .instructions-field::placeholder {
+    color: rgba(202,196,208,0.5);
+  }
+
+  /* ── Footer ── */
+  .dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 12px 20px 16px;
+    gap: 8px;
+  }
+
+  .btn {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 20px;
+    border-radius: 18px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-system);
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-text {
+    background: none;
+    color: var(--primary);
+  }
+  .btn-text:hover { background: rgba(208,188,255,0.08); }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--inverse-on-surface);
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary .mi { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div class="dialog-overlay">
+  <div class="variant-label">Orchestration Config Dialog</div>
+
+  <div class="dialog">
+    <div class="dialog-header">
+      <span class="mi material-icons">smart_toy</span>
+      <span class="title">Run Tickets</span>
+      <button class="close-btn"><span class="mi material-icons" style="font-size:18px">close</span></button>
+    </div>
+
+    <div class="dialog-body">
+
+      <!-- Ticket summary -->
+      <div>
+        <div class="section-label">Tickets (5 selected)</div>
+        <div class="ticket-summary">
+          <div class="ticket-row">
+            <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+            <span class="tid">TKT-008</span>
+            <span class="ttitle">Design user model schema</span>
+            <span class="effort-badge small">small</span>
+          </div>
+          <div class="ticket-row">
+            <span class="mi material-icons status-icon ready">radio_button_unchecked</span>
+            <span class="tid">TKT-009</span>
+            <span class="ttitle">Implement auth route handlers</span>
+            <span class="effort-badge medium">medium</span>
+          </div>
+          <div class="ticket-row">
+            <span class="mi material-icons status-icon blocked">block</span>
+            <span class="tid">TKT-010</span>
+            <span class="ttitle">Add session management</span>
+            <span class="effort-badge medium">medium</span>
+            <span class="deps">← 008</span>
+          </div>
+          <div class="ticket-row">
+            <span class="mi material-icons status-icon blocked">block</span>
+            <span class="tid">TKT-011</span>
+            <span class="ttitle">Permission middleware</span>
+            <span class="effort-badge medium">medium</span>
+            <span class="deps">← 008, 009</span>
+          </div>
+          <div class="ticket-row">
+            <span class="mi material-icons status-icon blocked">block</span>
+            <span class="tid">TKT-012</span>
+            <span class="ttitle">Integration tests for auth flow</span>
+            <span class="effort-badge large">large</span>
+            <span class="deps">← 010, 011</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dependency note -->
+      <div class="dep-note">
+        <span class="mi material-icons">info_outline</span>
+        3 tickets are blocked by dependencies within this set. The orchestrator will respect execution order.
+      </div>
+
+      <!-- Branch config -->
+      <div>
+        <div class="section-label">Feature branch</div>
+        <div class="branch-row">
+          <div class="field-group">
+            <span class="field-label">Base</span>
+            <select class="select-field">
+              <option selected>main</option>
+              <option>develop</option>
+              <option>origin/main</option>
+            </select>
+          </div>
+          <div class="branch-arrow"><span class="mi material-icons">arrow_forward</span></div>
+          <div class="field-group flex1">
+            <span class="field-label">Branch name</span>
+            <input type="text" class="text-field" value="feat-auth-system" style="width:100%">
+          </div>
+        </div>
+      </div>
+
+      <!-- Presets -->
+      <div>
+        <div class="section-label">Quick presets</div>
+        <div class="presets-row">
+          <button class="preset-chip active">
+            <span class="mi material-icons">call_split</span>
+            Parallel + Reviews
+          </button>
+          <button class="preset-chip">
+            <span class="mi material-icons">linear_scale</span>
+            Sequential
+          </button>
+          <button class="preset-chip">
+            <span class="mi material-icons">call_split</span>
+            Parallel, No Reviews
+          </button>
+          <button class="preset-chip">
+            <span class="mi material-icons">edit</span>
+            Custom
+          </button>
+        </div>
+      </div>
+
+      <!-- Instructions -->
+      <div>
+        <div class="section-label">Instructions for the orchestrator</div>
+        <textarea class="instructions-field">Use separate worktrees for each ticket. Run independent tickets in parallel. After each ticket finishes, have a different agent do a code review. If the review finds issues, send them back to the implementing agent to fix. Repeat until the review passes (max 3 rounds). Merge each completed ticket into the feature branch. Clean up ticket worktrees after merging.</textarea>
+      </div>
+
+    </div>
+
+    <div class="dialog-footer">
+      <button class="btn btn-text">Cancel</button>
+      <button class="btn btn-primary">
+        <span class="mi material-icons">play_arrow</span>
+        Launch Orchestrator
+      </button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
