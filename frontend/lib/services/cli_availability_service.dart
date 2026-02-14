@@ -15,6 +15,12 @@ class CliAvailabilityService extends ChangeNotifier {
   /// Per-agent availability keyed by agent ID.
   Map<String, bool> _agentAvailability = {};
 
+  /// Per-agent resolved CLI paths keyed by agent ID.
+  ///
+  /// Populated during [checkAgents]. Contains the actual path to the
+  /// executable when found (whether via custom path, env var, or PATH lookup).
+  Map<String, String> _agentResolvedPaths = {};
+
   /// Whether at least one claude-driver agent is available.
   ///
   /// Used by [CliRequiredScreen] to gate app startup.
@@ -26,6 +32,10 @@ class CliAvailabilityService extends ChangeNotifier {
   /// Whether a specific agent's CLI is available.
   bool isAgentAvailable(String agentId) =>
       _agentAvailability[agentId] ?? false;
+
+  /// Returns the resolved CLI path for an agent, or null if not found.
+  String? resolvedPathForAgent(String agentId) =>
+      _agentResolvedPaths[agentId];
 
   /// Unmodifiable view of per-agent availability.
   Map<String, bool> get agentAvailability =>
@@ -43,10 +53,17 @@ class CliAvailabilityService extends ChangeNotifier {
   /// and [AgentConfig.cliPath] as the custom path override.
   Future<void> checkAgents(List<AgentConfig> agents) async {
     final results = <String, bool>{};
+    final paths = <String, String>{};
     for (final agent in agents) {
-      results[agent.id] = await _checkExecutable(agent.driver, agent.cliPath);
+      final (found, resolvedPath) =
+          await _checkExecutable(agent.driver, agent.cliPath);
+      results[agent.id] = found;
+      if (found && resolvedPath != null) {
+        paths[agent.id] = resolvedPath;
+      }
     }
     _agentAvailability = results;
+    _agentResolvedPaths = paths;
     // Claude is available if ANY claude-driver agent resolves.
     _claudeAvailable = agents
         .where((a) => a.driver == 'claude')
@@ -64,17 +81,22 @@ class CliAvailabilityService extends ChangeNotifier {
   ///
   /// Used by [CliRequiredScreen] before the full agent list is relevant.
   Future<void> checkClaude({String customPath = ''}) async {
-    _claudeAvailable = await _checkExecutable('claude', customPath);
+    final (found, _) = await _checkExecutable('claude', customPath);
+    _claudeAvailable = found;
     _checked = true;
     notifyListeners();
   }
 
   /// Checks whether a single CLI executable is available.
   ///
+  /// Returns a tuple of (available, resolvedPath). The resolved path is the
+  /// actual path to the executable when found.
+  ///
   /// If [customPath] is non-empty, verifies that specific file exists and is
   /// runnable. Otherwise falls back to the CLAUDE_CODE_PATH env var (for
   /// claude only) and then `which`.
-  Future<bool> _checkExecutable(String name, String customPath) async {
+  Future<(bool, String?)> _checkExecutable(
+      String name, String customPath) async {
     // 1. If a custom path is configured, check that file directly.
     if (customPath.isNotEmpty) {
       final resolvedPath = await _resolveCustomPath(name, customPath);
@@ -83,7 +105,7 @@ class CliAvailabilityService extends ChangeNotifier {
         '$name CLI ${found ? 'found' : 'not found'} at custom path: $resolvedPath',
         name: 'CliAvailabilityService',
       );
-      return found;
+      return (found, found ? resolvedPath : null);
     }
 
     // 2. For claude, check the CLAUDE_CODE_PATH environment variable.
@@ -95,7 +117,7 @@ class CliAvailabilityService extends ChangeNotifier {
             '$name CLI found via CLAUDE_CODE_PATH: $envPath',
             name: 'CliAvailabilityService',
           );
-          return true;
+          return (true, envPath);
         }
         developer.log(
           '$name CLI not found at CLAUDE_CODE_PATH: $envPath',
@@ -105,22 +127,27 @@ class CliAvailabilityService extends ChangeNotifier {
     }
 
     // 3. Fall back to `which` to search PATH.
-    final found = await _whichExists(name);
+    final whichPath = await _whichPath(name);
+    final found = whichPath != null;
     developer.log(
-      '$name CLI ${found ? 'found' : 'not found'} via PATH lookup',
+      '$name CLI ${found ? 'found' : 'not found'} via PATH lookup${found ? ': $whichPath' : ''}',
       name: 'CliAvailabilityService',
     );
-    return found;
+    return (found, whichPath);
   }
 
-  /// Runs `which <name>` and returns true if it exits with code 0.
-  Future<bool> _whichExists(String name) async {
+  /// Runs `which <name>` and returns the resolved path, or null if not found.
+  Future<String?> _whichPath(String name) async {
     try {
       final result = await Process.run('which', [name])
           .timeout(const Duration(seconds: 5));
-      return result.exitCode == 0;
+      if (result.exitCode == 0) {
+        final path = (result.stdout as String).trim();
+        return path.isNotEmpty ? path : null;
+      }
+      return null;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 

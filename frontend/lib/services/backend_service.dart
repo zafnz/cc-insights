@@ -416,6 +416,7 @@ class BackendService extends ChangeNotifier {
               id: m.value.trim(),
               label: label,
               backend: BackendType.directCli,
+              description: m.description.trim(),
             );
           }).toList();
           if (mapped.isNotEmpty) {
@@ -441,6 +442,7 @@ class BackendService extends ChangeNotifier {
             id: model.value.trim(),
             label: label,
             backend: BackendType.codex,
+            description: model.description.trim(),
           );
         }).toList();
 
@@ -682,6 +684,7 @@ class BackendService extends ChangeNotifier {
               id: m.value.trim(),
               label: label,
               backend: BackendType.directCli,
+              description: m.description.trim(),
             );
           }).toList();
           if (mapped.isNotEmpty) {
@@ -707,6 +710,7 @@ class BackendService extends ChangeNotifier {
             id: model.value.trim(),
             label: label,
             backend: BackendType.codex,
+            description: model.description.trim(),
           );
         }).toList();
 

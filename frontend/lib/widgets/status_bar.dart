@@ -2,8 +2,10 @@ import 'package:agent_sdk_core/agent_sdk_core.dart' show RateLimitWindow;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/chat_model.dart';
 import '../models/project.dart';
 import '../models/ticket.dart';
+import '../services/backend_service.dart';
 import '../services/settings_service.dart';
 import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
@@ -59,6 +61,7 @@ class StatusBar extends StatelessWidget {
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+          const _ClaudeAccountInfo(),
           const _RateLimitStats(),
           const Spacer(),
           // Stats on the right
@@ -110,6 +113,51 @@ class _StatusBarDot extends StatelessWidget {
           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
         ),
       ),
+    );
+  }
+}
+
+/// Claude account information from the CLI backend.
+///
+/// Shows "Claude: email (plan)" when account info is available
+/// from model discovery.
+class _ClaudeAccountInfo extends StatelessWidget {
+  const _ClaudeAccountInfo();
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch BackendService to rebuild when model discovery completes.
+    try {
+      context.watch<BackendService>();
+    } on ProviderNotFoundException {
+      return const SizedBox.shrink();
+    }
+
+    final account = ChatModelCatalog.accountInfo;
+    if (account == null || account.email == null) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.labelSmall;
+
+    final parts = <String>['Claude: ${account.email}'];
+    if (account.subscriptionType != null &&
+        account.subscriptionType!.isNotEmpty) {
+      parts.add('(${account.subscriptionType})');
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _StatusBarDot(),
+        Text(
+          parts.join(' '),
+          style: baseStyle?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

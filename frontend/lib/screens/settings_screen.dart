@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/agent_config.dart';
 import '../models/chat_model.dart';
@@ -1757,47 +1758,80 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                 ),
                 const SizedBox(height: 16),
                 // CLI Path
-                _FormField(
-                  label: 'CLI Path',
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _cliPathController,
-                          style: mono,
-                          decoration: InputDecoration(
-                            hintText: 'Auto-detect',
-                            hintStyle: mono.copyWith(
-                              color: colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.5),
+                Builder(builder: (context) {
+                  final cliService = context.watch<CliAvailabilityService>();
+                  final isAvailable = _selectedAgentId != null &&
+                      cliService.isAgentAvailable(_selectedAgentId!);
+                  final resolvedPath = _selectedAgentId != null
+                      ? cliService.resolvedPathForAgent(_selectedAgentId!)
+                      : null;
+                  final showAutoDetected =
+                      _cliPathController.text.trim().isEmpty;
+
+                  return _FormField(
+                    label: 'CLI Path',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _cliPathController,
+                                style: mono,
+                                decoration: InputDecoration(
+                                  hintText: 'Auto-detect',
+                                  hintStyle: mono.copyWith(
+                                    color: colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                onSubmitted: (_) => _saveCurrentAgent(),
+                                onTapOutside: (_) => _saveCurrentAgent(),
+                              ),
                             ),
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(Icons.folder_open, size: 18),
+                              tooltip: 'Browse',
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: _pickCliPath,
                             ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
+                          ],
+                        ),
+                        if (showAutoDetected && isAvailable && resolvedPath != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              resolvedPath,
+                              style: mono.copyWith(
+                                fontSize: 11,
+                                color: colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.6),
+                              ),
                             ),
                           ),
-                          onSubmitted: (_) => _saveCurrentAgent(),
-                          onTapOutside: (_) => _saveCurrentAgent(),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.folder_open, size: 18),
-                        tooltip: 'Browse',
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        padding: EdgeInsets.zero,
-                        onPressed: _pickCliPath,
-                      ),
-                    ],
-                  ),
-                ),
+                        if (showAutoDetected && !isAvailable && cliService.checked)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: _CliNotFoundMessage(driver: _driver),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
                 const SizedBox(height: 16),
                 // CLI Arguments
                 _FormField(
@@ -1871,7 +1905,7 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                                 ],
                               ),
                             )
-                          : _buildDropdown(
+                          : _buildDropdownWithDescriptions(
                               value: modelOpts.any((o) => o.$1 == _defaultModel)
                                   ? _defaultModel
                                   : modelOpts.first.$1,
@@ -1993,15 +2027,17 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
   }
 
   /// Returns dropdown options for the model field based on driver type.
-  List<(String, String)> _modelOptionsForDriver(String driver) {
+  ///
+  /// Returns tuples of (id, label, description).
+  List<(String, String, String)> _modelOptionsForDriver(String driver) {
     switch (driver) {
       case 'claude':
         return ChatModelCatalog.claudeModels
-            .map((m) => (m.id, m.label))
+            .map((m) => (m.id, m.label, m.description))
             .toList();
       case 'codex':
         return ChatModelCatalog.codexModels
-            .map((m) => (m.id, m.label))
+            .map((m) => (m.id, m.label, m.description))
             .toList();
       default:
         return const [];
@@ -2013,7 +2049,20 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
     required List<(String, String)> options,
     required ValueChanged<String> onChanged,
   }) {
+    return _buildDropdownWithDescriptions(
+      value: value,
+      options: options.map((o) => (o.$1, o.$2, '')).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildDropdownWithDescriptions({
+    required String value,
+    required List<(String, String, String)> options,
+    required ValueChanged<String> onChanged,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final hasDescriptions = options.any((o) => o.$3.isNotEmpty);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -2035,11 +2084,44 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
           ),
           dropdownColor: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
+          // Show just label + description hint in the collapsed button.
+          selectedItemBuilder: hasDescriptions
+              ? (context) => options.map((opt) {
+                    final desc = opt.$3;
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        desc.isNotEmpty ? '${opt.$2}  ·  $desc' : opt.$2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    );
+                  }).toList()
+              : null,
           items: options
               .map(
                 (opt) => DropdownMenuItem<String>(
                   value: opt.$1,
-                  child: Text(opt.$2),
+                  child: opt.$3.isNotEmpty
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(opt.$2),
+                            Text(
+                              opt.$3,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(opt.$2),
                 ),
               )
               .toList(),
@@ -2133,6 +2215,60 @@ class _AgentRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Shows a "CLI not found" message with a clickable install link.
+class _CliNotFoundMessage extends StatelessWidget {
+  const _CliNotFoundMessage({required this.driver});
+
+  final String driver;
+
+  static const _installUrls = {
+    'claude': 'https://docs.anthropic.com/en/docs/claude-code/overview',
+    'codex': 'https://github.com/openai/codex',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final driverLabel = driver.substring(0, 1).toUpperCase() + driver.substring(1);
+    final installUrl = _installUrls[driver];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.warning_amber_rounded,
+          size: 14,
+          color: colorScheme.error.withValues(alpha: 0.8),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '$driverLabel CLI not found. ',
+          style: TextStyle(
+            fontSize: 11,
+            color: colorScheme.error.withValues(alpha: 0.8),
+          ),
+        ),
+        if (installUrl != null)
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => launchUrl(Uri.parse(installUrl)),
+              child: Text(
+                'Install $driverLabel CLI',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -11,6 +11,7 @@ class ChatModel {
     required this.id,
     required this.label,
     required this.backend,
+    this.description = '',
   });
 
   /// Model identifier used by the backend.
@@ -22,17 +23,21 @@ class ChatModel {
   /// Backend that provides this model.
   final BackendType backend;
 
+  /// Description from the backend (e.g. "Opus 4.6 · Most capable for complex work").
+  final String description;
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is ChatModel &&
         other.id == id &&
         other.label == label &&
-        other.backend == backend;
+        other.backend == backend &&
+        other.description == description;
   }
 
   @override
-  int get hashCode => Object.hash(id, label, backend);
+  int get hashCode => Object.hash(id, label, backend, description);
 }
 
 /// Catalog of known models per backend.
