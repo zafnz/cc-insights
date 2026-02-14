@@ -135,6 +135,12 @@ class LogService extends ChangeNotifier {
   // File logging state
   // ---------------------------------------------------------------------------
 
+  /// Reentrancy guard for stdout logging via [debugPrint].
+  ///
+  /// Prevents infinite recursion when the global [debugPrint] override
+  /// (in main.dart) routes back into [LogService.log].
+  bool _writingToStdout = false;
+
   IOSink? _sink;
   String? _logFilePath;
 
@@ -217,13 +223,24 @@ class LogService extends ChangeNotifier {
       _sink!.writeln(entry.toJsonLine());
     }
 
-    // Write to stdout if stdout logging is enabled and level meets threshold
-    if (stdoutMinimumLevel != null && level.meetsThreshold(stdoutMinimumLevel!)) {
-      stdout.writeln(
-        '${entry.timestamp.toIso8601String()} '
-        '[${level.name.toUpperCase()}] '
-        '${entry.source}: ${entry.message}',
-      );
+    // Write to stdout if stdout logging is enabled and level meets threshold.
+    // Uses debugPrint instead of stdout.writeln because Flutter's debug runner
+    // binds stdout to its own stream, making direct writes throw.
+    // The _writingToStdout guard prevents infinite recursion when the global
+    // debugPrint override (in main.dart) routes back into LogService.log().
+    if (stdoutMinimumLevel != null &&
+        level.meetsThreshold(stdoutMinimumLevel!) &&
+        !_writingToStdout) {
+      _writingToStdout = true;
+      try {
+        debugPrint(
+          '${entry.timestamp.toIso8601String()} '
+          '[${level.name.toUpperCase()}] '
+          '${entry.source}: ${entry.message}',
+        );
+      } finally {
+        _writingToStdout = false;
+      }
     }
 
     // Rate-limited UI notification
