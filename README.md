@@ -92,14 +92,17 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 📁 File Manager | ✅ | Basic view only |
 | 🖥️ Session Resume | ✅ | Full automatic resume of chat session |
 | 👾 Claude Dart SDK | ✅ | Can talk direct to claude cli |
-| 🪵 Logging | ❌ | UI not working, file logging is |
+| 🪵 Logging | ✅ | Fully working |
 | 💰 Cost & token tracking | ✅ | Per-session and per-model breakdown |
 | 📊 Context usage monitoring | ✅ | Live context window usage with warnings |
 | 🖼️ Message input with image attachments | ✅ | Paste, drag-and-drop, or pick images |
 | 🧩 Drag-and-drop panel layout | ✅ | Flexible resizable panels |
 | 📦 Auto containerisation | ❌ | |
+| 📊 Statistics | ✅ | Full stats of usage by backend, worktree, chat, etc |
+| 📋 Task management | ❌ | Basics in place now |
 | 🤖 Z.ai GLM subscription | ❌ | Coming soon |
-| 🧠 Codex backend | ✅ | Basic support now there |
+| 🧠 Codex backend | ✅ | 1st class citizen |
+| 🧠 ACP(Gemini) backend | 🫤 | Works, but not well |
 
 ## Proudly Self Hoisted
 
