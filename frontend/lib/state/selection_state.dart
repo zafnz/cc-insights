@@ -52,6 +52,9 @@ class SelectionState extends ChangeNotifier {
   /// The current mode for the main content panel.
   ContentPanelMode _contentPanelMode = ContentPanelMode.conversation;
 
+  /// Optional initial base branch for the create worktree panel.
+  String? _createWorktreeBaseBranch;
+
   /// Creates a [SelectionState] for the given project.
   ///
   /// The project is required and cannot be changed after creation.
@@ -87,6 +90,15 @@ class SelectionState extends ChangeNotifier {
 
   /// The current mode for the main content panel.
   ContentPanelMode get contentPanelMode => _contentPanelMode;
+
+  /// The initial base branch for the create worktree panel, if any.
+  ///
+  /// Consumed once when the panel reads it (cleared after access).
+  String? consumeCreateWorktreeBaseBranch() {
+    final branch = _createWorktreeBaseBranch;
+    _createWorktreeBaseBranch = null;
+    return branch;
+  }
 
   /// Selects a worktree within the project.
   ///
@@ -268,7 +280,11 @@ class SelectionState extends ChangeNotifier {
   }
 
   /// Shows the create worktree panel in the content area.
-  void showCreateWorktreePanel() {
+  ///
+  /// If [baseBranch] is provided, the panel will pre-select it as the
+  /// "Branch from" value.
+  void showCreateWorktreePanel({String? baseBranch}) {
+    _createWorktreeBaseBranch = baseBranch;
     _contentPanelMode = ContentPanelMode.createWorktree;
     notifyListeners();
   }

@@ -81,7 +81,24 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   @override
   void initState() {
     super.initState();
+    _applyInitialBaseBranch();
     _loadBranchesAndDefaults();
+  }
+
+  /// Applies the initial base branch from SelectionState, if any.
+  void _applyInitialBaseBranch() {
+    final baseBranch =
+        context.read<SelectionState>().consumeCreateWorktreeBaseBranch();
+    if (baseBranch == null) return;
+
+    if (baseBranch == 'main') {
+      _branchFromOption = BranchFromOption.main;
+    } else if (baseBranch == 'origin/main') {
+      _branchFromOption = BranchFromOption.originMain;
+    } else {
+      _branchFromOption = BranchFromOption.other;
+      _selectedOtherBranch = baseBranch;
+    }
   }
 
   @override
@@ -576,8 +593,19 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   }
 
   /// Get sorted branches with main and origin/main at top.
+  ///
+  /// Includes [_selectedOtherBranch] even if it's not in [_availableBranches]
+  /// (e.g. when branching off an existing worktree's branch).
   List<String> get _sortedBranches {
-    final branches = List<String>.from(_availableBranches);
+    final allBranches = {..._availableBranches};
+
+    // Ensure the pre-selected branch is included (it may already be in use
+    // by another worktree and thus filtered from _availableBranches).
+    if (_selectedOtherBranch != null) {
+      allBranches.add(_selectedOtherBranch!);
+    }
+
+    final branches = allBranches.toList();
     // Remove main and origin/main if present
     branches.remove('main');
     branches.remove('origin/main');
@@ -585,10 +613,10 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     branches.sort();
     // Add main and origin/main at top
     final result = <String>[];
-    if (_availableBranches.contains('main')) {
+    if (allBranches.contains('main')) {
       result.add('main');
     }
-    if (_availableBranches.contains('origin/main')) {
+    if (allBranches.contains('origin/main')) {
       result.add('origin/main');
     }
     result.addAll(branches);

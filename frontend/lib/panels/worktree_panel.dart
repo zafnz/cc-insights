@@ -1008,6 +1008,23 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             ],
           ),
         ),
+        styledMenuItem(
+          value: 'new_worktree',
+          child: Row(
+            children: [
+              Icon(
+                Icons.add,
+                size: 16,
+                color: colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'New worktree...',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ],
+          ),
+        ),
         const PopupMenuDivider(height: 8),
       ],
       // Tags submenu header with arrow indicator
@@ -1036,6 +1053,24 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         ),
       ),
       if (!data.isPrimary) ...[
+        const PopupMenuDivider(height: 8),
+        styledMenuItem(
+          value: 'branch_off',
+          child: Row(
+            children: [
+              Icon(
+                Icons.fork_right,
+                size: 16,
+                color: colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Branch off this worktree',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            ],
+          ),
+        ),
         const PopupMenuDivider(height: 8),
         if (worktree.hidden)
           styledMenuItem(
@@ -1100,9 +1135,15 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     switch (result) {
       case 'project_settings':
         context.read<SelectionState>().showProjectSettingsPanel();
+      case 'new_worktree':
+        context.read<SelectionState>().showCreateWorktreePanel();
       case 'tags':
         // Open the tags submenu to the right of the click position.
         _showTagsSubmenu(context, position, availableTags);
+      case 'branch_off':
+        context
+            .read<SelectionState>()
+            .showCreateWorktreePanel(baseBranch: worktree.data.branch);
       case 'hide':
         await _handleHide(context);
       case 'unhide':
