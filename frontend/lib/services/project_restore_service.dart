@@ -9,6 +9,7 @@ import '../models/conversation.dart';
 import '../models/cost_tracking.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
+import 'log_service.dart';
 import 'persistence_models.dart';
 import 'persistence_service.dart';
 import 'project_config_service.dart';
@@ -273,26 +274,32 @@ class ProjectRestoreService {
     final backend = ChatModelCatalog.backendFromValue(meta.backendType);
     chat.setModel(ChatModelCatalog.defaultForBackend(backend, meta.model));
 
-    // Restore security config from meta
+    // Restore security config from meta (notifyChange: false to avoid spurious notifications)
     if (backend == sdk.BackendType.codex && meta.codexSandboxMode != null) {
       // Codex chat with security config
-      chat.setSecurityConfig(sdk.CodexSecurityConfig(
-        sandboxMode: sdk.CodexSandboxMode.fromWire(meta.codexSandboxMode!),
-        approvalPolicy: meta.codexApprovalPolicy != null
-            ? sdk.CodexApprovalPolicy.fromWire(meta.codexApprovalPolicy!)
-            : sdk.CodexApprovalPolicy.onRequest,
-        workspaceWriteOptions: meta.codexWorkspaceWriteOptions != null
-            ? sdk.CodexWorkspaceWriteOptions.fromJson(meta.codexWorkspaceWriteOptions!)
-            : null,
-        webSearch: meta.codexWebSearch != null
-            ? sdk.CodexWebSearchMode.fromWire(meta.codexWebSearch!)
-            : null,
-      ));
+      chat.setSecurityConfig(
+        sdk.CodexSecurityConfig(
+          sandboxMode: sdk.CodexSandboxMode.fromWire(meta.codexSandboxMode!),
+          approvalPolicy: meta.codexApprovalPolicy != null
+              ? sdk.CodexApprovalPolicy.fromWire(meta.codexApprovalPolicy!)
+              : sdk.CodexApprovalPolicy.onRequest,
+          workspaceWriteOptions: meta.codexWorkspaceWriteOptions != null
+              ? sdk.CodexWorkspaceWriteOptions.fromJson(meta.codexWorkspaceWriteOptions!)
+              : null,
+          webSearch: meta.codexWebSearch != null
+              ? sdk.CodexWebSearchMode.fromWire(meta.codexWebSearch!)
+              : null,
+        ),
+        notifyChange: false,
+      );
     } else {
       // Claude chat or old meta without Codex fields
-      chat.setSecurityConfig(sdk.ClaudeSecurityConfig(
-        permissionMode: sdk.PermissionMode.fromString(meta.permissionMode),
-      ));
+      chat.setSecurityConfig(
+        sdk.ClaudeSecurityConfig(
+          permissionMode: sdk.PermissionMode.fromString(meta.permissionMode),
+        ),
+        notifyChange: false,
+      );
     }
   }
 
@@ -374,20 +381,44 @@ class ProjectRestoreService {
   ///
   /// Returns the number of entries loaded.
   Future<int> loadChatHistory(ChatState chat, String projectId) async {
-    final entries = await _persistence.loadChatHistory(
-      projectId,
-      chat.data.id,
-    );
-
-    if (entries.isNotEmpty) {
-      chat.loadEntriesFromPersistence(entries);
-      developer.log(
-        'Loaded ${entries.length} entries for chat: ${chat.data.name}',
-        name: 'ProjectRestoreService',
+    try {
+      final entries = await _persistence.loadChatHistory(
+        projectId,
+        chat.data.id,
       );
-    }
 
-    return entries.length;
+      if (entries.isNotEmpty) {
+        chat.loadEntriesFromPersistence(entries);
+        LogService.instance.debug(
+          'ProjectRestoreService',
+          'Restored chat "${chat.data.name}" (${chat.data.id}): loaded ${entries.length} entries',
+          meta: {'chatId': chat.data.id, 'chatName': chat.data.name},
+        );
+      } else {
+        chat.markHistoryAsLoaded();
+        LogService.instance.debug(
+          'ProjectRestoreService',
+          'Chat "${chat.data.name}" (${chat.data.id}): no persisted history',
+          meta: {'chatId': chat.data.id, 'chatName': chat.data.name},
+        );
+      }
+
+      return entries.length;
+    } catch (e, stackTrace) {
+      LogService.instance.error(
+        'ProjectRestoreService',
+        'Failed to load chat history: $e',
+        meta: {
+          'chatId': chat.data.id,
+          'chatName': chat.data.name,
+          'projectId': projectId,
+          'stack': stackTrace.toString(),
+        },
+      );
+      // Mark as loaded anyway to prevent repeated attempts
+      chat.markHistoryAsLoaded();
+      return 0;
+    }
   }
 
   /// Adds a new chat to a worktree and persists it.

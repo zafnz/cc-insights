@@ -318,6 +318,12 @@ class ChatState extends ChangeNotifier {
   /// Once true, the backend is locked for this chat even if the session ends.
   bool _hasStarted = false;
 
+  /// Whether the chat history has been loaded from persistence.
+  ///
+  /// Used to determine if lazy-loading is needed. Independent of entry count
+  /// since security config changes can add notification entries during restore.
+  bool _historyLoaded = false;
+
   /// The project root path for persistence updates.
   ///
   /// Set when the chat is associated with a project via [initPersistence].
@@ -702,19 +708,24 @@ class ChatState extends ChangeNotifier {
   ///
   /// If a session is active and the backend supports mid-session config changes,
   /// this also updates the configuration on the running session.
-  void setSecurityConfig(sdk.SecurityConfig config) {
+  ///
+  /// If [notifyChange] is false, no notification entry is added even if the
+  /// config changed. Used during restore to avoid spurious notifications.
+  void setSecurityConfig(sdk.SecurityConfig config, {bool notifyChange = true}) {
     if (_securityConfig == config) return;
     final oldConfig = _securityConfig;
     _securityConfig = config;
     _scheduleMetaSave();
 
-    // Generate change notification
-    final message = _describeSecurityChange(oldConfig, config);
-    if (message != null) {
-      addEntry(SystemNotificationEntry(
-        timestamp: DateTime.now(),
-        message: message,
-      ));
+    // Generate change notification (unless restoring from persistence)
+    if (notifyChange) {
+      final message = _describeSecurityChange(oldConfig, config);
+      if (message != null) {
+        addEntry(SystemNotificationEntry(
+          timestamp: DateTime.now(),
+          message: message,
+        ));
+      }
     }
 
     switch (config) {
@@ -1788,14 +1799,23 @@ class ChatState extends ChangeNotifier {
         entries: List.unmodifiable(entries),
       ),
     );
+    _historyLoaded = true;
     notifyListeners();
+  }
+
+  /// Marks chat history as loaded even when there are no entries.
+  ///
+  /// Used by [ProjectRestoreService] when the JSONL file is empty or doesn't exist.
+  void markHistoryAsLoaded() {
+    _historyLoaded = true;
   }
 
   /// Whether the chat history has been loaded from persistence.
   ///
-  /// Returns true if the primary conversation has any entries.
   /// Used to determine if lazy-loading is needed when a chat is selected.
-  bool get hasLoadedHistory => _data.primaryConversation.entries.isNotEmpty;
+  /// Uses a dedicated flag rather than entry count because security config
+  /// changes during restore can add notification entries.
+  bool get hasLoadedHistory => _historyLoaded;
 
   // ---------------------------------------------------------------------------
   // Context and Usage Tracking Methods

@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 
 import '../models/cost_tracking.dart';
 import '../models/output_entry.dart';
+import 'log_service.dart';
 import 'persistence_models.dart';
 
 /// Service for persisting project, chat, and conversation data.
@@ -270,9 +271,10 @@ class PersistenceService {
     final file = File(path);
 
     if (!await file.exists()) {
-      developer.log(
-        'Chat history not found: $chatId',
-        name: 'PersistenceService',
+      LogService.instance.debug(
+        'PersistenceService',
+        'Chat history file not found',
+        meta: {'chatId': chatId},
       );
       return [];
     }
@@ -312,25 +314,26 @@ class PersistenceService {
       final processedEntries = _applyToolResults(entries);
 
       if (skippedLines > 0) {
-        developer.log(
-          'Loaded ${processedEntries.length} entries from $chatId '
+        LogService.instance.debug(
+          'PersistenceService',
+          'Restored chat $chatId: loaded ${processedEntries.length} entries '
           '($skippedLines corrupted lines skipped)',
-          name: 'PersistenceService',
-          level: 900, // Warning
+          meta: {'chatId': chatId},
         );
       } else {
-        developer.log(
-          'Loaded ${processedEntries.length} entries from $chatId',
-          name: 'PersistenceService',
+        LogService.instance.debug(
+          'PersistenceService',
+          'Restored chat $chatId: loaded ${processedEntries.length} entries',
+          meta: {'chatId': chatId},
         );
       }
 
       return processedEntries;
-    } catch (e) {
-      developer.log(
-        'Failed to load chat history $chatId: $e',
-        name: 'PersistenceService',
-        error: e,
+    } catch (e, stackTrace) {
+      LogService.instance.error(
+        'PersistenceService',
+        'Failed to load chat history: $e',
+        meta: {'chatId': chatId, 'stack': stackTrace.toString()},
       );
       // Return what we have so far
       return entries;

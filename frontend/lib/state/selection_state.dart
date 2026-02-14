@@ -147,10 +147,6 @@ class SelectionState extends ChangeNotifier {
   /// is called to update the UI.
   Future<void> _loadChatHistoryIfNeeded(ChatState chat) async {
     if (chat.hasLoadedHistory) {
-      developer.log(
-        'Chat history already loaded: ${chat.data.name}',
-        name: 'SelectionState',
-      );
       return;
     }
 
@@ -158,24 +154,18 @@ class SelectionState extends ChangeNotifier {
       _project.data.repoRoot,
     );
 
-    developer.log(
-      'Lazy-loading history for chat: ${chat.data.name} (projectId: $projectId)',
-      name: 'SelectionState',
-    );
-
     try {
-      final entryCount = await _restoreService.loadChatHistory(chat, projectId);
-      developer.log(
-        'Loaded $entryCount entries for chat: ${chat.data.name}',
-        name: 'SelectionState',
-      );
+      await _restoreService.loadChatHistory(chat, projectId);
       // No need to call notifyListeners here - ChatState.loadEntriesFromPersistence
       // already calls notifyListeners, which triggers UI updates
-    } catch (e) {
-      developer.log(
-        'Failed to load chat history: ${chat.data.name}',
-        name: 'SelectionState',
-        error: e,
+    } catch (e, stackTrace) {
+      LogService.instance.error(
+        'SelectionState',
+        'Failed to load chat history: ${chat.data.name}: $e',
+        meta: {
+          'chatId': chat.data.id,
+          'stack': stackTrace.toString(),
+        },
       );
       // Don't rethrow - lazy loading failures shouldn't crash the UI
     }
