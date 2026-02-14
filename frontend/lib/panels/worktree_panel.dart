@@ -21,6 +21,317 @@ import '../widgets/delete_worktree_dialog.dart';
 import '../widgets/styled_popup_menu.dart';
 import 'panel_wrapper.dart';
 
+// -----------------------------------------------------------------------------
+// Tree item types for the flattened tree list
+// -----------------------------------------------------------------------------
+
+/// Represents one row in the flattened tree list for the ListView.
+sealed class _TreeItem {
+  const _TreeItem();
+}
+
+/// A worktree card in the tree.
+class _WorktreeTreeItem extends _TreeItem {
+  final WorktreeState worktree;
+  final int depth;           // 0=primary, 1=child, 2=grandchild...
+  final bool isLast;         // last sibling at this level
+  final List<bool> ancestorIsLast; // per ancestor depth, whether it was last
+
+  const _WorktreeTreeItem({
+    required this.worktree,
+    required this.depth,
+    required this.isLast,
+    required this.ancestorIsLast,
+  });
+}
+
+/// A non-worktree base marker (grey bar showing e.g. "origin/main").
+class _BaseMarkerTreeItem extends _TreeItem {
+  final String baseRef;
+  const _BaseMarkerTreeItem({required this.baseRef});
+}
+
+/// The ghost "New Worktree" card at the bottom.
+class _GhostTreeItem extends _TreeItem {
+  const _GhostTreeItem();
+}
+
+// -----------------------------------------------------------------------------
+// Tree building function
+// -----------------------------------------------------------------------------
+
+/// Builds the flat tree item list from the worktree list.
+List<_TreeItem> _buildTreeItems(List<WorktreeState> worktrees) {
+  if (worktrees.isEmpty) return [const _GhostTreeItem()];
+
+  final primary = worktrees.first;
+  final linked = worktrees.skip(1).toList();
+
+  // Build lookup: branch -> worktree (for visible worktrees only)
+  final branchToWorktree = <String, WorktreeState>{};
+  for (final wt in worktrees) {
+    branchToWorktree[wt.data.branch] = wt;
+  }
+
+  // Group linked worktrees by parent
+  final childrenOf = <String, List<WorktreeState>>{}; // key = worktreeRoot
+  final baseMarkerGroups = <String, List<WorktreeState>>{}; // key = baseRef string
+
+  for (final wt in linked) {
+    final baseRef = wt.data.baseRef;
+
+    if (baseRef == null || baseRef == primary.data.branch) {
+      childrenOf.putIfAbsent(primary.data.worktreeRoot, () => []).add(wt);
+    } else if (branchToWorktree.containsKey(baseRef) &&
+               branchToWorktree[baseRef] != wt) {
+      final parent = branchToWorktree[baseRef]!;
+      childrenOf.putIfAbsent(parent.data.worktreeRoot, () => []).add(wt);
+    } else {
+      baseMarkerGroups.putIfAbsent(baseRef, () => []).add(wt);
+    }
+  }
+
+  final result = <_TreeItem>[];
+  final visited = <String>{}; // circular reference guard
+
+  // 1. Primary worktree
+  result.add(_WorktreeTreeItem(
+    worktree: primary,
+    depth: 0,
+    isLast: false,
+    ancestorIsLast: const [],
+  ));
+  visited.add(primary.data.worktreeRoot);
+
+  // 2. Primary's children (DFS)
+  _addChildrenDFS(result, primary.data.worktreeRoot, childrenOf, 1, const [], visited);
+
+  // 3. Base marker groups (sorted by baseRef)
+  final sortedMarkerKeys = baseMarkerGroups.keys.toList()..sort();
+  for (final baseRef in sortedMarkerKeys) {
+    result.add(_BaseMarkerTreeItem(baseRef: baseRef));
+    final children = baseMarkerGroups[baseRef]!;
+    for (int i = 0; i < children.length; i++) {
+      final wt = children[i];
+      final isLastChild = (i == children.length - 1);
+      if (visited.contains(wt.data.worktreeRoot)) continue;
+      visited.add(wt.data.worktreeRoot);
+
+      result.add(_WorktreeTreeItem(
+        worktree: wt,
+        depth: 1,
+        isLast: isLastChild,
+        ancestorIsLast: const [],
+      ));
+
+      // Recurse for grandchildren
+      _addChildrenDFS(result, wt.data.worktreeRoot, childrenOf, 2, [isLastChild], visited);
+    }
+  }
+
+  // 4. Ghost card
+  result.add(const _GhostTreeItem());
+
+  return result;
+}
+
+void _addChildrenDFS(
+  List<_TreeItem> result,
+  String parentKey,
+  Map<String, List<WorktreeState>> childrenOf,
+  int depth,
+  List<bool> ancestorIsLast,
+  Set<String> visited,
+) {
+  final children = childrenOf[parentKey];
+  if (children == null || children.isEmpty) return;
+
+  for (int i = 0; i < children.length; i++) {
+    final wt = children[i];
+    if (visited.contains(wt.data.worktreeRoot)) continue;
+    visited.add(wt.data.worktreeRoot);
+
+    final isLastChild = (i == children.length - 1);
+
+    result.add(_WorktreeTreeItem(
+      worktree: wt,
+      depth: depth,
+      isLast: isLastChild,
+      ancestorIsLast: ancestorIsLast,
+    ));
+
+    // Recurse
+    _addChildrenDFS(
+      result,
+      wt.data.worktreeRoot,
+      childrenOf,
+      depth + 1,
+      [...ancestorIsLast, isLastChild],
+      visited,
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Tree indent widgets
+// -----------------------------------------------------------------------------
+
+class _IndentGuidePainter extends CustomPainter {
+  _IndentGuidePainter({
+    required this.color,
+    required this.hasTick,
+    required this.isLast,
+    required this.showLine,
+  });
+
+  final Color color;
+  final bool hasTick;
+  final bool isLast;
+  final bool showLine;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (!showLine && !hasTick) return;
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    const lineX = 9.0;
+
+    if (showLine) {
+      final bottom = isLast ? size.height / 2 : size.height;
+      canvas.drawLine(Offset(lineX, 0), Offset(lineX, bottom), paint);
+    }
+
+    if (hasTick) {
+      final tickY = size.height / 2;
+      canvas.drawLine(Offset(lineX, tickY), Offset(lineX + 8, tickY), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_IndentGuidePainter oldDelegate) =>
+      color != oldDelegate.color ||
+      hasTick != oldDelegate.hasTick ||
+      isLast != oldDelegate.isLast ||
+      showLine != oldDelegate.showLine;
+}
+
+class _IndentGuide extends StatelessWidget {
+  const _IndentGuide({
+    this.hasTick = false,
+    this.isLast = false,
+    this.showLine = true,
+  });
+
+  final bool hasTick;
+  final bool isLast;
+  final bool showLine;
+
+  static const double width = 20.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.outlineVariant;
+    return SizedBox(
+      width: width,
+      child: CustomPaint(
+        painter: _IndentGuidePainter(
+          color: color,
+          hasTick: hasTick,
+          isLast: isLast,
+          showLine: showLine,
+        ),
+      ),
+    );
+  }
+}
+
+class _TreeIndentWrapper extends StatelessWidget {
+  const _TreeIndentWrapper({
+    required this.depth,
+    required this.isLast,
+    required this.ancestorIsLast,
+    required this.child,
+  });
+
+  final int depth;
+  final bool isLast;
+  final List<bool> ancestorIsLast;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (depth == 0) return child;
+
+    Widget result = child;
+
+    // Build inside-out: innermost level first
+    for (int i = depth - 1; i >= 0; i--) {
+      final isInnermostLevel = (i == depth - 1);
+      final isAncestorLast = (i < ancestorIsLast.length) ? ancestorIsLast[i] : false;
+
+      result = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _IndentGuide(
+            hasTick: isInnermostLevel,
+            isLast: isInnermostLevel ? isLast : false,
+            showLine: isInnermostLevel || !isAncestorLast,
+          ),
+          Expanded(child: result),
+        ],
+      );
+    }
+
+    return IntrinsicHeight(child: result);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Base marker widget
+// -----------------------------------------------------------------------------
+
+class _BaseMarker extends StatelessWidget {
+  const _BaseMarker({super.key, required this.baseRef});
+
+  final String baseRef;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.12),
+        border: Border(
+          bottom: BorderSide(
+            color: colorScheme.surfaceContainerHighest,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Text(
+        baseRef,
+        style: const TextStyle(
+          fontFamily: 'JetBrains Mono',
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: Colors.grey,
+          letterSpacing: 0.02,
+        ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Worktree panel
+// -----------------------------------------------------------------------------
+
 /// Worktree panel - shows the list of worktrees.
 class WorktreePanel extends StatefulWidget {
   const WorktreePanel({super.key});
@@ -144,6 +455,13 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
   /// Listeners for permission changes across all chats in all worktrees.
   final List<VoidCallback> _chatListeners = [];
 
+  /// Listeners on worktree states for tree-structure changes (baseRef/branch).
+  final List<VoidCallback> _worktreeListeners = [];
+
+  /// Cached baseRef/branch per worktree to detect tree-structure changes.
+  final Map<String, String?> _prevBaseRefs = {};
+  final Map<String, String> _prevBranches = {};
+
   /// Previous permission counts per chat for detecting new permissions.
   final Map<String, int> _prevPermissionCounts = {};
 
@@ -197,6 +515,41 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
     _chatListeners.clear();
   }
 
+  /// Listens to each worktree for baseRef/branch changes that affect tree
+  /// structure. Triggers [setState] when the tree needs rebuilding.
+  void _setupWorktreeListeners(List<WorktreeState> worktrees) {
+    _removeWorktreeListeners();
+
+    for (final wt in worktrees) {
+      final key = wt.data.worktreeRoot;
+      _prevBaseRefs[key] = wt.data.baseRef;
+      _prevBranches[key] = wt.data.branch;
+
+      void listener() {
+        final newBaseRef = wt.data.baseRef;
+        final newBranch = wt.data.branch;
+        final oldBaseRef = _prevBaseRefs[key];
+        final oldBranch = _prevBranches[key];
+
+        if (newBaseRef != oldBaseRef || newBranch != oldBranch) {
+          _prevBaseRefs[key] = newBaseRef;
+          _prevBranches[key] = newBranch;
+          if (mounted) setState(() {});
+        }
+      }
+
+      wt.addListener(listener);
+      _worktreeListeners.add(() => wt.removeListener(listener));
+    }
+  }
+
+  void _removeWorktreeListeners() {
+    for (final removeListener in _worktreeListeners) {
+      removeListener();
+    }
+    _worktreeListeners.clear();
+  }
+
   /// Called when the bell animation completes.
   void _onBellAnimationComplete() {
     if (mounted) {
@@ -209,6 +562,7 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
   @override
   void dispose() {
     _removeChatListeners();
+    _removeWorktreeListeners();
     super.dispose();
   }
 
@@ -224,30 +578,36 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
     // Ensure keys and listeners are set up (for all worktrees, not just visible)
     _ensureKeysForWorktrees(allWorktrees);
     _setupChatListeners(allWorktrees, selection.selectedWorktree);
+    _setupWorktreeListeners(allWorktrees);
 
-    // +1 for the ghost "Create New Worktree" card
-    final itemCount = worktrees.length + 1;
+    final treeItems = _buildTreeItems(worktrees);
 
     return Stack(
       children: [
         ListView.builder(
           padding: EdgeInsets.zero,
-          itemCount: itemCount,
+          itemCount: treeItems.length,
           itemBuilder: (context, index) {
-            // Last item is the ghost card
-            if (index == worktrees.length) {
-              return const CreateWorktreeCard();
-            }
-
-            final worktree = worktrees[index];
-            final isSelected = selection.selectedWorktree == worktree;
-            return _WorktreeListItem(
-              key: _worktreeKeys[worktree.data.worktreeRoot],
-              worktree: worktree,
-              repoRoot: project.data.repoRoot,
-              isSelected: isSelected,
-              onTap: () => selection.selectWorktree(worktree),
-            );
+            final item = treeItems[index];
+            return switch (item) {
+              _WorktreeTreeItem(:final worktree, :final depth, :final isLast, :final ancestorIsLast) =>
+                _TreeIndentWrapper(
+                  depth: depth,
+                  isLast: isLast,
+                  ancestorIsLast: ancestorIsLast,
+                  child: _WorktreeListItem(
+                    key: _worktreeKeys[worktree.data.worktreeRoot],
+                    worktree: worktree,
+                    repoRoot: project.data.repoRoot,
+                    isSelected: selection.selectedWorktree == worktree,
+                    onTap: () => selection.selectWorktree(worktree),
+                  ),
+                ),
+              _BaseMarkerTreeItem(:final baseRef) =>
+                _BaseMarker(baseRef: baseRef),
+              _GhostTreeItem() =>
+                const CreateWorktreeCard(),
+            };
           },
         ),
         // Animated bell overlay for non-selected worktrees
