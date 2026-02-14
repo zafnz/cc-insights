@@ -366,9 +366,9 @@ void main() {
       check(chat.hasLoadedHistory).isFalse();
     });
 
-    test('returns true when entries exist', () {
+    test('returns true when marked as loaded', () {
       final chat = ChatState.create(name: 'Test', worktreeRoot: '/path');
-      chat.addEntry(UserInputEntry(timestamp: DateTime.now(), text: 'Test'));
+      chat.markHistoryAsLoaded();
       check(chat.hasLoadedHistory).isTrue();
     });
   });

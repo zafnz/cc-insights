@@ -422,10 +422,8 @@ void main() {
         final selection = SelectionState(project, restoreService: fakeRestoreService);
 
         final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
-        // Pre-populate the chat with an entry to simulate loaded history
-        chat.addEntry(
-          UserInputEntry(timestamp: DateTime.now(), text: 'Pre-loaded'),
-        );
+        // Mark history as already loaded to simulate a previously loaded chat
+        chat.markHistoryAsLoaded();
         project.primaryWorktree.addChat(chat);
 
         // Act
@@ -446,12 +444,10 @@ void main() {
         check(chat.hasLoadedHistory).isFalse();
       });
 
-      test('hasLoadedHistory returns true when entries exist', () {
+      test('hasLoadedHistory returns true when marked as loaded', () {
         // Arrange
         final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
-        chat.addEntry(
-          UserInputEntry(timestamp: DateTime.now(), text: 'Hello'),
-        );
+        chat.markHistoryAsLoaded();
 
         // Assert
         check(chat.hasLoadedHistory).isTrue();

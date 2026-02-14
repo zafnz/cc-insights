@@ -528,7 +528,6 @@ class RealGitService implements GitService {
     String? workingDirectory,
   }) async {
     final command = 'git ${args.join(' ')}';
-    LogService.instance.trace('Git', command, meta: {'cwd': workingDirectory ?? '.'});
     try {
       final result = await Process.run(
         'git',
@@ -800,6 +799,7 @@ class RealGitService implements GitService {
 
   @override
   Future<void> commit(String path, String message) async {
+    LogService.instance.info('Git', 'commit', meta: {'cwd': path});
     // Use -m for the commit message
     // For multiline messages, git handles newlines in the string properly
     await _runGit(['commit', '-m', message], workingDirectory: path);
@@ -807,11 +807,13 @@ class RealGitService implements GitService {
 
   @override
   Future<void> resetIndex(String path) async {
+    LogService.instance.info('Git', 'reset index', meta: {'cwd': path});
     await _runGit(['reset', 'HEAD'], workingDirectory: path);
   }
 
   @override
   Future<void> stash(String path) async {
+    LogService.instance.info('Git', 'stash', meta: {'cwd': path});
     await _runGit(['stash'], workingDirectory: path);
   }
 
@@ -974,6 +976,7 @@ class RealGitService implements GitService {
 
   @override
   Future<MergeResult> merge(String path, String targetBranch) async {
+    LogService.instance.info('Git', 'merge', meta: {'cwd': path, 'target': targetBranch});
     try {
       await Process.run(
         'git',
@@ -1009,6 +1012,7 @@ class RealGitService implements GitService {
 
   @override
   Future<MergeResult> rebase(String path, String targetBranch) async {
+    LogService.instance.info('Git', 'rebase', meta: {'cwd': path, 'target': targetBranch});
     try {
       final result = await Process.run(
         'git',
@@ -1052,6 +1056,7 @@ class RealGitService implements GitService {
 
   @override
   Future<MergeResult> pull(String path) async {
+    LogService.instance.info('Git', 'pull', meta: {'cwd': path});
     try {
       await Process.run(
         'git',
@@ -1087,6 +1092,7 @@ class RealGitService implements GitService {
 
   @override
   Future<MergeResult> pullRebase(String path) async {
+    LogService.instance.info('Git', 'pull --rebase', meta: {'cwd': path});
     try {
       final result = await Process.run(
         'git',
@@ -1130,16 +1136,19 @@ class RealGitService implements GitService {
 
   @override
   Future<void> mergeAbort(String path) async {
+    LogService.instance.info('Git', 'merge --abort', meta: {'cwd': path});
     await _runGit(['merge', '--abort'], workingDirectory: path);
   }
 
   @override
   Future<void> rebaseAbort(String path) async {
+    LogService.instance.info('Git', 'rebase --abort', meta: {'cwd': path});
     await _runGit(['rebase', '--abort'], workingDirectory: path);
   }
 
   @override
   Future<void> mergeContinue(String path) async {
+    LogService.instance.info('Git', 'merge --continue', meta: {'cwd': path});
     await _runGit(
       ['-c', 'core.editor=true', 'merge', '--continue'],
       workingDirectory: path,
@@ -1148,6 +1157,7 @@ class RealGitService implements GitService {
 
   @override
   Future<void> rebaseContinue(String path) async {
+    LogService.instance.info('Git', 'rebase --continue', meta: {'cwd': path});
     await _runGit(
       ['-c', 'core.editor=true', 'rebase', '--continue'],
       workingDirectory: path,
@@ -1210,14 +1220,6 @@ class RealGitService implements GitService {
       final gitCommonDir = lines.length > 1 ? lines[1].trim() : '';
       final toplevel = lines.length > 2 ? lines[2].trim() : '';
       final prefix = lines.length > 3 ? lines[3].trim() : '';
-
-      LogService.instance.trace(log, 'git rev-parse output', meta: {
-        'git-dir': gitDir,
-        'git-common-dir': gitCommonDir,
-        'toplevel': toplevel,
-        'prefix': prefix,
-        'line_count': lines.length,
-      });
 
       // Determine if this is a linked worktree by checking if git-dir contains /worktrees/
       // For primary worktree: git-dir is ".git" or "/path/to/.git"
@@ -1320,6 +1322,7 @@ class RealGitService implements GitService {
     }
 
     final command = 'git ${args.join(' ')}';
+    LogService.instance.info('Git', 'push', meta: {'cwd': path, 'command': command});
     try {
       final result = await Process.run(
         'git',
