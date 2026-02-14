@@ -1824,11 +1824,13 @@ class _WorktreeCostSummary extends StatelessWidget {
 
     return ClipRect(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (hasAnyCost) ...[
             Text(
               '\$${_formatCost(totalCost)}',
               style: textStyle,
+              overflow: TextOverflow.ellipsis,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1846,9 +1848,12 @@ class _WorktreeCostSummary extends StatelessWidget {
               _ => 'Claude',
             };
             return [
-              Text(
-                label,
-                style: textStyle,
+              Flexible(
+                child: Text(
+                  label,
+                  style: textStyle,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: 2),
               Icon(
@@ -1856,9 +1861,12 @@ class _WorktreeCostSummary extends StatelessWidget {
                 size: 12,
                 color: Colors.grey[600],
               ),
-              Text(
-                _formatTokenCount(entry.value.totalTokens),
-                style: textStyle,
+              Flexible(
+                child: Text(
+                  _formatTokenCount(entry.value.totalTokens),
+                  style: textStyle,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: 6),
             ];
