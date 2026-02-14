@@ -150,7 +150,7 @@ class _MockCodexProcess implements CodexProcess {
       return _configResponse ?? {'config': {}};
     }
 
-    if (method == 'config/requirementsRead') {
+    if (method == 'configRequirements/read') {
       return _requirementsResponse ?? {};
     }
 

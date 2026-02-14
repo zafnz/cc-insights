@@ -150,7 +150,7 @@ void main() {
     group('readCapabilities', () {
       test('returns default capabilities when no requirements', () async {
         mockProcess.setSendRequestHandler((method, params) {
-          expect(method, 'config/requirementsRead');
+          expect(method, 'configRequirements/read');
           return {};
         });
 

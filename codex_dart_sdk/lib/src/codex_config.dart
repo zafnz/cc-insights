@@ -46,10 +46,10 @@ class CodexConfigReader {
 
   /// Reads security capabilities from the Codex server.
   ///
-  /// Calls the `config/requirementsRead` JSON-RPC method and parses the
+  /// Calls the `configRequirements/read` JSON-RPC method and parses the
   /// response into a [CodexSecurityCapabilities].
   Future<CodexSecurityCapabilities> readCapabilities() async {
-    final result = await _process.sendRequest('config/requirementsRead', {});
+    final result = await _process.sendRequest('configRequirements/read', {});
     final requirementsRaw = result['requirements'];
     final requirements = requirementsRaw is Map
         ? Map<String, dynamic>.from(requirementsRaw)
