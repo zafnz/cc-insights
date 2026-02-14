@@ -665,8 +665,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Use mock data if explicitly requested or in test environment
     final shouldUseMock = useMockData || _shouldUseMockData();
 
-    // Determine if we have a project (for menu item enable/disable state)
-    final hasProject = shouldUseMock || _project != null;
+    // Determine if we have a project (for menu item enable/disable state).
+    // Use _projectSelected rather than _project != null because _project is
+    // set inside _buildScreen's FutureBuilder (after this line runs), so it
+    // would be null on the first frame even though the project is loaded.
+    final hasProject = shouldUseMock || _projectSelected;
 
     // Single AppMenuBar at the root to avoid PlatformMenuBar lock conflicts
     // when transitioning between states (loading -> loaded)
