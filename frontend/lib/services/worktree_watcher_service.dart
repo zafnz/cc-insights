@@ -48,7 +48,10 @@ class WorktreeWatcherService extends ChangeNotifier {
 
   /// Interval for periodic background polling (catches changes not
   /// visible to the filesystem watcher, e.g. `git fetch`).
-  static const periodicInterval = Duration(minutes: 2);
+  ///
+  /// Set slightly longer than [fetchInterval] so a fetch-triggered
+  /// poll resets this timer before it fires, avoiding redundant polls.
+  static const periodicInterval = Duration(minutes: 2, seconds: 10);
 
   /// Throttle interval for the common .git directory watcher.
   ///
@@ -149,10 +152,7 @@ class WorktreeWatcherService extends ChangeNotifier {
 
     // Start periodic background polling.
     if (_enablePeriodicPolling) {
-      watcher.periodicTimer = Timer.periodic(
-        periodicInterval,
-        (_) => _pollGitStatus(watcher),
-      );
+      _restartPeriodicTimer(watcher);
     }
 
     // Immediate initial poll.
@@ -215,12 +215,32 @@ class WorktreeWatcherService extends ChangeNotifier {
     }
   }
 
+  /// Restarts the periodic background timer for a single worktree.
+  ///
+  /// Cancels any existing timer and schedules a new one-shot timer.
+  /// This is called after every poll so the next periodic poll is
+  /// always [periodicInterval] after the last actual poll, rather
+  /// than on a fixed clock that may overlap with event-triggered or
+  /// fetch-triggered polls.
+  void _restartPeriodicTimer(_WorktreeWatcher watcher) {
+    if (_disposed || !_enablePeriodicPolling) return;
+    watcher.periodicTimer?.cancel();
+    watcher.periodicTimer = Timer(
+      periodicInterval,
+      () => _pollGitStatus(watcher),
+    );
+  }
+
   /// Polls git status and updates the worktree state.
   Future<void> _pollGitStatus(_WorktreeWatcher watcher) async {
     if (_disposed) return;
 
     final worktree = watcher.worktree;
     watcher.lastPollTime = DateTime.now();
+
+    // Reset the periodic timer so the next background poll is always
+    // [periodicInterval] after the most recent poll from any source.
+    _restartPeriodicTimer(watcher);
 
     try {
       final path = worktree.data.worktreeRoot;
@@ -496,8 +516,12 @@ class WorktreeWatcherService extends ChangeNotifier {
     _fetchTimer = Timer.periodic(fetchInterval, (_) => _fetchOrigin());
   }
 
-  /// Runs `git fetch` against the project repo root and refreshes
-  /// all worktrees afterwards.
+  /// Runs `git fetch` against the project repo root.
+  ///
+  /// The fetch writes to the shared `.git` directory, which the
+  /// git-dir filesystem watcher will detect and trigger a
+  /// [forceRefreshAll] automatically. No explicit refresh is needed
+  /// here.
   ///
   /// Network failures are non-fatal and silently ignored — status
   /// polls will continue with stale remote refs until the next
@@ -510,9 +534,6 @@ class WorktreeWatcherService extends ChangeNotifier {
     } catch (_) {
       // Network failures are non-fatal.
     }
-    if (!_disposed) {
-      await forceRefreshAll();
-    }
   }
 
   /// Triggers a fetch for testing purposes.
@@ -524,6 +545,23 @@ class WorktreeWatcherService extends ChangeNotifier {
   DateTime? get lastFetchTime => _lastFetchTime;
 
   // -----------------------------------------------------------------
+
+  /// Forces a git fetch followed by refresh of all worktrees.
+  ///
+  /// Intended for manual user-triggered refreshes (e.g. a refresh
+  /// button in the UI).
+  Future<void> forceFetchAndRefreshAll() async {
+    if (_disposed) return;
+    _lastFetchTime = DateTime.now();
+    try {
+      await _gitService.fetch(_project.data.repoRoot);
+    } catch (_) {
+      // Network failures are non-fatal.
+    }
+    if (!_disposed) {
+      await forceRefreshAll();
+    }
+  }
 
   /// Forces an immediate git status poll for [worktree].
   Future<void> forceRefresh(WorktreeState worktree) async {

@@ -31,6 +31,7 @@ import 'panel_wrapper.dart';
 class InformationPanelKeys {
   InformationPanelKeys._();
 
+  static const refreshButton = Key('info_panel_refresh');
   static const commitButton = Key('info_panel_commit');
   static const changeBaseButton = Key('info_panel_change_base');
   static const rebaseOntoBaseButton = Key('info_panel_rebase_onto_base');
@@ -60,7 +61,64 @@ class InformationPanel extends StatelessWidget {
     return PanelWrapper(
       title: title,
       icon: Icons.call_split,
+      trailing: worktree != null
+          ? _RefreshButton(key: InformationPanelKeys.refreshButton)
+          : null,
       child: const _InformationContent(),
+    );
+  }
+}
+
+class _RefreshButton extends StatefulWidget {
+  const _RefreshButton({super.key});
+
+  @override
+  State<_RefreshButton> createState() => _RefreshButtonState();
+}
+
+class _RefreshButtonState extends State<_RefreshButton> {
+  bool _refreshing = false;
+
+  Future<void> _handleRefresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final watcher = context.read<WorktreeWatcherService>();
+      await watcher.forceFetchAndRefreshAll();
+    } catch (_) {
+      // Provider not available (e.g., in tests)
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: 'Fetch and refresh git status',
+      child: InkWell(
+        onTap: _refreshing ? null : _handleRefresh,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: _refreshing
+              ? SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                )
+              : Icon(
+                  Icons.refresh,
+                  size: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+        ),
+      ),
     );
   }
 }
