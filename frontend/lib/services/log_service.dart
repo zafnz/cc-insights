@@ -142,6 +142,12 @@ class LogService extends ChangeNotifier {
   /// Public field for direct access.
   LogLevel minimumLevel = LogLevel.debug;
 
+  /// Minimum log level for stdout output, or null if stdout logging is disabled.
+  ///
+  /// When non-null, log entries at this level or above are also written to
+  /// stdout. Set via `--stdout-log-level <level>` CLI flag.
+  LogLevel? stdoutMinimumLevel;
+
   /// The current log file path, or null if file logging is disabled.
   String? get logFilePath => _logFilePath;
 
@@ -209,6 +215,15 @@ class LogService extends ChangeNotifier {
     // Write to disk if file logging is enabled and level meets threshold
     if (level.meetsThreshold(minimumLevel) && _sink != null) {
       _sink!.writeln(entry.toJsonLine());
+    }
+
+    // Write to stdout if stdout logging is enabled and level meets threshold
+    if (stdoutMinimumLevel != null && level.meetsThreshold(stdoutMinimumLevel!)) {
+      stdout.writeln(
+        '${entry.timestamp.toIso8601String()} '
+        '[${level.name.toUpperCase()}] '
+        '${entry.source}: ${entry.message}',
+      );
     }
 
     // Rate-limited UI notification

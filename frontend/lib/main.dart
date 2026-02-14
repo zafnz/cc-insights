@@ -527,6 +527,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Set minimum level
     LogService.instance.minimumLevel = _parseLogLevel(config.loggingMinimumLevel);
 
+    // Enable stdout logging if --stdout-log-level was specified
+    final stdoutLevel = config.stdoutLogLevel;
+    if (stdoutLevel != null) {
+      LogService.instance.stdoutMinimumLevel = _parseLogLevel(stdoutLevel);
+    }
+
     // Enable file logging if path is set
     if (logPath.isNotEmpty) {
       LogService.instance.enableFileLogging(logPath);

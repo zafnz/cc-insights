@@ -170,6 +170,12 @@ class RuntimeConfig extends ChangeNotifier {
   /// Command line arguments for the ACP agent executable.
   String _acpCliArgs = '';
 
+  /// Minimum log level for stdout output, or null if stdout logging is disabled.
+  ///
+  /// Set via the `--stdout-log-level <level>` CLI flag. When non-null, all log
+  /// messages at this level or above are also written to stdout.
+  String? _stdoutLogLevel;
+
   /// Whether the Codex CLI is available on this system.
   bool _codexAvailable = true;
 
@@ -247,6 +253,23 @@ class RuntimeConfig extends ChangeNotifier {
         // Next arg should be the config directory path
         if (i + 1 < args.length) {
           _instance._configDir = args[i + 1];
+          i++; // Skip the next arg since we consumed it
+        }
+      } else if (arg == '--stdout-log-level') {
+        // Next arg should be the log level
+        if (i + 1 < args.length) {
+          final level = args[i + 1];
+          const validLevels = [
+            'trace', 'debug', 'info', 'notice', 'warn', 'error',
+          ];
+          if (validLevels.contains(level)) {
+            _instance._stdoutLogLevel = level;
+          } else {
+            _instance._cliWarnings.add(
+              '--stdout-log-level has invalid value "$level"'
+              ' (valid: ${validLevels.join(", ")})',
+            );
+          }
           i++; // Skip the next arg since we consumed it
         }
       } else if (arg.startsWith('--') && arg.contains('=')) {
@@ -659,6 +682,12 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Minimum log level for stdout output, or null if disabled.
+  ///
+  /// Set via `--stdout-log-level <level>`. When non-null, log messages at
+  /// this level or above are also written to stdout.
+  String? get stdoutLogLevel => _stdoutLogLevel;
+
   /// Whether the Codex CLI is available on this system.
   bool get codexAvailable => _codexAvailable;
 
@@ -732,6 +761,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._codexCliPath = '';
     _instance._acpCliPath = '';
     _instance._acpCliArgs = '';
+    _instance._stdoutLogLevel = null;
     _instance._codexAvailable = true;
     _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;
