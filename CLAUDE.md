@@ -2,6 +2,12 @@
 
 ---
 
+## ⚠️ Git Commands: Do NOT use `git -C <path>` ⚠️
+
+**Never use `git -C <path>` for git commands.** The `-C` flag breaks permission allow rules (e.g. `git log:*` won't match `git -C /some/path log`). The working directory is already the worktree root, so plain `git` commands work. Use `git log`, `git status`, `git diff`, etc. directly.
+
+---
+
 ## ⚠️ CRITICAL: ALL TESTS MUST PASS ⚠️
 
 **There must be NO pre-existing test failures.**
