@@ -1033,6 +1033,173 @@ void main() {
         check(notifyCount).equals(4);
       });
     });
+
+    group('working stopwatch pauses during permission requests', () {
+      /// Creates a fake PermissionRequest for testing.
+      sdk.PermissionRequest createFakeRequest({
+        required String id,
+        String sessionId = 'test-session',
+        String toolName = 'Bash',
+        Map<String, dynamic> toolInput = const {'command': 'ls'},
+      }) {
+        final completer = Completer<sdk.PermissionResponse>();
+        return sdk.PermissionRequest(
+          id: id,
+          sessionId: sessionId,
+          toolName: toolName,
+          toolInput: toolInput,
+          completer: completer,
+        );
+      }
+
+      test('pauses stopwatch when first permission arrives while working', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setWorking(true);
+        check(state.workingStopwatch).isNotNull();
+        check(state.workingStopwatch!.isRunning).isTrue();
+
+        // Act - permission request arrives
+        final request = createFakeRequest(id: 'req-1');
+        state.addPendingPermission(request);
+
+        // Assert - stopwatch should be paused
+        check(state.workingStopwatch).isNotNull();
+        check(state.workingStopwatch!.isRunning).isFalse();
+      });
+
+      test('resumes stopwatch when last permission is allowed', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setWorking(true);
+
+        final request = createFakeRequest(id: 'req-1');
+        state.addPendingPermission(request);
+        check(state.workingStopwatch!.isRunning).isFalse();
+
+        // Act - allow the permission
+        state.allowPermission();
+
+        // Assert - stopwatch should be running again
+        check(state.workingStopwatch).isNotNull();
+        check(state.workingStopwatch!.isRunning).isTrue();
+      });
+
+      test('resumes stopwatch when last permission is denied', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setWorking(true);
+
+        final request = createFakeRequest(id: 'req-1');
+        state.addPendingPermission(request);
+        check(state.workingStopwatch!.isRunning).isFalse();
+
+        // Act - deny the permission
+        state.denyPermission('Not allowed');
+
+        // Assert - stopwatch should be running again
+        check(state.workingStopwatch).isNotNull();
+        check(state.workingStopwatch!.isRunning).isTrue();
+      });
+
+      test('stays paused when one permission is resolved but others remain', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setWorking(true);
+
+        final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
+        final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
+        state.addPendingPermission(request1);
+        state.addPendingPermission(request2);
+        check(state.workingStopwatch!.isRunning).isFalse();
+
+        // Act - allow the first permission
+        state.allowPermission();
+
+        // Assert - still paused because req-2 is pending
+        check(state.workingStopwatch!.isRunning).isFalse();
+
+        // Act - allow the second permission
+        state.allowPermission();
+
+        // Assert - now resumed
+        check(state.workingStopwatch!.isRunning).isTrue();
+      });
+
+      test('resumes stopwatch when permission times out and is removed', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setWorking(true);
+
+        // Create request with toolUseId set (used by removePendingPermissionByToolUseId)
+        final completer = Completer<sdk.PermissionResponse>();
+        final request = sdk.PermissionRequest(
+          id: 'req-1',
+          sessionId: 'test-session',
+          toolName: 'Bash',
+          toolInput: const {'command': 'ls'},
+          toolUseId: 'tool-use-1',
+          completer: completer,
+        );
+        state.addPendingPermission(request);
+        check(state.workingStopwatch!.isRunning).isFalse();
+
+        // Act - permission times out (removed by toolUseId)
+        state.removePendingPermissionByToolUseId('tool-use-1');
+
+        // Assert - stopwatch should be running again
+        check(state.workingStopwatch).isNotNull();
+        check(state.workingStopwatch!.isRunning).isTrue();
+      });
+
+      test('does not pause stopwatch when permission arrives while not working', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        // Not working - no stopwatch
+        check(state.workingStopwatch).isNull();
+
+        final request = createFakeRequest(id: 'req-1');
+        state.addPendingPermission(request);
+
+        // Assert - no stopwatch to pause
+        check(state.workingStopwatch).isNull();
+      });
+
+      test('does not resume stopwatch after setWorking(false) during permission', () {
+        final state = ChatState.create(
+          name: 'Test Chat',
+          worktreeRoot: '/path',
+        );
+        state.setWorking(true);
+
+        final request = createFakeRequest(id: 'req-1');
+        state.addPendingPermission(request);
+        check(state.workingStopwatch!.isRunning).isFalse();
+
+        // Turn completes while waiting for permission
+        state.setWorking(false);
+        check(state.workingStopwatch).isNull();
+
+        // Allow the permission
+        state.allowPermission();
+
+        // Assert - stopwatch should NOT be resumed since we're no longer working
+        check(state.workingStopwatch).isNull();
+        check(state.isWorking).isFalse();
+      });
+    });
   });
 }
 

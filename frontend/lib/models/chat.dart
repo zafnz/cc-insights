@@ -1423,9 +1423,21 @@ class ChatState extends ChangeNotifier {
   ///
   /// Also sends a desktop notification to alert the user and records the
   /// timestamp for tracking user response time.
+  ///
+  /// When the first permission request arrives while working, the working
+  /// stopwatch is paused so that user response time is not counted as
+  /// Claude working time.
   void addPendingPermission(sdk.PermissionRequest request) {
     LogService.instance.notice('Permission', 'Permission requested: tool=${request.toolName}', meta: {'chat': _data.name});
+
+    // Pause the working stopwatch when the first permission arrives.
+    // This ensures time spent waiting for user response is not counted
+    // as Claude working time in the displayed counter.
+    final wasEmpty = _pendingPermissions.isEmpty;
     _pendingPermissions.add(request);
+    if (wasEmpty && _workingStopwatch != null && _workingStopwatch!.isRunning) {
+      _workingStopwatch!.stop();
+    }
 
     // Record when this permission request was received for timing tracking
     final toolUseId = request.toolUseId;
@@ -1504,6 +1516,7 @@ class ChatState extends ChangeNotifier {
   ///
   /// After allowing, the next request in the queue (if any) becomes current.
   /// The user response time is recorded in [_timingStats].
+  /// When the last permission is resolved, the working stopwatch is resumed.
   void allowPermission({
     Map<String, dynamic>? updatedInput,
     List<dynamic>? updatedPermissions,
@@ -1524,6 +1537,9 @@ class ChatState extends ChangeNotifier {
       updatedInput: updatedInput,
       updatedPermissions: updatedPermissions,
     );
+
+    // Resume the working stopwatch when all permissions are resolved
+    _resumeStopwatchIfNoPermissions();
 
     // Notify event handler for ticket status transitions (needsInput → active)
     _eventHandler?.handlePermissionResponse(this);
@@ -1578,6 +1594,7 @@ class ChatState extends ChangeNotifier {
   ///
   /// After denying, the next request in the queue (if any) becomes current.
   /// The user response time is recorded in [_timingStats].
+  /// When the last permission is resolved, the working stopwatch is resumed.
   void denyPermission(String message, {bool interrupt = false}) {
     if (_pendingPermissions.isEmpty) return;
 
@@ -1588,6 +1605,9 @@ class ChatState extends ChangeNotifier {
 
     LogService.instance.info('Permission', 'Permission denied: tool=${request.toolName}', meta: {'chat': _data.name});
     request.deny(message, interrupt: interrupt);
+
+    // Resume the working stopwatch when all permissions are resolved
+    _resumeStopwatchIfNoPermissions();
 
     // Notify event handler for ticket status transitions (needsInput → active)
     _eventHandler?.handlePermissionResponse(this);
@@ -1606,6 +1626,7 @@ class ChatState extends ChangeNotifier {
   ///
   /// Note: This does NOT record user response time since the permission
   /// was timed out, not responded to by the user.
+  /// When the last permission is removed, the working stopwatch is resumed.
   void removePendingPermissionByToolUseId(String toolUseId) {
     final before = _pendingPermissions.length;
     _pendingPermissions.removeWhere((req) => req.toolUseId == toolUseId);
@@ -1614,7 +1635,22 @@ class ChatState extends ChangeNotifier {
     _permissionRequestTimes.remove(toolUseId);
 
     if (_pendingPermissions.length != before) {
+      // Resume the working stopwatch when all permissions are resolved
+      _resumeStopwatchIfNoPermissions();
       notifyListeners();
+    }
+  }
+
+  /// Resumes the working stopwatch if no more permissions are pending.
+  ///
+  /// Called after a permission is allowed, denied, or timed out. Only
+  /// resumes if we are still in a working state (the turn hasn't completed).
+  void _resumeStopwatchIfNoPermissions() {
+    if (_pendingPermissions.isEmpty &&
+        _isWorking &&
+        _workingStopwatch != null &&
+        !_workingStopwatch!.isRunning) {
+      _workingStopwatch!.start();
     }
   }
 
