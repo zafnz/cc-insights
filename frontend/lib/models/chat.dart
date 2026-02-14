@@ -2283,7 +2283,7 @@ class ChatState extends ChangeNotifier {
     final id = _agentId;
     if (id != null) {
       final config = RuntimeConfig.instance.agentById(id);
-      if (config != null) return config.name;
+      if (config != null) return config.name.toLowerCase();
     }
     return switch (_model.backend) {
       sdk.BackendType.codex => 'codex',

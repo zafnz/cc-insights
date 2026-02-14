@@ -63,7 +63,7 @@ class StatsService {
       final chatStats = ChatStats(
         chatName: entry.chatName,
         worktree: entry.worktree,
-        backend: entry.backend,
+        backend: entry.backend.toLowerCase(),
         modelUsage: entry.modelUsage,
         timing: entry.timing,
         timestamp: entry.timestamp,
