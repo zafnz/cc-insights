@@ -372,6 +372,20 @@ abstract class GitService {
   /// to resolve.
   Future<MergeResult> rebase(String path, String targetBranch);
 
+  /// Rebases commits from [oldBase] onto [newBase].
+  ///
+  /// Runs `git rebase --onto <newBase> <oldBase>`, which replays only the
+  /// commits after [oldBase] onto [newBase]. This is used when changing a
+  /// branch's base ref — it avoids replaying commits that belong to the
+  /// old base.
+  ///
+  /// Returns a [MergeResult] indicating success or conflicts.
+  Future<MergeResult> rebaseOnto(
+    String path, {
+    required String newBase,
+    required String oldBase,
+  });
+
   /// Pulls from the remote (git pull).
   ///
   /// Returns a [MergeResult] with [MergeOperationType.merge] indicating
@@ -1017,6 +1031,58 @@ class RealGitService implements GitService {
       final result = await Process.run(
         'git',
         ['rebase', targetBranch],
+        workingDirectory: path,
+      ).timeout(_mergeTimeout);
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('could not apply')) {
+          return const MergeResult(
+            hasConflicts: true,
+            operation: MergeOperationType.rebase,
+          );
+        }
+        return MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+          error: stderr.isNotEmpty ? stderr : 'Rebase failed',
+        );
+      }
+      return const MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+      );
+    } on TimeoutException {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Rebase timed out after $_mergeTimeout',
+      );
+    } on ProcessException catch (e) {
+      return MergeResult(
+        hasConflicts: false,
+        operation: MergeOperationType.rebase,
+        error: 'Failed to run git: ${e.message}',
+      );
+    }
+  }
+
+  @override
+  Future<MergeResult> rebaseOnto(
+    String path, {
+    required String newBase,
+    required String oldBase,
+  }) async {
+    LogService.instance.info('Git', 'rebase --onto', meta: {
+      'cwd': path,
+      'newBase': newBase,
+      'oldBase': oldBase,
+    });
+    try {
+      final result = await Process.run(
+        'git',
+        ['rebase', '--onto', newBase, oldBase],
         workingDirectory: path,
       ).timeout(_mergeTimeout);
 

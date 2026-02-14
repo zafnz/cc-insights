@@ -272,6 +272,19 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<MergeResult> rebaseOnto(
+    String path, {
+    required String newBase,
+    required String oldBase,
+  }) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return const MergeResult(
+      hasConflicts: false,
+      operation: MergeOperationType.rebase,
+    );
+  }
+
+  @override
   Future<MergeResult> pull(String path) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
     return const MergeResult(

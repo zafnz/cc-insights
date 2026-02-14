@@ -42,6 +42,11 @@ enum ConflictResolutionResult {
 /// step before checking the working tree. Use this for remote operations
 /// (pull-rebase, pull-merge) so the fetch progress is visible in the dialog.
 ///
+/// When [oldBase] is provided and [operation] is [MergeOperationType.rebase],
+/// the dialog uses `git rebase --onto <mainBranch> <oldBase>` instead of a
+/// plain `git rebase <mainBranch>`. This replays only the commits after
+/// [oldBase] onto [mainBranch].
+///
 /// Returns [ConflictResolutionResult] indicating what the user chose.
 Future<ConflictResolutionResult> showConflictResolutionDialog({
   required BuildContext context,
@@ -51,6 +56,7 @@ Future<ConflictResolutionResult> showConflictResolutionDialog({
   required MergeOperationType operation,
   required GitService gitService,
   bool fetchFirst = false,
+  String? oldBase,
 }) async {
   final result = await showDialog<ConflictResolutionResult>(
     context: context,
@@ -62,6 +68,7 @@ Future<ConflictResolutionResult> showConflictResolutionDialog({
       operation: operation,
       gitService: gitService,
       fetchFirst: fetchFirst,
+      oldBase: oldBase,
     ),
   );
   return result ?? ConflictResolutionResult.aborted;
@@ -95,6 +102,7 @@ class ConflictResolutionDialog extends StatefulWidget {
     required this.operation,
     required this.gitService,
     this.fetchFirst = false,
+    this.oldBase,
   });
 
   final String worktreePath;
@@ -103,6 +111,10 @@ class ConflictResolutionDialog extends StatefulWidget {
   final MergeOperationType operation;
   final GitService gitService;
   final bool fetchFirst;
+
+  /// When set and [operation] is rebase, uses `git rebase --onto` with this
+  /// as the old base ref.
+  final String? oldBase;
 
   @override
   State<ConflictResolutionDialog> createState() =>
@@ -260,11 +272,20 @@ class _ConflictResolutionDialogState
     );
 
     try {
-      final result = widget.operation == MergeOperationType.merge
-          ? await widget.gitService
-              .merge(widget.worktreePath, widget.mainBranch)
-          : await widget.gitService
-              .rebase(widget.worktreePath, widget.mainBranch);
+      final MergeResult result;
+      if (widget.operation == MergeOperationType.merge) {
+        result = await widget.gitService
+            .merge(widget.worktreePath, widget.mainBranch);
+      } else if (widget.oldBase != null) {
+        result = await widget.gitService.rebaseOnto(
+          widget.worktreePath,
+          newBase: widget.mainBranch,
+          oldBase: widget.oldBase!,
+        );
+      } else {
+        result = await widget.gitService
+            .rebase(widget.worktreePath, widget.mainBranch);
+      }
 
       if (!mounted) return;
 

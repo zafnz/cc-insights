@@ -525,6 +525,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
         mainBranch: newBase,
         operation: MergeOperationType.rebase,
         gitService: gitService,
+        oldBase: previousValue ?? 'main',
       );
 
       if (!context.mounted) return;

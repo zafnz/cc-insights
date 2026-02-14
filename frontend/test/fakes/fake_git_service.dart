@@ -525,6 +525,16 @@ class FakeGitService implements GitService {
   /// Tracks calls to [rebase] with (path, targetBranch).
   final List<(String, String)> rebaseCalls = [];
 
+  /// Tracks calls to [rebaseOnto] with (path, newBase, oldBase).
+  final List<({String path, String newBase, String oldBase})>
+      rebaseOntoCalls = [];
+
+  /// Result for [rebaseOnto]. Key is path.
+  final Map<String, MergeResult> rebaseOntoResults = {};
+
+  /// If set, [rebaseOnto] will throw this exception.
+  GitException? rebaseOntoError;
+
   /// If set, [merge] will throw this exception.
   GitException? mergeError;
 
@@ -558,6 +568,23 @@ class FakeGitService implements GitService {
     _maybeThrow();
     if (rebaseError != null) throw rebaseError!;
     return rebaseResults[path] ??
+        const MergeResult(
+          hasConflicts: false,
+          operation: MergeOperationType.rebase,
+        );
+  }
+
+  @override
+  Future<MergeResult> rebaseOnto(
+    String path, {
+    required String newBase,
+    required String oldBase,
+  }) async {
+    rebaseOntoCalls.add((path: path, newBase: newBase, oldBase: oldBase));
+    await _maybeDelay();
+    _maybeThrow();
+    if (rebaseOntoError != null) throw rebaseOntoError!;
+    return rebaseOntoResults[path] ??
         const MergeResult(
           hasConflicts: false,
           operation: MergeOperationType.rebase,
