@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
@@ -11,8 +10,7 @@ import '../models/chat.dart';
 import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../services/backend_service.dart';
-import '../services/event_handler.dart';
-import '../services/internal_tools_service.dart';
+import '../services/chat_session_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/message_input.dart';
@@ -467,9 +465,11 @@ class _ConversationPanelState extends State<ConversationPanel>
                       ? 'No messages yet. Start a conversation!'
                       : 'No output from this subagent yet.',
                 )
-              : _buildEntryList(
-                  conversation,
+              : _EntryList(
+                  conversation: conversation,
                   chat: chat,
+                  scrollController: _scrollController,
+                  listController: _listController,
                   showWorkingIndicator: isPrimary && isWorking,
                   isCompacting: isCompacting,
                 ),
@@ -479,148 +479,57 @@ class _ConversationPanelState extends State<ConversationPanel>
           _AgentRemovedBanner(message: chat.missingAgentMessage)
         else if (isPrimary)
           shouldShowPermissionWidget
-              ? _buildPermissionWidget(chat)
+              ? _PermissionSection(
+                  chat: chat,
+                  permission: _cachedPermission,
+                  animation: _permissionAnimation,
+                  onClearContextPlanApproval: (chat, planText) =>
+                      context
+                          .read<ChatSessionService>()
+                          .approvePlanWithClearContext(chat, planText),
+                )
               : MessageInput(
                   key: ValueKey('input-${chat.data.id}'),
                   initialText: chat.draftText,
                   onTextChanged: (text) => chat.draftText = text,
                   onSubmit: (text, images, displayFormat) =>
-                      _handleSubmit(context, text, images, displayFormat),
+                      context.read<ChatSessionService>().submitMessage(
+                            chat,
+                            text: text,
+                            images: images,
+                            displayFormat: displayFormat,
+                          ),
                   isWorking: isWorking,
-                  onInterrupt:
-                      isWorking ? () => _handleInterrupt(chat) : null,
+                  onInterrupt: isWorking
+                      ? () => context.read<ChatSessionService>().interrupt(chat)
+                      : null,
                 ),
       ],
     );
   }
 
-  /// Build the permission widget with slide-up animation.
-  Widget _buildPermissionWidget(ChatState chat) {
-    // Use cached permission to ensure we have a valid request during animation
-    final permission = _cachedPermission;
-    if (permission == null) {
-      return const SizedBox.shrink();
-    }
+}
 
-    // Determine which widget to show based on tool name
-    final isAskUserQuestion = permission.toolName == 'AskUserQuestion';
+/// Displays the list of output entries for a conversation.
+class _EntryList extends StatelessWidget {
+  const _EntryList({
+    required this.conversation,
+    required this.chat,
+    required this.scrollController,
+    required this.listController,
+    this.showWorkingIndicator = false,
+    this.isCompacting = false,
+  });
 
-    final isExitPlanMode = permission.toolName == 'ExitPlanMode';
+  final ConversationData conversation;
+  final ChatState? chat;
+  final ScrollController scrollController;
+  final ListController listController;
+  final bool showWorkingIndicator;
+  final bool isCompacting;
 
-    Widget dialogWidget;
-    if (isAskUserQuestion) {
-      dialogWidget = AskUserQuestionDialog(
-        request: permission,
-        onSubmit: (answers) {
-          // Submit answers through the permission system
-          chat.allowPermission(
-            updatedInput: {'answers': answers},
-          );
-        },
-        onCancel: () => chat.denyPermission('User cancelled the question'),
-      );
-    } else {
-      final selection = context.read<SelectionState>();
-      // Derive provider from chat's backend type
-      final provider = switch (chat.model.backend) {
-        sdk.BackendType.codex => sdk.BackendProvider.codex,
-        sdk.BackendType.acp => sdk.BackendProvider.acp,
-        sdk.BackendType.directCli => sdk.BackendProvider.claude,
-      };
-      dialogWidget = PermissionDialog(
-        request: permission,
-        projectDir: selection.selectedChat?.data.worktreeRoot,
-        onAllow: ({
-          Map<String, dynamic>? updatedInput,
-          List<dynamic>? updatedPermissions,
-        }) {
-          chat.allowPermission(
-            updatedInput: updatedInput,
-            updatedPermissions: updatedPermissions,
-          );
-        },
-        onDeny: (message, {bool interrupt = false}) =>
-            chat.denyPermission(message, interrupt: interrupt),
-        onClearContextAndAcceptEdits: isExitPlanMode
-            ? (planText) => _handleClearContextPlanApproval(chat, planText)
-            : null,
-        provider: provider,
-      );
-    }
-
-    return SizeTransition(
-      sizeFactor: _permissionAnimation,
-      axisAlignment: 1.0, // Align to bottom (slide up from bottom)
-      child: dialogWidget,
-    );
-  }
-
-  /// Handles Option 1: Clear context + Accept edits.
-  ///
-  /// 1. Allows the ExitPlanMode permission (so CLI gets a response)
-  /// 2. Resets the session (clears context)
-  /// 3. Switches to acceptEdits mode
-  /// 4. Starts a new session with the plan text as the prompt
-  Future<void> _handleClearContextPlanApproval(
-    ChatState chat,
-    String planText,
-  ) async {
-    // 1. Allow the ExitPlanMode permission first
-    chat.allowPermission(
-      updatedPermissions: [
-        {
-          'type': 'setMode',
-          'mode': 'acceptEdits',
-          'destination': 'session',
-        },
-      ],
-    );
-
-    // 2. Reset session (clears context, stops session)
-    await chat.resetSession();
-
-    // 3. Switch to acceptEdits mode for the new session
-    chat.setPermissionMode(PermissionMode.acceptEdits);
-
-    // 4. Start new session with plan as prompt
-    if (!mounted) return;
-    final backend = context.read<BackendService>();
-    final eventHandler = context.read<EventHandler>();
-    final internalTools = context.read<InternalToolsService>();
-
-    final prompt =
-        'The user has approved your plan and wants you to execute it '
-        'with a clear context. Here is the approved plan:\n\n'
-        '$planText\n\n'
-        'Begin implementation.';
-
-    chat.addEntry(UserInputEntry(
-      timestamp: DateTime.now(),
-      text: '[Plan approved - clear context + accept edits]',
-    ));
-
-    try {
-      await chat.startSession(
-        backend: backend,
-        eventHandler: eventHandler,
-        prompt: prompt,
-        internalToolsService: internalTools,
-      );
-    } catch (e) {
-      chat.addEntry(TextOutputEntry(
-        timestamp: DateTime.now(),
-        text: 'Failed to start session: $e',
-        contentType: 'error',
-      ));
-    }
-  }
-
-  Widget _buildEntryList(
-    ConversationData conversation, {
-    required ChatState? chat,
-    bool showWorkingIndicator = false,
-    bool isCompacting = false,
-  }) {
+  @override
+  Widget build(BuildContext context) {
     final entries = conversation.entries;
     final selection = context.read<SelectionState>();
     final projectDir = selection.selectedChat?.data.worktreeRoot;
@@ -636,8 +545,8 @@ class _ConversationPanelState extends State<ConversationPanel>
     final itemCount = entries.length + (showIndicator ? 1 : 0);
 
     return SuperListView.builder(
-      controller: _scrollController,
-      listController: _listController,
+      controller: scrollController,
+      listController: listController,
       padding: const EdgeInsets.all(8),
       itemCount: itemCount,
       itemBuilder: (context, index) {
@@ -665,94 +574,76 @@ class _ConversationPanelState extends State<ConversationPanel>
       },
     );
   }
+}
 
-  /// Handles interrupt button press - stops the current session.
-  Future<void> _handleInterrupt(ChatState chat) async {
-    try {
-      await chat.interrupt();
-    } catch (e) {
-      developer.log(
-        'Failed to interrupt session: $e',
-        name: 'ConversationPanel',
-        error: e,
+/// Builds the permission widget with slide-up animation.
+class _PermissionSection extends StatelessWidget {
+  const _PermissionSection({
+    required this.chat,
+    required this.permission,
+    required this.animation,
+    required this.onClearContextPlanApproval,
+  });
+
+  final ChatState chat;
+  final sdk.PermissionRequest? permission;
+  final Animation<double> animation;
+  final Future<void> Function(ChatState, String) onClearContextPlanApproval;
+
+  @override
+  Widget build(BuildContext context) {
+    if (permission == null) {
+      return const SizedBox.shrink();
+    }
+
+    final perm = permission!;
+    final isAskUserQuestion = perm.toolName == 'AskUserQuestion';
+    final isExitPlanMode = perm.toolName == 'ExitPlanMode';
+
+    Widget dialogWidget;
+    if (isAskUserQuestion) {
+      dialogWidget = AskUserQuestionDialog(
+        request: perm,
+        onSubmit: (answers) {
+          chat.allowPermission(
+            updatedInput: {'answers': answers},
+          );
+        },
+        onCancel: () => chat.denyPermission('User cancelled the question'),
+      );
+    } else {
+      final selection = context.read<SelectionState>();
+      final provider = switch (chat.model.backend) {
+        sdk.BackendType.codex => sdk.BackendProvider.codex,
+        sdk.BackendType.acp => sdk.BackendProvider.acp,
+        sdk.BackendType.directCli => sdk.BackendProvider.claude,
+      };
+      dialogWidget = PermissionDialog(
+        request: perm,
+        projectDir: selection.selectedChat?.data.worktreeRoot,
+        onAllow: ({
+          Map<String, dynamic>? updatedInput,
+          List<dynamic>? updatedPermissions,
+        }) {
+          chat.allowPermission(
+            updatedInput: updatedInput,
+            updatedPermissions: updatedPermissions,
+          );
+        },
+        onDeny: (message, {bool interrupt = false}) =>
+            chat.denyPermission(message, interrupt: interrupt),
+        onClearContextAndAcceptEdits: isExitPlanMode
+            ? (planText) => onClearContextPlanApproval(chat, planText)
+            : null,
+        provider: provider,
       );
     }
-  }
 
-  Future<void> _handleSubmit(
-    BuildContext context,
-    String text,
-    List<AttachedImage> images,
-    DisplayFormat displayFormat,
-  ) async {
-    if (text.trim().isEmpty && images.isEmpty) return;
-
-    final selection = context.read<SelectionState>();
-    final chat = selection.selectedChat;
-    if (chat == null) return;
-
-    // Handle /clear command - reset session without sending to SDK
-    if (text.trim() == '/clear') {
-      chat.draftText = '';
-      await chat.resetSession();
-      return;
-    }
-
-    // Clear the draft text since it's being submitted
-    chat.draftText = '';
-
-    final backend = context.read<BackendService>();
-    final eventHandler = context.read<EventHandler>();
-    final internalTools = context.read<InternalToolsService>();
-
-    if (!chat.hasActiveSession) {
-      // First message - start a new session with the prompt
-      // Add user input entry first
-      chat.addEntry(UserInputEntry(
-        timestamp: DateTime.now(),
-        text: text,
-        images: images,
-        displayFormat: displayFormat,
-      ));
-
-      // Generate a better title for the chat if it's new (fire-and-forget)
-      if (chat.isAutoGeneratedName) {
-        eventHandler.generateChatTitle(chat, text);
-      }
-
-      try {
-        await chat.startSession(
-          backend: backend,
-          eventHandler: eventHandler,
-          prompt: text,
-          images: images,
-          internalToolsService: internalTools,
-        );
-      } catch (e) {
-        // Show error in conversation
-        chat.addEntry(TextOutputEntry(
-          timestamp: DateTime.now(),
-          text: 'Failed to start session: $e',
-          contentType: 'error',
-        ));
-      }
-    } else {
-      // Subsequent message - send to existing session
-      try {
-        await chat.sendMessage(
-          text,
-          images: images,
-          displayFormat: displayFormat,
-        );
-      } catch (e) {
-        // Show error in conversation
-        chat.addEntry(TextOutputEntry(
-          timestamp: DateTime.now(),
-          text: 'Failed to send message: $e',
-          contentType: 'error',
-        ));
-      }
-    }
+    return SizeTransition(
+      sizeFactor: animation,
+      axisAlignment: 1.0, // Align to bottom (slide up from bottom)
+      child: dialogWidget,
+    );
   }
 }
 

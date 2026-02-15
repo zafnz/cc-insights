@@ -1,50 +1,26 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/chat.dart';
-import '../models/chat_model.dart';
-import '../models/output_entry.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/ask_ai_service.dart';
-import '../services/backend_service.dart';
-import '../services/event_handler.dart';
-import '../services/internal_tools_service.dart';
 import '../services/file_system_service.dart';
+import '../services/git_operations_service.dart';
 import '../services/git_service.dart';
 import '../services/log_service.dart';
 import '../services/persistence_service.dart';
-import '../services/project_restore_service.dart';
-import '../services/runtime_config.dart';
 import '../services/worktree_watcher_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/base_selector_dialog.dart';
-import '../widgets/insights_widgets.dart';
 import '../widgets/commit_dialog.dart';
 import '../widgets/conflict_resolution_dialog.dart';
 import '../widgets/create_pr_dialog.dart';
+import '../widgets/insights_widgets.dart';
+import 'information_panel_widgets.dart';
 import 'panel_wrapper.dart';
 
-/// Keys for testing InformationPanel widgets.
-class InformationPanelKeys {
-  InformationPanelKeys._();
-
-  static const refreshButton = Key('info_panel_refresh');
-  static const commitButton = Key('info_panel_commit');
-  static const changeBaseButton = Key('info_panel_change_base');
-  static const rebaseOntoBaseButton = Key('info_panel_rebase_onto_base');
-  static const mergeBaseButton = Key('info_panel_merge_base');
-  static const mergeBranchIntoMainButton =
-      Key('info_panel_merge_branch_into_main');
-  static const pushButton = Key('info_panel_push');
-  static const pullRebaseButton = Key('info_panel_pull_rebase');
-  static const pullMergeButton = Key('info_panel_pull_merge');
-  static const createPrButton = Key('info_panel_create_pr');
-  static const baseSection = Key('info_panel_base_section');
-  static const upstreamSection = Key('info_panel_upstream_section');
-}
+// Re-export so existing importers (tests) still find InformationPanelKeys.
+export 'information_panel_widgets.dart' show InformationPanelKeys;
 
 /// Information panel - shows git branch/status info for the selected worktree.
 class InformationPanel extends StatelessWidget {
@@ -208,6 +184,10 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Dialog-based handlers (remain on widget - need BuildContext for dialogs)
+  // ---------------------------------------------------------------------------
+
   Future<void> _showCommitDialog(BuildContext context) async {
     LogService.instance.info('InfoPanel', 'Stage & Commit: ${data.branch}');
     final gitService = context.read<GitService>();
@@ -250,15 +230,16 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     if (!context.mounted) return;
 
     if (result == ConflictResolutionResult.resolveWithClaude) {
-      final mainWorktreePath =
-          project.primaryWorktree.data.worktreeRoot;
-
-      await _openConflictManagerChat(
-        context,
+      final gitOps = context.read<GitOperationsService>();
+      final selection = context.read<SelectionState>();
+      await gitOps.openConflictManagerChat(
+        worktree: worktree,
+        project: project,
+        selection: selection,
         branch: data.branch,
         mainBranch: baseRef,
         worktreePath: worktreeRoot,
-        mainWorktreePath: mainWorktreePath,
+        mainWorktreePath: project.primaryWorktree.data.worktreeRoot,
         operation: operation,
       );
     }
@@ -271,11 +252,9 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
 
-    // Detect main branch
     String? mainBranch;
     try {
-      mainBranch =
-          await gitService.getMainBranch(project.data.repoRoot);
+      mainBranch = await gitService.getMainBranch(project.data.repoRoot);
     } catch (e) {
       if (!context.mounted) return;
       showErrorSnackBar(context, 'Failed to detect main branch: $e');
@@ -290,11 +269,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
 
     if (!context.mounted) return;
 
-    // Merge the current branch into main, running in the primary
-    // worktree directory (since we can't checkout main in a worktree
-    // where another branch is checked out).
-    final primaryWorktreePath =
-        project.primaryWorktree.data.worktreeRoot;
+    final primaryWorktreePath = project.primaryWorktree.data.worktreeRoot;
 
     final result = await showConflictResolutionDialog(
       context: context,
@@ -308,8 +283,12 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     if (!context.mounted) return;
 
     if (result == ConflictResolutionResult.resolveWithClaude) {
-      await _openConflictManagerChat(
-        context,
+      final gitOps = context.read<GitOperationsService>();
+      final selection = context.read<SelectionState>();
+      await gitOps.openConflictManagerChat(
+        worktree: worktree,
+        project: project,
+        selection: selection,
         branch: mainBranch,
         mainBranch: data.branch,
         worktreePath: primaryWorktreePath,
@@ -326,33 +305,27 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     bool setUpstream = false,
   }) async {
     LogService.instance.info('InfoPanel', 'Push: ${data.branch}${setUpstream ? ' (set upstream)' : ''}');
-    final gitService = context.read<GitService>();
-    try {
-      await gitService.push(worktreeRoot, setUpstream: setUpstream);
-    } catch (e) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, 'Push failed: $e');
-      return;
+    final gitOps = context.read<GitOperationsService>();
+    final result = await gitOps.push(worktreeRoot, setUpstream: setUpstream);
+    if (!result.success && context.mounted) {
+      showErrorSnackBar(context, result.errorMessage!);
     }
     onStatusChanged();
   }
 
   Future<void> _handlePullRebase(BuildContext context) async {
-    // On the primary worktree with a local base, warn that rebase rewrites
-    // history and can desync linked worktrees.
     final project = context.read<ProjectState>();
     if (data.isPrimary &&
         !data.isRemoteBase &&
         project.linkedWorktrees.isNotEmpty) {
-      final choice = await showDialog<_PullRebaseChoice>(
+      final choice = await showDialog<PullRebaseChoice>(
         context: context,
-        builder: (context) => const _PullRebaseWarningDialog(),
+        builder: (context) => const PullRebaseWarningDialog(),
       );
       if (choice == null || !context.mounted) return;
-      if (choice == _PullRebaseChoice.merge) {
+      if (choice == PullRebaseChoice.merge) {
         return _handlePullMerge(context);
       }
-      // choice == rebase → fall through to normal rebase flow
     }
 
     LogService.instance.info('InfoPanel', 'Pull rebase: ${data.branch}');
@@ -374,15 +347,16 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     if (!context.mounted) return;
 
     if (result == ConflictResolutionResult.resolveWithClaude) {
-      final mainWorktreePath =
-          project.primaryWorktree.data.worktreeRoot;
-
-      await _openConflictManagerChat(
-        context,
+      final gitOps = context.read<GitOperationsService>();
+      final selection = context.read<SelectionState>();
+      await gitOps.openConflictManagerChat(
+        worktree: worktree,
+        project: project,
+        selection: selection,
         branch: data.branch,
         mainBranch: upstream,
         worktreePath: worktreeRoot,
-        mainWorktreePath: mainWorktreePath,
+        mainWorktreePath: project.primaryWorktree.data.worktreeRoot,
         operation: MergeOperationType.rebase,
       );
     }
@@ -411,15 +385,16 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     if (!context.mounted) return;
 
     if (result == ConflictResolutionResult.resolveWithClaude) {
-      final mainWorktreePath =
-          project.primaryWorktree.data.worktreeRoot;
-
-      await _openConflictManagerChat(
-        context,
+      final gitOps = context.read<GitOperationsService>();
+      final selection = context.read<SelectionState>();
+      await gitOps.openConflictManagerChat(
+        worktree: worktree,
+        project: project,
+        selection: selection,
         branch: data.branch,
         mainBranch: upstream,
         worktreePath: worktreeRoot,
-        mainWorktreePath: mainWorktreePath,
+        mainWorktreePath: project.primaryWorktree.data.worktreeRoot,
         operation: MergeOperationType.merge,
       );
     }
@@ -433,7 +408,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     final askAiService = context.read<AskAiService>();
     final project = context.read<ProjectState>();
 
-    // Check gh is installed
     final ghInstalled = await gitService.isGhInstalled();
     if (!ghInstalled) {
       if (!context.mounted) return;
@@ -445,11 +419,9 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       return;
     }
 
-    // Detect main branch
     String? mainBranch;
     try {
-      mainBranch =
-          await gitService.getMainBranch(project.data.repoRoot);
+      mainBranch = await gitService.getMainBranch(project.data.repoRoot);
     } catch (e) {
       if (!context.mounted) return;
       showErrorSnackBar(context, 'Failed to detect main branch: $e');
@@ -487,13 +459,9 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     );
 
     if (!context.mounted) return;
-
-    // Cancel returns null - don't change anything.
     if (result == null) return;
 
     final newBase = result.base;
-
-    // Only apply if the result differs from the previous value.
     if (newBase == previousValue) return;
 
     LogService.instance.notice('Worktree', 'Base changed: ${data.branch} ${previousValue ?? "none"} -> $newBase');
@@ -518,7 +486,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
 
     onStatusChanged();
 
-    // Rebase onto the new base if requested.
     if (result.rebase && context.mounted) {
       LogService.instance.info('InfoPanel', 'Rebase onto new base: ${data.branch} -> $newBase');
       final gitService = context.read<GitService>();
@@ -537,15 +504,16 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
 
       if (conflictResult == ConflictResolutionResult.resolveWithClaude) {
         final project = context.read<ProjectState>();
-        final mainWorktreePath =
-            project.primaryWorktree.data.worktreeRoot;
-
-        await _openConflictManagerChat(
-          context,
+        final gitOps = context.read<GitOperationsService>();
+        final selection = context.read<SelectionState>();
+        await gitOps.openConflictManagerChat(
+          worktree: worktree,
+          project: project,
+          selection: selection,
           branch: data.branch,
           mainBranch: newBase,
           worktreePath: worktreeRoot,
-          mainWorktreePath: mainWorktreePath,
+          mainWorktreePath: project.primaryWorktree.data.worktreeRoot,
           operation: MergeOperationType.rebase,
         );
       }
@@ -554,160 +522,44 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     }
   }
 
-  Future<void> _openConflictManagerChat(
-    BuildContext context, {
-    required String branch,
-    required String mainBranch,
-    required String worktreePath,
-    required String mainWorktreePath,
-    required MergeOperationType operation,
-  }) async {
-    final selection = context.read<SelectionState>();
-    final project = context.read<ProjectState>();
-    final backend = context.read<BackendService>();
-    final eventHandler = context.read<EventHandler>();
-    final internalTools = context.read<InternalToolsService>();
-    final restoreService = context.read<ProjectRestoreService>();
-    final wt = selection.selectedWorktree;
-    if (wt == null) return;
-
-    final operationName =
-        operation == MergeOperationType.rebase ? 'rebasing' : 'merging';
-
-    // Build the preamble (sent to Claude but NOT shown in UI)
-    final preamble = 'The user is $operationName this child branch '
-        '($branch) onto its parent ($mainBranch), and has '
-        'encountered a number of merge conflicts. You are to resolve '
-        'the conflicts where the solution is obvious go ahead. If '
-        'the conflict is not obvious or you may break something STOP '
-        'and advise the user.\n'
-        'Rules:\n'
-        '- Do NOT use origin, only local.\n'
-        '- This branch is $branch: $worktreePath\n'
-        '- Parent is $mainBranch: $mainWorktreePath\n'
-        '- Do NOT do destructive edits\n'
-        '- Always ask the user if it is a complicated conflict '
-        'resolution.\n\n'
-        'Now analyse the conflict and begin work resolving it.';
-
-    // Create the chat
-    final chatName = 'Conflict: $operationName $branch '
-        'onto $mainBranch';
-    final chatData = ChatData.create(
-      name: chatName,
-      worktreeRoot: worktreePath,
-      isAutoGeneratedName: false,
-    );
-    final chat = ChatState(chatData);
-
-    // Set the model to the AI assistance model
-    final aiModel = RuntimeConfig.instance.aiAssistanceModel;
-    if (aiModel != 'disabled') {
-      final backend = RuntimeConfig.instance.defaultBackend;
-      chat.setModel(
-        ChatModelCatalog.defaultForBackend(backend, aiModel),
-      );
-    }
-
-    // Add to worktree and select it
-    wt.addChat(chat, select: true);
-    selection.selectChat(chat);
-
-    // Persist the new chat (fire-and-forget)
-    restoreService
-        .addChatToWorktree(
-          project.data.repoRoot,
-          wt.data.worktreeRoot,
-          chat,
-        )
-        .catchError((error) {
-      developer.log(
-        'Failed to persist conflict chat: $error',
-        name: 'InformationPanel',
-        level: 900,
-      );
-    });
-
-    // Start the session with the preamble as the prompt.
-    // We do NOT add a UserInputEntry so the preamble is invisible.
-    try {
-      await chat.startSession(
-        backend: backend,
-        eventHandler: eventHandler,
-        prompt: preamble,
-        internalToolsService: internalTools,
-      );
-    } catch (e) {
-      chat.addEntry(TextOutputEntry(
-        timestamp: DateTime.now(),
-        text: 'Failed to start conflict resolution session: $e',
-        contentType: 'error',
-      ));
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Service-delegated handlers
+  // ---------------------------------------------------------------------------
 
   Future<void> _handleAbortConflict(BuildContext context) async {
-    final gitService = context.read<GitService>();
-    final operation = data.conflictOperation;
-    try {
-      if (operation == MergeOperationType.rebase) {
-        await gitService.rebaseAbort(worktreeRoot);
-      } else {
-        await gitService.mergeAbort(worktreeRoot);
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, 'Failed to abort: $e');
+    final gitOps = context.read<GitOperationsService>();
+    final result = await gitOps.abortConflict(worktreeRoot, data.conflictOperation);
+    if (!result.success && context.mounted) {
+      showErrorSnackBar(context, result.errorMessage!);
     }
     onStatusChanged();
   }
 
-  Future<void> _handleContinueConflict(
-    BuildContext context,
-  ) async {
-    final gitService = context.read<GitService>();
-    final operation = data.conflictOperation;
-    try {
-      if (operation == MergeOperationType.rebase) {
-        await gitService.rebaseContinue(worktreeRoot);
-      } else {
-        await gitService.mergeContinue(worktreeRoot);
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      showErrorSnackBar(context, 'Failed to continue: $e');
+  Future<void> _handleContinueConflict(BuildContext context) async {
+    final gitOps = context.read<GitOperationsService>();
+    final result = await gitOps.continueConflict(worktreeRoot, data.conflictOperation);
+    if (!result.success && context.mounted) {
+      showErrorSnackBar(context, result.errorMessage!);
     }
     onStatusChanged();
   }
 
-  Future<void> _handleAskClaudeConflict(
-    BuildContext context,
-  ) async {
+  Future<void> _handleAskClaudeConflict(BuildContext context) async {
+    final gitOps = context.read<GitOperationsService>();
     final project = context.read<ProjectState>();
-    final mainBranch = await context
-        .read<GitService>()
-        .getMainBranch(project.data.repoRoot);
-    if (!context.mounted) return;
-
-    final operation =
-        data.conflictOperation ?? MergeOperationType.merge;
-    final mainWorktreePath =
-        project.primaryWorktree.data.worktreeRoot;
-
-    await _openConflictManagerChat(
-      context,
-      branch: data.branch,
-      mainBranch: mainBranch ?? 'main',
-      worktreePath: worktreeRoot,
-      mainWorktreePath: mainWorktreePath,
-      operation: operation,
+    final selection = context.read<SelectionState>();
+    await gitOps.askClaudeForConflict(
+      project: project,
+      selection: selection,
+      worktree: worktree,
+      data: data,
     );
   }
 
-  // -- Enable/disable logic --
-  // Rebase, merge, and pull buttons are always enabled when working with
-  // a remote base because we can't reliably know if the remote has changed
-  // since our last fetch. For local bases we can check commitsBehindMain.
+  // ---------------------------------------------------------------------------
+  // Enable/disable logic
+  // ---------------------------------------------------------------------------
+
   bool get _canUpdateFromBase =>
       data.isRemoteBase || data.commitsBehindMain > 0;
 
@@ -737,9 +589,9 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // A. Working Tree section (status counts, no label)
-              _StatusCounts(data: data),
+              InfoStatusCounts(data: data),
               const SizedBox(height: 8),
-              _CompactButton(
+              InfoCompactButton(
                 key: InformationPanelKeys.commitButton,
                 onPressed: data.uncommittedFiles > 0 ||
                         data.stagedFiles > 0
@@ -756,7 +608,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
               // B. Base section (non-primary only)
               if (!data.isPrimary) ...[
                 const SizedBox(height: 16),
-                _BaseSection(
+                InfoBaseSection(
                   key: InformationPanelKeys.baseSection,
                   data: data,
                   baseRef: baseRef,
@@ -767,7 +619,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
               // C. Upstream section (non-primary only)
               if (!data.isPrimary) ...[
                 const SizedBox(height: 16),
-                _UpstreamSection(
+                InfoUpstreamSection(
                   key: InformationPanelKeys.upstreamSection,
                   data: data,
                 ),
@@ -776,7 +628,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
               // D. Primary worktree upstream sync (Push/Pull only)
               if (data.isPrimary && data.upstreamBranch != null) ...[
                 const SizedBox(height: 16),
-                _PrimaryUpstreamSection(
+                InfoPrimaryUpstreamSection(
                   data: data,
                   canPush: _canPush,
                   onPush: () => _withLoading(
@@ -796,7 +648,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
               // E/F. Actions or Conflict section
               if (data.hasMergeConflict ||
                   data.conflictOperation != null) ...[
-                _ConflictInProgress(
+                InfoConflictInProgress(
                   data: data,
                   onAbort: () => _withLoading(
                     () => _handleAbortConflict(context),
@@ -809,7 +661,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                   ),
                 ),
               ] else if (!data.isPrimary) ...[
-                _ActionsSection(
+                InfoActionsSection(
                   data: data,
                   baseRef: baseRef,
                   canUpdateFromBase: _canUpdateFromBase,
@@ -834,8 +686,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
                   onPush: () => _withLoading(
                     () => _handlePush(
                       context,
-                      setUpstream:
-                          data.upstreamBranch == null,
+                      setUpstream: data.upstreamBranch == null,
                     ),
                   ),
                   onPullMerge: () => _withLoading(
@@ -868,872 +719,6 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
               ),
             ),
           ),
-      ],
-    );
-  }
-}
-
-// -- Section widgets --
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Text(
-      label,
-      style: textTheme.labelSmall?.copyWith(
-        color: colorScheme.onSurfaceVariant,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-}
-
-/// Section divider with centered text label and horizontal lines.
-class _SectionDivider extends StatelessWidget {
-  const _SectionDivider({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final dividerColor = colorScheme.outlineVariant.withValues(alpha: 0.4);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // For very narrow panels, just show text centered
-        if (constraints.maxWidth < 150) {
-          return Center(
-            child: Text(
-              label,
-              style: textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(child: Divider(color: dividerColor)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                label,
-                style: textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            Expanded(child: Divider(color: dividerColor)),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _StatusCounts extends StatelessWidget {
-  const _StatusCounts({required this.data});
-
-  final WorktreeData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Tooltip(
-      message: 'Uncommitted: ${data.uncommittedFiles} files\n'
-          'Staged: ${data.stagedFiles} files\n'
-          'Commits ahead of upstream: ${data.commitsAhead}',
-      child: Text(
-        'Uncommitted / Staged / Commits:  '
-        '${data.uncommittedFiles} / ${data.stagedFiles} / '
-        '${data.commitsAhead}',
-        style: textTheme.bodySmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-  }
-}
-
-class _BaseSection extends StatelessWidget {
-  const _BaseSection({
-    super.key,
-    required this.data,
-    required this.baseRef,
-    required this.onChangeBase,
-  });
-
-  final WorktreeData data;
-  final String baseRef;
-  final VoidCallback onChangeBase;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    // Use house emoji for local, globe icon for remote
-    final isLocal = !data.isRemoteBase;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionLabel(label: 'Base'),
-        const SizedBox(height: 4),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // Use row layout if wide enough, otherwise stack
-            final isWide = constraints.maxWidth > 220;
-            // Build label: "local main" for local, just "origin/main" for remote
-            final baseLabel = isLocal ? 'local $baseRef' : baseRef;
-
-            if (isWide) {
-              return Row(
-                children: [
-                  Text(
-                    isLocal ? '🏠' : '🌐',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      baseLabel,
-                      style: textTheme.bodySmall?.copyWith(
-                        fontFamily: 'JetBrains Mono',
-                        fontSize: 12,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _CompactButton(
-                    key: InformationPanelKeys.changeBaseButton,
-                    onPressed: onChangeBase,
-                    label: 'Change...',
-                  ),
-                ],
-              );
-            }
-            // Narrow layout: stack vertically
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      isLocal ? '🏠' : '🌐',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        baseLabel,
-                        style: textTheme.bodySmall?.copyWith(
-                          fontFamily: 'JetBrains Mono',
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _CompactButton(
-                    key: InformationPanelKeys.changeBaseButton,
-                    onPressed: onChangeBase,
-                    label: 'Change...',
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 4),
-        _AheadBehindIndicator(
-          ahead: data.commitsAheadOfMain,
-          behind: data.commitsBehindMain,
-          targetRef: baseRef,
-          aheadPrefix: '+',
-          behindPrefix: '-',
-        ),
-      ],
-    );
-  }
-}
-
-class _UpstreamSection extends StatelessWidget {
-  const _UpstreamSection({
-    super.key,
-    required this.data,
-  });
-
-  final WorktreeData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionLabel(label: 'Upstream'),
-        const SizedBox(height: 4),
-        if (data.upstreamBranch == null)
-          Row(
-            children: [
-              Icon(
-                Icons.cloud_off,
-                size: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  '(not published)',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontStyle: FontStyle.italic,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          )
-        else ...[
-          Row(
-            children: [
-              Icon(
-                Icons.cloud,
-                size: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  data.upstreamBranch!,
-                  style: textTheme.bodySmall?.copyWith(
-                    fontFamily: 'JetBrains Mono',
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          _AheadBehindIndicator(
-            ahead: data.commitsAhead,
-            behind: data.commitsBehind,
-            targetRef: data.upstreamBranch!,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Upstream section for primary worktree - shows upstream info and Push/Pull.
-class _PrimaryUpstreamSection extends StatelessWidget {
-  const _PrimaryUpstreamSection({
-    required this.data,
-    required this.canPush,
-    required this.onPush,
-    required this.onPullMerge,
-    required this.onPullRebase,
-  });
-
-  final WorktreeData data;
-  final bool canPush;
-  final VoidCallback onPush;
-  final VoidCallback onPullMerge;
-  final VoidCallback onPullRebase;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionLabel(label: 'Upstream'),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Icon(
-              Icons.cloud,
-              size: 14,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                data.upstreamBranch!,
-                style: textTheme.bodySmall?.copyWith(
-                  fontFamily: 'JetBrains Mono',
-                  fontSize: 12,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        _AheadBehindIndicator(
-          ahead: data.commitsAhead,
-          behind: data.commitsBehind,
-          targetRef: data.upstreamBranch!,
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: _CompactButton(
-            key: InformationPanelKeys.pushButton,
-            onPressed: canPush ? onPush : null,
-            label: 'Push',
-            icon: Icons.cloud_upload,
-            tooltip: canPush ? null : 'Nothing to push',
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: _CompactButton(
-                key: InformationPanelKeys.pullMergeButton,
-                onPressed: onPullMerge,
-                label: 'Pull / Merge',
-                icon: Icons.cloud_download,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _CompactButton(
-                key: InformationPanelKeys.pullRebaseButton,
-                onPressed: onPullRebase,
-                label: 'Pull / Rebase',
-                icon: Icons.cloud_download,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _AheadBehindIndicator extends StatelessWidget {
-  const _AheadBehindIndicator({
-    required this.ahead,
-    required this.behind,
-    required this.targetRef,
-    this.aheadPrefix = '\u{2191}',
-    this.behindPrefix = '\u{2193}',
-  });
-
-  final int ahead;
-  final int behind;
-  final String targetRef;
-  final String aheadPrefix;
-  final String behindPrefix;
-
-  String get _tooltipMessage {
-    final lines = <String>[];
-    if (ahead > 0) {
-      lines.add('This branch has $ahead commit${ahead == 1 ? '' : 's'} '
-          'not in $targetRef');
-    }
-    if (behind > 0) {
-      lines.add('$targetRef has $behind commit${behind == 1 ? '' : 's'} '
-          'not in this branch');
-    }
-    if (ahead > 0 && behind > 0) {
-      lines.add('Your branches have diverged.');
-    }
-    return lines.join('\n');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    if (ahead == 0 && behind == 0) {
-      return Text(
-        'Up to date',
-        style: textTheme.bodySmall?.copyWith(
-          color: Colors.green,
-        ),
-      );
-    }
-
-    return Tooltip(
-      message: _tooltipMessage,
-      child: RichText(
-        text: TextSpan(
-          style: textTheme.bodySmall,
-          children: [
-            if (ahead > 0)
-              TextSpan(
-                text: '$aheadPrefix$ahead',
-                style: const TextStyle(color: Colors.green),
-              ),
-            if (ahead > 0 && behind > 0)
-              const TextSpan(text: '  '),
-            if (behind > 0)
-              TextSpan(
-                text: '$behindPrefix$behind',
-                style: const TextStyle(color: Colors.orange),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionsSection extends StatelessWidget {
-  const _ActionsSection({
-    required this.data,
-    required this.baseRef,
-    required this.canUpdateFromBase,
-    required this.canMergeIntoMain,
-    required this.canPush,
-    required this.canCreatePr,
-    required this.onRebaseOntoBase,
-    required this.onMergeBase,
-    required this.onMergeIntoMain,
-    required this.onPush,
-    required this.onPullMerge,
-    required this.onPullRebase,
-    required this.onCreatePr,
-  });
-
-  final WorktreeData data;
-  final String baseRef;
-  final bool canUpdateFromBase;
-  final bool canMergeIntoMain;
-  final bool canPush;
-  final bool canCreatePr;
-  final VoidCallback onRebaseOntoBase;
-  final VoidCallback onMergeBase;
-  final VoidCallback onMergeIntoMain;
-  final VoidCallback onPush;
-  final VoidCallback onPullMerge;
-  final VoidCallback onPullRebase;
-  final VoidCallback onCreatePr;
-
-  bool get _isLocalBase => !data.isRemoteBase;
-  bool get _hasUpstream => data.upstreamBranch != null;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Top section: Remote actions / Local actions
-        _SectionDivider(
-          label: _isLocalBase ? 'Local actions' : 'Remote actions',
-        ),
-        const SizedBox(height: 4),
-
-        // Description: "Update from <baseRef>"
-        Text(
-          'Update from $baseRef',
-          style: textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 6),
-
-        // Rebase / Merge side by side
-        Row(
-          children: [
-            Expanded(
-              child: _CompactButton(
-                key: InformationPanelKeys.rebaseOntoBaseButton,
-                onPressed: canUpdateFromBase ? onRebaseOntoBase : null,
-                label: 'Rebase',
-                icon: Icons.low_priority,
-                tooltip: canUpdateFromBase ? null : 'Already up to date',
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: _CompactButton(
-                key: InformationPanelKeys.mergeBaseButton,
-                onPressed: canUpdateFromBase ? onMergeBase : null,
-                label: 'Merge',
-                icon: Icons.merge,
-                tooltip: canUpdateFromBase ? null : 'Already up to date',
-              ),
-            ),
-          ],
-        ),
-
-        // Bottom section
-        const SizedBox(height: 12),
-
-        if (_isLocalBase) ...[
-          const _SectionDivider(label: 'Integrate locally'),
-          const SizedBox(height: 8),
-          _CompactButton(
-            key: InformationPanelKeys.mergeBranchIntoMainButton,
-            onPressed:
-                canMergeIntoMain ? onMergeIntoMain : null,
-            label: 'Merge branch \u{2192} $baseRef',
-            icon: Icons.merge,
-            tooltip: _mergeIntoMainTooltip,
-          ),
-        ] else if (!_hasUpstream) ...[
-          const _SectionDivider(label: 'Publish'),
-          const SizedBox(height: 8),
-          _CompactButton(
-            key: InformationPanelKeys.pushButton,
-            onPressed: onPush,
-            label: 'Push to origin/${data.branch}...',
-            icon: Icons.cloud_upload,
-          ),
-
-          // Pull Request section
-          const SizedBox(height: 12),
-          const _SectionDivider(label: 'Pull Request'),
-          const SizedBox(height: 8),
-          const _CompactButton(
-            key: InformationPanelKeys.createPrButton,
-            onPressed: null,
-            label: 'Create PR (push required)',
-            icon: Icons.open_in_new,
-            tooltip: 'Push required before creating PR',
-          ),
-        ] else ...[
-          const _SectionDivider(label: 'Sync'),
-          const SizedBox(height: 4),
-
-          // Description: "Sync with <upstream>"
-          Text(
-            'Sync with ${data.upstreamBranch}',
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-
-          // Push full width
-          SizedBox(
-            width: double.infinity,
-            child: _CompactButton(
-              key: InformationPanelKeys.pushButton,
-              onPressed: canPush ? onPush : null,
-              label: 'Push',
-              icon: Icons.cloud_upload,
-              tooltip: canPush ? null : 'Nothing to push',
-            ),
-          ),
-          const SizedBox(height: 6),
-
-          // Pull/Merge and Pull/Rebase side by side
-          Row(
-            children: [
-              Expanded(
-                child: _CompactButton(
-                  key: InformationPanelKeys.pullMergeButton,
-                  onPressed: onPullMerge,
-                  label: 'Pull / Merge',
-                  icon: Icons.cloud_download,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _CompactButton(
-                  key: InformationPanelKeys.pullRebaseButton,
-                  onPressed: onPullRebase,
-                  label: 'Pull / Rebase',
-                  icon: Icons.cloud_download,
-                ),
-              ),
-            ],
-          ),
-
-          // Pull Request section
-          const SizedBox(height: 12),
-          const _SectionDivider(label: 'Pull Request'),
-          const SizedBox(height: 8),
-          _CompactButton(
-            key: InformationPanelKeys.createPrButton,
-            onPressed: canCreatePr ? onCreatePr : null,
-            label: 'Create PR',
-            icon: Icons.open_in_new,
-            tooltip: _createPrTooltip,
-          ),
-        ],
-      ],
-    );
-  }
-
-  String? get _mergeIntoMainTooltip {
-    if (data.commitsAheadOfMain == 0) return 'No commits to merge';
-    if (data.commitsBehindMain > 0) {
-      return 'Update this branch with the latest from $baseRef '
-          'before merging it back in';
-    }
-    return null;
-  }
-
-  String? get _createPrTooltip {
-    if (data.commitsAheadOfMain == 0) return 'No commits to push';
-    return null;
-  }
-}
-
-class _ConflictInProgress extends StatelessWidget {
-  const _ConflictInProgress({
-    required this.data,
-    required this.onAbort,
-    required this.onAskClaude,
-    required this.onContinue,
-  });
-
-  final WorktreeData data;
-  final VoidCallback onAbort;
-  final VoidCallback onAskClaude;
-  final VoidCallback onContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    final operationLabel =
-        data.conflictOperation == MergeOperationType.rebase
-            ? 'Rebase'
-            : 'Merge';
-
-    // Conflicts resolved but operation still pending.
-    final resolved = !data.hasMergeConflict &&
-        data.conflictOperation != null;
-
-    final Color bannerColor;
-    final IconData bannerIcon;
-    final String bannerText;
-    if (resolved) {
-      bannerColor = Colors.green.shade700;
-      bannerIcon = Icons.check_circle_outline;
-      bannerText = 'Conflicts resolved \u{2014} ready to continue';
-    } else {
-      bannerColor = Colors.orange.shade700;
-      bannerIcon = Icons.warning_amber;
-      bannerText = '$operationLabel conflict in progress';
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 6,
-          ),
-          decoration: BoxDecoration(
-            color: bannerColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: bannerColor.withValues(alpha: 0.4),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(bannerIcon, size: 14, color: bannerColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  bannerText,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: bannerColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (resolved)
-          Row(
-            children: [
-              Expanded(
-                child: _CompactButton(
-                  onPressed: onContinue,
-                  label: 'Continue',
-                  icon: Icons.play_arrow,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _CompactButton(
-                  onPressed: onAbort,
-                  label: 'Abort',
-                  icon: Icons.cancel_outlined,
-                ),
-              ),
-            ],
-          )
-        else
-          Row(
-            children: [
-              Expanded(
-                child: _CompactButton(
-                  onPressed: onAbort,
-                  label: 'Abort',
-                  icon: Icons.cancel_outlined,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _CompactButton(
-                  onPressed: onAskClaude,
-                  label: 'Ask Claude',
-                  icon: Icons.auto_fix_high,
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-}
-
-/// Compact button styled for desktop UI - smaller padding and text.
-class _CompactButton extends StatelessWidget {
-  const _CompactButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.icon,
-    this.tooltip,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final IconData? icon;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isEnabled = onPressed != null;
-
-    final contentColor = isEnabled
-        ? colorScheme.onSurface
-        : colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
-    final borderColor = isEnabled
-        ? colorScheme.outline
-        : colorScheme.outlineVariant.withValues(alpha: 0.3);
-
-    Widget button = Opacity(
-      opacity: isEnabled ? 1.0 : 0.6,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              border: Border.all(color: borderColor),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 12, color: contentColor),
-                  const SizedBox(width: 4),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    style: textTheme.labelSmall?.copyWith(
-                      color: contentColor,
-                    ),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (tooltip != null) {
-      button = Tooltip(message: tooltip!, child: button);
-    }
-
-    return button;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Pull rebase warning dialog (primary worktree with local base)
-// ---------------------------------------------------------------------------
-
-enum _PullRebaseChoice { rebase, merge }
-
-class _PullRebaseWarningDialog extends StatelessWidget {
-  const _PullRebaseWarningDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      title: const Text('Pull with rebase?'),
-      content: const Text(
-        'A git pull rebase rewrites the commit history. This is fine, '
-        'but any worktrees basing off local main will suddenly report '
-        'they are very out-of-sync. That can be solved by doing a rebase '
-        'on each worktree.\n\n'
-        'You may find doing a pull / merge is a better option and will '
-        'avoid that.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_PullRebaseChoice.rebase),
-          child: Text(
-            'Git pull (rebase)',
-            style: TextStyle(color: colorScheme.error),
-          ),
-        ),
-        FilledButton(
-          onPressed: () =>
-              Navigator.of(context).pop(_PullRebaseChoice.merge),
-          child: const Text('Git pull (merge)'),
-        ),
       ],
     );
   }

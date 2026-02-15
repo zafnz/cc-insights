@@ -8,6 +8,155 @@ import 'click_to_scroll_container.dart';
 import 'tool_card_inputs.dart';
 import 'tool_card_results.dart';
 
+// ---------------------------------------------------------------------------
+// File-level pure helper functions (used by multiple widgets below)
+// ---------------------------------------------------------------------------
+
+/// Formats tool name for display.
+///
+/// MCP tools have names like `mcp__<mcp-name>__<tool_name>` and are
+/// formatted as `MCP(mcp-name:tool_name)`.
+final _mcpNamePattern = RegExp(r'^mcp__([^_]+)__(.+)$');
+
+String _formatToolName(String toolName) {
+  final mcpMatch = _mcpNamePattern.firstMatch(toolName);
+  if (mcpMatch != null) {
+    final mcpName = mcpMatch.group(1)!;
+    final mcpToolName = mcpMatch.group(2)!;
+    return 'MCP($mcpName:$mcpToolName)';
+  }
+  return toolName;
+}
+
+IconData _getToolIcon(ToolKind toolKind, String toolName) {
+  return switch (toolKind) {
+    ToolKind.execute => Icons.terminal,
+    ToolKind.read => Icons.description,
+    ToolKind.edit => switch (toolName) {
+        'Write' => Icons.edit_document,
+        'NotebookEdit' => Icons.code,
+        _ => Icons.edit,
+      },
+    ToolKind.search => switch (toolName) {
+        'Glob' => Icons.folder_open,
+        _ => Icons.find_in_page,
+      },
+    ToolKind.fetch => Icons.link,
+    ToolKind.browse => Icons.travel_explore,
+    ToolKind.think => Icons.account_tree,
+    ToolKind.ask => Icons.help,
+    ToolKind.memory => Icons.checklist,
+    ToolKind.mcp => Icons.extension,
+    ToolKind.delete => Icons.delete_outline,
+    ToolKind.move => Icons.drive_file_move_outline,
+    ToolKind.other => Icons.extension,
+  };
+}
+
+Color _getToolColor(ToolKind toolKind) {
+  return switch (toolKind) {
+    ToolKind.execute => Colors.orange,
+    ToolKind.read || ToolKind.edit => Colors.blue,
+    ToolKind.search => Colors.purple,
+    ToolKind.fetch || ToolKind.browse => Colors.cyan,
+    ToolKind.think => Colors.deepOrange,
+    ToolKind.ask => Colors.green,
+    ToolKind.memory => Colors.teal,
+    ToolKind.mcp => Colors.indigo,
+    ToolKind.delete || ToolKind.move => Colors.amber,
+    ToolKind.other => Colors.grey,
+  };
+}
+
+String _getToolSummary(
+  ToolKind toolKind,
+  Map<String, dynamic> input,
+  String? projectDir,
+) {
+  final config = RuntimeConfig.instance;
+
+  return switch (toolKind) {
+    ToolKind.execute => config.bashToolSummary == BashToolSummary.description
+        ? input['description'] as String? ?? input['command'] as String? ?? ''
+        : input['command'] as String? ?? '',
+    ToolKind.read || ToolKind.edit => _formatFilePath(
+        input['file_path'] as String? ?? '',
+        projectDir,
+        config.toolSummaryRelativeFilePaths,
+      ),
+    ToolKind.search => input['pattern'] as String? ?? '',
+    ToolKind.browse => input['query'] as String? ?? '',
+    ToolKind.fetch => input['url'] as String? ?? '',
+    ToolKind.think => input['description'] as String? ?? '',
+    _ => '',
+  };
+}
+
+/// Formats a file path, optionally making it relative to the project dir.
+String _formatFilePath(String filePath, String? projectDir, bool useRelative) {
+  if (!useRelative ||
+      projectDir == null ||
+      projectDir.isEmpty ||
+      filePath.isEmpty) {
+    return filePath;
+  }
+
+  // Ensure projectDir ends with a separator for proper prefix matching
+  final normalizedProjectDir =
+      projectDir.endsWith('/') ? projectDir : '$projectDir/';
+
+  if (filePath.startsWith(normalizedProjectDir)) {
+    return filePath.substring(normalizedProjectDir.length);
+  }
+
+  return filePath;
+}
+
+/// Extracts error message from tool result, stripping XML-like tags.
+String? _extractErrorMessage(String? result) {
+  if (result == null || result.isEmpty) return null;
+
+  // Try to extract from <tool_use_error>...</tool_use_error> tags
+  final errorMatch = RegExp(
+    r'<tool_use_error>(.*?)</tool_use_error>',
+    dotAll: true,
+  ).firstMatch(result);
+  if (errorMatch != null) {
+    return errorMatch.group(1)?.trim();
+  }
+
+  // If no tags, return the result as-is (truncated if too long)
+  final trimmed = result.trim();
+  if (trimmed.length > 100) {
+    return '${trimmed.substring(0, 100)}...';
+  }
+  return trimmed;
+}
+
+/// Extracts displayable output from a Bash tool result.
+///
+/// The result can be either:
+/// - A [Map] with `stdout`, `stderr`, `interrupted`, `isImage` fields
+/// - A plain [String]
+/// - null
+String _extractBashOutput(dynamic result) {
+  if (result == null) return '';
+  if (result is Map) {
+    final stdout = result['stdout'] as String? ?? '';
+    final stderr = result['stderr'] as String? ?? '';
+    final parts = <String>[
+      if (stdout.isNotEmpty) stdout,
+      if (stderr.isNotEmpty) stderr,
+    ];
+    return parts.join('\n');
+  }
+  return result.toString();
+}
+
+// ---------------------------------------------------------------------------
+// Main widget
+// ---------------------------------------------------------------------------
+
 /// Expandable card showing tool execution details.
 ///
 /// Renders tool inputs and results with specialized formatting for different
@@ -68,9 +217,9 @@ class _ToolCardState extends State<ToolCard> {
                   ),
                   const SizedBox(width: 4),
                   Icon(
-                    _getToolIcon(entry.toolName),
+                    _getToolIcon(entry.toolKind, entry.toolName),
                     size: 16,
-                    color: _getToolColor(),
+                    color: _getToolColor(entry.toolKind),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -102,7 +251,10 @@ class _ToolCardState extends State<ToolCard> {
                   ],
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildToolSummaryWidget(context, entry),
+                    child: _ToolSummary(
+                      entry: entry,
+                      projectDir: widget.projectDir,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   if (hasResult)
@@ -134,15 +286,13 @@ class _ToolCardState extends State<ToolCard> {
                   if (!(entry.toolKind == ToolKind.think &&
                       hasResult &&
                       entry.result is Map))
-                    _buildToolInput(
-                      context,
-                      entry.toolName,
-                      entry.toolInput,
+                    _ToolInput(
                       entry: entry,
+                      projectDir: widget.projectDir,
                     ),
                   if (hasResult) ...[
                     const SizedBox(height: 8),
-                    _buildToolResult(context, entry),
+                    _ToolResult(entry: entry),
                   ],
                 ],
               ),
@@ -152,72 +302,25 @@ class _ToolCardState extends State<ToolCard> {
       ),
     );
   }
+}
 
-  /// Formats tool name for display.
-  ///
-  /// MCP tools have names like `mcp__<mcp-name>__<tool_name>` and are
-  /// formatted as `MCP(mcp-name:tool_name)`.
-  static final _mcpNamePattern = RegExp(r'^mcp__([^_]+)__(.+)$');
+// ---------------------------------------------------------------------------
+// Extracted widget classes
+// ---------------------------------------------------------------------------
 
-  String _formatToolName(String toolName) {
-    final mcpMatch = _mcpNamePattern.firstMatch(toolName);
-    if (mcpMatch != null) {
-      final mcpName = mcpMatch.group(1)!;
-      final mcpToolName = mcpMatch.group(2)!;
-      return 'MCP($mcpName:$mcpToolName)';
-    }
-    return toolName;
-  }
+/// Displays the tool summary text in the collapsed card header.
+class _ToolSummary extends StatelessWidget {
+  const _ToolSummary({
+    required this.entry,
+    required this.projectDir,
+  });
 
-  IconData _getToolIcon(String toolName) {
-    return switch (widget.entry.toolKind) {
-      ToolKind.execute => Icons.terminal,
-      ToolKind.read => Icons.description,
-      ToolKind.edit => switch (toolName) {
-          'Write' => Icons.edit_document,
-          'NotebookEdit' => Icons.code,
-          _ => Icons.edit,
-        },
-      ToolKind.search => switch (toolName) {
-          'Glob' => Icons.folder_open,
-          _ => Icons.find_in_page,
-        },
-      ToolKind.fetch => Icons.link,
-      ToolKind.browse => Icons.travel_explore,
-      ToolKind.think => Icons.account_tree,
-      ToolKind.ask => Icons.help,
-      ToolKind.memory => Icons.checklist,
-      ToolKind.mcp => Icons.extension,
-      ToolKind.delete => Icons.delete_outline,
-      ToolKind.move => Icons.drive_file_move_outline,
-      ToolKind.other => Icons.extension,
-    };
-  }
+  final ToolUseOutputEntry entry;
+  final String? projectDir;
 
-  Color _getToolColor() {
-    return switch (widget.entry.toolKind) {
-      ToolKind.execute => Colors.orange,
-      ToolKind.read || ToolKind.edit => Colors.blue,
-      ToolKind.search => Colors.purple,
-      ToolKind.fetch || ToolKind.browse => Colors.cyan,
-      ToolKind.think => Colors.deepOrange,
-      ToolKind.ask => Colors.green,
-      ToolKind.memory => Colors.teal,
-      ToolKind.mcp => Colors.indigo,
-      ToolKind.delete || ToolKind.move => Colors.amber,
-      ToolKind.other => Colors.grey,
-    };
-  }
-
-  /// Builds the tool summary widget, including error text when tools fail.
-  Widget _buildToolSummaryWidget(
-    BuildContext context,
-    ToolUseOutputEntry entry,
-  ) {
-    final summary = _getToolSummary(
-      entry.toolInput,
-      widget.projectDir,
-    );
+  @override
+  Widget build(BuildContext context) {
+    final summary = _getToolSummary(entry.toolKind, entry.toolInput, projectDir);
     final isError = entry.isError;
     final monoFont = RuntimeConfig.instance.monoFontFamily;
 
@@ -273,113 +376,64 @@ class _ToolCardState extends State<ToolCard> {
       maxLines: 1,
     );
   }
+}
 
-  /// Extracts error message from tool result, stripping XML-like tags.
-  String? _extractErrorMessage(String? result) {
-    if (result == null || result.isEmpty) return null;
+/// Dispatches to the appropriate tool-specific input widget.
+class _ToolInput extends StatelessWidget {
+  const _ToolInput({
+    required this.entry,
+    required this.projectDir,
+  });
 
-    // Try to extract from <tool_use_error>...</tool_use_error> tags
-    final errorMatch = RegExp(
-      r'<tool_use_error>(.*?)</tool_use_error>',
-      dotAll: true,
-    ).firstMatch(result);
-    if (errorMatch != null) {
-      return errorMatch.group(1)?.trim();
-    }
+  final ToolUseOutputEntry entry;
+  final String? projectDir;
 
-    // If no tags, return the result as-is (truncated if too long)
-    final trimmed = result.trim();
-    if (trimmed.length > 100) {
-      return '${trimmed.substring(0, 100)}...';
-    }
-    return trimmed;
-  }
-
-  String _getToolSummary(
-    Map<String, dynamic> input,
-    String? projectDir,
-  ) {
-    final config = RuntimeConfig.instance;
-
-    return switch (widget.entry.toolKind) {
-      ToolKind.execute => config.bashToolSummary == BashToolSummary.description
-          ? input['description'] as String? ?? input['command'] as String? ?? ''
-          : input['command'] as String? ?? '',
-      ToolKind.read || ToolKind.edit => _formatFilePath(
-          input['file_path'] as String? ?? '',
-          projectDir,
-          config.toolSummaryRelativeFilePaths,
-        ),
-      ToolKind.search => input['pattern'] as String? ?? '',
-      ToolKind.browse => input['query'] as String? ?? '',
-      ToolKind.fetch => input['url'] as String? ?? '',
-      ToolKind.think => input['description'] as String? ?? '',
-      _ => '',
-    };
-  }
-
-  /// Formats a file path, optionally making it relative to the project dir.
-  String _formatFilePath(String filePath, String? projectDir, bool useRelative) {
-    if (!useRelative ||
-        projectDir == null ||
-        projectDir.isEmpty ||
-        filePath.isEmpty) {
-      return filePath;
-    }
-
-    // Ensure projectDir ends with a separator for proper prefix matching
-    final normalizedProjectDir =
-        projectDir.endsWith('/') ? projectDir : '$projectDir/';
-
-    if (filePath.startsWith(normalizedProjectDir)) {
-      return filePath.substring(normalizedProjectDir.length);
-    }
-
-    return filePath;
-  }
-
-  Widget _buildToolInput(
-    BuildContext context,
-    String toolName,
-    Map<String, dynamic> input, {
-    ToolUseOutputEntry? entry,
-  }) {
-    return switch (entry?.toolKind ?? ToolKind.other) {
-      ToolKind.execute => BashInputWidget(input: input),
+  @override
+  Widget build(BuildContext context) {
+    return switch (entry.toolKind) {
+      ToolKind.execute => BashInputWidget(input: entry.toolInput),
       ToolKind.read => ReadInputWidget(
-          input: input,
-          projectDir: widget.projectDir,
+          input: entry.toolInput,
+          projectDir: projectDir,
         ),
-      ToolKind.edit => switch (toolName) {
+      ToolKind.edit => switch (entry.toolName) {
           'Write' => WriteInputWidget(
-              input: input,
-              projectDir: widget.projectDir,
+              input: entry.toolInput,
+              projectDir: projectDir,
             ),
           // Edit, NotebookEdit, and other edit tools
           _ => EditInputWidget(
-              entry: entry!,
-              projectDir: widget.projectDir,
+              entry: entry,
+              projectDir: projectDir,
             ),
         },
-      ToolKind.search => switch (toolName) {
-          'Grep' => GrepInputWidget(input: input),
+      ToolKind.search => switch (entry.toolName) {
+          'Grep' => GrepInputWidget(input: entry.toolInput),
           // Glob and other search tools
-          _ => GlobInputWidget(input: input),
+          _ => GlobInputWidget(input: entry.toolInput),
         },
-      ToolKind.browse => WebSearchInputWidget(input: input),
-      ToolKind.fetch => WebFetchInputWidget(input: input),
-      ToolKind.think => TaskInputWidget(input: input),
+      ToolKind.browse => WebSearchInputWidget(input: entry.toolInput),
+      ToolKind.fetch => WebFetchInputWidget(input: entry.toolInput),
+      ToolKind.think => TaskInputWidget(input: entry.toolInput),
       ToolKind.ask => AskUserQuestionInputWidget(
-          input: input,
-          result: entry?.result,
+          input: entry.toolInput,
+          result: entry.result,
         ),
       ToolKind.memory => const SizedBox.shrink(),
       ToolKind.mcp || ToolKind.delete || ToolKind.move || ToolKind.other =>
-        GenericInputWidget(input: input),
+        GenericInputWidget(input: entry.toolInput),
     };
   }
+}
 
-  Widget _buildToolResult(BuildContext context, ToolUseOutputEntry entry) {
+/// Renders the tool result section when the card is expanded.
+class _ToolResult extends StatelessWidget {
+  const _ToolResult({required this.entry});
+
+  final ToolUseOutputEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
     final isError = entry.isError;
     final monoFont = RuntimeConfig.instance.monoFontFamily;
 
@@ -477,25 +531,5 @@ class _ToolCardState extends State<ToolCard> {
         ),
       ],
     );
-  }
-
-  /// Extracts displayable output from a Bash tool result.
-  ///
-  /// The result can be either:
-  /// - A [Map] with `stdout`, `stderr`, `interrupted`, `isImage` fields
-  /// - A plain [String]
-  /// - null
-  String _extractBashOutput(dynamic result) {
-    if (result == null) return '';
-    if (result is Map) {
-      final stdout = result['stdout'] as String? ?? '';
-      final stderr = result['stderr'] as String? ?? '';
-      final parts = <String>[
-        if (stdout.isNotEmpty) stdout,
-        if (stderr.isNotEmpty) stderr,
-      ];
-      return parts.join('\n');
-    }
-    return result.toString();
   }
 }

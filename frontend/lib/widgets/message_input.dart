@@ -1,19 +1,14 @@
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 
 import '../config/fonts.dart';
 import '../models/output_entry.dart';
-import '../services/image_utils.dart';
+import 'image_attachment_helper.dart';
 import 'insights_widgets.dart';
 import 'keyboard_focus_manager.dart';
-
-/// Maximum number of images that can be attached to a single message.
-const _maxImages = 5;
 
 /// A message input widget for typing messages with image attachment support.
 ///
@@ -81,10 +76,9 @@ class _MessageInputState extends State<MessageInput>
     with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final List<AttachedImage> _pendingImages = [];
+  late final ImageAttachmentHelper _attachments;
   DisplayFormat _displayFormat = DisplayFormat.plain;
   bool _isDragging = false;
-  bool _isProcessingImage = false;
 
   /// Reference to the keyboard focus manager for safe unregistration.
   KeyboardFocusManagerState? _keyboardFocusManager;
@@ -93,6 +87,12 @@ class _MessageInputState extends State<MessageInput>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _attachments = ImageAttachmentHelper(
+      onChanged: () => setState(() {}),
+      onError: _showError,
+      isMounted: () => mounted,
+    );
 
     // Restore initial text (e.g., draft from previous session)
     if (widget.initialText.isNotEmpty) {
@@ -153,11 +153,11 @@ class _MessageInputState extends State<MessageInput>
 
   void _handleSubmit() {
     final text = _controller.text;
-    if (text.trim().isEmpty && _pendingImages.isEmpty) return;
+    if (text.trim().isEmpty && _attachments.images.isEmpty) return;
 
-    widget.onSubmit(text, List.from(_pendingImages), _displayFormat);
+    widget.onSubmit(text, List.from(_attachments.images), _displayFormat);
     _controller.clear();
-    _pendingImages.clear();
+    _attachments.clear();
     setState(() {
       _displayFormat = DisplayFormat.plain;
     });
@@ -212,7 +212,7 @@ class _MessageInputState extends State<MessageInput>
             (!Platform.isMacOS && isControlPressed);
 
         if (isPasteShortcut) {
-          _handlePaste();
+          _attachments.handlePaste();
           // Don't mark as handled - let text paste through if no image
           return KeyEventResult.ignored;
         }
@@ -220,134 +220,6 @@ class _MessageInputState extends State<MessageInput>
     }
 
     return KeyEventResult.ignored;
-  }
-
-  /// Handle paste from clipboard - checks for images.
-  Future<void> _handlePaste() async {
-    final clipboard = SystemClipboard.instance;
-    if (clipboard == null) return;
-
-    final reader = await clipboard.read();
-
-    // Check for image formats in priority order
-    for (final format in [Formats.png, Formats.jpeg, Formats.gif]) {
-      if (reader.canProvide(format)) {
-        // getFile uses a callback pattern
-        reader.getFile(format, (file) async {
-          final stream = file.getStream();
-          final chunks = <List<int>>[];
-          await for (final chunk in stream) {
-            chunks.add(chunk);
-          }
-          final data = Uint8List.fromList(
-            chunks.expand((chunk) => chunk).toList(),
-          );
-          final mediaType = _formatToMediaType(format);
-          await _addImageData(data, mediaType);
-        });
-        return;
-      }
-    }
-  }
-
-  /// Convert super_clipboard format to MIME type.
-  String _formatToMediaType(DataFormat format) {
-    if (format == Formats.png) return 'image/png';
-    if (format == Formats.jpeg) return 'image/jpeg';
-    if (format == Formats.gif) return 'image/gif';
-    return 'image/png'; // Default
-  }
-
-  /// Handle drag and drop files.
-  Future<void> _handleDrop(DropDoneDetails details) async {
-    for (final file in details.files) {
-      final path = file.path;
-      if (path.isEmpty) continue;
-
-      final extension = path.split('.').last;
-      if (!isSupportedImageExtension(extension)) continue;
-
-      final bytes = await File(path).readAsBytes();
-      final mediaType = getMimeTypeFromExtension(extension);
-      await _addImageData(bytes, mediaType);
-    }
-  }
-
-  /// Pick images from file system.
-  Future<void> _pickImages() async {
-    if (_pendingImages.length >= _maxImages) {
-      _showMaxImagesWarning();
-      return;
-    }
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: true,
-      withData: true,
-    );
-
-    if (result == null) return;
-
-    for (final file in result.files) {
-      if (_pendingImages.length >= _maxImages) {
-        _showMaxImagesWarning();
-        break;
-      }
-
-      if (file.bytes != null && file.extension != null) {
-        final mediaType = getMimeTypeFromExtension(file.extension!);
-        await _addImageData(file.bytes!, mediaType);
-      }
-    }
-  }
-
-  /// Add image data with processing/compression.
-  Future<void> _addImageData(Uint8List data, String mediaType) async {
-    if (_pendingImages.length >= _maxImages) {
-      _showMaxImagesWarning();
-      return;
-    }
-
-    setState(() => _isProcessingImage = true);
-
-    try {
-      final result = await processImage(data, mediaType);
-      if (!mounted) return;
-
-      setState(() {
-        _pendingImages.add(AttachedImage(
-          data: result.data,
-          mediaType: result.mediaType,
-        ));
-        _isProcessingImage = false;
-      });
-    } on ImageProcessingError catch (e) {
-      if (!mounted) return;
-      setState(() => _isProcessingImage = false);
-      _showError(e.message);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isProcessingImage = false);
-      _showError('Failed to process image');
-    }
-  }
-
-  /// Remove an image at the given index.
-  void _removeImage(int index) {
-    setState(() {
-      _pendingImages.removeAt(index);
-    });
-  }
-
-  /// Show warning when max images is reached.
-  void _showMaxImagesWarning() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Maximum $_maxImages images per message'),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   /// Show an error message.
@@ -366,7 +238,7 @@ class _MessageInputState extends State<MessageInput>
       onDragExited: (_) => setState(() => _isDragging = false),
       onDragDone: (details) {
         setState(() => _isDragging = false);
-        _handleDrop(details);
+        _attachments.handleDrop(details);
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -385,15 +257,15 @@ class _MessageInputState extends State<MessageInput>
           mainAxisSize: MainAxisSize.min,
           children: [
             // Image previews
-            if (_pendingImages.isNotEmpty) ...[
+            if (_attachments.images.isNotEmpty) ...[
               _ImagePreviewRow(
-                images: _pendingImages,
-                onRemove: _removeImage,
+                images: _attachments.images,
+                onRemove: _attachments.removeImage,
               ),
               const SizedBox(height: 8),
             ],
             // Processing indicator
-            if (_isProcessingImage) ...[
+            if (_attachments.isProcessing) ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
             ],
@@ -405,9 +277,9 @@ class _MessageInputState extends State<MessageInput>
                   _InterruptButton(onPressed: widget.onInterrupt!),
                 // Image attachment button
                 _ImageAttachButton(
-                  onPressed: widget.enabled ? _pickImages : null,
-                  imageCount: _pendingImages.length,
-                  maxImages: _maxImages,
+                  onPressed: widget.enabled ? _attachments.pickImages : null,
+                  imageCount: _attachments.imageCount,
+                  maxImages: _attachments.maxImages,
                 ),
                 const SizedBox(width: 8),
                 // Text input field
@@ -512,7 +384,7 @@ class _MessageInputState extends State<MessageInput>
                   onPressed: widget.enabled ? _handleSubmit : null,
                   isEmpty:
                       _controller.text.trim().isEmpty &&
-                      _pendingImages.isEmpty,
+                      _attachments.images.isEmpty,
                 ),
               ],
             ),

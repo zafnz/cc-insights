@@ -143,6 +143,78 @@ TextStyle textStyle({
 }
 
 // =============================================================================
+// File-level pure helper functions
+// =============================================================================
+
+String _truncate(String text, int maxLength) {
+  if (text.length <= maxLength) return text;
+  return '${text.substring(0, maxLength)}...';
+}
+
+/// Format mode name for display (e.g., "acceptEdits" -> "Accept Edits").
+String _formatModeName(String mode) {
+  switch (mode) {
+    case 'acceptEdits':
+      return 'Accept Edits';
+    case 'bypassPermissions':
+      return 'Bypass Permissions';
+    case 'plan':
+      return 'Plan';
+    default:
+      // Convert camelCase to Title Case
+      return mode
+          .replaceAllMapped(
+            RegExp(r'([a-z])([A-Z])'),
+            (m) => '${m.group(1)} ${m.group(2)}',
+          )
+          .replaceFirstMapped(
+            RegExp(r'^[a-z]'),
+            (m) => m.group(0)!.toUpperCase(),
+          );
+  }
+}
+
+/// Check if a suggestion type is actionable (user can choose behavior).
+/// Note: setMode is handled separately via the "Enable X" button, not here.
+bool _isActionableSuggestion(sdk.PermissionSuggestion s) {
+  if (s.type == 'addRules' || s.type == 'replaceRules') return true;
+  if (s.type == 'addDirectories') return true;
+  return false;
+}
+
+Color _behaviorColor(BuildContext context, String behavior) {
+  final colorScheme = Theme.of(context).colorScheme;
+  switch (behavior) {
+    case 'allow':
+      return colorScheme.primary;
+    case 'deny':
+      return colorScheme.error;
+    default:
+      return colorScheme.onSurfaceVariant;
+  }
+}
+
+List<_AcpPermissionOption> _readAcpOptions(sdk.PermissionRequest request) {
+  final raw = request.rawJson?['options'];
+  if (raw is! List) return const [];
+  final options = <_AcpPermissionOption>[];
+  for (final entry in raw) {
+    if (entry is! Map) continue;
+    final map = Map<String, dynamic>.from(entry);
+    final id = map['optionId'] ?? map['id'];
+    if (id is! String || id.isEmpty) continue;
+    final label =
+        map['name'] ?? map['label'] ?? map['title'] ?? id;
+    options.add(_AcpPermissionOption(
+      id: id,
+      label: label.toString(),
+      kind: map['kind'] as String?,
+    ));
+  }
+  return options;
+}
+
+// =============================================================================
 // Permission Request Widget
 // =============================================================================
 
@@ -218,1049 +290,37 @@ class _PermissionDialogState extends State<PermissionDialog> {
 
     // ExitPlanMode always shows the expanded plan view
     if (permission.toolName == 'ExitPlanMode') {
-      return _buildExpandedPlanView(context, permission);
+      return _ExpandedPlanView(
+        permission: permission,
+        projectDir: widget.projectDir,
+        feedbackController: _feedbackController,
+        onAllow: _handleAllow,
+        onDeny: _handleDeny,
+        onAllowWithAcceptEdits: _handleAllowWithAcceptEdits,
+        onClearContextAndAcceptEdits: widget.onClearContextAndAcceptEdits,
+        onDenyWithMessage: widget.onDeny,
+      );
     }
 
-    return _buildCompactView(context, permission);
-  }
-
-  /// Builds the compact (default) view of the permission dialog.
-  Widget _buildCompactView(
-    BuildContext context,
-    sdk.PermissionRequest permission,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    // Determine if this is a Codex backend
-    // When provider is explicitly set, use it. Otherwise default to Claude.
-    final isCodex = widget.provider == BackendProvider.codex;
-    final isAcp = widget.provider == BackendProvider.acp;
-
-    // Parse suggestions (Claude only)
-    final suggestions = permission.parsedSuggestions;
-
-    // Check for setMode suggestion (Claude only)
-    final setModeSuggestion =
-        suggestions.where((s) => s.type == 'setMode').toList();
-    final hasSetMode = setModeSuggestion.isNotEmpty;
-    final modeName = hasSetMode
-        ? _formatModeName(setModeSuggestion.first.mode ?? 'unknown')
-        : null;
-
-    // Check for non-setMode suggestions (Claude only)
-    final otherSuggestions =
-        suggestions.where((s) => s.type != 'setMode').toList();
-
-    // Use LayoutBuilder to get the available height and limit the content area
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Calculate max content height as roughly half the available space
-        // Account for header (~44px) and footer (~56px) = ~100px
-        // Use a minimum of 100px and maximum of half available height
-        final availableHeight = constraints.maxHeight;
-        final maxContentHeight = availableHeight.isFinite
-            ? (availableHeight * 0.5).clamp(100.0, 400.0)
-            : 300.0;
-
-        return Container(
-          key: PermissionDialogKeys.dialog,
-          // No margin, no rounded corners, no border - integrated look
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainer,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              _buildHeader(context),
-              // Content area - tool-specific display with max height constraint
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxContentHeight),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildToolContent(permission),
-                ),
-              ),
-              // Footer with suggestions and buttons
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color:
-                      colorScheme.surfaceContainer.withValues(alpha: 0.3),
-                  // No rounded corners - integrated look
-                ),
-                child: isCodex
-                    ? _buildCodexFooter(context, colorScheme)
-                    : isAcp
-                        ? _buildAcpFooter(context, colorScheme)
-                    : _buildClaudeFooter(
-                        context,
-                        colorScheme,
-                        otherSuggestions,
-                        hasSetMode,
-                        setModeSuggestion,
-                        modeName,
-                      ),
-              ),
-            ],
-          ),
-        );
+    return _CompactView(
+      permission: permission,
+      provider: widget.provider,
+      onAllow: widget.onAllow,
+      onDenyMessage: widget.onDeny,
+      onHandleAllow: _handleAllow,
+      onHandleDeny: _handleDeny,
+      onHandleCancelTurn: _handleCancelTurn,
+      onHandleDecline: _handleDecline,
+      onHandleAllowWithMode: _handleAllowWithMode,
+      behaviors: _behaviors,
+      destinations: _destinations,
+      onBehaviorChanged: (index, value) {
+        setState(() => _behaviors[index] = value);
+      },
+      onDestinationChanged: (index, value) {
+        setState(() => _destinations[index] = value);
       },
     );
-  }
-
-  Widget _buildAcpFooter(
-    BuildContext context,
-    ColorScheme colorScheme,
-  ) {
-    final options = _readAcpOptions();
-    if (options.isEmpty) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => widget.onDeny('Cancelled'),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: () => widget.onAllow(),
-            child: const Text('Allow'),
-          ),
-        ],
-      );
-    }
-
-    return Wrap(
-      alignment: WrapAlignment.end,
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final option in options) _buildAcpOptionButton(option, colorScheme),
-        TextButton(
-          onPressed: () => widget.onDeny('Cancelled'),
-          child: const Text('Cancel'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAcpOptionButton(
-    _AcpPermissionOption option,
-    ColorScheme colorScheme,
-  ) {
-    final isReject = option.kind != null &&
-        (option.kind!.startsWith('reject') ||
-            option.kind!.startsWith('deny'));
-    final onPressed = () => widget.onAllow(
-          updatedInput: {'optionId': option.id},
-        );
-    if (isReject) {
-      return OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: colorScheme.error,
-          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.6)),
-        ),
-        child: Text(option.label),
-      );
-    }
-    return FilledButton(
-      onPressed: onPressed,
-      child: Text(option.label),
-    );
-  }
-
-  List<_AcpPermissionOption> _readAcpOptions() {
-    final raw = widget.request.rawJson?['options'];
-    if (raw is! List) return const [];
-    final options = <_AcpPermissionOption>[];
-    for (final entry in raw) {
-      if (entry is! Map) continue;
-      final map = Map<String, dynamic>.from(entry);
-      final id = map['optionId'] ?? map['id'];
-      if (id is! String || id.isEmpty) continue;
-      final label =
-          map['name'] ?? map['label'] ?? map['title'] ?? id;
-      options.add(_AcpPermissionOption(
-        id: id,
-        label: label.toString(),
-        kind: map['kind'] as String?,
-      ));
-    }
-    return options;
-  }
-
-  /// Builds the footer for Claude backend with suggestions and buttons.
-  Widget _buildClaudeFooter(
-    BuildContext context,
-    ColorScheme colorScheme,
-    List<sdk.PermissionSuggestion> otherSuggestions,
-    bool hasSetMode,
-    List<sdk.PermissionSuggestion> setModeSuggestion,
-    String? modeName,
-  ) {
-    return Row(
-      children: [
-        // Suggestions on the left (only non-setMode suggestions)
-        if (otherSuggestions.isNotEmpty)
-          Expanded(
-            child: _buildSuggestionsRow(otherSuggestions),
-          )
-        else
-          const Spacer(),
-        // Buttons on the right
-        const SizedBox(width: 14),
-        // Enable mode button (if setMode suggestion exists)
-        if (hasSetMode) ...[
-          OutlinedButton(
-            onPressed: () =>
-                _handleAllowWithMode(setModeSuggestion.first),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colorScheme.tertiary,
-              side: BorderSide(color: colorScheme.tertiary.withValues(alpha: 0.5)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
-              visualDensity: VisualDensity.compact,
-            ),
-            child: Text('Enable $modeName'),
-          ),
-          const SizedBox(width: 8),
-        ],
-        OutlinedButton(
-          key: PermissionDialogKeys.denyButton,
-          onPressed: _handleDeny,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colorScheme.error,
-            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 8),
-            visualDensity: VisualDensity.compact,
-          ),
-          child: const Text('Deny'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          key: PermissionDialogKeys.allowButton,
-          onPressed: _handleAllow,
-          style: FilledButton.styleFrom(
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 8),
-            visualDensity: VisualDensity.compact,
-          ),
-          child: const Text('Allow'),
-        ),
-      ],
-    );
-  }
-
-  /// Builds the footer for Codex backend with three action buttons.
-  Widget _buildCodexFooter(
-    BuildContext context,
-    ColorScheme colorScheme,
-  ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        OutlinedButton(
-          key: PermissionDialogKeys.cancelTurnButton,
-          onPressed: _handleCancelTurn,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colorScheme.onSurfaceVariant,
-            side: BorderSide(color: colorScheme.outlineVariant),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 8),
-            visualDensity: VisualDensity.compact,
-          ),
-          child: const Text('Cancel Turn'),
-        ),
-        const SizedBox(width: 8),
-        OutlinedButton(
-          key: PermissionDialogKeys.declineButton,
-          onPressed: _handleDecline,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colorScheme.error,
-            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 8),
-            visualDensity: VisualDensity.compact,
-          ),
-          child: const Text('Decline'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          key: PermissionDialogKeys.acceptButton,
-          onPressed: _handleAllow,
-          style: FilledButton.styleFrom(
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 8),
-            visualDensity: VisualDensity.compact,
-          ),
-          child: const Text('Accept'),
-        ),
-      ],
-    );
-  }
-
-  /// Builds the plan view for ExitPlanMode.
-  ///
-  /// Shows the plan rendered as scrollable markdown with approval footer.
-  /// Uses max half the available height for the plan content area.
-  Widget _buildExpandedPlanView(
-    BuildContext context,
-    sdk.PermissionRequest permission,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final plan = permission.toolInput['plan'] as String? ?? '';
-    final hasPlan = plan.trim().isNotEmpty;
-
-    // Use the lowest surface container (matches chat/scaffold background)
-    final dialogBackground = colorScheme.surfaceContainerLowest;
-    // Markdown box: surfaceContainer (mid-tone, darker than surfaceContainerLowest)
-    final markdownBackground = colorScheme.surfaceContainer;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final availableHeight = constraints.maxHeight;
-        final maxPlanHeight = availableHeight.isFinite
-            ? (availableHeight * 0.5).clamp(100.0, 500.0)
-            : 300.0;
-
-        return Container(
-          key: PermissionDialogKeys.dialog,
-          decoration: BoxDecoration(color: dialogBackground),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildExpandedPlanHeader(context),
-              if (hasPlan)
-                ConstrainedBox(
-                  key: PermissionDialogKeys.planContent,
-                  constraints: BoxConstraints(maxHeight: maxPlanHeight),
-                  child: Container(
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: markdownBackground,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(14),
-                      child: SelectionArea(
-                        child: MarkdownBody(
-                          data: plan,
-                          styleSheet: buildMarkdownStyleSheet(
-                            context,
-                            fontSize: 13,
-                          ),
-                          builders: buildMarkdownBuilders(
-                            projectDir: widget.projectDir,
-                          ),
-                          onTapLink: (text, href, title) {
-                            if (href != null) launchUrl(Uri.parse(href));
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Padding(
-                  key: PermissionDialogKeys.planContent,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    'No plan provided.',
-                    style: textStyle(
-                      fontSize: 13,
-                      color: colorScheme.onSurface.withValues(alpha: 0.5),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              _buildPlanApprovalFooter(context, plan),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// Builds the footer for ExitPlanMode with feedback input row and
-  /// approval buttons row.
-  Widget _buildPlanApprovalFooter(BuildContext context, String plan) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainer.withValues(alpha: 0.3),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Feedback text input row
-          SizedBox(
-            height: 32,
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: PermissionDialogKeys.planFeedbackInput,
-                    controller: _feedbackController,
-                    style: textStyle(fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: 'Tell Claude what to change...',
-                      hintStyle: textStyle(
-                        fontSize: 12,
-                        color: colorScheme.onSurface.withValues(alpha: 0.35),
-                      ),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
-                          color: colorScheme.outline.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
-                          color: colorScheme.outline.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: colorScheme.primary),
-                      ),
-                    ),
-                    onSubmitted: (text) {
-                      if (text.trim().isNotEmpty) {
-                        widget.onDeny(text.trim());
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 4),
-                ListenableBuilder(
-                  listenable: _feedbackController,
-                  builder: (context, _) {
-                    final hasText =
-                        _feedbackController.text.trim().isNotEmpty;
-                    return IconButton(
-                      key: PermissionDialogKeys.planFeedbackSend,
-                      onPressed: hasText
-                          ? () =>
-                              widget.onDeny(_feedbackController.text.trim())
-                          : null,
-                      icon: Icon(
-                        Icons.send_rounded,
-                        size: 16,
-                        color: hasText
-                            ? colorScheme.tertiary
-                            : colorScheme.onSurface.withValues(alpha: 0.2),
-                      ),
-                      tooltip: 'Send feedback',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 28,
-                        minHeight: 28,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          // Buttons row
-          Row(
-            children: [
-              _PlanButton(
-                key: PermissionDialogKeys.planReject,
-                label: 'Reject',
-                icon: Icons.close,
-                color: colorScheme.error,
-                onPressed: _handleDeny,
-              ),
-              const Spacer(),
-              if (widget.onClearContextAndAcceptEdits != null) ...[
-                Flexible(
-                  child: _PlanButton(
-                    key: PermissionDialogKeys.planClearContext,
-                    label: 'Clear context, approve & allow edits',
-                    icon: Icons.restart_alt,
-                    color: colorScheme.tertiary,
-                    onPressed: () =>
-                        widget.onClearContextAndAcceptEdits!(plan),
-                    outlined: true,
-                  ),
-                ),
-                const SizedBox(width: 6),
-              ],
-              Flexible(
-                child: _PlanButton(
-                  key: PermissionDialogKeys.planApproveAcceptEdits,
-                  label: 'Approve & allow edits',
-                  icon: Icons.edit_note,
-                  color: colorScheme.tertiary,
-                  onPressed: _handleAllowWithAcceptEdits,
-                  outlined: true,
-                ),
-              ),
-              const SizedBox(width: 6),
-              _PlanButton(
-                key: PermissionDialogKeys.planApproveManual,
-                label: 'Approve',
-                icon: Icons.check,
-                color: colorScheme.primary,
-                onPressed: _handleAllow,
-                filled: true,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Handles allow with acceptEdits mode change (ExitPlanMode Option 2).
-  void _handleAllowWithAcceptEdits() {
-    widget.onAllow(
-      updatedPermissions: [
-        {
-          'type': 'setMode',
-          'mode': 'acceptEdits',
-          'destination': 'session',
-        },
-      ],
-    );
-  }
-
-  /// Builds the header for the plan view.
-  Widget _buildExpandedPlanHeader(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      key: PermissionDialogKeys.header,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: colorScheme.primary),
-      child: Row(
-        children: [
-          Icon(
-            Icons.description_outlined,
-            color: colorScheme.onPrimary,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Plan for Approval',
-            style: textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              color: colorScheme.onPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      key: PermissionDialogKeys.header,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.primary,
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.shield_outlined,
-            color: colorScheme.onPrimary,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Permission Required: ${widget.request.toolName}',
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build tool-specific content display.
-  Widget _buildToolContent(sdk.PermissionRequest permission) {
-    final toolInput = permission.toolInput;
-    final isCodex = widget.provider == BackendProvider.codex;
-
-    final baseContent = switch (permission.toolName) {
-      'Bash' => _buildBashContent(toolInput),
-      'Write' => _buildWriteContent(toolInput),
-      'FileChange' => _buildFileChangeContent(toolInput),
-      'Edit' => _buildEditContent(toolInput),
-      // ExitPlanMode is handled by _buildExpandedPlanView (full-panel mode)
-      // and never reaches _buildToolContent.
-      _ => _buildGenericContent(toolInput),
-    };
-
-    // Add Codex-specific fields if available
-    if (isCodex) {
-      return Column(
-        key: PermissionDialogKeys.content,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          baseContent,
-          // Show command actions if available (Codex)
-          if (toolInput['commandActions'] != null) ...[
-            const SizedBox(height: 8),
-            _buildCommandActionsRow(toolInput['commandActions']),
-          ],
-          // Show reason if available (Codex)
-          if (permission.decisionReason != null) ...[
-            const SizedBox(height: 8),
-            _buildReasonRow(permission.decisionReason!),
-          ],
-        ],
-      );
-    }
-
-    return baseContent;
-  }
-
-  Widget _buildBashContent(Map<String, dynamic> input) {
-    final command = input['command'] as String? ?? '';
-    final description = input['description'] as String?;
-
-    return Column(
-      key: PermissionDialogKeys.content,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (description != null) ...[
-          Text(
-            description,
-            style: textStyle(
-              fontSize: PermissionFontSizes.description,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        Container(
-          key: PermissionDialogKeys.bashCommand,
-          width: double.infinity,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: SelectableText(
-            '\$ $command',
-            style: monoStyle(
-              fontSize: PermissionFontSizes.commandText,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWriteContent(Map<String, dynamic> input) {
-    final filePath = input['file_path'] as String? ?? '';
-    final content = input['content'] as String? ?? '';
-    final lineCount = '\n'.allMatches(content).length + 1;
-    final truncatedContent = _truncate(content, 500);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SelectableText(
-          'File: $filePath',
-          style: monoStyle(fontSize: PermissionFontSizes.filePath),
-        ),
-        const SizedBox(height: 4),
-        _ScrollableCodeBox(
-          content: truncatedContent,
-          lineCount: lineCount,
-          backgroundColor:
-              Theme.of(context).colorScheme.surfaceContainerHighest,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFileChangeContent(Map<String, dynamic> input) {
-    final filePath = input['file_path'] as String? ?? '';
-    final paths = (input['paths'] as List<dynamic>?)
-        ?.whereType<String>()
-        .toList();
-    final content = input['content'] as String? ?? '';
-    final lineCount =
-        content.isEmpty ? 0 : '\n'.allMatches(content).length + 1;
-    final truncatedContent = _truncate(content, 500);
-
-    final displayPaths =
-        paths != null && paths.length > 1 ? paths : [filePath];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final path in displayPaths)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: SelectableText(
-              'File: $path',
-              style: monoStyle(fontSize: PermissionFontSizes.filePath),
-            ),
-          ),
-        if (content.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          _ScrollableCodeBox(
-            content: truncatedContent,
-            lineCount: lineCount,
-            backgroundColor:
-                Theme.of(context).colorScheme.surfaceContainerHighest,
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildEditContent(Map<String, dynamic> input) {
-    final filePath = input['file_path'] as String? ?? '';
-    final oldString = input['old_string'] as String? ?? '';
-    final newString = input['new_string'] as String? ?? '';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SelectableText(
-          'File: $filePath',
-          style: monoStyle(fontSize: PermissionFontSizes.filePath),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: SelectableText(
-                  _truncate(oldString, 200),
-                  style: monoStyle(fontSize: PermissionFontSizes.diffContent),
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Icon(Icons.arrow_forward, size: 16),
-            ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: SelectableText(
-                  _truncate(newString, 200),
-                  style: monoStyle(fontSize: PermissionFontSizes.diffContent),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGenericContent(Map<String, dynamic> input) {
-    final details = input.entries
-        .map((e) => '${e.key}: ${_truncate(e.value?.toString() ?? '', 100)}')
-        .join('\n');
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: SelectableText(
-        details,
-        style: monoStyle(fontSize: PermissionFontSizes.genericContent),
-      ),
-    );
-  }
-
-  /// Build command actions row (Codex).
-  Widget _buildCommandActionsRow(dynamic commandActions) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final actions = commandActions is List
-        ? commandActions.map((a) => a.toString()).join(', ')
-        : commandActions.toString();
-
-    return Row(
-      key: PermissionDialogKeys.commandActions,
-      children: [
-        Icon(
-          Icons.info_outline,
-          size: 14,
-          color: colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: 6),
-        Text(
-          'Actions: ',
-          style: textStyle(
-            fontSize: 11,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        Text(
-          actions,
-          style: textStyle(
-            fontSize: 11,
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Build reason row (Codex).
-  Widget _buildReasonRow(String reason) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Row(
-      key: PermissionDialogKeys.reason,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          Icons.chat_bubble_outline,
-          size: 14,
-          color: colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            reason,
-            style: textStyle(
-              fontSize: 11,
-              color: colorScheme.onSurface,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Check if a suggestion type is actionable (user can choose behavior).
-  /// Note: setMode is handled separately via the "Enable X" button, not here.
-  bool _isActionableSuggestion(sdk.PermissionSuggestion s) {
-    // Rule-based types: addRules, replaceRules
-    if (s.type == 'addRules' || s.type == 'replaceRules') {
-      return true;
-    }
-    // Directory-based types
-    if (s.type == 'addDirectories') {
-      return true;
-    }
-    // Other types not actionable (setMode handled via button)
-    return false;
-  }
-
-  /// Build inline suggestions row for footer.
-  /// Note: This only handles non-setMode suggestions.
-  Widget _buildSuggestionsRow(List<sdk.PermissionSuggestion> suggestions) {
-    if (suggestions.isEmpty) return const SizedBox.shrink();
-
-    // Find actionable suggestions (already filtered to exclude setMode by
-    // caller)
-    final actionable = suggestions
-        .asMap()
-        .entries
-        .where((e) => _isActionableSuggestion(e.value))
-        .toList();
-
-    // Find unknown/unhandled suggestions
-    final unknown =
-        suggestions.where((s) => !_isActionableSuggestion(s)).toList();
-
-    // If no actionable suggestions, just show raw JSON of unknown ones
-    if (actionable.isEmpty && unknown.isNotEmpty) {
-      return Flexible(
-        child: Text(
-          'Unknown suggestion: ${unknown.first.rawJson}',
-          style: monoStyle(
-            fontSize: PermissionFontSizes.badge,
-            color: Theme.of(context).colorScheme.tertiary,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
-    }
-
-    if (actionable.isEmpty) return const SizedBox.shrink();
-
-    // Show the first actionable suggestion
-    final entry = actionable.first;
-    final index = entry.key;
-    final suggestion = entry.value;
-
-    return _buildRuleSuggestionRow(index, suggestion);
-  }
-
-  /// Format mode name for display (e.g., "acceptEdits" -> "Accept Edits").
-  String _formatModeName(String mode) {
-    switch (mode) {
-      case 'acceptEdits':
-        return 'Accept Edits';
-      case 'bypassPermissions':
-        return 'Bypass Permissions';
-      case 'plan':
-        return 'Plan';
-      default:
-        // Convert camelCase to Title Case
-        return mode
-            .replaceAllMapped(
-              RegExp(r'([a-z])([A-Z])'),
-              (m) => '${m.group(1)} ${m.group(2)}',
-            )
-            .replaceFirstMapped(
-              RegExp(r'^[a-z]'),
-              (m) => m.group(0)!.toUpperCase(),
-            );
-    }
-  }
-
-  /// Build UI for rule-based suggestions (addRules, addDirectories, etc.).
-  Widget _buildRuleSuggestionRow(int index, sdk.PermissionSuggestion suggestion) {
-    final behavior = _behaviors[index] ?? 'ask';
-    final destination = _destinations[index] ??
-        sdk.PermissionDestination.fromValue(suggestion.destination);
-    final displayLabel = suggestion.displayLabel;
-
-    // Build the label text based on suggestion type
-    final isDirectoryType = suggestion.type == 'addDirectories';
-    final labelPrefix = isDirectoryType ? 'directory access: ' : '';
-
-    return Row(
-      children: [
-        Text(
-          'Always ',
-          style: textStyle(fontSize: PermissionFontSizes.footer),
-        ),
-        // Behavior dropdown (Ask/Allow/Deny)
-        DropdownButton<String>(
-          value: behavior,
-          isDense: true,
-          underline: const SizedBox.shrink(),
-          style: textStyle(
-            fontSize: PermissionFontSizes.footerDropdown,
-            fontWeight: FontWeight.w600,
-            color: _behaviorColor(behavior),
-          ),
-          items: const [
-            DropdownMenuItem(value: 'ask', child: Text('Ask')),
-            DropdownMenuItem(value: 'allow', child: Text('Allow')),
-            DropdownMenuItem(value: 'deny', child: Text('Deny')),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              setState(() {
-                _behaviors[index] = value;
-              });
-            }
-          },
-        ),
-        const SizedBox(width: 4),
-        Text(
-          labelPrefix,
-          style: textStyle(fontSize: PermissionFontSizes.footer),
-        ),
-        Flexible(
-          child: Text(
-            displayLabel,
-            style: monoStyle(
-              fontSize: PermissionFontSizes.footer,
-              fontWeight: FontWeight.w500,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // Only show location dropdown for allow/deny (not ask)
-        if (behavior != 'ask') ...[
-          const SizedBox(width: 12),
-          Text(
-            'in',
-            style: textStyle(
-              fontSize: PermissionFontSizes.footer,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(width: 4),
-          DropdownButton<sdk.PermissionDestination>(
-            value: destination,
-            isDense: true,
-            underline: const SizedBox.shrink(),
-            style: textStyle(fontSize: PermissionFontSizes.footerDropdown),
-            items: sdk.PermissionDestination.values.map((d) {
-              return DropdownMenuItem(
-                value: d,
-                child: Text(d.displayName),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _destinations[index] = value;
-                });
-              }
-            },
-          ),
-        ],
-      ],
-    );
-  }
-
-  Color _behaviorColor(String behavior) {
-    final colorScheme = Theme.of(context).colorScheme;
-    switch (behavior) {
-      case 'allow':
-        return colorScheme.primary;
-      case 'deny':
-        return colorScheme.error;
-      default:
-        return colorScheme.onSurfaceVariant;
-    }
   }
 
   void _handleAllow() {
@@ -1324,9 +384,1226 @@ class _PermissionDialogState extends State<PermissionDialog> {
     widget.onAllow(updatedPermissions: acceptedSuggestions);
   }
 
-  String _truncate(String text, int maxLength) {
-    if (text.length <= maxLength) return text;
-    return '${text.substring(0, maxLength)}...';
+  /// Handles allow with acceptEdits mode change (ExitPlanMode Option 2).
+  void _handleAllowWithAcceptEdits() {
+    widget.onAllow(
+      updatedPermissions: [
+        {
+          'type': 'setMode',
+          'mode': 'acceptEdits',
+          'destination': 'session',
+        },
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Compact View (non-ExitPlanMode permissions)
+// =============================================================================
+
+class _CompactView extends StatelessWidget {
+  const _CompactView({
+    required this.permission,
+    required this.provider,
+    required this.onAllow,
+    required this.onDenyMessage,
+    required this.onHandleAllow,
+    required this.onHandleDeny,
+    required this.onHandleCancelTurn,
+    required this.onHandleDecline,
+    required this.onHandleAllowWithMode,
+    required this.behaviors,
+    required this.destinations,
+    required this.onBehaviorChanged,
+    required this.onDestinationChanged,
+  });
+
+  final sdk.PermissionRequest permission;
+  final BackendProvider? provider;
+  final void Function({
+    Map<String, dynamic>? updatedInput,
+    List<dynamic>? updatedPermissions,
+  }) onAllow;
+  final void Function(String message, {bool interrupt}) onDenyMessage;
+  final VoidCallback onHandleAllow;
+  final VoidCallback onHandleDeny;
+  final VoidCallback onHandleCancelTurn;
+  final VoidCallback onHandleDecline;
+  final void Function(sdk.PermissionSuggestion) onHandleAllowWithMode;
+  final Map<int, String> behaviors;
+  final Map<int, sdk.PermissionDestination> destinations;
+  final void Function(int index, String value) onBehaviorChanged;
+  final void Function(int index, sdk.PermissionDestination value) onDestinationChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final isCodex = provider == BackendProvider.codex;
+    final isAcp = provider == BackendProvider.acp;
+
+    // Parse suggestions (Claude only)
+    final suggestions = permission.parsedSuggestions;
+
+    // Check for setMode suggestion (Claude only)
+    final setModeSuggestion =
+        suggestions.where((s) => s.type == 'setMode').toList();
+    final hasSetMode = setModeSuggestion.isNotEmpty;
+    final modeName = hasSetMode
+        ? _formatModeName(setModeSuggestion.first.mode ?? 'unknown')
+        : null;
+
+    // Check for non-setMode suggestions (Claude only)
+    final otherSuggestions =
+        suggestions.where((s) => s.type != 'setMode').toList();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.maxHeight;
+        final maxContentHeight = availableHeight.isFinite
+            ? (availableHeight * 0.5).clamp(100.0, 400.0)
+            : 300.0;
+
+        return Container(
+          key: PermissionDialogKeys.dialog,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainer,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PermissionHeader(toolName: permission.toolName),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxContentHeight),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: _ToolContent(
+                    permission: permission,
+                    provider: provider,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color:
+                      colorScheme.surfaceContainer.withValues(alpha: 0.3),
+                ),
+                child: isCodex
+                    ? _CodexFooter(
+                        onAllow: onHandleAllow,
+                        onCancelTurn: onHandleCancelTurn,
+                        onDecline: onHandleDecline,
+                      )
+                    : isAcp
+                        ? _AcpFooter(
+                            request: permission,
+                            onAllow: onAllow,
+                            onDeny: onDenyMessage,
+                          )
+                    : _ClaudeFooter(
+                        otherSuggestions: otherSuggestions,
+                        hasSetMode: hasSetMode,
+                        setModeSuggestion: setModeSuggestion,
+                        modeName: modeName,
+                        onAllow: onHandleAllow,
+                        onDeny: onHandleDeny,
+                        onAllowWithMode: onHandleAllowWithMode,
+                        behaviors: behaviors,
+                        destinations: destinations,
+                        onBehaviorChanged: onBehaviorChanged,
+                        onDestinationChanged: onDestinationChanged,
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// =============================================================================
+// Header Widgets
+// =============================================================================
+
+class _PermissionHeader extends StatelessWidget {
+  const _PermissionHeader({required this.toolName});
+
+  final String toolName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      key: PermissionDialogKeys.header,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.primary,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.shield_outlined,
+            color: colorScheme.onPrimary,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Permission Required: $toolName',
+              style: textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpandedPlanHeader extends StatelessWidget {
+  const _ExpandedPlanHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      key: PermissionDialogKeys.header,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: colorScheme.primary),
+      child: Row(
+        children: [
+          Icon(
+            Icons.description_outlined,
+            color: colorScheme.onPrimary,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Plan for Approval',
+            style: textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: colorScheme.onPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Tool Content Widgets
+// =============================================================================
+
+class _ToolContent extends StatelessWidget {
+  const _ToolContent({
+    required this.permission,
+    required this.provider,
+  });
+
+  final sdk.PermissionRequest permission;
+  final BackendProvider? provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final toolInput = permission.toolInput;
+    final isCodex = provider == BackendProvider.codex;
+
+    final baseContent = switch (permission.toolName) {
+      'Bash' => _BashContent(input: toolInput),
+      'Write' => _WriteContent(input: toolInput),
+      'FileChange' => _FileChangeContent(input: toolInput),
+      'Edit' => _EditContent(input: toolInput),
+      _ => _GenericContent(input: toolInput),
+    };
+
+    if (isCodex) {
+      return Column(
+        key: PermissionDialogKeys.content,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          baseContent,
+          if (toolInput['commandActions'] != null) ...[
+            const SizedBox(height: 8),
+            _CommandActionsRow(commandActions: toolInput['commandActions']),
+          ],
+          if (permission.decisionReason != null) ...[
+            const SizedBox(height: 8),
+            _ReasonRow(reason: permission.decisionReason!),
+          ],
+        ],
+      );
+    }
+
+    return baseContent;
+  }
+}
+
+class _BashContent extends StatelessWidget {
+  const _BashContent({required this.input});
+
+  final Map<String, dynamic> input;
+
+  @override
+  Widget build(BuildContext context) {
+    final command = input['command'] as String? ?? '';
+    final description = input['description'] as String?;
+
+    return Column(
+      key: PermissionDialogKeys.content,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (description != null) ...[
+          Text(
+            description,
+            style: textStyle(
+              fontSize: PermissionFontSizes.description,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Container(
+          key: PermissionDialogKeys.bashCommand,
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: SelectableText(
+            '\$ $command',
+            style: monoStyle(
+              fontSize: PermissionFontSizes.commandText,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WriteContent extends StatelessWidget {
+  const _WriteContent({required this.input});
+
+  final Map<String, dynamic> input;
+
+  @override
+  Widget build(BuildContext context) {
+    final filePath = input['file_path'] as String? ?? '';
+    final content = input['content'] as String? ?? '';
+    final lineCount = '\n'.allMatches(content).length + 1;
+    final truncatedContent = _truncate(content, 500);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SelectableText(
+          'File: $filePath',
+          style: monoStyle(fontSize: PermissionFontSizes.filePath),
+        ),
+        const SizedBox(height: 4),
+        _ScrollableCodeBox(
+          content: truncatedContent,
+          lineCount: lineCount,
+          backgroundColor:
+              Theme.of(context).colorScheme.surfaceContainerHighest,
+        ),
+      ],
+    );
+  }
+}
+
+class _FileChangeContent extends StatelessWidget {
+  const _FileChangeContent({required this.input});
+
+  final Map<String, dynamic> input;
+
+  @override
+  Widget build(BuildContext context) {
+    final filePath = input['file_path'] as String? ?? '';
+    final paths = (input['paths'] as List<dynamic>?)
+        ?.whereType<String>()
+        .toList();
+    final content = input['content'] as String? ?? '';
+    final lineCount =
+        content.isEmpty ? 0 : '\n'.allMatches(content).length + 1;
+    final truncatedContent = _truncate(content, 500);
+
+    final displayPaths =
+        paths != null && paths.length > 1 ? paths : [filePath];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final path in displayPaths)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: SelectableText(
+              'File: $path',
+              style: monoStyle(fontSize: PermissionFontSizes.filePath),
+            ),
+          ),
+        if (content.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          _ScrollableCodeBox(
+            content: truncatedContent,
+            lineCount: lineCount,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _EditContent extends StatelessWidget {
+  const _EditContent({required this.input});
+
+  final Map<String, dynamic> input;
+
+  @override
+  Widget build(BuildContext context) {
+    final filePath = input['file_path'] as String? ?? '';
+    final oldString = input['old_string'] as String? ?? '';
+    final newString = input['new_string'] as String? ?? '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SelectableText(
+          'File: $filePath',
+          style: monoStyle(fontSize: PermissionFontSizes.filePath),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SelectableText(
+                  _truncate(oldString, 200),
+                  style: monoStyle(fontSize: PermissionFontSizes.diffContent),
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(Icons.arrow_forward, size: 16),
+            ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: SelectableText(
+                  _truncate(newString, 200),
+                  style: monoStyle(fontSize: PermissionFontSizes.diffContent),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _GenericContent extends StatelessWidget {
+  const _GenericContent({required this.input});
+
+  final Map<String, dynamic> input;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = input.entries
+        .map((e) => '${e.key}: ${_truncate(e.value?.toString() ?? '', 100)}')
+        .join('\n');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: SelectableText(
+        details,
+        style: monoStyle(fontSize: PermissionFontSizes.genericContent),
+      ),
+    );
+  }
+}
+
+class _CommandActionsRow extends StatelessWidget {
+  const _CommandActionsRow({required this.commandActions});
+
+  final dynamic commandActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final actions = commandActions is List
+        ? commandActions.map((a) => a.toString()).join(', ')
+        : commandActions.toString();
+
+    return Row(
+      key: PermissionDialogKeys.commandActions,
+      children: [
+        Icon(
+          Icons.info_outline,
+          size: 14,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Actions: ',
+          style: textStyle(
+            fontSize: 11,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          actions,
+          style: textStyle(
+            fontSize: 11,
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReasonRow extends StatelessWidget {
+  const _ReasonRow({required this.reason});
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      key: PermissionDialogKeys.reason,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.chat_bubble_outline,
+          size: 14,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            reason,
+            style: textStyle(
+              fontSize: 11,
+              color: colorScheme.onSurface,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Footer Widgets
+// =============================================================================
+
+class _CodexFooter extends StatelessWidget {
+  const _CodexFooter({
+    required this.onAllow,
+    required this.onCancelTurn,
+    required this.onDecline,
+  });
+
+  final VoidCallback onAllow;
+  final VoidCallback onCancelTurn;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        OutlinedButton(
+          key: PermissionDialogKeys.cancelTurnButton,
+          onPressed: onCancelTurn,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colorScheme.onSurfaceVariant,
+            side: BorderSide(color: colorScheme.outlineVariant),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Cancel Turn'),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          key: PermissionDialogKeys.declineButton,
+          onPressed: onDecline,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colorScheme.error,
+            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Decline'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          key: PermissionDialogKeys.acceptButton,
+          onPressed: onAllow,
+          style: FilledButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Accept'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AcpFooter extends StatelessWidget {
+  const _AcpFooter({
+    required this.request,
+    required this.onAllow,
+    required this.onDeny,
+  });
+
+  final sdk.PermissionRequest request;
+  final void Function({
+    Map<String, dynamic>? updatedInput,
+    List<dynamic>? updatedPermissions,
+  }) onAllow;
+  final void Function(String message, {bool interrupt}) onDeny;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final options = _readAcpOptions(request);
+
+    if (options.isEmpty) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          TextButton(
+            onPressed: () => onDeny('Cancelled'),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => onAllow(),
+            child: const Text('Allow'),
+          ),
+        ],
+      );
+    }
+
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final option in options)
+          _buildOptionButton(option, colorScheme),
+        TextButton(
+          onPressed: () => onDeny('Cancelled'),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOptionButton(
+    _AcpPermissionOption option,
+    ColorScheme colorScheme,
+  ) {
+    final isReject = option.kind != null &&
+        (option.kind!.startsWith('reject') ||
+            option.kind!.startsWith('deny'));
+    final onPressed = () => onAllow(
+          updatedInput: {'optionId': option.id},
+        );
+    if (isReject) {
+      return OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colorScheme.error,
+          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.6)),
+        ),
+        child: Text(option.label),
+      );
+    }
+    return FilledButton(
+      onPressed: onPressed,
+      child: Text(option.label),
+    );
+  }
+}
+
+class _ClaudeFooter extends StatelessWidget {
+  const _ClaudeFooter({
+    required this.otherSuggestions,
+    required this.hasSetMode,
+    required this.setModeSuggestion,
+    required this.modeName,
+    required this.onAllow,
+    required this.onDeny,
+    required this.onAllowWithMode,
+    required this.behaviors,
+    required this.destinations,
+    required this.onBehaviorChanged,
+    required this.onDestinationChanged,
+  });
+
+  final List<sdk.PermissionSuggestion> otherSuggestions;
+  final bool hasSetMode;
+  final List<sdk.PermissionSuggestion> setModeSuggestion;
+  final String? modeName;
+  final VoidCallback onAllow;
+  final VoidCallback onDeny;
+  final void Function(sdk.PermissionSuggestion) onAllowWithMode;
+  final Map<int, String> behaviors;
+  final Map<int, sdk.PermissionDestination> destinations;
+  final void Function(int index, String value) onBehaviorChanged;
+  final void Function(int index, sdk.PermissionDestination value) onDestinationChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        // Suggestions on the left (only non-setMode suggestions)
+        if (otherSuggestions.isNotEmpty)
+          Expanded(
+            child: _SuggestionsRow(
+              suggestions: otherSuggestions,
+              behaviors: behaviors,
+              destinations: destinations,
+              onBehaviorChanged: onBehaviorChanged,
+              onDestinationChanged: onDestinationChanged,
+            ),
+          )
+        else
+          const Spacer(),
+        // Buttons on the right
+        const SizedBox(width: 14),
+        // Enable mode button (if setMode suggestion exists)
+        if (hasSetMode) ...[
+          OutlinedButton(
+            onPressed: () =>
+                onAllowWithMode(setModeSuggestion.first),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.tertiary,
+              side: BorderSide(color: colorScheme.tertiary.withValues(alpha: 0.5)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text('Enable $modeName'),
+          ),
+          const SizedBox(width: 8),
+        ],
+        OutlinedButton(
+          key: PermissionDialogKeys.denyButton,
+          onPressed: onDeny,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colorScheme.error,
+            side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Deny'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          key: PermissionDialogKeys.allowButton,
+          onPressed: onAllow,
+          style: FilledButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 8),
+            visualDensity: VisualDensity.compact,
+          ),
+          child: const Text('Allow'),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Suggestion Widgets
+// =============================================================================
+
+class _SuggestionsRow extends StatelessWidget {
+  const _SuggestionsRow({
+    required this.suggestions,
+    required this.behaviors,
+    required this.destinations,
+    required this.onBehaviorChanged,
+    required this.onDestinationChanged,
+  });
+
+  final List<sdk.PermissionSuggestion> suggestions;
+  final Map<int, String> behaviors;
+  final Map<int, sdk.PermissionDestination> destinations;
+  final void Function(int index, String value) onBehaviorChanged;
+  final void Function(int index, sdk.PermissionDestination value) onDestinationChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    // Find actionable suggestions (already filtered to exclude setMode by
+    // caller)
+    final actionable = suggestions
+        .asMap()
+        .entries
+        .where((e) => _isActionableSuggestion(e.value))
+        .toList();
+
+    // Find unknown/unhandled suggestions
+    final unknown =
+        suggestions.where((s) => !_isActionableSuggestion(s)).toList();
+
+    // If no actionable suggestions, just show raw JSON of unknown ones
+    if (actionable.isEmpty && unknown.isNotEmpty) {
+      return Flexible(
+        child: Text(
+          'Unknown suggestion: ${unknown.first.rawJson}',
+          style: monoStyle(
+            fontSize: PermissionFontSizes.badge,
+            color: Theme.of(context).colorScheme.tertiary,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    if (actionable.isEmpty) return const SizedBox.shrink();
+
+    // Show the first actionable suggestion
+    final entry = actionable.first;
+    final index = entry.key;
+    final suggestion = entry.value;
+
+    return _RuleSuggestionRow(
+      index: index,
+      suggestion: suggestion,
+      behavior: behaviors[index] ?? 'ask',
+      destination: destinations[index] ??
+          sdk.PermissionDestination.fromValue(suggestion.destination),
+      onBehaviorChanged: onBehaviorChanged,
+      onDestinationChanged: onDestinationChanged,
+    );
+  }
+}
+
+class _RuleSuggestionRow extends StatelessWidget {
+  const _RuleSuggestionRow({
+    required this.index,
+    required this.suggestion,
+    required this.behavior,
+    required this.destination,
+    required this.onBehaviorChanged,
+    required this.onDestinationChanged,
+  });
+
+  final int index;
+  final sdk.PermissionSuggestion suggestion;
+  final String behavior;
+  final sdk.PermissionDestination destination;
+  final void Function(int index, String value) onBehaviorChanged;
+  final void Function(int index, sdk.PermissionDestination value) onDestinationChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayLabel = suggestion.displayLabel;
+    final isDirectoryType = suggestion.type == 'addDirectories';
+    final labelPrefix = isDirectoryType ? 'directory access: ' : '';
+
+    return Row(
+      children: [
+        Text(
+          'Always ',
+          style: textStyle(fontSize: PermissionFontSizes.footer),
+        ),
+        // Behavior dropdown (Ask/Allow/Deny)
+        DropdownButton<String>(
+          value: behavior,
+          isDense: true,
+          underline: const SizedBox.shrink(),
+          style: textStyle(
+            fontSize: PermissionFontSizes.footerDropdown,
+            fontWeight: FontWeight.w600,
+            color: _behaviorColor(context, behavior),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'ask', child: Text('Ask')),
+            DropdownMenuItem(value: 'allow', child: Text('Allow')),
+            DropdownMenuItem(value: 'deny', child: Text('Deny')),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              onBehaviorChanged(index, value);
+            }
+          },
+        ),
+        const SizedBox(width: 4),
+        Text(
+          labelPrefix,
+          style: textStyle(fontSize: PermissionFontSizes.footer),
+        ),
+        Flexible(
+          child: Text(
+            displayLabel,
+            style: monoStyle(
+              fontSize: PermissionFontSizes.footer,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // Only show location dropdown for allow/deny (not ask)
+        if (behavior != 'ask') ...[
+          const SizedBox(width: 12),
+          Text(
+            'in',
+            style: textStyle(
+              fontSize: PermissionFontSizes.footer,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 4),
+          DropdownButton<sdk.PermissionDestination>(
+            value: destination,
+            isDense: true,
+            underline: const SizedBox.shrink(),
+            style: textStyle(fontSize: PermissionFontSizes.footerDropdown),
+            items: sdk.PermissionDestination.values.map((d) {
+              return DropdownMenuItem(
+                value: d,
+                child: Text(d.displayName),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                onDestinationChanged(index, value);
+              }
+            },
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Plan View Widgets (ExitPlanMode)
+// =============================================================================
+
+class _ExpandedPlanView extends StatelessWidget {
+  const _ExpandedPlanView({
+    required this.permission,
+    required this.projectDir,
+    required this.feedbackController,
+    required this.onAllow,
+    required this.onDeny,
+    required this.onAllowWithAcceptEdits,
+    required this.onClearContextAndAcceptEdits,
+    required this.onDenyWithMessage,
+  });
+
+  final sdk.PermissionRequest permission;
+  final String? projectDir;
+  final TextEditingController feedbackController;
+  final VoidCallback onAllow;
+  final VoidCallback onDeny;
+  final VoidCallback onAllowWithAcceptEdits;
+  final void Function(String planText)? onClearContextAndAcceptEdits;
+  final void Function(String message, {bool interrupt}) onDenyWithMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final plan = permission.toolInput['plan'] as String? ?? '';
+    final hasPlan = plan.trim().isNotEmpty;
+
+    final dialogBackground = colorScheme.surfaceContainerLowest;
+    final markdownBackground = colorScheme.surfaceContainer;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.maxHeight;
+        final maxPlanHeight = availableHeight.isFinite
+            ? (availableHeight * 0.5).clamp(100.0, 500.0)
+            : 300.0;
+
+        return Container(
+          key: PermissionDialogKeys.dialog,
+          decoration: BoxDecoration(color: dialogBackground),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _ExpandedPlanHeader(),
+              if (hasPlan)
+                ConstrainedBox(
+                  key: PermissionDialogKeys.planContent,
+                  constraints: BoxConstraints(maxHeight: maxPlanHeight),
+                  child: Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: markdownBackground,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(14),
+                      child: SelectionArea(
+                        child: MarkdownBody(
+                          data: plan,
+                          styleSheet: buildMarkdownStyleSheet(
+                            context,
+                            fontSize: 13,
+                          ),
+                          builders: buildMarkdownBuilders(
+                            projectDir: projectDir,
+                          ),
+                          onTapLink: (text, href, title) {
+                            if (href != null) launchUrl(Uri.parse(href));
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  key: PermissionDialogKeys.planContent,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Text(
+                    'No plan provided.',
+                    style: textStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              _PlanApprovalFooter(
+                plan: plan,
+                feedbackController: feedbackController,
+                onAllow: onAllow,
+                onDeny: onDeny,
+                onAllowWithAcceptEdits: onAllowWithAcceptEdits,
+                onClearContextAndAcceptEdits: onClearContextAndAcceptEdits,
+                onDenyWithMessage: onDenyWithMessage,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PlanApprovalFooter extends StatelessWidget {
+  const _PlanApprovalFooter({
+    required this.plan,
+    required this.feedbackController,
+    required this.onAllow,
+    required this.onDeny,
+    required this.onAllowWithAcceptEdits,
+    required this.onClearContextAndAcceptEdits,
+    required this.onDenyWithMessage,
+  });
+
+  final String plan;
+  final TextEditingController feedbackController;
+  final VoidCallback onAllow;
+  final VoidCallback onDeny;
+  final VoidCallback onAllowWithAcceptEdits;
+  final void Function(String planText)? onClearContextAndAcceptEdits;
+  final void Function(String message, {bool interrupt}) onDenyWithMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer.withValues(alpha: 0.3),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Feedback text input row
+          SizedBox(
+            height: 32,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: PermissionDialogKeys.planFeedbackInput,
+                    controller: feedbackController,
+                    style: textStyle(fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'Tell Claude what to change...',
+                      hintStyle: textStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurface.withValues(alpha: 0.35),
+                      ),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(
+                          color: colorScheme.outline.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(
+                          color: colorScheme.outline.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: colorScheme.primary),
+                      ),
+                    ),
+                    onSubmitted: (text) {
+                      if (text.trim().isNotEmpty) {
+                        onDenyWithMessage(text.trim());
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 4),
+                ListenableBuilder(
+                  listenable: feedbackController,
+                  builder: (context, _) {
+                    final hasText =
+                        feedbackController.text.trim().isNotEmpty;
+                    return IconButton(
+                      key: PermissionDialogKeys.planFeedbackSend,
+                      onPressed: hasText
+                          ? () =>
+                              onDenyWithMessage(feedbackController.text.trim())
+                          : null,
+                      icon: Icon(
+                        Icons.send_rounded,
+                        size: 16,
+                        color: hasText
+                            ? colorScheme.tertiary
+                            : colorScheme.onSurface.withValues(alpha: 0.2),
+                      ),
+                      tooltip: 'Send feedback',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Buttons row
+          Row(
+            children: [
+              _PlanButton(
+                key: PermissionDialogKeys.planReject,
+                label: 'Reject',
+                icon: Icons.close,
+                color: colorScheme.error,
+                onPressed: onDeny,
+              ),
+              const Spacer(),
+              if (onClearContextAndAcceptEdits != null) ...[
+                Flexible(
+                  child: _PlanButton(
+                    key: PermissionDialogKeys.planClearContext,
+                    label: 'Clear context, approve & allow edits',
+                    icon: Icons.restart_alt,
+                    color: colorScheme.tertiary,
+                    onPressed: () =>
+                        onClearContextAndAcceptEdits!(plan),
+                    outlined: true,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: _PlanButton(
+                  key: PermissionDialogKeys.planApproveAcceptEdits,
+                  label: 'Approve & allow edits',
+                  icon: Icons.edit_note,
+                  color: colorScheme.tertiary,
+                  onPressed: onAllowWithAcceptEdits,
+                  outlined: true,
+                ),
+              ),
+              const SizedBox(width: 6),
+              _PlanButton(
+                key: PermissionDialogKeys.planApproveManual,
+                label: 'Approve',
+                icon: Icons.check,
+                color: colorScheme.primary,
+                onPressed: onAllow,
+                filled: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

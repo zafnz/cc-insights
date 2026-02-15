@@ -27,7 +27,9 @@ import 'services/ask_ai_service.dart';
 import 'services/cli_availability_service.dart';
 import 'services/log_service.dart';
 import 'services/backend_service.dart';
+import 'services/chat_session_service.dart';
 import 'services/file_system_service.dart';
+import 'services/git_operations_service.dart';
 import 'services/git_service.dart';
 import 'services/notification_service.dart';
 import 'services/persistence_service.dart';
@@ -1081,8 +1083,24 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<InternalToolsService>.value(
           value: _internalToolsService!,
         ),
+        // Chat session service for session lifecycle operations
+        Provider<ChatSessionService>(
+          create: (context) => ChatSessionService(
+            backend: context.read<BackendService>(),
+            eventHandler: context.read<EventHandler>(),
+            internalTools: context.read<InternalToolsService>(),
+          ),
+        ),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
+        // Git operations service for push/pull/conflict operations
+        Provider<GitOperationsService>(
+          create: (context) => GitOperationsService(
+            git: context.read<GitService>(),
+            chatSession: context.read<ChatSessionService>(),
+            restoreService: context.read<ProjectRestoreService>(),
+          ),
+        ),
         // Git service for git operations (stateless)
         Provider<GitService>.value(value: const RealGitService()),
         // File system service for file tree and content (stateless)
