@@ -50,19 +50,14 @@ class FileManagerState extends ChangeNotifier {
     this._fileSystemService,
     this._selectionState,
   ) {
-    // Listen to selection state changes to sync worktree selection
-    _selectionState.addListener(_onSelectionChanged);
     // Initialize with current selection if any
-    _syncWithSelectionState();
-  }
-
-  /// Called when SelectionState changes.
-  void _onSelectionChanged() {
-    _syncWithSelectionState();
+    syncWithSelectionState();
   }
 
   /// Syncs our state with the current SelectionState worktree.
-  void _syncWithSelectionState() {
+  ///
+  /// Called by Provider's `update` callback when SelectionState changes.
+  void syncWithSelectionState() {
     final newWorktree = _selectionState.selectedWorktree;
     if (newWorktree != _lastKnownWorktree) {
       _handleWorktreeChanged(newWorktree);
@@ -102,7 +97,6 @@ class FileManagerState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _selectionState.removeListener(_onSelectionChanged);
     super.dispose();
   }
 
@@ -162,8 +156,9 @@ class FileManagerState extends ChangeNotifier {
       name: 'FileManagerState',
     );
 
-    // Delegate to SelectionState - our listener will handle the rest
+    // Delegate to SelectionState, then sync our internal state
     _selectionState.selectWorktree(worktree);
+    syncWithSelectionState();
   }
 
   /// Rebuilds the file tree for the currently selected worktree.

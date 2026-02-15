@@ -1139,8 +1139,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             context.read<FileSystemService>(),
             context.read<SelectionState>(),
           ),
-          update: (context, project, fileService, selectionState, previous) =>
-              previous ?? FileManagerState(project, fileService, selectionState),
+          update: (context, project, fileService, selectionState, previous) {
+            previous?.syncWithSelectionState();
+            return previous ?? FileManagerState(project, fileService, selectionState);
+          },
         ),
         // Project config service for reading/writing .ccinsights/config.json
         ChangeNotifierProvider<ProjectConfigService>(

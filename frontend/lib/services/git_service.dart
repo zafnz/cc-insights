@@ -656,7 +656,13 @@ class RealGitService implements GitService {
         workingDirectory: path,
       );
       return output.trim();
-    } on GitException {
+    } on GitException catch (e) {
+      // Expected to fail for non-git directories
+      LogService.instance.debug(
+        'Git',
+        'findRepoRoot: not a git repo or access denied',
+        meta: {'path': path, 'error': '$e'},
+      );
       return null;
     }
   }
@@ -716,8 +722,13 @@ class RealGitService implements GitService {
       );
       final upstream = output.trim();
       return upstream.isEmpty ? null : upstream;
-    } on GitException {
-      // No upstream configured
+    } on GitException catch (e) {
+      // Expected when no upstream is configured
+      LogService.instance.debug(
+        'Git',
+        'getUpstream: no upstream configured',
+        meta: {'path': path, 'error': '$e'},
+      );
       return null;
     }
   }
@@ -742,7 +753,12 @@ class RealGitService implements GitService {
         );
       }
       return null;
-    } on GitException {
+    } on GitException catch (e) {
+      LogService.instance.warn(
+        'Git',
+        'getBranchComparison failed',
+        meta: {'path': path, 'branch': branch, 'target': targetBranch, 'error': '$e'},
+      );
       return null;
     }
   }
@@ -832,7 +848,13 @@ class RealGitService implements GitService {
         workingDirectory: worktreePath,
       );
       return output;
-    } on GitException {
+    } on GitException catch (e) {
+      // Expected when file doesn't exist at the given ref
+      LogService.instance.debug(
+        'Git',
+        'getFileAtRef: file not found',
+        meta: {'ref': ref, 'file': filePath, 'error': '$e'},
+      );
       return null;
     }
   }
@@ -947,8 +969,12 @@ class RealGitService implements GitService {
         // Lines starting with "- " are already on target, skip them
       }
       return unmerged;
-    } on GitException {
-      // If cherry fails, return empty (assume merged)
+    } on GitException catch (e) {
+      LogService.instance.warn(
+        'Git',
+        'getUnmergedCommits: git cherry failed',
+        meta: {'path': path, 'branch': branch, 'target': targetBranch, 'error': '$e'},
+      );
       return [];
     }
   }
@@ -979,7 +1005,12 @@ class RealGitService implements GitService {
         }
       }
       return commits;
-    } on GitException {
+    } on GitException catch (e) {
+      LogService.instance.warn(
+        'Git',
+        'getCommitsAhead: git log failed',
+        meta: {'path': path, 'target': targetBranch, 'error': '$e'},
+      );
       return [];
     }
   }
@@ -1000,8 +1031,13 @@ class RealGitService implements GitService {
       // Merge succeeded without conflicts - abort to restore state
       try {
         await _runGit(['merge', '--abort'], workingDirectory: path);
-      } catch (_) {
+      } catch (abortError) {
         // If abort fails, the merge was clean so reset instead
+        LogService.instance.warn(
+          'Git',
+          'merge --abort failed, using reset --merge',
+          meta: {'cwd': path, 'error': '$abortError'},
+        );
         await _runGit(['reset', '--merge'], workingDirectory: path);
       }
       return false;
@@ -1009,8 +1045,12 @@ class RealGitService implements GitService {
       // Merge failed - conflicts detected. Abort to restore state.
       try {
         await _runGit(['merge', '--abort'], workingDirectory: path);
-      } catch (_) {
-        // Abort may also fail if in a weird state, ignore
+      } catch (abortError) {
+        LogService.instance.warn(
+          'Git',
+          'merge --abort failed after conflict detection',
+          meta: {'cwd': path, 'error': '$abortError'},
+        );
       }
       if (e.exitCode == 1 ||
           (e.stderr?.contains('CONFLICT') ?? false) ||
@@ -1025,17 +1065,25 @@ class RealGitService implements GitService {
   Future<MergeResult> merge(String path, String targetBranch) async {
     LogService.instance.info('Git', 'merge', meta: {'cwd': path, 'target': targetBranch});
     try {
-      await Process.run(
+      final result = await Process.run(
         'git',
         ['merge', targetBranch],
         workingDirectory: path,
       ).timeout(_mergeTimeout);
-      // Check if there are conflicts by looking at status
-      final status = await getStatus(path);
-      if (status.hasConflicts) {
-        return const MergeResult(
-          hasConflicts: true,
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('Automatic merge failed')) {
+          return const MergeResult(
+            hasConflicts: true,
+            operation: MergeOperationType.merge,
+          );
+        }
+        return MergeResult(
+          hasConflicts: false,
           operation: MergeOperationType.merge,
+          error: stderr.isNotEmpty ? stderr : 'Merge failed',
         );
       }
       return const MergeResult(
@@ -1233,17 +1281,25 @@ class RealGitService implements GitService {
   Future<MergeResult> pull(String path) async {
     LogService.instance.info('Git', 'pull', meta: {'cwd': path});
     try {
-      await Process.run(
+      final result = await Process.run(
         'git',
         ['pull'],
         workingDirectory: path,
       ).timeout(_mergeTimeout);
-      // Check if there are conflicts by looking at status
-      final status = await getStatus(path);
-      if (status.hasConflicts) {
-        return const MergeResult(
-          hasConflicts: true,
+
+      if (result.exitCode != 0) {
+        final stderr = result.stderr as String;
+        if (stderr.contains('CONFLICT') ||
+            stderr.contains('Automatic merge failed')) {
+          return const MergeResult(
+            hasConflicts: true,
+            operation: MergeOperationType.merge,
+          );
+        }
+        return MergeResult(
+          hasConflicts: false,
           operation: MergeOperationType.merge,
+          error: stderr.isNotEmpty ? stderr : 'Pull failed',
         );
       }
       return const MergeResult(
@@ -1397,8 +1453,12 @@ class RealGitService implements GitService {
       if (mergeHead.existsSync()) {
         return MergeOperationType.merge;
       }
-    } catch (_) {
-      // If we can't determine, return null.
+    } catch (e) {
+      LogService.instance.warn(
+        'Git',
+        'Failed to detect conflict operation',
+        meta: {'cwd': path, 'error': '$e'},
+      );
     }
     return null;
   }

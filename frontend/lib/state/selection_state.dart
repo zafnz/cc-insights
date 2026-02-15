@@ -43,6 +43,8 @@ class SelectionState extends ChangeNotifier {
   /// Service for lazy-loading chat history.
   final ProjectRestoreService _restoreService;
 
+  bool _disposed = false;
+
   /// The currently selected file path, if any.
   ///
   /// File selection is separate from the entity hierarchy (project/worktree/
@@ -51,6 +53,12 @@ class SelectionState extends ChangeNotifier {
 
   /// The current mode for the main content panel.
   ContentPanelMode _contentPanelMode = ContentPanelMode.conversation;
+
+  /// Whether chat history is currently being loaded.
+  bool _isLoadingChatHistory = false;
+
+  /// Error message from the last chat history load failure, if any.
+  String? _chatHistoryError;
 
   /// Optional initial base branch for the create worktree panel.
   String? _createWorktreeBaseBranch;
@@ -90,6 +98,14 @@ class SelectionState extends ChangeNotifier {
 
   /// The current mode for the main content panel.
   ContentPanelMode get contentPanelMode => _contentPanelMode;
+
+  /// Whether chat history is currently being loaded for the selected chat.
+  bool get isLoadingChatHistory => _isLoadingChatHistory;
+
+  /// Error message from the last chat history load failure, if any.
+  ///
+  /// Cleared when a new chat is selected.
+  String? get chatHistoryError => _chatHistoryError;
 
   /// The initial base branch for the create worktree panel, if any.
   ///
@@ -141,6 +157,9 @@ class SelectionState extends ChangeNotifier {
       previousChat.markAsNotViewed();
     }
 
+    // Clear any previous error
+    _chatHistoryError = null;
+
     selectedWorktree?.selectChat(chat);
     // Reset to primary conversation when selecting a chat
     chat.resetToMainConversation();
@@ -162,14 +181,18 @@ class SelectionState extends ChangeNotifier {
       return;
     }
 
+    _isLoadingChatHistory = true;
+    notifyListeners();
+
     final projectId = PersistenceService.generateProjectId(
       _project.data.repoRoot,
     );
 
     try {
       await _restoreService.loadChatHistory(chat, projectId);
-      // No need to call notifyListeners here - ChatState.loadEntriesFromPersistence
-      // already calls notifyListeners, which triggers UI updates
+      if (_disposed) return;
+      _isLoadingChatHistory = false;
+      notifyListeners();
     } catch (e, stackTrace) {
       LogService.instance.error(
         'SelectionState',
@@ -179,6 +202,10 @@ class SelectionState extends ChangeNotifier {
           'stack': stackTrace.toString(),
         },
       );
+      if (_disposed) return;
+      _isLoadingChatHistory = false;
+      _chatHistoryError = 'Failed to load chat history for "${chat.data.name}"';
+      notifyListeners();
       // Don't rethrow - lazy loading failures shouldn't crash the UI
     }
   }
@@ -299,5 +326,11 @@ class SelectionState extends ChangeNotifier {
   void showProjectSettingsPanel() {
     _contentPanelMode = ContentPanelMode.projectSettings;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

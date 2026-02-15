@@ -453,6 +453,23 @@ void main() {
         check(chat.hasLoadedHistory).isTrue();
       });
 
+      test('selectChat sets isLoadingChatHistory during load', () async {
+        // Arrange
+        final project = createProjectState();
+        final fakeRestoreService = _FakeProjectRestoreService();
+        final selection = SelectionState(project, restoreService: fakeRestoreService);
+
+        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
+        project.primaryWorktree.addChat(chat);
+
+        // Act
+        selection.selectChat(chat);
+
+        // Assert - loading should have started and completed
+        await Future<void>.delayed(Duration.zero);
+        check(selection.isLoadingChatHistory).isFalse();
+      });
+
       test('selectChat handles loading errors gracefully', () async {
         // Arrange
         final project = createProjectState();
@@ -472,6 +489,37 @@ void main() {
 
         // Assert - chat should still be selected despite error
         check(selection.selectedChat).equals(chat);
+        // Error should be set
+        check(selection.chatHistoryError).isNotNull();
+        check(selection.chatHistoryError!).contains('Test Chat');
+        // Loading should be false
+        check(selection.isLoadingChatHistory).isFalse();
+      });
+
+      test('selecting new chat clears previous error', () async {
+        // Arrange
+        final project = createProjectState();
+        final fakeRestoreService = _FakeProjectRestoreService(
+          shouldThrowOnLoad: true,
+        );
+        final selection = SelectionState(project, restoreService: fakeRestoreService);
+
+        final chat1 = ChatState.create(name: 'Chat 1', worktreeRoot: '/repo');
+        final chat2 = ChatState.create(name: 'Chat 2', worktreeRoot: '/repo');
+        chat2.markHistoryAsLoaded();
+        project.primaryWorktree.addChat(chat1);
+        project.primaryWorktree.addChat(chat2);
+
+        // Trigger error on first chat
+        selection.selectChat(chat1);
+        await Future<void>.delayed(Duration.zero);
+        check(selection.chatHistoryError).isNotNull();
+
+        // Act - select second chat
+        selection.selectChat(chat2);
+
+        // Assert - error should be cleared
+        check(selection.chatHistoryError).isNull();
       });
 
       test('selectChat resets to primary conversation', () async {
