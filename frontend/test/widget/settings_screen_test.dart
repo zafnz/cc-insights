@@ -385,9 +385,11 @@ void main() {
         await tester.tap(find.text('Project Mgmt'));
         await safePumpAndSettle(tester);
 
-        // Toggle off - find the switch and tap it
+        // Toggle off - there are now 2 switches in Project Mgmt category
+        // (Agent Ticket Tools and Agent Git Tools)
+        // We need to find the first switch (the one for ticket tools)
         final switches = find.byType(Switch);
-        expect(switches, findsOneWidget);
+        expect(switches, findsNWidgets(2));
         await tester.tap(switches.first);
         await safePumpAndSettle(tester);
 

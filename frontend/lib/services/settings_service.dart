@@ -400,6 +400,16 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: true,
       ),
+      SettingDefinition(
+        key: 'projectMgmt.agentGitTools',
+        title: 'Agent Git Tools',
+        description:
+            'Allow agents to use git tools (commit, diff, log, status) '
+            'via internal MCP. When disabled, agents must use shell '
+            'commands for git operations.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
     ],
   );
 
@@ -804,6 +814,8 @@ class SettingsService extends ChangeNotifier {
         config.loggingMinimumLevel = value as String;
       case 'projectMgmt.agentTicketTools':
         config.agentTicketToolsEnabled = value as bool;
+      case 'projectMgmt.agentGitTools':
+        config.agentGitToolsEnabled = value as bool;
     }
   }
 

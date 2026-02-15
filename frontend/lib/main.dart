@@ -492,6 +492,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create ChatTitleService for AI-powered chat title generation
     _chatTitleService = ChatTitleService(askAiService: _askAiService);
 
+    // Register git tools if enabled
+    if (_settingsService!.getEffectiveValue<bool>(
+      'projectMgmt.agentGitTools',
+    )) {
+      _internalToolsService!.registerGitTools(const RealGitService());
+    }
+
     // Create or use injected EventHandler
     _eventHandler =
         widget.eventHandler ?? EventHandler(rateLimitState: _rateLimitState);

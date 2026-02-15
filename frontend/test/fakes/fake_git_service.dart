@@ -59,6 +59,13 @@ class FakeGitService implements GitService {
     findRepoRootCalls = 0;
     fileAtRefContents.clear();
     remoteMainBranches.clear();
+    stageFilesCalls.clear();
+    stageFilesError = null;
+    diffStats.clear();
+    diffs.clear();
+    recentCommitsMap.clear();
+    logs.clear();
+    headShortShas.clear();
   }
 
   Future<void> _maybeDelay() async {
@@ -792,5 +799,81 @@ class FakeGitService implements GitService {
     if (pruneWorktreesError != null) {
       throw pruneWorktreesError!;
     }
+  }
+
+  // =========================================================================
+  // Git tool MCP operations
+  // =========================================================================
+
+  /// Tracks calls to [stageFiles] with (path, files).
+  final List<(String, List<String>)> stageFilesCalls = [];
+
+  /// If set, [stageFiles] will throw this exception.
+  GitException? stageFilesError;
+
+  @override
+  Future<void> stageFiles(String path, List<String> files) async {
+    stageFilesCalls.add((path, List.of(files)));
+    await _maybeDelay();
+    _maybeThrow();
+    if (stageFilesError != null) throw stageFilesError!;
+  }
+
+  /// Map of path -> diff stat output for [getDiffStat].
+  final Map<String, String> diffStats = {};
+
+  @override
+  Future<String> getDiffStat(String path, {bool staged = false}) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return diffStats[path] ?? '';
+  }
+
+  /// Map of path -> diff output for [getDiff].
+  final Map<String, String> diffs = {};
+
+  @override
+  Future<String> getDiff(
+    String path, {
+    bool staged = false,
+    List<String>? files,
+  }) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return diffs[path] ?? '';
+  }
+
+  /// Map of path -> recent commits for [getRecentCommits].
+  final Map<String, List<({String sha, String message})>> recentCommitsMap =
+      {};
+
+  @override
+  Future<List<({String sha, String message})>> getRecentCommits(
+    String path, {
+    int count = 5,
+  }) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return (recentCommitsMap[path] ?? []).take(count).toList();
+  }
+
+  /// Map of path -> log output for [getLog].
+  final Map<String, String> logs = {};
+
+  @override
+  Future<String> getLog(String path, {int count = 5}) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return logs[path] ?? '';
+  }
+
+  /// Map of path -> short SHA for [getHeadShortSha].
+  final Map<String, String> headShortShas = {};
+
+  @override
+  Future<String> getHeadShortSha(String path) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return headShortShas[path] ?? 'abc1234';
   }
 }

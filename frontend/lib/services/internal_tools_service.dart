@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:claude_sdk/claude_sdk.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/ticket.dart';
 import '../state/bulk_proposal_state.dart';
+import 'git_service.dart';
 
 /// Service that manages internal MCP tools for CC-Insights.
 ///
@@ -201,5 +203,395 @@ class InternalToolsService extends ChangeNotifier {
     );
 
     return resultFuture;
+  }
+
+  // ===========================================================================
+  // Git tools
+  // ===========================================================================
+
+  GitService? _gitService;
+
+  /// Register git tools (commit_context, commit, log, diff) with the given
+  /// git service.
+  void registerGitTools(GitService gitService) {
+    _gitService = gitService;
+    _registry.register(_gitCommitContextTool());
+    _registry.register(_gitCommitTool());
+    _registry.register(_gitLogTool());
+    _registry.register(_gitDiffTool());
+  }
+
+  /// Unregister git tools.
+  void unregisterGitTools() {
+    _registry.unregister('git_commit_context');
+    _registry.unregister('git_commit');
+    _registry.unregister('git_log');
+    _registry.unregister('git_diff');
+    _gitService = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // git_commit_context
+  // ---------------------------------------------------------------------------
+
+  InternalToolDefinition _gitCommitContextTool() {
+    return InternalToolDefinition(
+      name: 'git_commit_context',
+      description:
+          'Returns git context needed for crafting a commit: '
+          'current branch, file status grouped by type, diff stat, '
+          'and recent commit messages. Use before making a commit.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'path': {
+            'type': 'string',
+            'description':
+                'Absolute path to the git repository working directory',
+          },
+        },
+        'required': ['path'],
+      },
+      handler: _handleGitCommitContext,
+    );
+  }
+
+  Future<InternalToolResult> _handleGitCommitContext(
+    Map<String, dynamic> input,
+  ) async {
+    final gitService = _gitService;
+    if (gitService == null) {
+      return InternalToolResult.error('Git service not available');
+    }
+
+    final path = _validatePath(input);
+    if (path == null) {
+      return InternalToolResult.error(
+        'Missing or empty "path" field. Must be an absolute path.',
+      );
+    }
+
+    try {
+      final results = await Future.wait([
+        gitService.getCurrentBranch(path),
+        gitService.getChangedFiles(path),
+        gitService.getDiffStat(path),
+        gitService.getRecentCommits(path, count: 5),
+      ]);
+
+      final branch = results[0] as String?;
+      final changedFiles = results[1] as List<GitFileChange>;
+      final diffStat = results[2] as String;
+      final recentCommits =
+          results[3] as List<({String sha, String message})>;
+
+      // Group files by status
+      final modified = <String>[];
+      final untracked = <String>[];
+      final deleted = <String>[];
+      final staged = <String>[];
+
+      for (final file in changedFiles) {
+        if (file.status == GitFileStatus.untracked) {
+          untracked.add(file.path);
+        } else if (file.isStaged) {
+          staged.add(file.path);
+        } else if (file.status == GitFileStatus.deleted) {
+          deleted.add(file.path);
+        } else {
+          modified.add(file.path);
+        }
+      }
+
+      final result = jsonEncode({
+        'branch': branch,
+        'status': {
+          'modified': modified,
+          'untracked': untracked,
+          'deleted': deleted,
+          'staged': staged,
+        },
+        'diff_stat': diffStat.trimRight(),
+        'recent_commits': recentCommits
+            .map((c) => {'sha': c.sha, 'message': c.message})
+            .toList(),
+      });
+
+      return InternalToolResult.text(result);
+    } on GitException catch (e) {
+      return InternalToolResult.error('Git error: ${e.message}');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // git_commit
+  // ---------------------------------------------------------------------------
+
+  InternalToolDefinition _gitCommitTool() {
+    return InternalToolDefinition(
+      name: 'git_commit',
+      description:
+          'Stages specific files and creates a git commit. '
+          'Files must be listed explicitly — no wildcards or "." allowed. '
+          'Does not support amending.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'path': {
+            'type': 'string',
+            'description':
+                'Absolute path to the git repository working directory',
+          },
+          'files': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description':
+                'File paths (relative to path) to stage. '
+                'No "." or "*" wildcards.',
+          },
+          'message': {
+            'type': 'string',
+            'description': 'The commit message',
+          },
+          'co_author': {
+            'type': 'string',
+            'description':
+                'Optional Co-Authored-By value '
+                '(e.g. "Name <email>"). Appended as a trailer.',
+          },
+        },
+        'required': ['path', 'files', 'message'],
+      },
+      handler: _handleGitCommit,
+    );
+  }
+
+  Future<InternalToolResult> _handleGitCommit(
+    Map<String, dynamic> input,
+  ) async {
+    final gitService = _gitService;
+    if (gitService == null) {
+      return InternalToolResult.error('Git service not available');
+    }
+
+    final path = _validatePath(input);
+    if (path == null) {
+      return InternalToolResult.error(
+        'Missing or empty "path" field. Must be an absolute path.',
+      );
+    }
+
+    // Validate files
+    final filesInput = input['files'];
+    if (filesInput == null || filesInput is! List || filesInput.isEmpty) {
+      return InternalToolResult.error(
+        'Missing or invalid "files" field. '
+        'Expected a non-empty array of file paths.',
+      );
+    }
+
+    final files = <String>[];
+    for (var i = 0; i < filesInput.length; i++) {
+      final file = filesInput[i];
+      if (file is! String || file.isEmpty) {
+        return InternalToolResult.error(
+          'File at index $i is not a valid string.',
+        );
+      }
+      if (file == '.' || file.contains('*')) {
+        return InternalToolResult.error(
+          'Wildcards and "." are not allowed. '
+          'Specify each file explicitly. Got: "$file"',
+        );
+      }
+      files.add(file);
+    }
+
+    // Validate message
+    final message = input['message'] as String?;
+    if (message == null || message.isEmpty) {
+      return InternalToolResult.error(
+        'Missing or empty "message" field.',
+      );
+    }
+
+    // Build full message with optional co-author trailer
+    final coAuthor = input['co_author'] as String?;
+    final fullMessage = StringBuffer(message);
+    if (coAuthor != null && coAuthor.isNotEmpty) {
+      fullMessage.write('\n\nCo-Authored-By: $coAuthor');
+    }
+
+    try {
+      await gitService.stageFiles(path, files);
+      await gitService.commit(path, fullMessage.toString());
+
+      // Get the short SHA of the new commit
+      final sha = await gitService.getHeadShortSha(path);
+
+      return InternalToolResult.text(jsonEncode({
+        'success': true,
+        'sha': sha,
+        'message': message,
+        'files_committed': files,
+      }));
+    } on GitException catch (e) {
+      // Best-effort reset of the index on failure
+      try {
+        await gitService.resetIndex(path);
+      } catch (_) {}
+
+      return InternalToolResult.text(jsonEncode({
+        'success': false,
+        'error': e.message,
+      }));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // git_log
+  // ---------------------------------------------------------------------------
+
+  InternalToolDefinition _gitLogTool() {
+    return InternalToolDefinition(
+      name: 'git_log',
+      description:
+          'Returns the full git log (messages, authors, dates) '
+          'for recent commits.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'path': {
+            'type': 'string',
+            'description':
+                'Absolute path to the git repository working directory',
+          },
+          'count': {
+            'type': 'integer',
+            'description': 'Number of commits to show (default: 5, max: 50)',
+          },
+        },
+        'required': ['path'],
+      },
+      handler: _handleGitLog,
+    );
+  }
+
+  Future<InternalToolResult> _handleGitLog(
+    Map<String, dynamic> input,
+  ) async {
+    final gitService = _gitService;
+    if (gitService == null) {
+      return InternalToolResult.error('Git service not available');
+    }
+
+    final path = _validatePath(input);
+    if (path == null) {
+      return InternalToolResult.error(
+        'Missing or empty "path" field. Must be an absolute path.',
+      );
+    }
+
+    var count = (input['count'] as num?)?.toInt() ?? 5;
+    if (count < 1) count = 1;
+    if (count > 50) count = 50;
+
+    try {
+      final log = await gitService.getLog(path, count: count);
+      if (log.isEmpty) {
+        return InternalToolResult.text('(no commits)');
+      }
+      return InternalToolResult.text(log.trimRight());
+    } on GitException catch (e) {
+      return InternalToolResult.error('Git error: ${e.message}');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // git_diff
+  // ---------------------------------------------------------------------------
+
+  InternalToolDefinition _gitDiffTool() {
+    return InternalToolDefinition(
+      name: 'git_diff',
+      description:
+          'Returns the git diff output for the working directory. '
+          'Shows unstaged changes by default, or staged changes '
+          'with the staged option.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'path': {
+            'type': 'string',
+            'description':
+                'Absolute path to the git repository working directory',
+          },
+          'staged': {
+            'type': 'boolean',
+            'description':
+                'If true, show staged changes (--cached). Default: false',
+          },
+          'files': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description': 'Optional list of file paths to limit the diff to',
+          },
+        },
+        'required': ['path'],
+      },
+      handler: _handleGitDiff,
+    );
+  }
+
+  Future<InternalToolResult> _handleGitDiff(
+    Map<String, dynamic> input,
+  ) async {
+    final gitService = _gitService;
+    if (gitService == null) {
+      return InternalToolResult.error('Git service not available');
+    }
+
+    final path = _validatePath(input);
+    if (path == null) {
+      return InternalToolResult.error(
+        'Missing or empty "path" field. Must be an absolute path.',
+      );
+    }
+
+    final staged = input['staged'] as bool? ?? false;
+
+    List<String>? files;
+    final filesInput = input['files'];
+    if (filesInput is List && filesInput.isNotEmpty) {
+      files = filesInput.cast<String>();
+    }
+
+    try {
+      final diff = await gitService.getDiff(
+        path,
+        staged: staged,
+        files: files,
+      );
+      if (diff.isEmpty) {
+        return InternalToolResult.text('(no changes)');
+      }
+      return InternalToolResult.text(diff.trimRight());
+    } on GitException catch (e) {
+      return InternalToolResult.error('Git error: ${e.message}');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared helpers
+  // ---------------------------------------------------------------------------
+
+  /// Validates and extracts the path from tool input.
+  /// Returns null if path is missing, empty, or not absolute.
+  String? _validatePath(Map<String, dynamic> input) {
+    final path = input['path'] as String?;
+    if (path == null || path.isEmpty || !path.startsWith('/')) {
+      return null;
+    }
+    return path;
   }
 }

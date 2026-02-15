@@ -374,6 +374,48 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<void> stageFiles(String path, List<String> files) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+  }
+
+  @override
+  Future<String> getDiffStat(String path, {bool staged = false}) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return '';
+  }
+
+  @override
+  Future<String> getDiff(
+    String path, {
+    bool staged = false,
+    List<String>? files,
+  }) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return '';
+  }
+
+  @override
+  Future<List<({String sha, String message})>> getRecentCommits(
+    String path, {
+    int count = 5,
+  }) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return [];
+  }
+
+  @override
+  Future<String> getLog(String path, {int count = 5}) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return '';
+  }
+
+  @override
+  Future<String> getHeadShortSha(String path) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return 'abc1234';
+  }
+
+  @override
   Future<void> pruneWorktrees(String repoRoot) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
   }

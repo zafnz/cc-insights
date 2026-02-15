@@ -504,6 +504,41 @@ abstract class GitService {
   /// Runs `git worktree prune` to clean up the worktree list.
   /// Throws [GitException] on failure.
   Future<void> pruneWorktrees(String repoRoot);
+
+  /// Stages specific files (git add -- <file1> <file2> ...).
+  ///
+  /// [files] must be a non-empty list of paths relative to the worktree root.
+  /// Throws [GitException] on failure.
+  Future<void> stageFiles(String path, List<String> files);
+
+  /// Gets the diff stat summary (git diff --stat).
+  ///
+  /// If [staged] is true, shows staged changes (--cached).
+  Future<String> getDiffStat(String path, {bool staged = false});
+
+  /// Gets the full diff output.
+  ///
+  /// If [staged] is true, shows staged changes (--cached).
+  /// If [files] is provided, limits diff to those files.
+  Future<String> getDiff(String path, {bool staged = false, List<String>? files});
+
+  /// Gets recent commit log entries as (sha, message) pairs.
+  ///
+  /// Returns up to [count] entries using `git log --pretty=format:%h %s`.
+  Future<List<({String sha, String message})>> getRecentCommits(
+    String path, {
+    int count = 5,
+  });
+
+  /// Gets full commit log output for recent commits.
+  ///
+  /// Returns the raw output of `git log -n [count]`.
+  Future<String> getLog(String path, {int count = 5});
+
+  /// Gets the short SHA of HEAD.
+  ///
+  /// Returns the abbreviated commit hash (e.g., "495d5de").
+  Future<String> getHeadShortSha(String path);
 }
 
 /// Result of analyzing a directory's git repository status.
@@ -1666,6 +1701,76 @@ class RealGitService implements GitService {
   @override
   Future<void> pruneWorktrees(String repoRoot) async {
     await _runGit(['worktree', 'prune'], workingDirectory: repoRoot);
+  }
+
+  @override
+  Future<void> stageFiles(String path, List<String> files) async {
+    if (files.isEmpty) {
+      throw const GitException('No files specified for staging');
+    }
+    await _runGit(['add', '--', ...files], workingDirectory: path);
+  }
+
+  @override
+  Future<String> getDiffStat(String path, {bool staged = false}) async {
+    final args = ['diff', '--stat'];
+    if (staged) args.add('--cached');
+    return await _runGit(args, workingDirectory: path);
+  }
+
+  @override
+  Future<String> getDiff(
+    String path, {
+    bool staged = false,
+    List<String>? files,
+  }) async {
+    final args = ['diff'];
+    if (staged) args.add('--cached');
+    if (files != null && files.isNotEmpty) {
+      args.addAll(['--', ...files]);
+    }
+    return await _runGit(args, workingDirectory: path);
+  }
+
+  @override
+  Future<List<({String sha, String message})>> getRecentCommits(
+    String path, {
+    int count = 5,
+  }) async {
+    final output = await _runGit(
+      ['log', '-n', '$count', '--pretty=format:%h %s'],
+      workingDirectory: path,
+    );
+
+    final commits = <({String sha, String message})>[];
+    for (final line in output.split('\n')) {
+      if (line.isEmpty) continue;
+      final spaceIndex = line.indexOf(' ');
+      if (spaceIndex > 0) {
+        commits.add((
+          sha: line.substring(0, spaceIndex),
+          message: line.substring(spaceIndex + 1),
+        ));
+      }
+    }
+    return commits;
+  }
+
+  @override
+  Future<String> getLog(String path, {int count = 5}) async {
+    return await _runGit(
+      ['log', '-n', '$count'],
+      workingDirectory: path,
+    );
+  }
+
+  @override
+  Future<String> getHeadShortSha(String path) async {
+    final output = await _runGit(
+      ['rev-parse', '--short', 'HEAD'],
+      workingDirectory: path,
+    );
+    return output.trim();
   }
 }
 

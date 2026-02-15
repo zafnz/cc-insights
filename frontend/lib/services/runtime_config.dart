@@ -128,6 +128,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether agents can access ticket tools (create_ticket MCP tool).
   bool _agentTicketToolsEnabled = true;
 
+  /// Whether agents can access git tools (commit, diff, log, status MCP tools).
+  bool _agentGitToolsEnabled = true;
+
   // defaultModel and defaultBackend are now derived from the default agent.
   // See the getters below.
 
@@ -539,6 +542,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether agents can access git tools.
+  bool get agentGitToolsEnabled => _agentGitToolsEnabled;
+
+  set agentGitToolsEnabled(bool value) {
+    if (_agentGitToolsEnabled != value) {
+      _agentGitToolsEnabled = value;
+      notifyListeners();
+    }
+  }
+
   /// Default model for new chats, derived from the default agent.
   ///
   /// Returns a composite value like `"claude:opus"` built from
@@ -821,6 +834,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._codexAvailable = true;
     _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;
+    _instance._agentGitToolsEnabled = true;
     _instance._agents = [];
     _instance._defaultAgentId = 'claude-default';
   }
