@@ -4,6 +4,7 @@ import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/chat_session_service.dart';
+import 'package:cc_insights_v2/services/chat_title_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
 import 'package:checks/checks.dart';
@@ -184,6 +185,7 @@ void main() {
       backend: fakeBackend,
       eventHandler: eventHandler,
       internalTools: internalTools,
+      chatTitleService: ChatTitleService(),
     );
   });
 

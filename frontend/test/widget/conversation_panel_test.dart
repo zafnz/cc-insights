@@ -7,6 +7,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/chat_session_service.dart';
+import 'package:cc_insights_v2/services/chat_title_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
@@ -474,11 +475,13 @@ void main() {
             ChangeNotifierProvider<InternalToolsService>(
               create: (_) => InternalToolsService(),
             ),
+            Provider<ChatTitleService>.value(value: ChatTitleService()),
             Provider<ChatSessionService>(
               create: (context) => ChatSessionService(
                 backend: context.read<BackendService>(),
                 eventHandler: context.read<EventHandler>(),
                 internalTools: context.read<InternalToolsService>(),
+                chatTitleService: context.read<ChatTitleService>(),
               ),
             ),
             ChangeNotifierProvider(create: (_) => ThemeState()),

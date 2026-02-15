@@ -13,6 +13,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/backend_service.dart';
 import '../services/cli_availability_service.dart';
+import '../services/chat_title_service.dart';
 import '../services/event_handler.dart';
 import '../services/internal_tools_service.dart';
 import '../services/project_restore_service.dart';
@@ -307,7 +308,8 @@ class WelcomeCard extends StatelessWidget {
     chat.addEntry(userEntry);
 
     // Generate a better title for the chat (fire-and-forget)
-    eventHandler.generateChatTitle(chat, text);
+    final chatTitleService = context.read<ChatTitleService>();
+    chatTitleService.generateChatTitle(chat, text);
 
     // Start session with the first message (including images if attached)
     try {

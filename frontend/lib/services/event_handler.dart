@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:agent_sdk_core/agent_sdk_core.dart'
@@ -37,24 +36,19 @@ import '../models/output_entry.dart';
 import '../models/ticket.dart';
 import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
-import 'ask_ai_service.dart';
 import 'log_service.dart';
-import 'runtime_config.dart';
+import 'streaming_processor.dart';
+import 'ticket_event_bridge.dart';
 
-/// Handles InsightsEvent objects and routes them to the correct conversation.
+part 'event_handler_lifecycle.dart';
+part 'event_handler_subagents.dart';
+
+/// Base class with shared state for event handling.
 ///
-/// This class is responsible for:
-/// - Processing typed InsightsEvent objects and creating appropriate OutputEntry objects
-/// - Tool use → tool result pairing via [_toolCallIndex]
-/// - Conversation routing via parentCallId → [_agentIdToConversationId]
-/// - Agent lifecycle management (subagent spawning)
-/// - Streaming: processing StreamDeltaEvent objects into live-updating entries
-///   with throttled UI notifications
-///
-/// The handler is stateless with respect to [ChatState] - the chat is passed
-/// to [handleEvent] rather than stored. Internal tracking maps are keyed
-/// by callId/agentId which are unique across sessions.
-class EventHandler {
+/// Contains the event routing switch, conversation resolution, tool/text
+/// event processing, and cleanup methods. Session lifecycle and subagent
+/// management are in part file mixins.
+class _EventHandlerBase {
   /// Tool pairing: callId → entry (for updating with result later).
   final Map<String, ToolUseOutputEntry> _toolCallIndex = {};
 
@@ -62,102 +56,76 @@ class EventHandler {
   final Map<String, String> _agentIdToConversationId = {};
 
   /// Maps new Task callId → original agent's sdkAgentId (for resumed agents).
-  ///
-  /// When an agent is resumed with a new Task tool call, the new callId
-  /// needs to map back to the original agent's sdkAgentId so that results
-  /// update the correct agent.
   final Map<String, String> _toolUseIdToAgentId = {};
 
-  /// Tracks whether assistant output was added during the current turn,
-  /// per chat.
-  ///
-  /// Used to determine whether to display result messages - if no assistant
-  /// output was added (e.g., for an unrecognized slash command), the result
-  /// message should be shown to the user.
+  /// Tracks whether assistant output was added during the current turn.
   final Map<String, bool> _hasAssistantOutputThisTurn = {};
 
-  /// Tracks whether we're expecting a context summary message, per chat.
-  ///
-  /// Set to true after receiving a ContextCompactionEvent without a summary.
-  /// The next user message will be treated as the context summary and displayed
-  /// as a [ContextSummaryEntry].
+  /// Tracks whether we're expecting a context summary message.
   final Map<String, bool> _expectingContextSummary = {};
 
-  /// AskAiService for generating chat titles.
-  final AskAiService? _askAiService;
-
   /// Rate limit state for displaying rate limit information.
-  ///
-  /// When set, [RateLimitUpdateEvent]s are forwarded to this state so the UI
-  /// can display the latest rate limit data.
   final RateLimitState? rateLimitState;
 
-  /// Ticket board state for ticket status transitions.
-  ///
-  /// When set, EventHandler will automatically transition ticket statuses
-  /// based on chat events (e.g., needsInput on permission requests).
-  TicketBoardState? _ticketBoard;
+  /// Bridge for ticket status transitions based on chat events.
+  final TicketEventBridge _ticketBridge;
 
-  /// Set of chat IDs that are currently having their title generated.
-  ///
-  /// Used to prevent duplicate concurrent title generation requests.
-  final Set<String> _pendingTitleGenerations = {};
+  /// Streaming delta processor with its own state machine.
+  late final StreamingProcessor _streaming;
 
-  /// Set of chat IDs that have already had title generation attempted.
-  ///
-  /// Once a chat ID is in this set, we won't attempt title generation again.
-  /// This persists for the lifetime of the EventHandler instance.
-  final Set<String> _titlesGenerated = {};
-
-  // Streaming state
-
-  /// Tracks streaming entries by (conversationId, contentBlockIndex).
-  /// Reset on each new message_start.
-  final Map<(String, int), OutputEntry> _streamingBlocks = {};
-
-  /// The conversation ID for the currently streaming message.
-  String? _streamingConversationId;
-
-  /// Chat reference for the current streaming session.
-  ChatState? _streamingChat;
-
-  /// Entries created during streaming for each conversation.
-  /// Used by [_handleText] and [_handleToolInvocation] to finalize instead of duplicate.
-  final Map<String, List<OutputEntry>> _activeStreamingEntries = {};
-
-  /// Throttle timer for batching UI updates during streaming.
-  Timer? _notifyTimer;
-
-  /// Whether any deltas arrived since the last timer tick.
-  bool _hasPendingNotify = false;
-
-  /// Creates an [EventHandler].
-  ///
-  /// If [askAiService] is provided, it will be used to auto-generate chat
-  /// titles after the first assistant response.
-  ///
-  /// If [ticketBoard] is provided, ticket statuses will be automatically
-  /// transitioned based on chat events (e.g., needsInput on permission requests).
-  EventHandler({
-    AskAiService? askAiService,
+  _EventHandlerBase({
     this.rateLimitState,
     TicketBoardState? ticketBoard,
-  })  : _askAiService = askAiService,
-       _ticketBoard = ticketBoard;
+  }) : _ticketBridge = TicketEventBridge(ticketBoard: ticketBoard) {
+    _streaming = StreamingProcessor(
+      toolCallIndex: _toolCallIndex,
+      activeStreamingEntries: _activeStreamingEntries,
+      resolveConversationId: _resolveConversationId,
+    );
+  }
+
+  /// Streaming entries shared between StreamingProcessor and finalization
+  /// in _handleText/_handleToolInvocation.
+  final Map<String, List<OutputEntry>> _activeStreamingEntries = {};
 
   /// The current ticket board state, if any.
-  TicketBoardState? get ticketBoard => _ticketBoard;
+  TicketBoardState? get ticketBoard => _ticketBridge.ticketBoard;
 
-  /// Updates the ticket board state.
-  ///
-  /// Called when the active project changes and a new [TicketBoardState]
-  /// is created.
-  set ticketBoard(TicketBoardState? value) => _ticketBoard = value;
+  set ticketBoard(TicketBoardState? value) =>
+      _ticketBridge.ticketBoard = value;
+
+  /// The ticket event bridge for external callers (e.g. ChatState).
+  TicketEventBridge get ticketBridge => _ticketBridge;
+
+  /// Resolves a parentCallId to a conversation ID.
+  String _resolveConversationId(ChatState chat, String? parentCallId) {
+    if (parentCallId == null) {
+      return chat.data.primaryConversation.id;
+    }
+    return _agentIdToConversationId[parentCallId] ??
+        chat.data.primaryConversation.id;
+  }
+}
+
+/// Handles InsightsEvent objects and routes them to the correct conversation.
+///
+/// Responsibilities:
+/// - Processing typed InsightsEvent objects and creating appropriate OutputEntry objects
+/// - Tool use → tool result pairing via [_toolCallIndex]
+/// - Conversation routing via parentCallId → [_agentIdToConversationId]
+///
+/// Extracted concerns:
+/// - Streaming delta processing → [StreamingProcessor]
+/// - Chat title generation → ChatTitleService
+/// - Ticket status transitions → [TicketEventBridge]
+class EventHandler extends _EventHandlerBase
+    with _LifecycleMixin, _SubagentMixin {
+  EventHandler({
+    super.rateLimitState,
+    super.ticketBoard,
+  });
 
   /// Handle an incoming InsightsEvent.
-  ///
-  /// The [chat] is the ChatState to route events to.
-  /// The [event] is the typed event object from the protocol.
   void handleEvent(ChatState chat, InsightsEvent event) {
     switch (event) {
       case final ToolInvocationEvent e:
@@ -187,27 +155,17 @@ class EventHandler {
       case final SubagentCompleteEvent e:
         _handleSubagentComplete(chat, e);
       case final StreamDeltaEvent e:
-        _handleStreamDelta(chat, e);
+        _streaming.handleDelta(chat, e);
       case final UsageUpdateEvent e:
         _handleUsageUpdate(chat, e);
       case PermissionRequestEvent e:
-        _handlePermissionRequest(chat, e);
+        _ticketBridge.onPermissionRequest(chat);
       case final RateLimitUpdateEvent e:
         rateLimitState?.update(e);
     }
   }
 
-  /// Resolves a parentCallId to a conversation ID.
-  ///
-  /// Returns the primary conversation ID if [parentCallId] is null,
-  /// otherwise looks up the conversation for that agent.
-  String _resolveConversationId(ChatState chat, String? parentCallId) {
-    if (parentCallId == null) {
-      return chat.data.primaryConversation.id;
-    }
-    return _agentIdToConversationId[parentCallId] ??
-        chat.data.primaryConversation.id;
-  }
+  // -- Tool event processing --
 
   void _handleToolInvocation(ChatState chat, ToolInvocationEvent event) {
     final conversationId = _resolveConversationId(chat, event.parentCallId);
@@ -215,10 +173,8 @@ class EventHandler {
     // Check for streaming entries to finalize
     final streamingEntries = _activeStreamingEntries[conversationId];
     if (streamingEntries != null && streamingEntries.isNotEmpty) {
-      // Find the first matching tool entry
       for (final entry in streamingEntries) {
         if (entry is ToolUseOutputEntry && entry.toolUseId == event.callId) {
-          // Finalize the streaming entry
           entry.toolInput
             ..clear()
             ..addAll(Map<String, dynamic>.from(event.input));
@@ -231,7 +187,6 @@ class EventHandler {
       }
     }
 
-    // Non-streaming path: create entry
     final entry = ToolUseOutputEntry(
       timestamp: DateTime.now(),
       toolName: event.toolName,
@@ -242,10 +197,7 @@ class EventHandler {
       model: event.model,
     );
 
-    // Add raw message for debugging
     entry.addRawMessage(event.raw ?? {});
-
-    // Track for pairing with tool_result
     _toolCallIndex[event.callId] = entry;
     chat.addOutputEntry(conversationId, entry);
   }
@@ -254,42 +206,23 @@ class EventHandler {
     final entry = _toolCallIndex[event.callId];
 
     if (entry != null) {
-      // Update the entry in place
       entry.updateResult(event.output, event.isError);
-
-      // Add the result message to raw messages for debugging
       entry.addRawMessage(event.raw ?? {});
-
-      // Persist the tool result to the JSONL file
       chat.persistToolResult(event.callId, event.output, event.isError);
-
-      // Entry already in the list - just notify listeners
       chat.notifyListeners();
     }
 
-    // Clear any pending permission request for this specific tool.
-    // This handles the timeout case: when the SDK times out waiting for
-    // permission, it sends a tool result (denied), and we should dismiss
-    // the stale permission widget.
     if (event.callId.isNotEmpty) {
       chat.removePendingPermissionByToolUseId(event.callId);
     }
   }
 
-  /// Formats token count with K suffix for readability.
-  String _formatTokens(int tokens) {
-    if (tokens >= 1000) {
-      return '${(tokens / 1000).toStringAsFixed(1)}K';
-    }
-    return tokens.toString();
-  }
+  // -- Text & message processing --
 
-  // Task 4c methods
   void _handleText(ChatState chat, TextEvent event) {
     final chatId = chat.data.id;
 
     // Check if this is a context summary (after compaction).
-    // Requires both: we're expecting a summary AND the message is synthetic.
     final isSynthetic = event.extensions?['claude.isSynthetic'] == true;
     if ((_expectingContextSummary[chatId] ?? false) && isSynthetic) {
       _expectingContextSummary[chatId] = false;
@@ -304,15 +237,11 @@ class EventHandler {
 
     final conversationId = _resolveConversationId(chat, event.parentCallId);
 
-    // Check for streaming entries to finalize: when a non-streaming event arrives
-    // and there are active streaming entries for that conversation, finalize the
-    // first matching text entry.
+    // Check for streaming entries to finalize
     final streamingEntries = _activeStreamingEntries.remove(conversationId);
     if (streamingEntries != null && streamingEntries.isNotEmpty) {
-      // Find the first TextOutputEntry to finalize
       for (final entry in streamingEntries) {
         if (entry is TextOutputEntry) {
-          // Finalize with authoritative text
           entry.text = event.text;
           entry.isStreaming = false;
           entry.addRawMessage(event.raw ?? {});
@@ -323,7 +252,6 @@ class EventHandler {
       }
     }
 
-    // Non-streaming path: create entry
     final String contentType;
     String? errorType;
 
@@ -348,7 +276,6 @@ class EventHandler {
     entry.addRawMessage(event.raw ?? {});
     chat.addOutputEntry(conversationId, entry);
 
-    // Mark that we have assistant output for this turn (main agent only)
     if (event.parentCallId == null) {
       _hasAssistantOutputThisTurn[chat.data.id] = true;
     }
@@ -357,15 +284,10 @@ class EventHandler {
   void _handleUserInput(ChatState chat, UserInputEvent event) {
     final chatId = chat.data.id;
 
-    // Check if this is a context summary message (after compaction)
-    // The SDK may send this with isSynthetic=true, or we track it via
-    // _expectingContextSummary flag after receiving compact_boundary
     if (event.isSynthetic ||
         (_expectingContextSummary[chatId] ?? false)) {
-      // Reset the flag
       _expectingContextSummary[chatId] = false;
 
-      // Extract the text content and display as a context summary entry
       if (event.text.isNotEmpty) {
         chat.addEntry(ContextSummaryEntry(
           timestamp: DateTime.now(),
@@ -375,9 +297,6 @@ class EventHandler {
       return;
     }
 
-    // Handle local command output (e.g., /cost, /compact).
-    // These arrive as user messages with isReplay: true and text content
-    // wrapped in <local-command-stdout> tags.
     final isReplay = event.extensions?['isReplay'] == true;
     if (isReplay) {
       final localCmdRegex = RegExp(
@@ -395,732 +314,26 @@ class EventHandler {
       }
       return;
     }
-
-    // Normal user input - no-op (user input entries are added by ChatState.sendMessage)
   }
 
-  void _handleSessionInit(ChatState chat, SessionInitEvent event) {
-    // Sync the server-reported model to the chat's model dropdown so the UI
-    // shows the actual resolved model (e.g. "gpt-5.2-codex" instead of
-    // "Default (server)").
-    final serverModel = event.model;
-    if (serverModel != null && serverModel.isNotEmpty) {
-      final models = ChatModelCatalog.forBackend(chat.model.backend);
-      final match = models.where((m) => m.id == serverModel).toList();
-      if (match.isNotEmpty) {
-        chat.syncModelFromServer(match.first);
-      } else {
-        // Model not in catalog — add it dynamically so the dropdown shows it
-        final resolved = ChatModel(
-          id: serverModel,
-          label: serverModel,
-          backend: chat.model.backend,
-        );
-        chat.syncModelFromServer(resolved);
-      }
-    }
-
-    // Sync the server-reported reasoning effort to the chat so the dropdown
-    // reflects what the server is actually using.
-    final effort = ReasoningEffort.fromString(event.reasoningEffort);
-    if (effort != null && effort != chat.reasoningEffort) {
-      chat.syncReasoningEffortFromServer(effort);
-    }
-  }
-
-  void _handleConfigOptions(ChatState chat, ConfigOptionsEvent event) {
-    chat.setAcpConfigOptions(event.configOptions);
-  }
-
-  void _handleAvailableCommands(ChatState chat, AvailableCommandsEvent event) {
-    chat.setAcpAvailableCommands(event.availableCommands);
-  }
-
-  void _handleSessionMode(ChatState chat, SessionModeEvent event) {
-    chat.setAcpSessionMode(
-      currentModeId: event.currentModeId,
-      availableModes: event.availableModes,
-    );
-  }
-
-  void _handleSessionStatus(ChatState chat, SessionStatusEvent event) {
-    // Update compacting state
-    if (event.status == SessionStatus.compacting) {
-      chat.setCompacting(true);
-    } else {
-      chat.setCompacting(false);
-    }
-
-    // Sync permission mode when the CLI reports it (e.g., entering plan mode)
-    final permMode = event.extensions?['permissionMode'] as String?;
-    if (permMode != null) {
-      chat.setPermissionMode(PermissionMode.fromApiName(permMode));
-    }
-  }
-
-  void _handleCompaction(ChatState chat, ContextCompactionEvent event) {
-    // Check for context_cleared trigger
-    if (event.trigger == CompactionTrigger.cleared) {
-      chat.addEntry(ContextClearedEntry(timestamp: DateTime.now()));
-      chat.resetContext();
-      return;
-    }
-
-    // Create AutoCompactionEntry
-    final message = event.preTokens != null
-        ? 'Was ${_formatTokens(event.preTokens!)} tokens'
-        : null;
-    final isManual = event.trigger == CompactionTrigger.manual;
-
-    chat.addEntry(AutoCompactionEntry(
-      timestamp: DateTime.now(),
-      message: message,
-      isManual: isManual,
-    ));
-
-    // Handle summary
-    if (event.summary != null) {
-      // Summary provided immediately - create entry
-      chat.addEntry(ContextSummaryEntry(
-        timestamp: DateTime.now(),
-        summary: event.summary!,
-      ));
-    } else {
-      // Summary will arrive in the next user message
-      _expectingContextSummary[chat.data.id] = true;
-    }
-  }
-
-  void _handleTurnComplete(ChatState chat, TurnCompleteEvent event) {
-    // Determine if main agent or subagent
-    final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
-
-    // Extract usage
-    UsageInfo? usageInfo;
-    if (event.usage != null) {
-      final u = event.usage!;
-      usageInfo = UsageInfo(
-        inputTokens: u.inputTokens,
-        outputTokens: u.outputTokens,
-        cacheReadTokens: u.cacheReadTokens ?? 0,
-        cacheCreationTokens: u.cacheCreationTokens ?? 0,
-        costUsd: event.costUsd ?? 0.0,
-      );
-    }
-
-    // Extract per-model usage breakdown
-    List<ModelUsageInfo>? modelUsageList;
-    int? contextWindow;
-    if (event.modelUsage != null && event.modelUsage!.isNotEmpty) {
-      modelUsageList = event.modelUsage!.entries.map((entry) {
-        final data = entry.value;
-        return ModelUsageInfo(
-          modelName: entry.key,
-          inputTokens: data.inputTokens,
-          outputTokens: data.outputTokens,
-          cacheReadTokens: data.cacheReadTokens ?? 0,
-          cacheCreationTokens: data.cacheCreationTokens ?? 0,
-          costUsd: data.costUsd ?? 0.0,
-          contextWindow: data.contextWindow ?? 200000,
-        );
-      }).toList();
-
-      // Get context window from first model (they should all be the same)
-      if (modelUsageList.isNotEmpty) {
-        contextWindow = modelUsageList.first.contextWindow;
-      }
-    }
-
-    // Calculate cost from pricing table for Codex (which doesn't report cost)
-    double totalCostUsd = event.costUsd ?? 0.0;
-    if (totalCostUsd == 0.0 &&
-        event.provider == BackendProvider.codex &&
-        modelUsageList != null) {
-      modelUsageList = modelUsageList.map((m) {
-        final pricing = lookupCodexPricing(m.modelName);
-        if (pricing == null) return m;
-        final cost = pricing.calculateCost(
-          inputTokens: m.inputTokens,
-          cachedInputTokens: m.cacheReadTokens,
-          outputTokens: m.outputTokens,
-        );
-        return ModelUsageInfo(
-          modelName: m.modelName,
-          inputTokens: m.inputTokens,
-          outputTokens: m.outputTokens,
-          cacheReadTokens: m.cacheReadTokens,
-          cacheCreationTokens: m.cacheCreationTokens,
-          costUsd: cost,
-          contextWindow: m.contextWindow,
-        );
-      }).toList();
-      totalCostUsd = modelUsageList.fold(0.0, (sum, m) => sum + m.costUsd);
-      if (usageInfo != null && totalCostUsd > 0.0) {
-        usageInfo = usageInfo.copyWith(costUsd: totalCostUsd);
-      }
-    }
-
-    if (parentCallId == null) {
-      // Main agent result
-      if (usageInfo != null) {
-        chat.updateCumulativeUsage(
-          usage: usageInfo,
-          totalCostUsd: totalCostUsd,
-          modelUsage: modelUsageList,
-          contextWindow: contextWindow,
-        );
-      }
-
-      // Update context tracker with the last step's per-API-call usage.
-      // The result message's `usage` is cumulative across all steps in a turn,
-      // which inflates the context count. Instead, we use `lastStepUsage`
-      // from extensions — the usage from the final assistant message, which
-      // reflects the actual context window size.
-      final lastStepUsage =
-          event.extensions?['lastStepUsage'] as Map<String, dynamic>?;
-      if (lastStepUsage != null) {
-        chat.updateContextFromUsage(lastStepUsage);
-      }
-
-      chat.setWorking(false);
-
-      // Handle no-output result: if no assistant output was added during this
-      // turn and there's a result message, display it as a system notification
-      // (e.g., "Unknown skill: clear")
-      final chatId = chat.data.id;
-      final result = event.result;
-      if (!(_hasAssistantOutputThisTurn[chatId] ?? false) &&
-          result != null &&
-          result.isNotEmpty) {
-        chat.addEntry(SystemNotificationEntry(
-          timestamp: DateTime.now(),
-          message: result,
-        ));
-      }
-
-      // Reset the flag for the next turn
-      _hasAssistantOutputThisTurn[chatId] = false;
-
-      // Ticket status transitions: linked tickets → inReview + cost accumulation
-      _updateLinkedTicketsOnTurnComplete(chat, event);
-    } else {
-      // Subagent result - determine agent status from subtype
-      final AgentStatus status;
-      final subtype = event.subtype;
-
-      if (subtype == 'success') {
-        status = AgentStatus.completed;
-      } else if (subtype == 'error_max_turns' ||
-          subtype == 'error_tool' ||
-          subtype == 'error_api' ||
-          subtype == 'error_budget') {
-        status = AgentStatus.error;
-      } else {
-        status = AgentStatus.completed;
-      }
-
-      chat.updateAgent(status, parentCallId);
-    }
-  }
-
-  // Intermediate usage update — fires after each API call (step) during a turn.
-  void _handleUsageUpdate(ChatState chat, UsageUpdateEvent event) {
-    // Accumulate output tokens from ALL events (main + subagent) so the
-    // token counter reflects total work done during the turn.
-    final outputTokens =
-        (event.stepUsage['output_tokens'] as num?)?.toInt() ?? 0;
-    chat.addInTurnOutputTokens(outputTokens);
-
-    // Only update context tracker for main agent events — subagents have
-    // independent context windows that don't reflect the main agent's state.
-    final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
-    if (parentCallId != null) return;
-
-    // Update context tracker with per-step usage (reflects actual context size).
-    chat.updateContextFromUsage(event.stepUsage);
-  }
-
-  // Task 4d: Streaming delta handling
-  void _handleStreamDelta(ChatState chat, StreamDeltaEvent event) {
-    switch (event.kind) {
-      case StreamDeltaKind.messageStart:
-        _onMessageStart(chat, event.parentCallId);
-      case StreamDeltaKind.blockStart:
-        _onContentBlockStart(chat, event.blockIndex ?? 0, event);
-      case StreamDeltaKind.text:
-        _onContentBlockDelta(chat, event.blockIndex ?? 0, event);
-      case StreamDeltaKind.thinking:
-        _onContentBlockDelta(chat, event.blockIndex ?? 0, event);
-      case StreamDeltaKind.toolInput:
-        _onContentBlockDelta(chat, event.blockIndex ?? 0, event);
-      case StreamDeltaKind.blockStop:
-        _onContentBlockStop(event.blockIndex ?? 0);
-      case StreamDeltaKind.messageStop:
-        _onMessageStop(chat);
-    }
-  }
-
-  void _onMessageStart(ChatState chat, String? parentCallId) {
-    _streamingConversationId = _resolveConversationId(chat, parentCallId);
-    _streamingChat = chat;
-    _streamingBlocks.clear();
-  }
-
-  void _onContentBlockStart(
-    ChatState chat,
-    int index,
-    StreamDeltaEvent event,
-  ) {
-    final convId = _streamingConversationId;
-    if (convId == null) return;
-
-    OutputEntry? entry;
-
-    // Determine block type from event fields
-    if (event.callId != null) {
-      // tool_use block
-      final toolName = event.extensions?['tool_name'] as String? ?? '';
-      entry = ToolUseOutputEntry(
-        timestamp: DateTime.now(),
-        toolName: toolName,
-        toolKind: ToolKind.fromToolName(toolName),
-        provider: event.provider,
-        toolUseId: event.callId!,
-        toolInput: <String, dynamic>{},
-        isStreaming: true,
-      );
-      // Register for tool result pairing
-      _toolCallIndex[event.callId!] = entry as ToolUseOutputEntry;
-    } else if (event.extensions?['block_type'] == 'thinking') {
-      // thinking block
-      entry = TextOutputEntry(
-        timestamp: DateTime.now(),
-        text: '',
-        contentType: 'thinking',
-        isStreaming: true,
-      );
-    } else {
-      // text block (default)
-      entry = TextOutputEntry(
-        timestamp: DateTime.now(),
-        text: '',
-        contentType: 'text',
-        isStreaming: true,
-      );
-    }
-
-    _streamingBlocks[(convId, index)] = entry;
-    chat.addOutputEntry(convId, entry);
-    _activeStreamingEntries.putIfAbsent(convId, () => []).add(entry);
-  }
-
-  void _onContentBlockDelta(
-    ChatState chat,
-    int index,
-    StreamDeltaEvent event,
-  ) {
-    final convId = _streamingConversationId;
-    if (convId == null) return;
-
-    final entry = _streamingBlocks[(convId, index)];
-    if (entry == null) return;
-
-    switch (event.kind) {
-      case StreamDeltaKind.text:
-      case StreamDeltaKind.thinking:
-        if (entry is TextOutputEntry) {
-          entry.appendDelta(event.textDelta ?? '');
-        }
-      case StreamDeltaKind.toolInput:
-        if (entry is ToolUseOutputEntry) {
-          entry.appendInputDelta(event.jsonDelta ?? '');
-        }
-      default:
-        break;
-    }
-
-    _scheduleNotify();
-  }
-
-  void _onContentBlockStop(int index) {
-    final convId = _streamingConversationId;
-    if (convId == null) return;
-
-    final entry = _streamingBlocks[(convId, index)];
-    if (entry is TextOutputEntry) {
-      entry.isStreaming = false;
-    } else if (entry is ToolUseOutputEntry) {
-      entry.isStreaming = false;
-    }
-  }
-
-  void _onMessageStop(ChatState chat) {
-    _notifyTimer?.cancel();
-    _notifyTimer = null;
-    if (_hasPendingNotify) {
-      _hasPendingNotify = false;
-      chat.notifyListeners();
-    }
-
-    _streamingBlocks.clear();
-    _streamingConversationId = null;
-    _streamingChat = null;
-  }
-
-  void _scheduleNotify() {
-    _hasPendingNotify = true;
-    _notifyTimer ??= Timer.periodic(
-      const Duration(milliseconds: 50),
-      (_) {
-        if (_hasPendingNotify && _streamingChat != null) {
-          _hasPendingNotify = false;
-          _streamingChat!.notifyListeners();
-        }
-      },
-    );
-  }
-
-  /// Clears in-flight streaming state.
-  ///
-  /// Marks any streaming entries as finalized and flushes pending
-  /// notifications. Call this when a session is interrupted.
-  void clearStreamingState() {
-    _notifyTimer?.cancel();
-    _notifyTimer = null;
-    _hasPendingNotify = false;
-
-    // Finalize any in-flight streaming entries
-    for (final entry in _streamingBlocks.values) {
-      if (entry is TextOutputEntry) {
-        entry.isStreaming = false;
-      } else if (entry is ToolUseOutputEntry) {
-        entry.isStreaming = false;
-      }
-    }
-
-    if (_streamingChat != null) {
-      _streamingChat!.notifyListeners();
-    }
-
-    _streamingBlocks.clear();
-    _activeStreamingEntries.clear();
-    _streamingConversationId = null;
-    _streamingChat = null;
-  }
-
-  // Task 4e: Subagent routing + title generation
-  void _handleSubagentSpawn(ChatState chat, SubagentSpawnEvent event) {
-    // Check if this is a resume of an existing agent
-    if (event.isResume && event.resumeAgentId != null) {
-      final existingAgent = chat.findAgentByResumeId(event.resumeAgentId!);
-      if (existingAgent != null) {
-        developer.log(
-          'Resuming existing agent: resumeId=${event.resumeAgentId} -> '
-          'conversationId=${existingAgent.conversationId}',
-          name: 'EventHandler',
-        );
-
-        // Update the agent status back to working
-        chat.updateAgent(AgentStatus.working, existingAgent.sdkAgentId);
-
-        // Map this new callId to the existing conversation
-        _agentIdToConversationId[event.callId] = existingAgent.conversationId;
-
-        // Also map the new callId to the existing agent for result routing
-        _toolUseIdToAgentId[event.callId] = existingAgent.sdkAgentId;
-
-        return;
-      } else {
-        developer.log(
-          'Resume requested but agent not found: resumeId=${event.resumeAgentId}',
-          name: 'EventHandler',
-          level: 900, // Warning
-        );
-        // Fall through to create a new agent
-      }
-    }
-
-    final descPreview = event.description != null
-        ? (event.description!.length > 50
-            ? '${event.description!.substring(0, 50)}...'
-            : event.description!)
-        : 'null';
-    developer.log(
-      'Creating subagent: type=${event.agentType ?? "null"}, '
-      'description=$descPreview',
-      name: 'EventHandler',
-    );
-
-    // Log warning if expected fields are missing
-    if (event.agentType == null) {
-      developer.log(
-        'SubagentSpawnEvent missing agentType field',
-        name: 'EventHandler',
-      );
-    }
-    if (event.description == null) {
-      developer.log(
-        'SubagentSpawnEvent missing description field',
-        name: 'EventHandler',
-      );
-    }
-
-    LogService.instance.debug(
-      'Task',
-      'Task tool created: type=${event.agentType ?? "unknown"} '
-      'description=${event.description ?? "none"}',
-    );
-
-    // Create subagent conversation and agent
-    chat.addSubagentConversation(event.callId, event.agentType, event.description);
-
-    // Map this callId to the new conversation for routing
-    final agent = chat.activeAgents[event.callId];
-    if (agent != null) {
-      _agentIdToConversationId[event.callId] = agent.conversationId;
-      developer.log(
-        'Subagent created: callId=${event.callId} -> '
-        'conversationId=${agent.conversationId}',
-        name: 'EventHandler',
-      );
-    } else {
-      developer.log(
-        'ERROR: Failed to create agent for callId=${event.callId}',
-        name: 'EventHandler',
-        level: 1000, // Error level
-      );
-    }
-  }
-
-  void _handleSubagentComplete(ChatState chat, SubagentCompleteEvent event) {
-    // Look up correct agent ID: for resumed agents, use the mapped ID
-    final agentId = _toolUseIdToAgentId[event.callId] ?? event.callId;
-
-    // Determine agent status from event status
-    final AgentStatus agentStatus;
-    if (event.status == 'completed') {
-      agentStatus = AgentStatus.completed;
-    } else if (event.status == 'error' ||
-        event.status == 'error_max_turns' ||
-        event.status == 'error_tool' ||
-        event.status == 'error_api' ||
-        event.status == 'error_budget') {
-      agentStatus = AgentStatus.error;
-    } else {
-      // Unknown status - treat as completed
-      agentStatus = AgentStatus.completed;
-    }
-
-    developer.log(
-      'Subagent complete: callId=${event.callId}, agentId=$agentId, '
-      'status=${event.status}, agentStatus=${agentStatus.name}',
-      name: 'EventHandler',
-    );
-
-    LogService.instance.debug(
-      'Task',
-      'Task tool finished: status=${event.status ?? "unknown"}',
-    );
-
-    // Update the agent status and store the resumeId for future resume operations
-    chat.updateAgent(
-      agentStatus,
-      agentId,
-      result: event.summary,
-      resumeId: event.agentId,
-    );
-  }
-
-  /// Generates an AI-powered title for a chat based on the user's message.
-  ///
-  /// Call this when creating a new chat and sending the first message.
-  /// The title generation is fire-and-forget - failures are logged but don't
-  /// affect the user experience.
-  ///
-  /// The method is idempotent - it tracks which chats have had title generation
-  /// attempted and won't generate twice for the same chat.
-  ///
-  /// Parameters:
-  /// - [chat]: The chat to generate a title for
-  /// - [userMessage]: The user's message to base the title on
-  void generateChatTitle(ChatState chat, String userMessage) {
-    // Fire and forget - don't await
-    _generateChatTitleAsync(chat, userMessage);
-  }
-
-  Future<void> _generateChatTitleAsync(
-    ChatState chat,
-    String userMessage,
-  ) async {
-    // Skip if no AskAiService available
-    if (_askAiService == null) return;
-
-    // Skip if AI chat labels are disabled
-    final config = RuntimeConfig.instance;
-    if (!config.aiChatLabelsEnabled) return;
-
-    // Skip if we've already generated (or attempted to generate) a title for this chat
-    if (_titlesGenerated.contains(chat.data.id)) return;
-
-    // Skip if currently generating a title for this chat
-    if (_pendingTitleGenerations.contains(chat.data.id)) return;
-
-    if (userMessage.isEmpty) return;
-
-    // Get the working directory
-    final workingDirectory = chat.data.worktreeRoot;
-    if (workingDirectory == null) return;
-
-    // Mark as generated (even before we start, to prevent duplicate attempts)
-    _titlesGenerated.add(chat.data.id);
-
-    // Mark as pending (prevents duplicate concurrent requests)
-    _pendingTitleGenerations.add(chat.data.id);
-
-    try {
-      final prompt = '''Read the following and produce a short 3-5 word statement succiciently summing up what the request is. It should be concise, do not worry about grammer.
-Your reply should be between ==== marks. eg:
-=====
-Automatic Chat Summary
-=====
-
-User's message:
-$userMessage''';
-
-      final result = await _askAiService.ask(
-        prompt: prompt,
-        workingDirectory: workingDirectory,
-        model: config.aiChatLabelModel,
-        allowedTools: [], // No tools needed for title generation
-        maxTurns: 1, // Single turn only - no tool use
-        timeoutSeconds: 30,
-      );
-
-      if (result != null && !result.isError && result.result.isNotEmpty) {
-        // Extract the title from between ==== marks
-        final rawResult = result.result;
-        final titleMatch = RegExp(r'=+\s*\n(.+?)\n\s*=+', dotAll: true)
-            .firstMatch(rawResult);
-
-        String title;
-        if (titleMatch != null) {
-          title = titleMatch.group(1)?.trim() ?? rawResult.trim();
-        } else {
-          // Fallback: use the raw result if no ==== marks found
-          title = rawResult.trim();
-        }
-
-        // Clean up the title - remove any remaining markers and limit length
-        title = title
-            .replaceAll(RegExp(r'^=+'), '')
-            .replaceAll(RegExp(r'=+$'), '')
-            .trim();
-        if (title.length > 50) {
-          title = '${title.substring(0, 47)}...';
-        }
-
-        if (title.isNotEmpty) {
-          chat.rename(title);
-        }
-      }
-    } catch (e) {
-      // Title generation is fire-and-forget - log but don't propagate errors
-      developer.log(
-        'Failed to generate chat title: $e',
-        name: 'EventHandler',
-        level: 900,
-      );
-    } finally {
-      _pendingTitleGenerations.remove(chat.data.id);
-    }
-  }
-
-  /// Updates linked tickets when a main agent turn completes.
-  ///
-  /// Transitions non-terminal linked tickets to [TicketStatus.inReview] and
-  /// accumulates cost/usage statistics from the turn.
-  void _updateLinkedTicketsOnTurnComplete(
-    ChatState chat,
-    TurnCompleteEvent event,
-  ) {
-    final board = ticketBoard;
-    if (board == null) return;
-
-    final linkedTickets = board.getTicketsForChat(chat.data.id);
-    if (linkedTickets.isEmpty) return;
-
-    // Calculate total tokens from usage
-    int totalTokens = 0;
-    if (event.usage != null) {
-      totalTokens = event.usage!.inputTokens + event.usage!.outputTokens;
-    }
-
-    final costUsd = event.costUsd ?? 0.0;
-    final durationMs = event.durationMs ?? 0;
-
-    for (final ticket in linkedTickets) {
-      // Transition to inReview if not in a terminal state
-      if (!ticket.isTerminal) {
-        board.setStatus(ticket.id, TicketStatus.inReview);
-      }
-
-      // Accumulate cost stats regardless of status (even terminal tickets
-      // should track their total cost)
-      if (totalTokens > 0 || costUsd > 0 || durationMs > 0) {
-        board.accumulateCostStats(
-          ticket.id,
-          tokens: totalTokens,
-          cost: costUsd,
-          agentTimeMs: durationMs,
-        );
-      }
-    }
-  }
-
-  /// Handles a permission request event for ticket status transitions.
-  ///
-  /// When a linked chat requests permission, transitions linked tickets
-  /// to [TicketStatus.needsInput] so the user knows attention is needed.
-  /// The actual permission UI handling is still done via the permission stream.
-  void _handlePermissionRequest(ChatState chat, PermissionRequestEvent event) {
-    // Ticket status transition: linked tickets → needsInput
-    final board = ticketBoard;
-    if (board != null) {
-      final linkedTickets = board.getTicketsForChat(chat.data.id);
-      for (final ticket in linkedTickets) {
-        if (!ticket.isTerminal && ticket.status == TicketStatus.active) {
-          board.setStatus(ticket.id, TicketStatus.needsInput);
-        }
-      }
-    }
-  }
+  // -- Delegation to extracted classes --
 
   /// Notifies the event handler that a permission response was sent.
   ///
-  /// Call this from [ChatState] after [allowPermission] or [denyPermission]
-  /// to transition linked tickets back to [TicketStatus.active] from
-  /// [TicketStatus.needsInput].
+  /// Delegates to [TicketEventBridge] to transition linked tickets back
+  /// to active from needsInput.
   void handlePermissionResponse(ChatState chat) {
-    final board = ticketBoard;
-    if (board == null) return;
-
-    final linkedTickets = board.getTicketsForChat(chat.data.id);
-    for (final ticket in linkedTickets) {
-      if (ticket.status == TicketStatus.needsInput) {
-        board.setStatus(ticket.id, TicketStatus.active);
-      }
-    }
+    _ticketBridge.onPermissionResponse(chat);
   }
 
+  /// Clears in-flight streaming state.
+  void clearStreamingState() {
+    _streaming.clearStreamingState();
+  }
+
+  // -- Cleanup --
+
   /// Removes tracking state associated with a specific chat.
-  ///
-  /// Call this when a chat session ends. Cleans up chatId-keyed entries
-  /// directly, and removes agent/streaming entries that reference the
-  /// given [agentIds] or [conversationIds].
-  ///
-  /// [_toolCallIndex] is not cleaned here because entries are keyed by
-  /// callId with no back-reference to the owning chat. These entries are
-  /// transient (tool results arrive in the same turn) and small.
   void clearChat(
     String chatId, {
     required Set<String> agentIds,
@@ -1129,8 +342,6 @@ $userMessage''';
     // Chat-keyed maps
     _hasAssistantOutputThisTurn.remove(chatId);
     _expectingContextSummary.remove(chatId);
-    _pendingTitleGenerations.remove(chatId);
-    _titlesGenerated.remove(chatId);
 
     // Agent-keyed maps
     for (final agentId in agentIds) {
@@ -1138,39 +349,19 @@ $userMessage''';
     }
     _toolUseIdToAgentId.removeWhere((_, agentId) => agentIds.contains(agentId));
 
-    // Streaming maps
-    _streamingBlocks.removeWhere(
-      (key, _) => conversationIds.contains(key.$1),
-    );
-    _activeStreamingEntries.removeWhere(
-      (convId, _) => conversationIds.contains(convId),
-    );
-
-    // Clear streaming references if they belong to this chat
-    if (conversationIds.contains(_streamingConversationId)) {
-      _streamingConversationId = null;
-      _streamingChat = null;
-    }
+    // Streaming
+    _streaming.clearConversations(conversationIds);
   }
 
   /// Clears all internal state.
-  ///
-  /// Call this when the session ends or is cleared.
   void clear() {
     _toolCallIndex.clear();
     _agentIdToConversationId.clear();
     _toolUseIdToAgentId.clear();
     _hasAssistantOutputThisTurn.clear();
     _expectingContextSummary.clear();
-    _pendingTitleGenerations.clear();
-    _titlesGenerated.clear();
-    _streamingBlocks.clear();
     _activeStreamingEntries.clear();
-    _streamingConversationId = null;
-    _streamingChat = null;
-    _notifyTimer?.cancel();
-    _notifyTimer = null;
-    _hasPendingNotify = false;
+    _streaming.clear();
   }
 
   /// Disposes of resources.

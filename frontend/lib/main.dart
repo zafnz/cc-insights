@@ -41,6 +41,7 @@ import 'services/settings_service.dart';
 import 'services/window_layout_service.dart';
 import 'services/script_execution_service.dart';
 import 'services/codex_pricing_service.dart';
+import 'services/chat_title_service.dart';
 import 'services/event_handler.dart';
 import 'services/internal_tools_service.dart';
 import 'services/worktree_watcher_service.dart';
@@ -242,6 +243,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// The event handler for typed InsightsEvent consumption.
   EventHandler? _eventHandler;
+
+  /// Service for generating AI-powered chat titles.
+  ChatTitleService? _chatTitleService;
 
   /// The internal tools service for MCP tool registration.
   InternalToolsService? _internalToolsService;
@@ -486,10 +490,12 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create the internal tools service for MCP tool registration
     _internalToolsService = InternalToolsService();
 
+    // Create ChatTitleService for AI-powered chat title generation
+    _chatTitleService = ChatTitleService(askAiService: _askAiService);
+
     // Create or use injected EventHandler
     _eventHandler = widget.eventHandler ??
         EventHandler(
-          askAiService: _askAiService,
           rateLimitState: _rateLimitState,
         );
 
@@ -1109,6 +1115,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<BackendService>.value(value: _backend!),
         // Event handler for typed InsightsEvent consumption
         Provider<EventHandler>.value(value: _eventHandler!),
+        // Chat title generation service
+        Provider<ChatTitleService>.value(value: _chatTitleService!),
         // Internal tools service for MCP tool registration
         ChangeNotifierProvider<InternalToolsService>.value(
           value: _internalToolsService!,
@@ -1119,6 +1127,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             backend: context.read<BackendService>(),
             eventHandler: context.read<EventHandler>(),
             internalTools: context.read<InternalToolsService>(),
+            chatTitleService: context.read<ChatTitleService>(),
           ),
         ),
         // Project restore service for persistence operations
