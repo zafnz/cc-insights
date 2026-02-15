@@ -9,7 +9,7 @@ import 'log_service.dart';
 /// Service that manages dynamic Codex/GPT pricing data.
 ///
 /// On initialization:
-/// 1. Loads cached pricing from `~/.ccusage/codex-pricing.json` (if present)
+/// 1. Loads cached pricing from `~/.ccinsights/codex-pricing.json` (if present)
 /// 2. Kicks off a background download from the GitHub URL
 /// 3. Merges downloaded pricing and saves to disk for next startup
 ///
@@ -64,10 +64,10 @@ class CodexPricingService {
   /// Path to the cached pricing file.
   static String get _cacheFilePath {
     final home = Platform.environment['HOME'] ?? '';
-    return '$home/.ccusage/codex-pricing.json';
+    return '$home/.ccinsights/codex-pricing.json';
   }
 
-  /// Load pricing from ~/.ccusage/codex-pricing.json.
+  /// Load pricing from ~/.ccinsights/codex-pricing.json.
   void _loadFromDisk() {
     try {
       final file = File(_cacheFilePath);
