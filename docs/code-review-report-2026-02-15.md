@@ -100,7 +100,7 @@ These run on every widget rebuild, even when unrelated state changes trigger a n
 
 ---
 
-### 8. Helper Methods Returning Widgets Instead of Widget Classes
+### 8. ~~Helper Methods Returning Widgets Instead of Widget Classes~~ FIXED
 
 Pervasive across the codebase - `_build*()` methods instead of separate Widget classes:
 
@@ -113,7 +113,7 @@ These prevent Flutter's widget reconciliation from optimizing rebuilds and make 
 
 ---
 
-### 9. UI Tightly Coupled to Business Logic
+### 9. ~~UI Tightly Coupled to Business Logic~~ FIXED
 
 - **`panels/conversation_panel.dart:602-755`**: Directly calls `chat.allowPermission()`, `chat.denyPermission()`, `chat.interrupt()`, and orchestrates backend session creation with full error handling logic
 - **`panels/information_panel.dart:211-322`**: Git service calls + merge operation logic embedded in widget state methods
@@ -138,7 +138,7 @@ Dependencies are set post-construction through direct field assignment. The depe
 
 ---
 
-### 11. Manual Listener Pattern
+### 11. ~~Manual Listener Pattern~~ FIXED
 
 **File:** `state/file_manager_state.dart:48-107`
 
@@ -162,7 +162,7 @@ These maps accumulate entries across sessions with no clear cleanup trigger. Mem
 
 ---
 
-### 13. SelectionState Fire-and-Forget Loading
+### 13. ~~SelectionState Fire-and-Forget Loading~~ FIXED
 
 **File:** `state/selection_state.dart:160-184`
 
@@ -188,7 +188,7 @@ This blurs the distinction between services (consumed for operations) and state 
 
 ---
 
-### 15. Git Service Silent Failures
+### 15. ~~Git Service Silent Failures~~ FIXED
 
 **File:** `services/git_service.dart:967-981`
 
