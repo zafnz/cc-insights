@@ -343,9 +343,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _sdkLogSubscription = sdk.SdkLogger.instance.logs.listen((entry) {
       if (entry.direction != sdk.LogDirection.internal) return;
 
-      final source = entry.text != null ? 'CCI:${entry.text}' : 'SDK';
+      final isTrace = entry.text != null;
+      final source = isTrace ? 'CCI:${entry.text}' : 'SDK';
       final level = switch (entry.level) {
-        sdk.LogLevel.debug => LogLevel.debug,
+        sdk.LogLevel.debug => isTrace ? LogLevel.trace : LogLevel.debug,
         sdk.LogLevel.info => LogLevel.info,
         sdk.LogLevel.warning => LogLevel.warn,
         sdk.LogLevel.error => LogLevel.error,
