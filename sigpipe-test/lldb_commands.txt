@@ -1,0 +1,2 @@
+process handle SIGPIPE -s true -p true -n false
+run

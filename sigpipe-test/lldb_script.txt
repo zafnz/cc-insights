@@ -1,0 +1,4 @@
+process handle SIGPIPE -s true -p true -n false
+run
+thread backtrace all
+quit
