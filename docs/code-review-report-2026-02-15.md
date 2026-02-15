@@ -32,17 +32,17 @@ Returns a direct reference to the internal mutable `Set`. External code can call
 
 ---
 
-### 3. God Classes (Single Responsibility Violations)
+### 3. God Classes (Single Responsibility Violations) — PARTIALLY FIXED
 
-| File | Lines | Concerns |
-|------|-------|----------|
-| `screens/settings_screen.dart` | 2,372 | Category nav, forms for ALL categories, dialogs, reset logic |
-| `panels/worktree_panel.dart` | 1,935 | Tree building, selection, creation, deletion, restoration |
-| `panels/information_panel.dart` | 1,735 | Branch info, 6+ git operations, conflict resolution, dialogs |
-| `widgets/permission_dialog.dart` | 1,578 | Tool-specific builders, suggestion handlers, 3 footer variants |
-| `services/persistence_service.dart` | 1,565 | 7 separate concerns: projects index, chat meta, chat history, cost tracking, tickets, archiving, worktree tags |
-| `services/event_handler.dart` | 1,106 | Event routing, streaming state, title generation, tool tracking maps |
-| `state/ticket_board_state.dart` | 1,076 | CRUD, selection, filtering, grouping, view modes, DAG validation, bulk proposals, persistence, callbacks |
+| File | Lines | Concerns | Status |
+|------|-------|----------|--------|
+| ~~`screens/settings_screen.dart`~~ | ~~2,372~~ | ~~Category nav, forms for ALL categories, dialogs, reset logic~~ | FIXED — split into 4 part files |
+| ~~`panels/worktree_panel.dart`~~ | ~~1,935~~ | ~~Tree building, selection, creation, deletion, restoration~~ | FIXED — split into 4 part files |
+| `panels/information_panel.dart` | 1,735 | Branch info, 6+ git operations, conflict resolution, dialogs | Not yet addressed |
+| ~~`widgets/permission_dialog.dart`~~ | ~~1,578~~ | ~~Tool-specific builders, suggestion handlers, 3 footer variants~~ | FIXED — split into 4 part files |
+| ~~`services/persistence_service.dart`~~ | ~~1,565~~ | ~~7 separate concerns: projects index, chat meta, chat history, cost tracking, tickets, archiving, worktree tags~~ | FIXED — extracted CostTrackingService + TicketStorageService; restructured remainder into base+mixins |
+| `services/event_handler.dart` | 1,106 | Event routing, streaming state, title generation, tool tracking maps | Not yet addressed |
+| `state/ticket_board_state.dart` | 1,076 | CRUD, selection, filtering, grouping, view modes, DAG validation, bulk proposals, persistence, callbacks | Not yet addressed |
 
 ---
 
