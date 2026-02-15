@@ -1100,6 +1100,47 @@ $userMessage''';
     }
   }
 
+  /// Removes tracking state associated with a specific chat.
+  ///
+  /// Call this when a chat session ends. Cleans up chatId-keyed entries
+  /// directly, and removes agent/streaming entries that reference the
+  /// given [agentIds] or [conversationIds].
+  ///
+  /// [_toolCallIndex] is not cleaned here because entries are keyed by
+  /// callId with no back-reference to the owning chat. These entries are
+  /// transient (tool results arrive in the same turn) and small.
+  void clearChat(
+    String chatId, {
+    required Set<String> agentIds,
+    required Set<String> conversationIds,
+  }) {
+    // Chat-keyed maps
+    _hasAssistantOutputThisTurn.remove(chatId);
+    _expectingContextSummary.remove(chatId);
+    _pendingTitleGenerations.remove(chatId);
+    _titlesGenerated.remove(chatId);
+
+    // Agent-keyed maps
+    for (final agentId in agentIds) {
+      _agentIdToConversationId.remove(agentId);
+    }
+    _toolUseIdToAgentId.removeWhere((_, agentId) => agentIds.contains(agentId));
+
+    // Streaming maps
+    _streamingBlocks.removeWhere(
+      (key, _) => conversationIds.contains(key.$1),
+    );
+    _activeStreamingEntries.removeWhere(
+      (convId, _) => conversationIds.contains(convId),
+    );
+
+    // Clear streaming references if they belong to this chat
+    if (conversationIds.contains(_streamingConversationId)) {
+      _streamingConversationId = null;
+      _streamingChat = null;
+    }
+  }
+
   /// Clears all internal state.
   ///
   /// Call this when the session ends or is cleared.

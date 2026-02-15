@@ -915,6 +915,20 @@ class ChatState extends ChangeNotifier {
     _acpAvailableModes = null;
   }
 
+  /// Clears EventHandler tracking state for this chat before nulling the
+  /// reference. Must be called while [_eventHandler] and [_activeAgents]
+  /// are still populated.
+  void _clearEventHandlerState() {
+    _eventHandler?.clearChat(
+      _data.id,
+      agentIds: _activeAgents.keys.toSet(),
+      conversationIds: {
+        _data.primaryConversation.id,
+        ..._data.subagentConversations.keys,
+      },
+    );
+  }
+
   List<Map<String, dynamic>> _freezeMapList(
     List<Map<String, dynamic>> input,
   ) {
@@ -1478,6 +1492,7 @@ class ChatState extends ChangeNotifier {
 
     _transport = null;
     _session = null;
+    _clearEventHandlerState();
     _eventHandler = null;
     _eventSubscription = null;
     _permissionSubscription = null;
@@ -1830,6 +1845,7 @@ class ChatState extends ChangeNotifier {
     _transport?.dispose();
     _transport = null;
     _session = null;
+    _clearEventHandlerState();
     _eventHandler = null;
     _isWorking = false;
     _isCompacting = false;
@@ -1908,6 +1924,7 @@ class ChatState extends ChangeNotifier {
     _workingStopwatch = null;
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();
+    _clearEventHandlerState();
     _eventHandler = null;
     _eventSubscription = null;
     _permissionSubscription = null;
@@ -2329,6 +2346,7 @@ class ChatState extends ChangeNotifier {
     _session?.kill();
     _session = null;
     _testHasActiveSession = false;
+    _clearEventHandlerState();
     _eventHandler = null;
     _eventSubscription = null;
     _permissionSubscription = null;

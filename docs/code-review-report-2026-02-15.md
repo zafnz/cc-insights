@@ -146,7 +146,7 @@ Dependencies are set post-construction through direct field assignment. The depe
 
 ---
 
-### 12. EventHandler Tracking Maps Never Cleaned
+### 12. ~~EventHandler Tracking Maps Never Cleaned~~ FIXED
 
 **File:** `services/event_handler.dart:59-85`
 
