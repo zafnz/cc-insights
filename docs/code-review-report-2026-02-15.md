@@ -70,7 +70,7 @@ Multiple `unawaited()` calls for model refresh and agent startup. The called met
 
 ---
 
-### 6. Persistence Operations Swallow Errors
+### 6. ~~Persistence Operations Swallow Errors~~ FIXED
 
 **File:** `services/persistence_service.dart` - lines 444, 522, 601, 669, 732, 799, 858, 1036, 1118
 
