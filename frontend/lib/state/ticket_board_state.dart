@@ -93,6 +93,14 @@ class TicketBoardState extends ChangeNotifier {
   /// IDs of tickets created by the current proposal batch.
   List<int> _proposalTicketIds = [];
 
+  // Cached computed values — nulled by _invalidate*() methods.
+  List<String>? _cachedAllCategories;
+  TicketData? _cachedNextReadyTicket;
+  bool _hasComputedNextReady = false;
+  List<TicketData>? _cachedFilteredTickets;
+  Map<String, List<TicketData>>? _cachedGroupedTickets;
+  Map<String, ({int completed, int total})>? _cachedCategoryProgress;
+
   /// Callback invoked when a bulk review is completed (approved or rejected).
   ///
   /// The callback receives the number of approved and rejected tickets.
@@ -168,14 +176,37 @@ class TicketBoardState extends ChangeNotifier {
   /// Which proposed ticket is being inline-edited, if any.
   int? get proposalEditingId => _proposalEditingId;
 
+  /// Clears all cached computed values. Called when ticket data changes.
+  void _invalidateTicketData() {
+    _cachedAllCategories = null;
+    _cachedNextReadyTicket = null;
+    _hasComputedNextReady = false;
+    _cachedFilteredTickets = null;
+    _cachedGroupedTickets = null;
+    _cachedCategoryProgress = null;
+  }
+
+  /// Clears filter-dependent caches. Called when search/filter settings change.
+  void _invalidateFilters() {
+    _cachedFilteredTickets = null;
+    _cachedGroupedTickets = null;
+  }
+
+  /// Clears grouping-dependent cache. Called when groupBy setting changes.
+  void _invalidateGrouping() {
+    _cachedGroupedTickets = null;
+  }
+
   /// All unique categories from tickets, sorted alphabetically.
   List<String> get allCategories {
+    if (_cachedAllCategories != null) return _cachedAllCategories!;
     final categories = _tickets
         .where((t) => t.category != null)
         .map((t) => t.category!)
         .toSet()
         .toList();
     categories.sort();
+    _cachedAllCategories = categories;
     return categories;
   }
 
@@ -184,8 +215,14 @@ class TicketBoardState extends ChangeNotifier {
   /// Priority order: critical > high > medium > low.
   /// Ties are broken by ticket ID (lower first).
   TicketData? get nextReadyTicket {
+    if (_hasComputedNextReady) return _cachedNextReadyTicket;
+
     final ready = _tickets.where((t) => t.status == TicketStatus.ready).toList();
-    if (ready.isEmpty) return null;
+    if (ready.isEmpty) {
+      _cachedNextReadyTicket = null;
+      _hasComputedNextReady = true;
+      return null;
+    }
 
     // Sort by priority (descending) then by ID (ascending)
     ready.sort((a, b) {
@@ -203,6 +240,8 @@ class TicketBoardState extends ChangeNotifier {
       return a.id.compareTo(b.id);
     });
 
+    _cachedNextReadyTicket = ready.first;
+    _hasComputedNextReady = true;
     return ready.first;
   }
 
@@ -211,6 +250,8 @@ class TicketBoardState extends ChangeNotifier {
   /// Search matches displayId, title, and description (case-insensitive).
   /// All filters are AND-combined.
   List<TicketData> get filteredTickets {
+    if (_cachedFilteredTickets != null) return _cachedFilteredTickets!;
+
     var filtered = _tickets.toList();
 
     // Search filter
@@ -243,6 +284,7 @@ class TicketBoardState extends ChangeNotifier {
       filtered = filtered.where((t) => t.category == _categoryFilter).toList();
     }
 
+    _cachedFilteredTickets = filtered;
     return filtered;
   }
 
@@ -252,6 +294,8 @@ class TicketBoardState extends ChangeNotifier {
   /// Within each group, tickets are sorted by priority (descending) then ID.
   /// Tickets without a category are placed in an "Uncategorized" group.
   Map<String, List<TicketData>> get groupedTickets {
+    if (_cachedGroupedTickets != null) return _cachedGroupedTickets!;
+
     final filtered = filteredTickets;
     final groups = <String, List<TicketData>>{};
 
@@ -291,6 +335,7 @@ class TicketBoardState extends ChangeNotifier {
       });
     }
 
+    _cachedGroupedTickets = groups;
     return groups;
   }
 
@@ -298,6 +343,8 @@ class TicketBoardState extends ChangeNotifier {
   ///
   /// Returns a map of category name to (completed: int, total: int).
   Map<String, ({int completed, int total})> get categoryProgress {
+    if (_cachedCategoryProgress != null) return _cachedCategoryProgress!;
+
     final progress = <String, ({int completed, int total})>{};
 
     for (final ticket in _tickets) {
@@ -311,6 +358,7 @@ class TicketBoardState extends ChangeNotifier {
       );
     }
 
+    _cachedCategoryProgress = progress;
     return progress;
   }
 
@@ -350,6 +398,7 @@ class TicketBoardState extends ChangeNotifier {
     );
 
     _tickets.add(ticket);
+    _invalidateTicketData();
     notifyListeners();
     _autoSave();
 
@@ -367,6 +416,7 @@ class TicketBoardState extends ChangeNotifier {
     final updated = updater(_tickets[index]);
     _tickets[index] = updated.copyWith(updatedAt: DateTime.now());
 
+    _invalidateTicketData();
     notifyListeners();
     _autoSave();
   }
@@ -394,6 +444,7 @@ class TicketBoardState extends ChangeNotifier {
       _selectedTicketId = null;
     }
 
+    _invalidateTicketData();
     notifyListeners();
     _autoSave();
   }
@@ -429,36 +480,42 @@ class TicketBoardState extends ChangeNotifier {
   /// Sets the search query.
   void setSearchQuery(String query) {
     _searchQuery = query;
+    _invalidateFilters();
     notifyListeners();
   }
 
   /// Sets the status filter.
   void setStatusFilter(TicketStatus? status) {
     _statusFilter = status;
+    _invalidateFilters();
     notifyListeners();
   }
 
   /// Sets the kind filter.
   void setKindFilter(TicketKind? kind) {
     _kindFilter = kind;
+    _invalidateFilters();
     notifyListeners();
   }
 
   /// Sets the priority filter.
   void setPriorityFilter(TicketPriority? priority) {
     _priorityFilter = priority;
+    _invalidateFilters();
     notifyListeners();
   }
 
   /// Sets the category filter.
   void setCategoryFilter(String? category) {
     _categoryFilter = category;
+    _invalidateFilters();
     notifyListeners();
   }
 
   /// Sets the grouping method.
   void setGroupBy(TicketGroupBy groupBy) {
     _groupBy = groupBy;
+    _invalidateGrouping();
     notifyListeners();
   }
 
@@ -848,6 +905,7 @@ class TicketBoardState extends ChangeNotifier {
 
     _detailMode = TicketDetailMode.bulkReview;
 
+    _invalidateTicketData();
     notifyListeners();
     _autoSave();
 
@@ -928,6 +986,7 @@ class TicketBoardState extends ChangeNotifier {
     _proposalSourceChatName = null;
     _detailMode = TicketDetailMode.detail;
 
+    _invalidateTicketData();
     notifyListeners();
     _autoSave();
 
@@ -969,6 +1028,7 @@ class TicketBoardState extends ChangeNotifier {
     _proposalSourceChatName = null;
     _detailMode = TicketDetailMode.detail;
 
+    _invalidateTicketData();
     notifyListeners();
     _autoSave();
 
@@ -1015,6 +1075,7 @@ class TicketBoardState extends ChangeNotifier {
         name: 'TicketBoardState',
       );
 
+      _invalidateTicketData();
       notifyListeners();
     } catch (e) {
       developer.log(

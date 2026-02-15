@@ -84,7 +84,7 @@ Users get zero feedback when persistence fails, leading to silent data loss.
 
 ---
 
-### 7. Expensive Computations in Getters (No Caching)
+### 7. ~~Expensive Computations in Getters (No Caching)~~ FIXED
 
 **File:** `state/ticket_board_state.dart`
 
