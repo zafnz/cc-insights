@@ -452,156 +452,136 @@ class PersistenceService {
   /// - [chatId]: The chat identifier.
   /// - [sessionId]: The SDK session ID to store, or null to clear.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> updateChatSessionId({
     required String projectRoot,
     required String worktreePath,
     required String chatId,
     required String? sessionId,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for session ID update: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for session ID update: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      // Find and update the chat reference
-      final updatedChats = worktree.chats.map((chat) {
-        if (chat.chatId == chatId) {
-          return ChatReference(
-            name: chat.name,
-            chatId: chat.chatId,
-            lastSessionId: sessionId,
-          );
-        }
-        return chat;
-      }).toList();
-
-      // Rebuild the index with the updated chat
-      final updatedWorktree = worktree.copyWith(chats: updatedChats);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Updated session ID for chat $chatId: ${sessionId ?? 'cleared'}',
+        'Project not found for session ID update: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      // Log error but don't throw - this is a fire-and-forget operation
-      developer.log(
-        'Failed to update session ID for chat $chatId: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for session ID update: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    // Find and update the chat reference
+    final updatedChats = worktree.chats.map((chat) {
+      if (chat.chatId == chatId) {
+        return ChatReference(
+          name: chat.name,
+          chatId: chat.chatId,
+          lastSessionId: sessionId,
+        );
+      }
+      return chat;
+    }).toList();
+
+    // Rebuild the index with the updated chat
+    final updatedWorktree = worktree.copyWith(chats: updatedChats);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Updated session ID for chat $chatId: ${sessionId ?? 'cleared'}',
+      name: 'PersistenceService',
+    );
   }
 
   /// Renames a chat in the projects.json index.
   ///
   /// This updates the chat name in the worktree's chat list in projects.json.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> renameChatInIndex({
     required String projectRoot,
     required String worktreePath,
     required String chatId,
     required String newName,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for chat rename: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for chat rename: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      // Find and update the chat reference with the new name
-      final updatedChats = worktree.chats.map((chat) {
-        if (chat.chatId == chatId) {
-          return ChatReference(
-            name: newName,
-            chatId: chat.chatId,
-            lastSessionId: chat.lastSessionId,
-          );
-        }
-        return chat;
-      }).toList();
-
-      // Rebuild the index with the updated chat
-      final updatedWorktree = worktree.copyWith(chats: updatedChats);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Renamed chat $chatId to: $newName',
+        'Project not found for chat rename: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      // Log error but don't throw - this is a fire-and-forget operation
-      developer.log(
-        'Failed to rename chat $chatId: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for chat rename: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    // Find and update the chat reference with the new name
+    final updatedChats = worktree.chats.map((chat) {
+      if (chat.chatId == chatId) {
+        return ChatReference(
+          name: newName,
+          chatId: chat.chatId,
+          lastSessionId: chat.lastSessionId,
+        );
+      }
+      return chat;
+    }).toList();
+
+    // Rebuild the index with the updated chat
+    final updatedWorktree = worktree.copyWith(chats: updatedChats);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Renamed chat $chatId to: $newName',
+      name: 'PersistenceService',
+    );
   }
 
   /// Removes a chat reference from the projects.json index.
@@ -609,196 +589,168 @@ class PersistenceService {
   /// This removes the chat from the worktree's chat list in projects.json.
   /// Does not delete the chat files from disk - use [deleteChat] for that.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> removeChatFromIndex({
     required String projectRoot,
     required String worktreePath,
     required String chatId,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for chat removal: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for chat removal: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      // Filter out the chat with matching chatId
-      final updatedChats =
-          worktree.chats.where((chat) => chat.chatId != chatId).toList();
-
-      // Rebuild the index with the updated chat list
-      final updatedWorktree = worktree.copyWith(chats: updatedChats);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Removed chat $chatId from projects.json',
+        'Project not found for chat removal: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      // Log error but don't throw - this is a fire-and-forget operation
-      developer.log(
-        'Failed to remove chat $chatId from index: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for chat removal: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    // Filter out the chat with matching chatId
+    final updatedChats =
+        worktree.chats.where((chat) => chat.chatId != chatId).toList();
+
+    // Rebuild the index with the updated chat list
+    final updatedWorktree = worktree.copyWith(chats: updatedChats);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Removed chat $chatId from projects.json',
+      name: 'PersistenceService',
+    );
   }
 
   /// Updates the tags assigned to a worktree in projects.json.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> updateWorktreeTags({
     required String projectRoot,
     required String worktreePath,
     required List<String> tags,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for tag update: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for tag update: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final updatedWorktree = worktree.copyWith(tags: tags);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Updated tags for worktree $worktreePath: $tags',
+        'Project not found for tag update: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      developer.log(
-        'Failed to update tags for worktree $worktreePath: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for tag update: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    final updatedWorktree = worktree.copyWith(tags: tags);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Updated tags for worktree $worktreePath: $tags',
+      name: 'PersistenceService',
+    );
   }
 
   /// Updates the base branch for a worktree in projects.json.
   ///
   /// Pass null for [base] to clear and revert to the project default.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> updateWorktreeBase({
     required String projectRoot,
     required String worktreePath,
     required String? base,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for base update: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for base update: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final updatedWorktree = base != null
-          ? worktree.copyWith(base: base)
-          : worktree.copyWith(clearBase: true);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Updated base for worktree $worktreePath: '
-        '${base ?? 'cleared'}',
+        'Project not found for base update: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      developer.log(
-        'Failed to update base for worktree $worktreePath: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for base update: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    final updatedWorktree = base != null
+        ? worktree.copyWith(base: base)
+        : worktree.copyWith(clearBase: true);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Updated base for worktree $worktreePath: '
+      '${base ?? 'cleared'}',
+      name: 'PersistenceService',
+    );
   }
 
   /// Hides a worktree by setting `hidden: true` in projects.json.
@@ -807,67 +759,59 @@ class PersistenceService {
   /// preserved. Hidden worktrees are filtered from the UI by default but
   /// can be shown via a toggle in the worktree panel header.
   ///
-  /// This is a fire-and-forget operation - errors are logged but not thrown.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> hideWorktreeFromIndex({
     required String projectRoot,
     required String worktreePath,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for worktree hide: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for hide: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      // Set hidden flag on the worktree
-      final updatedWorktree = worktree.copyWith(hidden: true);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Hidden worktree $worktreePath in projects.json (hidden flag set)',
+        'Project not found for worktree hide: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      developer.log(
-        'Failed to hide worktree $worktreePath: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for hide: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    // Set hidden flag on the worktree
+    final updatedWorktree = worktree.copyWith(hidden: true);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Hidden worktree $worktreePath in projects.json (hidden flag set)',
+      name: 'PersistenceService',
+    );
   }
 
   /// Unhides a worktree by setting `hidden: false` in projects.json.
   ///
-  /// This is a fire-and-forget operation - errors are logged but not thrown.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> unhideWorktreeFromIndex({
     required String projectRoot,
     required String worktreePath,
@@ -1044,90 +988,80 @@ class PersistenceService {
   /// Archives a chat by moving it from a worktree's chat list to the project's
   /// archived chats list. Does NOT delete the chat files from disk.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> archiveChat({
     required String projectRoot,
     required String worktreePath,
     required String chatId,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for chat archive: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null) {
-        developer.log(
-          'Worktree not found for chat archive: $worktreePath',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      // Find the chat reference to archive
-      final chatRef = worktree.chats.where((c) => c.chatId == chatId).firstOrNull;
-      if (chatRef == null) {
-        developer.log(
-          'Chat not found for archive: $chatId',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      // Create archived reference and remove from worktree
-      final archivedRef = ArchivedChatReference.fromChatReference(
-        chatRef,
-        worktreePath: worktreePath,
-      );
-      final updatedChats =
-          worktree.chats.where((c) => c.chatId != chatId).toList();
-
-      final updatedWorktree = worktree.copyWith(chats: updatedChats);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-        archivedChats: [...project.archivedChats, archivedRef],
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Archived chat $chatId from worktree $worktreePath',
+        'Project not found for chat archive: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      developer.log(
-        'Failed to archive chat $chatId: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null) {
+      developer.log(
+        'Worktree not found for chat archive: $worktreePath',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    // Find the chat reference to archive
+    final chatRef = worktree.chats.where((c) => c.chatId == chatId).firstOrNull;
+    if (chatRef == null) {
+      developer.log(
+        'Chat not found for archive: $chatId',
+        name: 'PersistenceService',
+        level: _kWarningLevel,
+      );
+      return;
+    }
+
+    // Create archived reference and remove from worktree
+    final archivedRef = ArchivedChatReference.fromChatReference(
+      chatRef,
+      worktreePath: worktreePath,
+    );
+    final updatedChats =
+        worktree.chats.where((c) => c.chatId != chatId).toList();
+
+    final updatedWorktree = worktree.copyWith(chats: updatedChats);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+      archivedChats: [...project.archivedChats, archivedRef],
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Archived chat $chatId from worktree $worktreePath',
+      name: 'PersistenceService',
+    );
   }
 
   /// Restores an archived chat by moving it from the project's archived chats
   /// list to a worktree's chat list.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> restoreArchivedChat({
     required String projectRoot,
     required String targetWorktreePath,
@@ -1207,66 +1141,57 @@ class PersistenceService {
   /// Archives all chats in a worktree. Used before worktree deletion/hiding
   /// when the archive setting is enabled.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> archiveWorktreeChats({
     required String projectRoot,
     required String worktreePath,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for worktree chat archive: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final worktree = project.worktrees[worktreePath];
-      if (worktree == null || worktree.chats.isEmpty) {
-        return;
-      }
-
-      // Archive all chats
-      final archivedRefs = worktree.chats
-          .map((chatRef) => ArchivedChatReference.fromChatReference(
-                chatRef,
-                worktreePath: worktreePath,
-              ))
-          .toList();
-
-      final updatedWorktree = worktree.copyWith(chats: []);
-      final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
-        archivedChats: [...project.archivedChats, ...archivedRefs],
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Archived ${archivedRefs.length} chats from worktree $worktreePath',
+        'Project not found for worktree chat archive: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      developer.log(
-        'Failed to archive worktree chats: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final worktree = project.worktrees[worktreePath];
+    if (worktree == null || worktree.chats.isEmpty) {
+      return;
+    }
+
+    // Archive all chats
+    final archivedRefs = worktree.chats
+        .map((chatRef) => ArchivedChatReference.fromChatReference(
+              chatRef,
+              worktreePath: worktreePath,
+            ))
+        .toList();
+
+    final updatedWorktree = worktree.copyWith(chats: []);
+    final updatedProject = project.copyWith(
+      worktrees: {
+        ...project.worktrees,
+        worktreePath: updatedWorktree,
+      },
+      archivedChats: [...project.archivedChats, ...archivedRefs],
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Archived ${archivedRefs.length} chats from worktree $worktreePath',
+      name: 'PersistenceService',
+    );
   }
 
   /// Returns all archived chats for a project.
@@ -1338,52 +1263,43 @@ class PersistenceService {
   /// Pass null for [defaultWorktreeRoot] to clear the override and revert to
   /// the calculated default.
   ///
-  /// This method is designed to be called fire-and-forget - errors are logged
-  /// but not thrown to avoid blocking UI operations.
+  /// Throws on failure — callers are responsible for error handling.
   Future<void> updateProjectDefaultWorktreeRoot({
     required String projectRoot,
     required String? defaultWorktreeRoot,
   }) async {
-    try {
-      final projectsIndex = await loadProjectsIndex();
-      final project = projectsIndex.projects[projectRoot];
+    final projectsIndex = await loadProjectsIndex();
+    final project = projectsIndex.projects[projectRoot];
 
-      if (project == null) {
-        developer.log(
-          'Project not found for default worktree root update: $projectRoot',
-          name: 'PersistenceService',
-          level: _kWarningLevel,
-        );
-        return;
-      }
-
-      final updatedProject = ProjectInfo(
-        id: project.id,
-        name: project.name,
-        worktrees: project.worktrees,
-        defaultWorktreeRoot: defaultWorktreeRoot,
-      );
-      final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
-      );
-
-      await saveProjectsIndex(updatedIndex);
-
+    if (project == null) {
       developer.log(
-        'Updated default worktree root for project $projectRoot: '
-        '${defaultWorktreeRoot ?? 'cleared'}',
+        'Project not found for default worktree root update: $projectRoot',
         name: 'PersistenceService',
+        level: _kWarningLevel,
       );
-    } catch (e) {
-      developer.log(
-        'Failed to update default worktree root for project $projectRoot: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+      return;
     }
+
+    final updatedProject = ProjectInfo(
+      id: project.id,
+      name: project.name,
+      worktrees: project.worktrees,
+      defaultWorktreeRoot: defaultWorktreeRoot,
+    );
+    final updatedIndex = projectsIndex.copyWith(
+      projects: {
+        ...projectsIndex.projects,
+        projectRoot: updatedProject,
+      },
+    );
+
+    await saveProjectsIndex(updatedIndex);
+
+    developer.log(
+      'Updated default worktree root for project $projectRoot: '
+      '${defaultWorktreeRoot ?? 'cleared'}',
+      name: 'PersistenceService',
+    );
   }
 
   /// Loads cost tracking entries from the project's tracking.jsonl file.
@@ -1503,12 +1419,8 @@ class PersistenceService {
         '(total: \$${entry.totalCost.toStringAsFixed(4)})',
         name: 'PersistenceService',
       );
-    } catch (e) {
-      developer.log(
-        'Failed to append cost tracking: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
+    } catch (e, stack) {
+      LogService.instance.logUnhandledException(e, stack);
       // Don't rethrow - cost tracking failures shouldn't block chat closure
     }
   }

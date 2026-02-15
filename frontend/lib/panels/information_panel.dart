@@ -502,13 +502,18 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     try {
       final project = context.read<ProjectState>();
       final persistence = context.read<PersistenceService>();
-      persistence.updateWorktreeBase(
+      await persistence.updateWorktreeBase(
         projectRoot: project.data.repoRoot,
         worktreePath: worktreeRoot,
         base: newBase,
       );
-    } catch (_) {
-      // PersistenceService may not be available in tests
+    } catch (e, stack) {
+      LogService.instance.logUnhandledException(e, stack);
+      worktree.setBase(previousValue);
+      if (context.mounted) {
+        showErrorSnackBar(context, 'Failed to update base branch. Please try again.');
+      }
+      return;
     }
 
     onStatusChanged();

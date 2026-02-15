@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/project.dart';
 import '../models/project_config.dart';
+import '../services/log_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_config_service.dart';
 import '../services/worktree_service.dart';
@@ -306,10 +307,17 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     // Only save if different from calculated default
     final valueToSave = value == _calculatedWorktreeRoot ? null : value;
 
-    await _persistenceService.updateProjectDefaultWorktreeRoot(
-      projectRoot: projectRoot,
-      defaultWorktreeRoot: valueToSave,
-    );
+    try {
+      await _persistenceService.updateProjectDefaultWorktreeRoot(
+        projectRoot: projectRoot,
+        defaultWorktreeRoot: valueToSave,
+      );
+    } catch (e, stack) {
+      LogService.instance.logUnhandledException(e, stack);
+      if (mounted) {
+        showErrorSnackBar(context, 'Failed to save worktree root setting.');
+      }
+    }
   }
 
   void _addUserAction() {

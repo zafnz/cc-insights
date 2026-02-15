@@ -1097,12 +1097,19 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     try {
       final project = context.read<ProjectState>();
       final persistence = context.read<PersistenceService>();
-      persistence.updateWorktreeBase(
+      await persistence.updateWorktreeBase(
         projectRoot: project.data.repoRoot,
         worktreePath: worktree.data.worktreeRoot,
         base: newBase,
       );
-    } catch (_) {}
+    } catch (e, stack) {
+      LogService.instance.logUnhandledException(e, stack);
+      worktree.setBase(previousValue);
+      if (context.mounted) {
+        showErrorSnackBar(context, 'Failed to update base branch. Please try again.');
+      }
+      return;
+    }
 
     _refreshStatus();
 
@@ -1305,7 +1312,11 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                     projectRoot: project.data.repoRoot,
                     worktreePath: worktree.data.worktreeRoot,
                     tags: List.of(worktree.tags),
-                  );
+                  ).catchError((Object e, StackTrace stack) {
+                    LogService.instance.logUnhandledException(e, stack);
+                    worktree.toggleTag(tag.name); // revert
+                  });
+                  setState(() {});
                 },
                 leadingIcon: SizedBox(
                   width: 20,
@@ -1649,10 +1660,18 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     final persistenceService = context.read<PersistenceService>();
 
     // Set hidden flag in projects.json
-    await persistenceService.hideWorktreeFromIndex(
-      projectRoot: project.data.repoRoot,
-      worktreePath: worktree.data.worktreeRoot,
-    );
+    try {
+      await persistenceService.hideWorktreeFromIndex(
+        projectRoot: project.data.repoRoot,
+        worktreePath: worktree.data.worktreeRoot,
+      );
+    } catch (e, stack) {
+      LogService.instance.logUnhandledException(e, stack);
+      if (context.mounted) {
+        showErrorSnackBar(context, 'Failed to hide worktree. Please try again.');
+      }
+      return;
+    }
 
     if (!context.mounted) return;
 
@@ -1697,10 +1716,18 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     // This moves chat references to the archived list so that
     // removeWorktreeFromIndex() won't delete the chat files.
     if (archive) {
-      await persistenceService.archiveWorktreeChats(
-        projectRoot: project.data.repoRoot,
-        worktreePath: worktree.data.worktreeRoot,
-      );
+      try {
+        await persistenceService.archiveWorktreeChats(
+          projectRoot: project.data.repoRoot,
+          worktreePath: worktree.data.worktreeRoot,
+        );
+      } catch (e, stack) {
+        LogService.instance.logUnhandledException(e, stack);
+        if (context.mounted) {
+          showErrorSnackBar(context, 'Failed to archive chats. Worktree deletion aborted to prevent data loss.');
+        }
+        return;
+      }
     }
 
     final deleteBranch =

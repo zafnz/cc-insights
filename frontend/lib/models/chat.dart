@@ -1071,13 +1071,14 @@ class ChatState extends ChangeNotifier {
     if (_projectRoot == null || _worktreePath == null) {
       return;
     }
-    // Fire and forget - persistence errors are logged but don't block UI
     persistenceService.renameChatInIndex(
       projectRoot: _projectRoot!,
       worktreePath: _worktreePath!,
       chatId: _data.id,
       newName: newName,
-    );
+    ).catchError((Object e, StackTrace stack) {
+      LogService.instance.logUnhandledException(e, stack);
+    });
   }
 
   /// Selects a conversation within this chat.
@@ -2294,13 +2295,14 @@ class ChatState extends ChangeNotifier {
       return;
     }
 
-    // Fire-and-forget - don't await
     persistenceService.updateChatSessionId(
       projectRoot: _projectRoot!,
       worktreePath: _worktreePath!,
       chatId: _data.id,
       sessionId: sessionId,
-    );
+    ).catchError((Object e, StackTrace stack) {
+      LogService.instance.logUnhandledException(e, stack);
+    });
   }
 
   /// Notifies listeners that the state has changed.

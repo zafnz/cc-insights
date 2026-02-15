@@ -572,22 +572,32 @@ class ProjectRestoreService {
 
     if (archive) {
       // Archive: keep files, move reference to archived list
-      await _persistence.archiveChat(
-        projectRoot: projectRoot,
-        worktreePath: worktreePath,
-        chatId: chatId,
-      );
+      try {
+        await _persistence.archiveChat(
+          projectRoot: projectRoot,
+          worktreePath: worktreePath,
+          chatId: chatId,
+        );
+      } catch (e, stack) {
+        LogService.instance.logUnhandledException(e, stack);
+        rethrow;
+      }
     } else {
       // Delete: remove files and index entry
       if (projectId != null) {
         await _persistence.deleteChat(projectId, chatId);
       }
 
-      await _persistence.removeChatFromIndex(
-        projectRoot: projectRoot,
-        worktreePath: worktreePath,
-        chatId: chatId,
-      );
+      try {
+        await _persistence.removeChatFromIndex(
+          projectRoot: projectRoot,
+          worktreePath: worktreePath,
+          chatId: chatId,
+        );
+      } catch (e, stack) {
+        LogService.instance.logUnhandledException(e, stack);
+        rethrow;
+      }
     }
 
     developer.log(
@@ -620,12 +630,8 @@ class ProjectRestoreService {
 
       // Append to tracking.jsonl
       await _persistence.appendCostTracking(projectId, entry);
-    } catch (e) {
-      developer.log(
-        'Failed to save cost tracking for chat ${chat.data.name}: $e',
-        name: 'ProjectRestoreService',
-        error: e,
-      );
+    } catch (e, stack) {
+      LogService.instance.logUnhandledException(e, stack);
       // Don't rethrow - cost tracking failures shouldn't block chat closure
     }
   }
