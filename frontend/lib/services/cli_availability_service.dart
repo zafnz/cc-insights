@@ -47,6 +47,16 @@ class CliAvailabilityService extends ChangeNotifier {
   /// Whether the initial check has completed.
   bool get checked => _checked;
 
+  /// Marks all agents as available without checking CLI executables.
+  ///
+  /// Used in mock/test mode where real CLI executables are not needed.
+  void markAllAvailable(List<AgentConfig> agents) {
+    _agentAvailability = {for (final agent in agents) agent.id: true};
+    _claudeAvailable = agents.any((a) => a.driver == 'claude');
+    _checked = true;
+    notifyListeners();
+  }
+
   /// Checks CLI availability for each agent in the list.
   ///
   /// Each agent's [AgentConfig.driver] is used as the executable name

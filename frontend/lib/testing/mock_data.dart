@@ -8,6 +8,7 @@ import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
+import '../services/runtime_config.dart';
 import 'message_log_player.dart';
 
 /// Configurable base path for mock data.
@@ -191,6 +192,7 @@ class MockDataFactory {
         primaryConversation: primaryConversation,
         subagentConversations: subagentConversations,
       ),
+      agentId: RuntimeConfig.instance.defaultAgentId,
     );
   }
 

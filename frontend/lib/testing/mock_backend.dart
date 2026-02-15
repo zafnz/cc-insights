@@ -348,6 +348,25 @@ class MockBackendService extends BackendService {
     );
   }
 
+  @override
+  Future<EventTransport> createTransportForAgent({
+    required String agentId,
+    required String prompt,
+    required String cwd,
+    SessionOptions? options,
+    List<ContentBlock>? content,
+    InternalToolRegistry? registry,
+  }) async {
+    final session = await createSession(
+      prompt: prompt,
+      cwd: cwd,
+      options: options,
+      content: content,
+      registry: registry,
+    );
+    return InProcessTransport(session: session);
+  }
+
   /// Get a session by ID.
   TestSession? getSession(String sessionId) {
     return _sessions[sessionId];

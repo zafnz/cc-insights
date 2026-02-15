@@ -55,4 +55,12 @@ class FakeCliAvailabilityService extends ChangeNotifier
   Future<void> checkClaude({String customPath = ''}) async {
     checkClaudeCalls++;
   }
+
+  @override
+  void markAllAvailable(List<AgentConfig> agents) {
+    _agentAvailability = {for (final agent in agents) agent.id: true};
+    _claudeAvailable = agents.any((a) => a.driver == 'claude');
+    _checked = true;
+    notifyListeners();
+  }
 }

@@ -13,6 +13,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'models/agent_config.dart';
 import 'models/output_entry.dart';
 import 'models/project.dart';
 import 'models/worktree.dart';
@@ -381,6 +382,15 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Create CLI availability service
     _cliAvailability = CliAvailabilityService();
 
+    // In mock/test mode, immediately seed agents and mark them available
+    // so that agent dropdowns render before settings load completes.
+    if (shouldUseMock || widget.backendService != null) {
+      if (RuntimeConfig.instance.agents.isEmpty) {
+        RuntimeConfig.instance.agents = AgentConfig.defaults;
+      }
+      _cliAvailability!.markAllAvailable(RuntimeConfig.instance.agents);
+    }
+
     // Create and load the settings service (fire-and-forget load)
     _settingsService = SettingsService();
     _windowLayoutService = WindowLayoutService();
@@ -393,7 +403,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       await _settingsService!.removeLegacyWindowLayoutKeys();
 
       // Check CLI availability after settings load (custom paths may be set)
-      if (!shouldUseMock && widget.backendService == null) {
+      if (shouldUseMock || widget.backendService != null) {
+        // In mock/test mode, mark all agents as available without checking CLI
+        _cliAvailability!.markAllAvailable(RuntimeConfig.instance.agents);
+      } else {
         final config = RuntimeConfig.instance;
         await _cliAvailability!.checkAgents(config.agents);
 
