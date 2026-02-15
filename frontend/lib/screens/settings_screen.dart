@@ -258,16 +258,6 @@ class _SettingsContent extends StatelessWidget {
     SettingDefinition definition,
     dynamic value,
   ) {
-    if (definition.key == 'session.defaultModel') {
-      unawaited(settings.setValue(definition.key, value));
-      final parsed =
-          ChatModelCatalog.parseCompositeModel(value as String);
-      if (parsed != null) {
-        unawaited(backendService.startAgent(settings.defaultAgentId));
-      }
-      return;
-    }
-
     if (definition.key == 'projectMgmt.agentTicketTools') {
       unawaited(settings.setValue(definition.key, value));
       final tools = context.read<InternalToolsService>();
@@ -348,26 +338,6 @@ class _SettingsContent extends StatelessWidget {
     var isLoading = false;
     final isOverridden = settings.isOverridden(definition.key);
 
-    if (definition.key == 'session.defaultModel') {
-      isLoading = backendService.isModelListLoadingFor(BackendType.codex);
-      final options = ChatModelCatalog.allModelOptions();
-
-      final currentValue = value as String;
-      value = _ensureDropdownValue(currentValue, options);
-
-      effectiveDefinition = SettingDefinition(
-        key: definition.key,
-        title: definition.title,
-        description: definition.description,
-        type: definition.type,
-        defaultValue: definition.defaultValue,
-        options: options,
-        min: definition.min,
-        max: definition.max,
-        placeholder: definition.placeholder,
-      );
-    }
-
     return _SettingRow(
       definition: effectiveDefinition,
       value: value,
@@ -385,20 +355,6 @@ class _SettingsContent extends StatelessWidget {
     );
   }
 
-  static String _ensureDropdownValue(
-    String value,
-    List<SettingOption> options,
-  ) {
-    for (final option in options) {
-      if (option.value == value) {
-        return value;
-      }
-    }
-    if (options.isEmpty) {
-      return value;
-    }
-    return options.first.value;
-  }
 }
 
 // -----------------------------------------------------------------------------

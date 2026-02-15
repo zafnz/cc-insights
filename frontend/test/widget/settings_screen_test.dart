@@ -131,8 +131,8 @@ void main() {
         await tester.tap(find.text('Session'));
         await safePumpAndSettle(tester);
 
-        // Now shows Session content (Default Model is the first setting)
-        expect(find.text('Default Model'), findsOneWidget);
+        // Now shows Session content
+        expect(find.text('Show Stream of Thought'), findsOneWidget);
         // Appearance settings should be gone
         expect(find.text('Bash Tool Summary'), findsNothing);
       });

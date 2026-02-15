@@ -3,11 +3,9 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/material.dart';
 
 import '../models/agent_config.dart';
-import '../models/chat_model.dart';
 import '../models/setting_definition.dart';
 import '../models/worktree_tag.dart';
 import 'persistence_service.dart';
@@ -275,20 +273,6 @@ class SettingsService extends ChangeNotifier {
     description: 'Default settings for new chat sessions',
     icon: Icons.chat_outlined,
     settings: [
-      SettingDefinition(
-        key: 'session.defaultModel',
-        title: 'Default Model',
-        description:
-            'The default backend and model for new chat sessions. '
-            '`Last used` remembers your previous choice.',
-        type: SettingType.dropdown,
-        defaultValue: 'last_used',
-        // Options are built dynamically in the settings screen
-        // because Codex models are loaded at runtime.
-        options: [
-          SettingOption(value: 'last_used', label: 'Last used'),
-        ],
-      ),
       SettingDefinition(
         key: 'session.streamOfThought',
         title: 'Show Stream of Thought',
@@ -800,19 +784,6 @@ class SettingsService extends ChangeNotifier {
         config.deleteBranchWithWorktree = value as bool;
       case 'appearance.showWorktreeCost':
         config.showWorktreeCost = value as bool;
-      case 'session.defaultModel':
-        final composite = value as String;
-        config.defaultModel = composite;
-        final parsed = ChatModelCatalog.parseCompositeModel(composite);
-        if (parsed != null) {
-          config.defaultBackend = parsed.$1;
-        }
-      case 'session.defaultBackend':
-        // Legacy: kept for loading old config files.
-        final backend =
-            parseBackendType(value as String?) ??
-                BackendType.directCli;
-        config.defaultBackend = backend;
       case 'session.streamOfThought':
         config.streamOfThought = value as bool;
       case 'developer.showRawMessages':
@@ -843,8 +814,6 @@ class SettingsService extends ChangeNotifier {
   /// 2. Config value from disk (if present)
   /// 3. Default value from the setting definition
   void _syncAllToRuntimeConfig() {
-    // Migrate legacy separate backend/model settings to composite format.
-    _migrateLegacyModelSetting();
     // Migrate legacy per-backend CLI paths to agent configs.
     _migrateToAgentConfigs();
     // Sync agent registry.
@@ -863,40 +832,8 @@ class SettingsService extends ChangeNotifier {
       }
     }
 
-    // Sync the legacy backend key only when the model is "last_used"
-    // (i.e. no backend is encoded in the composite value). Otherwise
-    // the composite value already set defaultBackend above and the
-    // stale legacy key would overwrite it.
-    if (_values.containsKey('session.defaultBackend')) {
-      final model = _values['session.defaultModel'] ?? 'last_used';
-      if (model == 'last_used') {
-        _doSyncToRuntimeConfig(
-          'session.defaultBackend',
-          _values['session.defaultBackend'],
-        );
-      }
-    }
-  }
-
-  /// Converts old separate `session.defaultBackend` + `session.defaultModel`
-  /// values into the new composite `session.defaultModel` format and
-  /// removes the now-redundant `session.defaultBackend` key.
-  void _migrateLegacyModelSetting() {
-    final model = _values['session.defaultModel'];
-    if (model is! String) return;
-    // Already in composite format or "last_used" — nothing to migrate.
-    if (model == 'last_used' || model.contains(':')) return;
-
-    // Old format: model is a bare ID like 'opus', 'sonnet', 'haiku',
-    // or a Codex model ID like 'gpt-5.2'.
-    final backend = _values['session.defaultBackend'] as String? ?? 'direct';
-    final prefix = switch (backend) {
-      'codex' => 'codex',
-      'acp' => 'acp',
-      _ => 'claude',
-    };
-    _values['session.defaultModel'] = '$prefix:$model';
-    // Remove the legacy key so it doesn't interfere on future loads.
+    // Remove any stale legacy keys from old config files.
+    _values.remove('session.defaultModel');
     _values.remove('session.defaultBackend');
   }
 

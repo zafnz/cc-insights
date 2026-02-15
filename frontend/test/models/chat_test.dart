@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cc_insights_v2/models/agent.dart';
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/chat_model.dart';
 import 'package:cc_insights_v2/models/conversation.dart';
@@ -67,18 +68,30 @@ void main() {
       RuntimeConfig.initialize([]);
     });
 
-    test('uses RuntimeConfig defaults', () {
-      // RuntimeConfig defaults: model='last_used', permissionMode='default'
-      // 'last_used' falls back to the first model for the default backend.
+    test('uses RuntimeConfig defaults from default agent', () {
+      // Default agent is 'claude-default' with defaultModel='opus'.
       final chat = ChatState(
         ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
       );
-      check(chat.model).equals(ChatModelCatalog.claudeModels.first);
+      check(chat.model).equals(const ChatModel(
+        id: 'opus',
+        label: 'Opus',
+        backend: sdk.BackendType.directCli,
+      ));
       check(chat.permissionMode).equals(PermissionMode.defaultMode);
     });
 
-    test('picks up non-default RuntimeConfig values', () {
-      RuntimeConfig.instance.defaultModel = 'claude:haiku';
+    test('picks up non-default agent model and permission', () {
+      RuntimeConfig.instance.agents = [
+        const AgentConfig(
+          id: 'test-agent',
+          name: 'Test',
+          driver: 'claude',
+          defaultModel: 'haiku',
+          defaultPermissions: 'default',
+        ),
+      ];
+      RuntimeConfig.instance.defaultAgentId = 'test-agent';
       RuntimeConfig.instance.defaultPermissionMode = 'acceptEdits';
 
       final chat = ChatState(

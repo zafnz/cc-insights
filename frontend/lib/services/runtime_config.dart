@@ -128,12 +128,8 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether agents can access ticket tools (create_ticket MCP tool).
   bool _agentTicketToolsEnabled = true;
 
-  /// Default model for new chats (composite value, e.g. 'last_used',
-  /// 'claude:opus', 'codex:gpt-5.2', 'acp:default').
-  String _defaultModel = 'last_used';
-
-  /// Default backend for new chats.
-  BackendType _defaultBackend = BackendType.directCli;
+  // defaultModel and defaultBackend are now derived from the default agent.
+  // See the getters below.
 
   /// Default permission mode for new chats.
   String _defaultPermissionMode = 'default';
@@ -543,24 +539,26 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
-  /// Default model for new chats (composite value).
-  String get defaultModel => _defaultModel;
-
-  set defaultModel(String value) {
-    if (_defaultModel != value) {
-      _defaultModel = value;
-      notifyListeners();
-    }
+  /// Default model for new chats, derived from the default agent.
+  ///
+  /// Returns a composite value like `"claude:opus"` built from
+  /// the default agent's driver and default model.
+  String get defaultModel {
+    final agent = defaultAgent;
+    if (agent == null) return 'claude:opus';
+    final prefix = switch (agent.driver) {
+      'codex' => 'codex',
+      'acp' => 'acp',
+      _ => 'claude',
+    };
+    return '$prefix:${agent.defaultModel}';
   }
 
-  /// Default backend for new chats.
-  BackendType get defaultBackend => _defaultBackend;
-
-  set defaultBackend(BackendType value) {
-    if (_defaultBackend != value) {
-      _defaultBackend = value;
-      notifyListeners();
-    }
+  /// Default backend for new chats, derived from the default agent.
+  BackendType get defaultBackend {
+    final agent = defaultAgent;
+    if (agent == null) return BackendType.directCli;
+    return agent.backendType;
   }
 
   /// Default permission mode for new chats.
@@ -807,8 +805,6 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._archiveChats = false;
     _instance._deleteBranchWithWorktree = true;
     _instance._showWorktreeCost = true;
-    _instance._defaultModel = 'last_used';
-    _instance._defaultBackend = BackendType.directCli;
     _instance._defaultPermissionMode = 'default';
     _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;
