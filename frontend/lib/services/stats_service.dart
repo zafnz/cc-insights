@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/project.dart';
 import '../models/project_stats.dart';
-import 'persistence_service.dart';
+import 'cost_tracking_service.dart';
 
 /// Service for building aggregated project statistics.
 ///
@@ -10,10 +10,10 @@ import 'persistence_service.dart';
 /// data from the current ProjectState to produce a complete view of project
 /// costs and usage.
 class StatsService {
-  final PersistenceService _persistence;
+  final CostTrackingService _costTracking;
 
-  StatsService({required PersistenceService persistence})
-      : _persistence = persistence;
+  StatsService({required CostTrackingService costTracking})
+      : _costTracking = costTracking;
 
   /// Builds project statistics by merging historical and live data.
   ///
@@ -30,7 +30,7 @@ class StatsService {
     required String projectId,
   }) async {
     // Load historical entries from tracking.jsonl
-    final historicalEntries = await _persistence.loadCostTracking(projectId);
+    final historicalEntries = await _costTracking.loadCostTracking(projectId);
 
     // Build a map of worktree name -> list of ChatStats
     final worktreeChatMap = <String, List<ChatStats>>{};

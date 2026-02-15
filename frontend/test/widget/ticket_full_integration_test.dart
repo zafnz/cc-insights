@@ -12,7 +12,7 @@ import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
-import 'package:cc_insights_v2/services/persistence_service.dart';
+import 'package:cc_insights_v2/services/ticket_storage_service.dart';
 import 'package:cc_insights_v2/services/ticket_dispatch_service.dart';
 import 'package:cc_insights_v2/services/worktree_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -712,10 +712,10 @@ void main() {
         'save -> recreate and load -> verify everything restored', () async {
       final projectId =
           'test-persist-full-${DateTime.now().millisecondsSinceEpoch}';
-      final persistence = PersistenceService();
+      final storage = TicketStorageService();
 
       final ticketBoard = resources.track(
-        TicketBoardState(projectId, persistence: persistence),
+        TicketBoardState(projectId, storage: storage),
       );
 
       // Create tickets in various states
@@ -776,7 +776,7 @@ void main() {
 
       // Recreate and load
       final ticketBoard2 = resources.track(
-        TicketBoardState(projectId, persistence: persistence),
+        TicketBoardState(projectId, storage: storage),
       );
       await ticketBoard2.load();
 

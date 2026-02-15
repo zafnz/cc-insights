@@ -9,6 +9,7 @@ import '../models/conversation.dart';
 import '../models/cost_tracking.dart';
 import '../models/project.dart';
 import '../models/worktree.dart';
+import 'cost_tracking_service.dart';
 import 'log_service.dart';
 import 'persistence_models.dart';
 import 'persistence_service.dart';
@@ -29,6 +30,7 @@ import 'runtime_config.dart';
 /// 4. History is loaded lazily when a chat is selected
 class ProjectRestoreService {
   final PersistenceService _persistence;
+  final CostTrackingService _costTracking;
   final ProjectConfigService _configService;
 
   /// Creates a [ProjectRestoreService] with the given services.
@@ -36,8 +38,10 @@ class ProjectRestoreService {
   /// If no services are provided, default instances are created.
   ProjectRestoreService({
     PersistenceService? persistence,
+    CostTrackingService? costTracking,
     ProjectConfigService? configService,
   })  : _persistence = persistence ?? PersistenceService(),
+        _costTracking = costTracking ?? CostTrackingService(),
         _configService = configService ?? ProjectConfigService();
 
   /// Restores or creates a project for the given root path.
@@ -629,7 +633,7 @@ class ProjectRestoreService {
       );
 
       // Append to tracking.jsonl
-      await _persistence.appendCostTracking(projectId, entry);
+      await _costTracking.appendCostTracking(projectId, entry);
     } catch (e, stack) {
       LogService.instance.logUnhandledException(e, stack);
       // Don't rethrow - cost tracking failures shouldn't block chat closure

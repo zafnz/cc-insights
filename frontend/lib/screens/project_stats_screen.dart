@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/output_entry.dart';
 import '../models/project_stats.dart';
 import '../models/timing_stats.dart';
+import '../services/cost_tracking_service.dart';
 import '../services/persistence_service.dart';
 import '../services/stats_service.dart';
 import '../state/selection_state.dart';
@@ -79,10 +80,8 @@ class _ProjectStatsScreenState extends State<ProjectStatsScreen> {
     try {
       final selectionState = context.read<SelectionState>();
       final project = selectionState.project;
-      final persistence = context.read<PersistenceService>();
-
       final projectId = PersistenceService.generateProjectId(project.data.repoRoot);
-      final statsService = StatsService(persistence: persistence);
+      final statsService = StatsService(costTracking: CostTrackingService());
       final stats = await statsService.buildProjectStats(
         project: project,
         projectId: projectId,

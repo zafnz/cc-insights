@@ -5,6 +5,7 @@ import 'package:cc_insights_v2/models/cost_tracking.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
+import 'package:cc_insights_v2/services/cost_tracking_service.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/stats_service.dart';
@@ -15,6 +16,7 @@ import '../test_helpers.dart';
 
 void main() {
   late Directory tempDir;
+  late CostTrackingService costTracking;
   late PersistenceService persistence;
   late StatsService statsService;
   late String projectId;
@@ -26,11 +28,12 @@ void main() {
 
     // Create temp directory for this test
     tempDir = await Directory.systemTemp.createTemp('stats_service_test_');
+    costTracking = CostTrackingService();
     persistence = PersistenceService();
     PersistenceService.setBaseDir(tempDir.path);
 
     projectId = PersistenceService.generateProjectId('/test/project');
-    statsService = StatsService(persistence: persistence);
+    statsService = StatsService(costTracking: costTracking);
 
     // Initialize RuntimeConfig for ChatState
     RuntimeConfig.resetForTesting();
@@ -101,7 +104,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, entry1);
+      await costTracking.appendCostTracking(projectId, entry1);
 
       final entry2 = CostTrackingEntry(
         worktree: 'main',
@@ -120,7 +123,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, entry2);
+      await costTracking.appendCostTracking(projectId, entry2);
 
       // Create empty project
       const projectData = ProjectData(
@@ -247,7 +250,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, historicalEntry);
+      await costTracking.appendCostTracking(projectId, historicalEntry);
 
       // Create project with live chat
       const projectData = ProjectData(
@@ -341,7 +344,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, entry1);
+      await costTracking.appendCostTracking(projectId, entry1);
 
       // Create project with only live worktree
       const projectData = ProjectData(
@@ -398,7 +401,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, claudeEntry);
+      await costTracking.appendCostTracking(projectId, claudeEntry);
 
       final codexEntry = CostTrackingEntry(
         worktree: 'project',
@@ -417,7 +420,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, codexEntry);
+      await costTracking.appendCostTracking(projectId, codexEntry);
 
       // Create empty project
       const projectData = ProjectData(
@@ -474,7 +477,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, historicalEntry);
+      await costTracking.appendCostTracking(projectId, historicalEntry);
 
       // Live chat
       const projectData = ProjectData(
@@ -563,7 +566,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, deleted1);
+      await costTracking.appendCostTracking(projectId, deleted1);
 
       final deleted2 = CostTrackingEntry(
         worktree: 'alpha-deleted',
@@ -582,7 +585,7 @@ void main() {
           ),
         ],
       );
-      await persistence.appendCostTracking(projectId, deleted2);
+      await costTracking.appendCostTracking(projectId, deleted2);
 
       // Live worktrees with chats
       const projectData = ProjectData(

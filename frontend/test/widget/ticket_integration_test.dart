@@ -5,7 +5,7 @@ import 'package:cc_insights_v2/panels/ticket_create_form.dart';
 import 'package:cc_insights_v2/panels/ticket_detail_panel.dart';
 import 'package:cc_insights_v2/panels/ticket_list_panel.dart';
 import 'package:cc_insights_v2/screens/ticket_screen.dart';
-import 'package:cc_insights_v2/services/persistence_service.dart';
+import 'package:cc_insights_v2/services/ticket_storage_service.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -493,9 +493,9 @@ void main() {
     test('create tickets -> save -> reload -> all restored', () async {
       final testProjectId =
           'test-integration-persist-${DateTime.now().millisecondsSinceEpoch}';
-      final persistence = PersistenceService();
+      final storage = TicketStorageService();
       final state = resources.track(
-        TicketBoardState(testProjectId, persistence: persistence),
+        TicketBoardState(testProjectId, storage: storage),
       );
 
       // Create tickets with varying fields
@@ -533,9 +533,9 @@ void main() {
       // Small delay to ensure file system writes complete
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // Create a new state instance and load from persistence
+      // Create a new state instance and load from storage
       final state2 = resources.track(
-        TicketBoardState(testProjectId, persistence: persistence),
+        TicketBoardState(testProjectId, storage: storage),
       );
       await state2.load();
 

@@ -33,6 +33,7 @@ import 'services/git_operations_service.dart';
 import 'services/git_service.dart';
 import 'services/notification_service.dart';
 import 'services/persistence_service.dart';
+import 'services/ticket_storage_service.dart';
 import 'services/project_restore_service.dart';
 import 'services/runtime_config.dart';
 import 'services/project_config_service.dart';
@@ -1208,7 +1209,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     );
     final ticketBoardState = TicketBoardState(
       projectId,
-      persistence: context.read<PersistenceService>(),
+      storage: TicketStorageService(),
     );
     context.read<EventHandler>().ticketBoard = ticketBoardState;
     if (context.read<SettingsService>().getEffectiveValue<bool>(

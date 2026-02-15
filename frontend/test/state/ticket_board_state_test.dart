@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:cc_insights_v2/models/ticket.dart';
-import 'package:cc_insights_v2/services/persistence_service.dart';
+import 'package:cc_insights_v2/services/ticket_storage_service.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_helpers.dart';
@@ -641,8 +638,8 @@ void main() {
     test('save and load round-trip', () async {
       // Use unique project ID to avoid collision with other tests
       final testProjectId = 'test-project-roundtrip-${DateTime.now().millisecondsSinceEpoch}';
-      final persistence = PersistenceService();
-      final state = resources.track(TicketBoardState(testProjectId, persistence: persistence));
+      final storage = TicketStorageService();
+      final state = resources.track(TicketBoardState(testProjectId, storage: storage));
 
       // Create some tickets
       state.createTicket(
@@ -666,7 +663,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // Create new state and load
-      final state2 = resources.track(TicketBoardState(testProjectId, persistence: persistence));
+      final state2 = resources.track(TicketBoardState(testProjectId, storage: storage));
       await state2.load();
 
       // Verify
@@ -694,8 +691,8 @@ void main() {
       final state = resources.track(TicketBoardState('test-project'));
 
       // Write corrupt data
-      final persistence = PersistenceService();
-      await persistence.saveTickets('test-project', {'invalid': 'data'});
+      final storage = TicketStorageService();
+      await storage.saveTickets('test-project', {'invalid': 'data'});
 
       // Should not throw
       await state.load();
@@ -706,8 +703,8 @@ void main() {
     test('createTicket triggers auto-save', () async {
       // Use unique project ID to avoid collision with other tests
       final testProjectId = 'test-project-autosave-${DateTime.now().millisecondsSinceEpoch}';
-      final persistence = PersistenceService();
-      final state = resources.track(TicketBoardState(testProjectId, persistence: persistence));
+      final storage = TicketStorageService();
+      final state = resources.track(TicketBoardState(testProjectId, storage: storage));
 
       state.createTicket(title: 'Test', kind: TicketKind.feature);
 
@@ -718,7 +715,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // Load in new state
-      final state2 = resources.track(TicketBoardState(testProjectId, persistence: persistence));
+      final state2 = resources.track(TicketBoardState(testProjectId, storage: storage));
       await state2.load();
 
       expect(state2.tickets.length, 1);
@@ -728,8 +725,8 @@ void main() {
     test('nextId is preserved across save/load', () async {
       // Use a unique project ID to avoid collision with other tests
       final testProjectId = 'test-project-nextid-${DateTime.now().millisecondsSinceEpoch}';
-      final persistence = PersistenceService();
-      final state = resources.track(TicketBoardState(testProjectId, persistence: persistence));
+      final storage = TicketStorageService();
+      final state = resources.track(TicketBoardState(testProjectId, storage: storage));
 
       state.createTicket(title: 'A', kind: TicketKind.feature);
       state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -749,11 +746,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // Verify the saved data contains nextId
-      final savedData = await persistence.loadTickets(testProjectId);
+      final savedData = await storage.loadTickets(testProjectId);
       expect(savedData, isNotNull, reason: 'Saved data should not be null after save');
       expect(savedData!['nextId'], 4, reason: 'nextId should be 4');
 
-      final state2 = resources.track(TicketBoardState(testProjectId, persistence: persistence));
+      final state2 = resources.track(TicketBoardState(testProjectId, storage: storage));
       await state2.load();
 
       // Verify loaded state

@@ -4,7 +4,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 
 import '../models/ticket.dart';
-import '../services/persistence_service.dart';
+import '../services/ticket_storage_service.dart';
 
 /// Result emitted when a bulk review completes.
 typedef BulkReviewResult = ({int approvedCount, int rejectedCount});
@@ -44,7 +44,7 @@ enum TicketDetailMode {
 /// validation for tickets. Uses [PersistenceService] for storage.
 class TicketBoardState extends ChangeNotifier {
   final String projectId;
-  final PersistenceService _persistence;
+  final TicketStorageService _storage;
 
   /// Save queue to serialize save operations.
   Future<void>? _pendingSave;
@@ -128,8 +128,8 @@ class TicketBoardState extends ChangeNotifier {
   ///
   /// The [persistence] parameter is optional for testing; if not provided,
   /// a default instance is created.
-  TicketBoardState(this.projectId, {PersistenceService? persistence})
-      : _persistence = persistence ?? PersistenceService();
+  TicketBoardState(this.projectId, {TicketStorageService? storage})
+      : _storage = storage ?? TicketStorageService();
 
   @override
   void dispose() {
@@ -1062,7 +1062,7 @@ class TicketBoardState extends ChangeNotifier {
   /// Loads tickets from persistence.
   Future<void> load() async {
     try {
-      final data = await _persistence.loadTickets(projectId);
+      final data = await _storage.loadTickets(projectId);
       if (data == null) {
         developer.log(
           'No tickets file found for project $projectId',
@@ -1116,7 +1116,7 @@ class TicketBoardState extends ChangeNotifier {
           'nextId': _nextId,
         };
 
-        await _persistence.saveTickets(projectId, data);
+        await _storage.saveTickets(projectId, data);
 
         developer.log(
           'Saved ${_tickets.length} tickets for project $projectId',
