@@ -157,8 +157,10 @@ class _ToolCardState extends State<ToolCard> {
   ///
   /// MCP tools have names like `mcp__<mcp-name>__<tool_name>` and are
   /// formatted as `MCP(mcp-name:tool_name)`.
+  static final _mcpNamePattern = RegExp(r'^mcp__([^_]+)__(.+)$');
+
   String _formatToolName(String toolName) {
-    final mcpMatch = RegExp(r'^mcp__([^_]+)__(.+)$').firstMatch(toolName);
+    final mcpMatch = _mcpNamePattern.firstMatch(toolName);
     if (mcpMatch != null) {
       final mcpName = mcpMatch.group(1)!;
       final mcpToolName = mcpMatch.group(2)!;

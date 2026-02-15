@@ -173,11 +173,22 @@ class ScriptExecutionService extends ChangeNotifier {
 
     // Stream PTY output to xterm terminal via broadcast stream.
     // No notifyListeners() here — xterm handles rendering internally.
-    final outputSub = pty.output.listen((data) {
-      script.appendBytes(data);
-      final text = utf8.decode(data, allowMalformed: true);
-      script._combined.write(text);
-    });
+    final outputSub = pty.output.listen(
+      (data) {
+        script.appendBytes(data);
+        final text = utf8.decode(data, allowMalformed: true);
+        script._combined.write(text);
+      },
+      onError: (Object error, StackTrace stack) {
+        developer.log(
+          'PTY output stream error for script "$name"',
+          name: 'ScriptExecutionService',
+          error: error,
+          stackTrace: stack,
+          level: 1000,
+        );
+      },
+    );
     _subscriptions[id]!.add(outputSub);
 
     // Handle completion

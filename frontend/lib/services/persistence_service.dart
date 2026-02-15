@@ -19,6 +19,9 @@ import 'persistence_models.dart';
 ///
 /// All paths are relative to `~/.ccinsights/` (or a custom directory if set).
 class PersistenceService {
+  /// Log level for non-critical warnings (e.g. missing files, skipped writes).
+  static const int _kWarningLevel = 900;
+
   /// Per-file write queue to serialize appends and prevent interleaving.
   ///
   /// Concurrent async writes to the same file can interleave bytes, corrupting
@@ -410,8 +413,16 @@ class PersistenceService {
       }
     });
 
-    // Store the future (ignoring errors so the chain continues for next writes)
-    _writeQueues[path] = current.catchError((_) {});
+    // Store the future with error logging so the chain continues for next writes
+    _writeQueues[path] = current.catchError((Object e, StackTrace stack) {
+      developer.log(
+        'Write queue error for $path (continuing chain)',
+        name: 'PersistenceService',
+        error: e,
+        stackTrace: stack,
+        level: 1000,
+      );
+    });
 
     return current;
   }
@@ -457,7 +468,7 @@ class PersistenceService {
         developer.log(
           'Project not found for session ID update: $projectRoot',
           name: 'PersistenceService',
-          level: 900, // Warning
+          level: _kWarningLevel,
         );
         return;
       }
@@ -467,7 +478,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for session ID update: $worktreePath',
           name: 'PersistenceService',
-          level: 900, // Warning
+          level: _kWarningLevel,
         );
         return;
       }
@@ -535,7 +546,7 @@ class PersistenceService {
         developer.log(
           'Project not found for chat rename: $projectRoot',
           name: 'PersistenceService',
-          level: 900, // Warning
+          level: _kWarningLevel,
         );
         return;
       }
@@ -545,7 +556,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for chat rename: $worktreePath',
           name: 'PersistenceService',
-          level: 900, // Warning
+          level: _kWarningLevel,
         );
         return;
       }
@@ -613,7 +624,7 @@ class PersistenceService {
         developer.log(
           'Project not found for chat removal: $projectRoot',
           name: 'PersistenceService',
-          level: 900, // Warning
+          level: _kWarningLevel,
         );
         return;
       }
@@ -623,7 +634,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for chat removal: $worktreePath',
           name: 'PersistenceService',
-          level: 900, // Warning
+          level: _kWarningLevel,
         );
         return;
       }
@@ -680,7 +691,7 @@ class PersistenceService {
         developer.log(
           'Project not found for tag update: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -690,7 +701,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for tag update: $worktreePath',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -743,7 +754,7 @@ class PersistenceService {
         developer.log(
           'Project not found for base update: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -753,7 +764,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for base update: $worktreePath',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -809,7 +820,7 @@ class PersistenceService {
         developer.log(
           'Project not found for worktree hide: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -819,7 +830,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for hide: $worktreePath',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -869,7 +880,7 @@ class PersistenceService {
         developer.log(
           'Project not found for worktree unhide: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -879,7 +890,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for unhide: $worktreePath',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -935,7 +946,7 @@ class PersistenceService {
       developer.log(
         'Project not found for worktree removal: $projectRoot',
         name: 'PersistenceService',
-        level: 900, // Warning
+        level: _kWarningLevel,
       );
       return [];
     }
@@ -945,7 +956,7 @@ class PersistenceService {
       developer.log(
         'Worktree not found for removal: $worktreePath',
         name: 'PersistenceService',
-        level: 900, // Warning
+        level: _kWarningLevel,
       );
       return [];
     }
@@ -1048,7 +1059,7 @@ class PersistenceService {
         developer.log(
           'Project not found for chat archive: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1058,7 +1069,7 @@ class PersistenceService {
         developer.log(
           'Worktree not found for chat archive: $worktreePath',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1069,7 +1080,7 @@ class PersistenceService {
         developer.log(
           'Chat not found for archive: $chatId',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1130,7 +1141,7 @@ class PersistenceService {
         developer.log(
           'Project not found for chat restore: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1142,7 +1153,7 @@ class PersistenceService {
         developer.log(
           'Archived chat not found for restore: $chatId',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1152,7 +1163,7 @@ class PersistenceService {
         developer.log(
           'Target worktree not found for chat restore: $targetWorktreePath',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1210,7 +1221,7 @@ class PersistenceService {
         developer.log(
           'Project not found for worktree chat archive: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1341,7 +1352,7 @@ class PersistenceService {
         developer.log(
           'Project not found for default worktree root update: $projectRoot',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
         return;
       }
@@ -1423,7 +1434,7 @@ class PersistenceService {
           'Loaded ${entries.length} cost tracking entries for project $projectId '
           '($skippedLines invalid lines skipped)',
           name: 'PersistenceService',
-          level: 900,
+          level: _kWarningLevel,
         );
       } else {
         developer.log(

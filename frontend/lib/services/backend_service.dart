@@ -388,6 +388,65 @@ class BackendService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetches models from [backend] and updates the [ChatModelCatalog].
+  ///
+  /// Shared logic used by both [_refreshModelsForAgent] and
+  /// [_refreshModelsIfSupported].
+  Future<void> _fetchAndUpdateModels(
+    BackendType type,
+    AgentBackend backend,
+  ) async {
+    // For Claude, use queryBackendInfo to get both models and account.
+    if (type == BackendType.directCli && backend is ClaudeCliBackend) {
+      final (models, account) = await backend.queryBackendInfo();
+      ChatModelCatalog.updateAccountInfo(account);
+      if (models.isNotEmpty) {
+        final mapped = models
+            .where((m) => m.value.trim().isNotEmpty)
+            .map((m) {
+          final label = m.displayName.trim().isEmpty
+              ? m.value
+              : m.displayName.trim();
+          return ChatModel(
+            id: m.value.trim(),
+            label: label,
+            backend: BackendType.directCli,
+            description: m.description.trim(),
+          );
+        }).toList();
+        if (mapped.isNotEmpty) {
+          ChatModelCatalog.updateClaudeModels(mapped);
+        }
+      }
+      return;
+    }
+
+    // For other backends, use the generic listModels.
+    final modelBackend = backend as ModelListingBackend;
+    final models = await modelBackend.listModels();
+    if (models.isEmpty) return;
+
+    if (type == BackendType.codex) {
+      final mapped = models
+          .where((model) => model.value.trim().isNotEmpty)
+          .map((model) {
+        final label = model.displayName.trim().isEmpty
+            ? model.value
+            : model.displayName.trim();
+        return ChatModel(
+          id: model.value.trim(),
+          label: label,
+          backend: BackendType.codex,
+          description: model.description.trim(),
+        );
+      }).toList();
+
+      if (mapped.isNotEmpty) {
+        ChatModelCatalog.updateCodexModels(mapped);
+      }
+    }
+  }
+
   Future<void> _refreshModelsForAgent(
     String agentId,
     BackendType type,
@@ -401,55 +460,7 @@ class BackendService extends ChangeNotifier {
     }
 
     try {
-      // For Claude, use queryBackendInfo to get both models and account.
-      if (type == BackendType.directCli && backend is ClaudeCliBackend) {
-        final (models, account) = await backend.queryBackendInfo();
-        ChatModelCatalog.updateAccountInfo(account);
-        if (models.isNotEmpty) {
-          final mapped = models
-              .where((m) => m.value.trim().isNotEmpty)
-              .map((m) {
-            final label = m.displayName.trim().isEmpty
-                ? m.value
-                : m.displayName.trim();
-            return ChatModel(
-              id: m.value.trim(),
-              label: label,
-              backend: BackendType.directCli,
-              description: m.description.trim(),
-            );
-          }).toList();
-          if (mapped.isNotEmpty) {
-            ChatModelCatalog.updateClaudeModels(mapped);
-          }
-        }
-        return;
-      }
-
-      // For other backends, use the generic listModels.
-      final modelBackend = backend as ModelListingBackend;
-      final models = await modelBackend.listModels();
-      if (models.isEmpty) return;
-
-      if (type == BackendType.codex) {
-        final mapped = models
-            .where((model) => model.value.trim().isNotEmpty)
-            .map((model) {
-          final label = model.displayName.trim().isEmpty
-              ? model.value
-              : model.displayName.trim();
-          return ChatModel(
-            id: model.value.trim(),
-            label: label,
-            backend: BackendType.codex,
-            description: model.description.trim(),
-          );
-        }).toList();
-
-        if (mapped.isNotEmpty) {
-          ChatModelCatalog.updateCodexModels(mapped);
-        }
-      }
+      await _fetchAndUpdateModels(type, backend);
     } catch (e) {
       debugPrint('Failed to refresh model list for agent $agentId: $e');
     } finally {
@@ -669,55 +680,7 @@ class BackendService extends ChangeNotifier {
     }
 
     try {
-      // For Claude, use queryBackendInfo to get both models and account.
-      if (type == BackendType.directCli && backend is ClaudeCliBackend) {
-        final (models, account) = await backend.queryBackendInfo();
-        ChatModelCatalog.updateAccountInfo(account);
-        if (models.isNotEmpty) {
-          final mapped = models
-              .where((m) => m.value.trim().isNotEmpty)
-              .map((m) {
-            final label = m.displayName.trim().isEmpty
-                ? m.value
-                : m.displayName.trim();
-            return ChatModel(
-              id: m.value.trim(),
-              label: label,
-              backend: BackendType.directCli,
-              description: m.description.trim(),
-            );
-          }).toList();
-          if (mapped.isNotEmpty) {
-            ChatModelCatalog.updateClaudeModels(mapped);
-          }
-        }
-        return;
-      }
-
-      // For other backends, use the generic listModels.
-      final modelBackend = backend as ModelListingBackend;
-      final models = await modelBackend.listModels();
-      if (models.isEmpty) return;
-
-      if (type == BackendType.codex) {
-        final mapped = models
-            .where((model) => model.value.trim().isNotEmpty)
-            .map((model) {
-          final label = model.displayName.trim().isEmpty
-              ? model.value
-              : model.displayName.trim();
-          return ChatModel(
-            id: model.value.trim(),
-            label: label,
-            backend: BackendType.codex,
-            description: model.description.trim(),
-          );
-        }).toList();
-
-        if (mapped.isNotEmpty) {
-          ChatModelCatalog.updateCodexModels(mapped);
-        }
-      }
+      await _fetchAndUpdateModels(type, backend);
     } catch (e) {
       debugPrint('Failed to refresh model list: $e');
     } finally {
@@ -837,19 +800,28 @@ class BackendService extends ChangeNotifier {
     _starting.remove(type);
   }
 
+  /// Cancels all stream subscriptions and closes controllers.
+  ///
+  /// Returns a future that completes when all cancellations finish.
+  /// Called by [dispose] to ensure subscriptions are properly cleaned up.
+  Future<void> _cancelAllSubscriptions() async {
+    await Future.wait<void>([
+      if (_rateLimitSub != null) _rateLimitSub!.cancel(),
+      _rateLimitsController.close(),
+      ..._errorSubscriptions.values.map((sub) => sub.cancel()),
+      ..._agentErrorSubscriptions.values.map((sub) => sub.cancel()),
+    ]);
+  }
+
   /// Disposes of the backend service and terminates the subprocess.
   ///
   /// This should be called when the app is shutting down to ensure
   /// the backend process is properly terminated.
   @override
   void dispose() {
-    _rateLimitSub?.cancel();
-    _rateLimitsController.close();
-    // Clean up BackendType-keyed state
-    for (final sub in _errorSubscriptions.values) {
-      sub.cancel();
-    }
+    unawaited(_cancelAllSubscriptions());
     _errorSubscriptions.clear();
+    // Clean up BackendType-keyed state
     for (final backend in _backends.values) {
       backend.dispose();
     }
@@ -859,9 +831,6 @@ class BackendService extends ChangeNotifier {
     _starting.clear();
     _backendType = null;
     // Clean up agent-keyed state
-    for (final sub in _agentErrorSubscriptions.values) {
-      sub.cancel();
-    }
     _agentErrorSubscriptions.clear();
     for (final backend in _agentBackends.values) {
       backend.dispose();

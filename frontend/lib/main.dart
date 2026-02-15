@@ -1104,48 +1104,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProxyProvider<ProjectState, TicketBoardState>(
           create: (context) {
             final projectState = context.read<ProjectState>();
-            final projectId = PersistenceService.generateProjectId(
-              projectState.data.repoRoot,
-            );
-            final ticketBoardState = TicketBoardState(
-              projectId,
-              persistence: context.read<PersistenceService>(),
-            );
-            // Wire up the event handler for ticket status transitions
-            context.read<EventHandler>().ticketBoard = ticketBoardState;
-            // Register internal MCP tools with the ticket board
-            if (context.read<SettingsService>().getEffectiveValue<bool>(
-              'projectMgmt.agentTicketTools',
-            )) {
-              context.read<InternalToolsService>().registerTicketTools(
-                ticketBoardState,
-              );
-            }
-            // Load tickets asynchronously (fire-and-forget)
-            ticketBoardState.load();
-            return ticketBoardState;
+            return _initTicketBoardState(context, projectState);
           },
           update: (context, project, previous) {
             if (previous != null) return previous;
-            final projectId = PersistenceService.generateProjectId(
-              project.data.repoRoot,
-            );
-            final ticketBoardState = TicketBoardState(
-              projectId,
-              persistence: context.read<PersistenceService>(),
-            );
-            // Wire up the event handler for ticket status transitions
-            context.read<EventHandler>().ticketBoard = ticketBoardState;
-            // Register internal MCP tools with the ticket board
-            if (context.read<SettingsService>().getEffectiveValue<bool>(
-              'projectMgmt.agentTicketTools',
-            )) {
-              context.read<InternalToolsService>().registerTicketTools(
-                ticketBoardState,
-              );
-            }
-            ticketBoardState.load();
-            return ticketBoardState;
+            return _initTicketBoardState(context, project);
           },
         ),
       ],
@@ -1153,6 +1116,30 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         child: const MainScreen(),
       ),
     );
+  }
+
+  /// Creates and wires up a [TicketBoardState] for the given project.
+  TicketBoardState _initTicketBoardState(
+    BuildContext context,
+    ProjectState project,
+  ) {
+    final projectId = PersistenceService.generateProjectId(
+      project.data.repoRoot,
+    );
+    final ticketBoardState = TicketBoardState(
+      projectId,
+      persistence: context.read<PersistenceService>(),
+    );
+    context.read<EventHandler>().ticketBoard = ticketBoardState;
+    if (context.read<SettingsService>().getEffectiveValue<bool>(
+      'projectMgmt.agentTicketTools',
+    )) {
+      context.read<InternalToolsService>().registerTicketTools(
+        ticketBoardState,
+      );
+    }
+    ticketBoardState.load();
+    return ticketBoardState;
   }
 
   /// Build a compact desktop-appropriate theme.

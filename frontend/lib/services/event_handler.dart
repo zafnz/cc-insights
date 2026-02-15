@@ -828,9 +828,14 @@ class EventHandler {
       }
     }
 
+    final descPreview = event.description != null
+        ? (event.description!.length > 50
+            ? '${event.description!.substring(0, 50)}...'
+            : event.description!)
+        : 'null';
     developer.log(
       'Creating subagent: type=${event.agentType ?? "null"}, '
-      'description=${event.description?.substring(0, event.description!.length > 50 ? 50 : event.description!.length) ?? "null"}...',
+      'description=$descPreview',
       name: 'EventHandler',
     );
 

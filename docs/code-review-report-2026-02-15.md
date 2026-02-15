@@ -7,7 +7,7 @@
 
 ## Critical Issues
 
-### 1. Write Queue Error Swallowing
+### 1. ~~Write Queue Error Swallowing~~ FIXED
 
 **File:** `services/persistence_service.dart:414`
 
@@ -20,7 +20,7 @@ The write queue serializes appends correctly, but `.catchError((_) {})` silently
 
 ---
 
-### 2. Mutable State Exposed via Getter
+### 2. ~~Mutable State Exposed via Getter~~ FIXED
 
 **File:** `state/file_manager_state.dart:145`
 
@@ -200,7 +200,7 @@ Merge abort failures are caught with `catch (_)` and silently retried with `rese
 
 ---
 
-### 16. Subscription Cleanup Not Awaited
+### 16. ~~Subscription Cleanup Not Awaited~~ FIXED
 
 **File:** `services/backend_service.dart:846-875`
 
@@ -208,7 +208,7 @@ Merge abort failures are caught with `catch (_)` and silently retried with `rese
 
 ---
 
-### 17. Duplicate Model Loading Code
+### 17. ~~Duplicate Model Loading Code~~ FIXED
 
 **File:** `services/backend_service.dart`
 
@@ -216,7 +216,7 @@ Merge abort failures are caught with `catch (_)` and silently retried with `rese
 
 ---
 
-### 18. PTY Stream Missing Error Handler
+### 18. ~~PTY Stream Missing Error Handler~~ FIXED
 
 **File:** `services/script_execution_service.dart:176-180`
 
@@ -245,7 +245,7 @@ These should be decomposed into smaller widget classes.
 
 ---
 
-### 20. Duplicate Provider Registration
+### 20. ~~Duplicate Provider Registration~~ FIXED
 
 **File:** `main.dart:1091-1137`
 
@@ -267,27 +267,27 @@ The `ChangeNotifierProxyProvider<ProjectState, TicketBoardState>` has nearly ide
 
 Padding, margins, font sizes, border radii, animation durations, and truncation limits scattered as literals across `tool_card.dart`, `message_input.dart`, `permission_dialog.dart`, `conversation_panel.dart` and others. Not using theme extensions or named constants.
 
-### 23. Magic Logging Levels
+### 23. ~~Magic Logging Levels~~ FIXED
 
 `persistence_service.dart` uses `level: 900` in 14+ locations. No named constant or documentation of what 900 represents.
 
-### 24. Missing `const` Constructors
+### 24. ~~Missing `const` Constructors~~ NOT AN ISSUE
 
-Many small private widgets could be `const` but aren't: `_ImagePreviewTile`, `_ImagePreviewRow`, `_ImageAttachButton`, `_SendButton`, `_ConversationPlaceholder`, `_AgentRemovedBanner`.
+All listed widgets already have `const` constructors: `_ImagePreviewTile`, `_ImagePreviewRow`, `_ImageAttachButton`, `_SendButton`, `_ConversationPlaceholder`, `_AgentRemovedBanner`.
 
-### 25. ListView Without `.builder`
+### 25. ~~ListView Without `.builder`~~ FIXED
 
 **File:** `panels/agents_panel.dart:71-95`
 
 Uses `ListView()` with list comprehension materializing all items at once instead of `ListView.builder()` for lazy rendering.
 
-### 26. RegExp in Build Methods
+### 26. ~~RegExp in Build Methods~~ FIXED
 
 **File:** `widgets/tool_card.dart:161`
 
 `_formatToolName()` creates a `RegExp` on every invocation during build. Should be a `static final`.
 
-### 27. Unsafe Substring Operations
+### 27. ~~Unsafe Substring Operations~~ FIXED
 
 **File:** `services/event_handler.dart:817`
 

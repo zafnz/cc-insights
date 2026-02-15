@@ -142,7 +142,7 @@ class FileManagerState extends ChangeNotifier {
   ///
   /// Use [isExpanded] to check if a specific path is expanded.
   /// Use [toggleExpanded] to change the expanded state.
-  Set<String> get expandedPaths => _expandedPaths;
+  Set<String> get expandedPaths => Set.unmodifiable(_expandedPaths);
 
   /// Returns whether the directory at [path] is expanded.
   bool isExpanded(String path) => _expandedPaths.contains(path);

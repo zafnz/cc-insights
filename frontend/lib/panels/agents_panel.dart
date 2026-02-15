@@ -67,31 +67,33 @@ class _AgentsListContent extends StatelessWidget {
   ) {
     // Reverse subagents so newest appears first (after main chat)
     final reversedSubagents = subagents.reversed.toList();
+    final itemCount = 1 + reversedSubagents.length;
 
-    return ListView(
+    return ListView.builder(
       padding: EdgeInsets.zero,
-      children: [
-        // Primary "Chat" entry - always first
-        _PrimaryChatListItem(
-          conversation: primaryConversation,
-          isSelected: selection.selectedConversation == primaryConversation,
-          onTap: () => selection.selectConversation(primaryConversation),
-        ),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          // Primary "Chat" entry - always first
+          return _PrimaryChatListItem(
+            conversation: primaryConversation,
+            isSelected: selection.selectedConversation == primaryConversation,
+            onTap: () => selection.selectConversation(primaryConversation),
+          );
+        }
         // Subagent entries (newest first)
-        ...reversedSubagents.map((subagent) {
-          // Find the agent for this conversation
-          final agent = activeAgents.values.cast<Agent?>().firstWhere(
-            (a) => a?.conversationId == subagent.id,
-            orElse: () => null,
-          );
-          return _AgentListItem(
-            conversation: subagent,
-            isSelected: selection.selectedConversation == subagent,
-            onTap: () => selection.selectConversation(subagent),
-            agentStatus: agent?.status,
-          );
-        }),
-      ],
+        final subagent = reversedSubagents[index - 1];
+        final agent = activeAgents.values.cast<Agent?>().firstWhere(
+          (a) => a?.conversationId == subagent.id,
+          orElse: () => null,
+        );
+        return _AgentListItem(
+          conversation: subagent,
+          isSelected: selection.selectedConversation == subagent,
+          onTap: () => selection.selectConversation(subagent),
+          agentStatus: agent?.status,
+        );
+      },
     );
   }
 }
