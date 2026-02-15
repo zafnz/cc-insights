@@ -880,7 +880,7 @@ $commitList''';
           FilledButton(
             onPressed: canCommit ? _squash : null,
             child: _isSquashing
-                ? const SizedBox(
+                ? SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
