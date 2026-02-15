@@ -1280,12 +1280,15 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       menuItems.add(const Divider(height: 1));
     }
 
-    // Tags submenu - build submenu children lazily
+    // Tags submenu - capture providers eagerly (the Builder's context is
+    // deactivated by the time MenuItemButton.onPressed fires post-frame).
     menuItems.add(
       Builder(
         builder: (BuildContext menuContext) {
           final settings = menuContext.read<SettingsService>();
           final availableTags = settings.availableTags;
+          final project = menuContext.read<ProjectState>();
+          final persistence = menuContext.read<PersistenceService>();
 
           return SubmenuButton(
             leadingIcon: Icon(
@@ -1297,15 +1300,12 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
               final isChecked = worktree.tags.contains(tag.name);
               return MenuItemButton(
                 onPressed: () {
-                  final project = menuContext.read<ProjectState>();
-                  final persistence = menuContext.read<PersistenceService>();
                   worktree.toggleTag(tag.name);
                   persistence.updateWorktreeTags(
                     projectRoot: project.data.repoRoot,
                     worktreePath: worktree.data.worktreeRoot,
                     tags: List.of(worktree.tags),
                   );
-                  setState(() {});
                 },
                 leadingIcon: SizedBox(
                   width: 20,
