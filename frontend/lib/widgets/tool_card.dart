@@ -2,6 +2,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../config/design_tokens.dart';
 import '../models/output_entry.dart';
 import '../services/runtime_config.dart';
 import 'click_to_scroll_container.dart';
@@ -226,7 +227,7 @@ class _ToolCardState extends State<ToolCard> {
                     _formatToolName(entry.toolName),
                     style: const TextStyle(
                       fontWeight: FontWeight.w500,
-                      fontSize: 13,
+                      fontSize: FontSizes.body,
                     ),
                   ),
                   if (entry.toolKind == ToolKind.think) ...[
@@ -238,12 +239,12 @@ class _ToolCardState extends State<ToolCard> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.orange.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: Radii.smallBorderRadius,
                       ),
                       child: Text(
                         entry.toolInput['subagent_type'] as String? ?? '',
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: FontSizes.code,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -470,7 +471,7 @@ class _ToolResult extends StatelessWidget {
           Text(
             'Result:',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: FontSizes.code,
               color:
                   Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
@@ -480,12 +481,12 @@ class _ToolResult extends StatelessWidget {
             maxHeight: 300,
             padding: const EdgeInsets.all(8),
             backgroundColor: Colors.black87,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: Radii.smallBorderRadius,
             child: SelectableText(
               bashOutput,
               style: GoogleFonts.getFont(
                 monoFont,
-                fontSize: 11,
+                fontSize: FontSizes.code,
                 color: Colors.grey,
               ),
             ),
@@ -504,7 +505,7 @@ class _ToolResult extends StatelessWidget {
         Text(
           isError ? 'Error:' : 'Result:',
           style: TextStyle(
-            fontSize: 11,
+            fontSize: FontSizes.code,
             color: isError
                 ? Colors.red
                 : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -517,12 +518,12 @@ class _ToolResult extends StatelessWidget {
           backgroundColor: isError
               ? Colors.red.withValues(alpha: 0.1)
               : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: Radii.smallBorderRadius,
           child: SelectableText(
             resultText,
             style: GoogleFonts.getFont(
               monoFont,
-              fontSize: 11,
+              fontSize: FontSizes.code,
               color: isError
                   ? Colors.red
                   : Theme.of(context).colorScheme.onSurface,

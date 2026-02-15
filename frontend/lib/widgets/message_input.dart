@@ -4,6 +4,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../config/design_tokens.dart';
 import '../config/fonts.dart';
 import '../models/output_entry.dart';
 import 'image_attachment_helper.dart';
@@ -341,7 +342,7 @@ class _MessageInputState extends State<MessageInput>
                           minHeight: 32,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: Radii.largeBorderRadius,
                           borderSide: BorderSide(
                             color:
                                 colorScheme.outlineVariant.withValues(
@@ -350,7 +351,7 @@ class _MessageInputState extends State<MessageInput>
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: Radii.largeBorderRadius,
                           borderSide: BorderSide(
                             color:
                                 colorScheme.outlineVariant.withValues(
@@ -359,14 +360,14 @@ class _MessageInputState extends State<MessageInput>
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: Radii.largeBorderRadius,
                           borderSide: BorderSide(
                             color: colorScheme.primary,
                             width: 1.5,
                           ),
                         ),
                         disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: Radii.largeBorderRadius,
                           borderSide: BorderSide(
                             color:
                                 colorScheme.outlineVariant.withValues(
@@ -444,7 +445,7 @@ class _ImagePreviewTile extends StatelessWidget {
           width: 80,
           height: 80,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: Radii.largeBorderRadius,
             border: Border.all(
               color: colorScheme.outlineVariant.withValues(alpha: 0.5),
             ),
@@ -509,10 +510,10 @@ class _ImageAttachButton extends StatelessWidget {
           : 'Attach images ($imageCount/$maxImages)',
       child: Material(
         color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: Radii.largeBorderRadius,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: Radii.largeBorderRadius,
           child: Container(
             width: 40,
             height: 40,
@@ -545,10 +546,10 @@ class _InterruptButton extends StatelessWidget {
         message: 'Stop (preserves context)',
         child: Material(
           color: Colors.orange.shade700,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: Radii.largeBorderRadius,
           child: InkWell(
             onTap: onPressed,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: Radii.largeBorderRadius,
             child: Container(
               width: 40,
               height: 40,
@@ -584,10 +585,10 @@ class _SendButton extends StatelessWidget {
       color: onPressed == null || isEmpty
           ? colorScheme.surfaceContainerHighest
           : colorScheme.primary,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: Radii.largeBorderRadius,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: Radii.largeBorderRadius,
         child: Container(
           width: 40,
           height: 40,

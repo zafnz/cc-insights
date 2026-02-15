@@ -303,7 +303,6 @@ class BackendService extends ChangeNotifier {
       unawaited(_refreshModelsForAgent(agentId, type, backend));
     } catch (e) {
       _t('BackendService', 'ERROR starting backend for agent $agentId: $e');
-      debugPrint('Failed to start agent $agentId: $e');
       _agentErrors[agentId] = e.toString();
       _agentErrorIsAgent[agentId] = false;
       _agentBackends.remove(agentId);
@@ -463,7 +462,9 @@ class BackendService extends ChangeNotifier {
     try {
       await _fetchAndUpdateModels(type, backend);
     } catch (e) {
-      debugPrint('Failed to refresh model list for agent $agentId: $e');
+      _t('BackendService', 'Failed to refresh model list for agent $agentId: $e');
+      _agentErrors[agentId] = 'Model refresh failed: $e';
+      _agentErrorIsAgent[agentId] = false;
     } finally {
       _agentModelListLoading.remove(agentId);
       notifyListeners();
@@ -683,7 +684,9 @@ class BackendService extends ChangeNotifier {
     try {
       await _fetchAndUpdateModels(type, backend);
     } catch (e) {
-      debugPrint('Failed to refresh model list: $e');
+      _t('BackendService', 'Failed to refresh model list for ${type.name}: $e');
+      _errors[type] = 'Model refresh failed: $e';
+      _errorIsAgent[type] = false;
     } finally {
       _modelListLoading.remove(type);
       notifyListeners();

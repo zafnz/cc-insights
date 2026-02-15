@@ -48,7 +48,7 @@ Returns a direct reference to the internal mutable `Set`. External code can call
 
 ## High Severity
 
-### 4. Callback-Based State Wiring
+### 4. ~~Callback-Based State Wiring~~ FIXED
 
 **File:** `state/ticket_board_state.dart:96-108`
 
@@ -62,7 +62,7 @@ void Function(TicketData ticket)? onTicketReady;
 
 ---
 
-### 5. Fire-and-Forget Without Error Handling
+### 5. ~~Fire-and-Forget Without Error Handling~~ FIXED
 
 **File:** `services/backend_service.dart` - lines 261, 303, 484, 587, 632
 
@@ -125,7 +125,7 @@ Business logic should be in services, not in `build()` methods or widget state.
 
 ## Medium Severity
 
-### 10. Implicit EventHandler Dependencies
+### 10. ~~Implicit EventHandler Dependencies~~ FIXED
 
 **File:** `services/event_handler.dart:93, 99-100`
 
@@ -233,7 +233,7 @@ If the PTY output stream errors, the listener crashes without notification.
 
 ---
 
-### 19. Oversized Build Methods
+### 19. ~~Oversized Build Methods~~ FIXED
 
 | Widget | File | Build Lines |
 |--------|------|-------------|
@@ -253,7 +253,7 @@ The `ChangeNotifierProxyProvider<ProjectState, TicketBoardState>` has nearly ide
 
 ---
 
-### 21. MainScreen Manual Listener Management
+### 21. ~~MainScreen Manual Listener Management~~ FIXED
 
 **File:** `screens/main_screen.dart:108-158`
 
@@ -263,7 +263,7 @@ The `ChangeNotifierProxyProvider<ProjectState, TicketBoardState>` has nearly ide
 
 ## Low Severity
 
-### 22. Hardcoded Values Throughout
+### 22. ~~Hardcoded Values Throughout~~ FIXED
 
 Padding, margins, font sizes, border radii, animation durations, and truncation limits scattered as literals across `tool_card.dart`, `message_input.dart`, `permission_dialog.dart`, `conversation_panel.dart` and others. Not using theme extensions or named constants.
 

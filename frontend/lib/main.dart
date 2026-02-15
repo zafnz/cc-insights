@@ -489,9 +489,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _internalToolsService = InternalToolsService();
 
     // Create or use injected EventHandler
-    _eventHandler =
-        widget.eventHandler ?? EventHandler(askAiService: _askAiService);
-    _eventHandler!.rateLimitState = _rateLimitState;
+    _eventHandler = widget.eventHandler ??
+        EventHandler(
+          askAiService: _askAiService,
+          rateLimitState: _rateLimitState,
+        );
 
     // Subscribe to backend-level rate limit events (independent of sessions).
     // This ensures rate limit data is captured even if no chat session is

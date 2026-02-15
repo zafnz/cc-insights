@@ -12,6 +12,7 @@ import '../models/output_entry.dart';
 import '../services/backend_service.dart';
 import '../services/chat_session_service.dart';
 import '../state/selection_state.dart';
+import '../config/design_tokens.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/message_input.dart';
 import '../widgets/output_entries.dart';
@@ -70,7 +71,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     super.initState();
     _scrollController.addListener(_onScroll);
     _permissionAnimController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: AnimDurations.standard,
       vsync: this,
     );
     _permissionAnimation = CurvedAnimation(
@@ -157,7 +158,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 100),
+        duration: AnimDurations.fast,
         curve: Curves.easeOut,
       );
     }

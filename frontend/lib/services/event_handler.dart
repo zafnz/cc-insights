@@ -90,14 +90,13 @@ class EventHandler {
   ///
   /// When set, [RateLimitUpdateEvent]s are forwarded to this state so the UI
   /// can display the latest rate limit data.
-  RateLimitState? rateLimitState;
+  final RateLimitState? rateLimitState;
 
   /// Ticket board state for ticket status transitions.
   ///
   /// When set, EventHandler will automatically transition ticket statuses
   /// based on chat events (e.g., needsInput on permission requests).
-  /// Set this during initialization when the ticket board is available.
-  TicketBoardState? ticketBoard;
+  TicketBoardState? _ticketBoard;
 
   /// Set of chat IDs that are currently having their title generated.
   ///
@@ -139,8 +138,21 @@ class EventHandler {
   ///
   /// If [ticketBoard] is provided, ticket statuses will be automatically
   /// transitioned based on chat events (e.g., needsInput on permission requests).
-  EventHandler({AskAiService? askAiService, this.ticketBoard})
-      : _askAiService = askAiService;
+  EventHandler({
+    AskAiService? askAiService,
+    this.rateLimitState,
+    TicketBoardState? ticketBoard,
+  })  : _askAiService = askAiService,
+       _ticketBoard = ticketBoard;
+
+  /// The current ticket board state, if any.
+  TicketBoardState? get ticketBoard => _ticketBoard;
+
+  /// Updates the ticket board state.
+  ///
+  /// Called when the active project changes and a new [TicketBoardState]
+  /// is created.
+  set ticketBoard(TicketBoardState? value) => _ticketBoard = value;
 
   /// Handle an incoming InsightsEvent.
   ///

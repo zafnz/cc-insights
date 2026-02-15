@@ -878,16 +878,17 @@ void main() {
         dependsOn: [ticket1.id],
       );
 
-      // Set up callback to capture the ready ticket
+      // Listen for the ready ticket via stream
       TicketData? readyTicket;
-      state.onTicketReady = (ticket) {
+      final sub = state.onTicketReady.listen((ticket) {
         readyTicket = ticket;
-      };
+      });
+      addTearDown(sub.cancel);
 
       // Complete the dependency
       state.markCompleted(ticket1.id);
 
-      // Verify callback was fired with the correct ticket
+      // Verify event was emitted with the correct ticket
       expect(readyTicket, isNotNull);
       expect(readyTicket!.id, ticket2.id);
       expect(readyTicket!.status, TicketStatus.ready);
@@ -902,17 +903,18 @@ void main() {
         status: TicketStatus.blocked,
       );
 
-      // Set up callback
-      var callbackFired = false;
-      state.onTicketReady = (ticket) {
-        callbackFired = true;
-      };
+      // Listen via stream
+      var eventFired = false;
+      final sub = state.onTicketReady.listen((ticket) {
+        eventFired = true;
+      });
+      addTearDown(sub.cancel);
 
       // Manually set status to ready
       state.setStatus(ticket.id, TicketStatus.ready);
 
-      // Verify callback was NOT fired
-      expect(callbackFired, isFalse);
+      // Verify event was NOT emitted
+      expect(eventFired, isFalse);
     });
 
     test('onTicketReady fires for multiple tickets becoming ready', () {
@@ -933,16 +935,17 @@ void main() {
         dependsOn: [ticket1.id],
       );
 
-      // Capture all ready tickets
+      // Capture all ready tickets via stream
       final readyTickets = <TicketData>[];
-      state.onTicketReady = (ticket) {
+      final sub = state.onTicketReady.listen((ticket) {
         readyTickets.add(ticket);
-      };
+      });
+      addTearDown(sub.cancel);
 
       // Complete the shared dependency
       state.markCompleted(ticket1.id);
 
-      // Verify callback fired for both tickets
+      // Verify events were emitted for both tickets
       expect(readyTickets.length, 2);
       expect(readyTickets.map((t) => t.id).toSet(), {ticket2.id, ticket3.id});
       expect(readyTickets.every((t) => t.status == TicketStatus.ready), isTrue);
@@ -960,17 +963,18 @@ void main() {
         dependsOn: [ticket1.id],
       );
 
-      // Set up callback
-      var callbackFired = false;
-      state.onTicketReady = (ticket) {
-        callbackFired = true;
-      };
+      // Listen via stream
+      var eventFired = false;
+      final sub = state.onTicketReady.listen((ticket) {
+        eventFired = true;
+      });
+      addTearDown(sub.cancel);
 
       // Complete the dependency
       state.markCompleted(ticket1.id);
 
-      // Verify callback was NOT fired (ticket was already ready)
-      expect(callbackFired, isFalse);
+      // Verify event was NOT emitted (ticket was already ready)
+      expect(eventFired, isFalse);
     });
 
     test('onTicketReady does not fire when dependencies not all complete', () {
@@ -986,24 +990,25 @@ void main() {
         dependsOn: [ticket1.id, ticket2.id],
       );
 
-      // Set up callback
-      var callbackFired = false;
-      state.onTicketReady = (ticket) {
-        callbackFired = true;
-      };
+      // Listen via stream
+      var eventFired = false;
+      final sub = state.onTicketReady.listen((ticket) {
+        eventFired = true;
+      });
+      addTearDown(sub.cancel);
 
       // Complete only ONE dependency
       state.markCompleted(ticket1.id);
 
-      // Verify callback was NOT fired (not all dependencies complete)
-      expect(callbackFired, isFalse);
+      // Verify event was NOT emitted (not all dependencies complete)
+      expect(eventFired, isFalse);
       expect(state.getTicket(ticket3.id)!.status, TicketStatus.blocked);
 
       // Now complete the other dependency
       state.markCompleted(ticket2.id);
 
-      // NOW callback should fire
-      expect(callbackFired, isTrue);
+      // NOW event should fire
+      expect(eventFired, isTrue);
       expect(state.getTicket(ticket3.id)!.status, TicketStatus.ready);
     });
   });

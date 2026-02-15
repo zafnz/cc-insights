@@ -329,14 +329,15 @@ void main() {
       expect(result.content, contains('1 were rejected'));
     });
 
-    test('clears onBulkReviewComplete after completing', () async {
+    test('stream-based review supports sequential tool calls', () async {
       final service = resources.track(InternalToolsService());
       final board = resources.track(TicketBoardState('test-project'));
       service.registerTicketTools(board);
 
       final tool = service.registry['create_ticket']!;
 
-      final resultFuture = tool.handler({
+      // First call
+      final resultFuture1 = tool.handler({
         'tickets': [
           {
             'title': 'Ticket A',
@@ -346,13 +347,24 @@ void main() {
         ],
       });
 
-      expect(board.onBulkReviewComplete, isNotNull);
+      board.approveBulk();
+      final result1 = await resultFuture1;
+      expect(result1.isError, isFalse);
+
+      // Second call should also work (no stale callback issues)
+      final resultFuture2 = tool.handler({
+        'tickets': [
+          {
+            'title': 'Ticket B',
+            'description': 'Desc B',
+            'kind': 'feature',
+          },
+        ],
+      });
 
       board.approveBulk();
-      await resultFuture;
-
-      // The callback should be cleared after completion
-      expect(board.onBulkReviewComplete, isNull);
+      final result2 = await resultFuture2;
+      expect(result2.isError, isFalse);
     });
 
     test('parses optional fields correctly', () async {

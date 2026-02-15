@@ -209,16 +209,14 @@ void main() {
       ticketBoard.toggleProposalChecked(created[2].id);
       expect(ticketBoard.proposalCheckedIds.length, 2);
 
-      // 4. Track callback
+      // 4. Track review events via stream
       int? callbackApproved;
       int? callbackRejected;
-      ticketBoard.onBulkReviewComplete = ({
-        required int approvedCount,
-        required int rejectedCount,
-      }) {
-        callbackApproved = approvedCount;
-        callbackRejected = rejectedCount;
-      };
+      final reviewSub = ticketBoard.onBulkReviewComplete.listen((result) {
+        callbackApproved = result.approvedCount;
+        callbackRejected = result.rejectedCount;
+      });
+      addTearDown(reviewSub.cancel);
 
       // 5. Approve
       ticketBoard.approveBulk();
@@ -267,12 +265,10 @@ void main() {
       );
 
       int? callbackRejected;
-      ticketBoard.onBulkReviewComplete = ({
-        required int approvedCount,
-        required int rejectedCount,
-      }) {
-        callbackRejected = rejectedCount;
-      };
+      final rejectSub = ticketBoard.onBulkReviewComplete.listen((result) {
+        callbackRejected = result.rejectedCount;
+      });
+      addTearDown(rejectSub.cancel);
 
       ticketBoard.rejectAll();
 
@@ -318,11 +314,12 @@ void main() {
       expect(ticketBoard.getTicket(b.id)!.status, TicketStatus.blocked);
       expect(ticketBoard.getTicket(a.id)!.status, TicketStatus.blocked);
 
-      // Track onTicketReady callback
+      // Track onTicketReady events via stream
       final readyTicketIds = <int>[];
-      ticketBoard.onTicketReady = (ticket) {
+      final readySub = ticketBoard.onTicketReady.listen((ticket) {
         readyTicketIds.add(ticket.id);
-      };
+      });
+      addTearDown(readySub.cancel);
 
       // Complete C -> B should auto-unblock to ready
       ticketBoard.markCompleted(c.id);

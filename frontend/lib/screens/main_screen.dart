@@ -63,6 +63,11 @@ class _MainScreenState extends State<MainScreen> {
   // Subscription for unhandled async error notifications
   StreamSubscription<LogEntry>? _unhandledErrorSub;
 
+  // Tracked listeners for safe disposal (avoids context.read in dispose)
+  BackendService? _backendService;
+  MenuActionService? _menuActionService;
+  TicketBoardState? _ticketBoardState;
+
   // Debounce timer for saving panel layout after divider drag
   Timer? _layoutSaveDebounce;
 
@@ -107,6 +112,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _setupBackendErrorListener() {
     final backend = context.read<BackendService>();
+    _backendService = backend;
     backend.addListener(_onBackendChanged);
 
     // Check if there's already an error
@@ -169,6 +175,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _setupTicketBoardListener() {
     final ticketBoard = context.read<TicketBoardState>();
+    _ticketBoardState = ticketBoard;
     ticketBoard.addListener(_onTicketBoardChanged);
   }
 
@@ -184,6 +191,7 @@ class _MainScreenState extends State<MainScreen> {
 
   void _setupMenuActionListener() {
     final menuService = context.read<MenuActionService>();
+    _menuActionService = menuService;
     menuService.addListener(_onMenuAction);
   }
 
@@ -497,15 +505,11 @@ class _MainScreenState extends State<MainScreen> {
     _resumeKeyboardInterception?.call();
     // Remove native menu handler
     _windowChannel.setMethodCallHandler(null);
-    // Remove listeners before dispose
+    // Remove listeners before dispose (using stored references, not context)
     _controller.removeListener(_onLayoutChanged);
-    try {
-      context.read<BackendService>().removeListener(_onBackendChanged);
-      context.read<MenuActionService>().removeListener(_onMenuAction);
-      context.read<TicketBoardState>().removeListener(_onTicketBoardChanged);
-    } catch (_) {
-      // Context may not be valid during dispose
-    }
+    _backendService?.removeListener(_onBackendChanged);
+    _menuActionService?.removeListener(_onMenuAction);
+    _ticketBoardState?.removeListener(_onTicketBoardChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -897,38 +901,9 @@ class _MainScreenState extends State<MainScreen> {
                       index: _selectedNavIndex,
                       children: [
                         // Index 0: Main screen with panel layout
-                        EditableMultiSplitView(
+                        _PanelLayout(
                           controller: _controller,
                           onDividerDragEnd: _debounceSaveLayout,
-                          config: EditableMultiSplitViewConfig(
-                            dividerThickness: 1.0,
-                            dividerHandleBuffer: 3.0,
-                            paneConfig: DraggablePaneConfig(
-                              dragFeedbackOpacity: 0.8,
-                              dragFeedbackScale: 0.95,
-                              useLongPressOnMobile: true,
-                              previewStyle: DropPreviewStyle(
-                                splitColor: colorScheme.primary.withValues(
-                                  alpha: 0.3,
-                                ),
-                                replaceColor: colorScheme.secondary.withValues(
-                                  alpha: 0.3,
-                                ),
-                                borderWidth: 2.0,
-                                animationDuration: const Duration(
-                                  milliseconds: 150,
-                                ),
-                              ),
-                              // Only the drag handle initiates dragging
-                              dragHandleBuilder: (context) => Icon(
-                                Icons.drag_indicator,
-                                size: 14,
-                                color: colorScheme.onSurfaceVariant.withValues(
-                                  alpha: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
                         ),
                         // Index 1: File Manager screen
                         const FileManagerScreen(),
@@ -949,6 +924,47 @@ class _MainScreenState extends State<MainScreen> {
             // Status bar (locked to bottom)
             StatusBar(showTicketStats: _selectedNavIndex == 4),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Panel layout with drag-and-drop split view configuration.
+class _PanelLayout extends StatelessWidget {
+  const _PanelLayout({
+    required this.controller,
+    required this.onDividerDragEnd,
+  });
+
+  final SplitLayoutController controller;
+  final VoidCallback onDividerDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return EditableMultiSplitView(
+      controller: controller,
+      onDividerDragEnd: onDividerDragEnd,
+      config: EditableMultiSplitViewConfig(
+        dividerThickness: 1.0,
+        dividerHandleBuffer: 3.0,
+        paneConfig: DraggablePaneConfig(
+          dragFeedbackOpacity: 0.8,
+          dragFeedbackScale: 0.95,
+          useLongPressOnMobile: true,
+          previewStyle: DropPreviewStyle(
+            splitColor: colorScheme.primary.withValues(alpha: 0.3),
+            replaceColor: colorScheme.secondary.withValues(alpha: 0.3),
+            borderWidth: 2.0,
+            animationDuration: const Duration(milliseconds: 150),
+          ),
+          dragHandleBuilder: (context) => Icon(
+            Icons.drag_indicator,
+            size: 14,
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
         ),
       ),
     );

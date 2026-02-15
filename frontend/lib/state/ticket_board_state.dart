@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
 import '../models/ticket.dart';
 import '../services/persistence_service.dart';
+
+/// Result emitted when a bulk review completes.
+typedef BulkReviewResult = ({int approvedCount, int rejectedCount});
 
 /// Mode for the ticket detail panel.
 enum TicketDetailMode {
@@ -101,19 +105,24 @@ class TicketBoardState extends ChangeNotifier {
   Map<String, List<TicketData>>? _cachedGroupedTickets;
   Map<String, ({int completed, int total})>? _cachedCategoryProgress;
 
-  /// Callback invoked when a bulk review is completed (approved or rejected).
-  ///
-  /// The callback receives the number of approved and rejected tickets.
-  /// This is used by [EventHandler] to send the tool result back to the agent.
-  void Function({required int approvedCount, required int rejectedCount})?
-      onBulkReviewComplete;
+  final StreamController<BulkReviewResult> _bulkReviewCompleteController =
+      StreamController<BulkReviewResult>.broadcast(sync: true);
 
-  /// Callback invoked when a ticket automatically becomes ready.
+  /// Stream that emits when a bulk review completes (approved or rejected).
+  ///
+  /// Used by [InternalToolsService] to send the tool result back to the agent.
+  Stream<BulkReviewResult> get onBulkReviewComplete =>
+      _bulkReviewCompleteController.stream;
+
+  final StreamController<TicketData> _ticketReadyController =
+      StreamController<TicketData>.broadcast(sync: true);
+
+  /// Stream that emits when a ticket automatically becomes ready.
   ///
   /// Fires when [_autoUnblockDependents] transitions a ticket from
   /// [TicketStatus.blocked] to [TicketStatus.ready]. Does not fire for
   /// manual status changes.
-  void Function(TicketData ticket)? onTicketReady;
+  Stream<TicketData> get onTicketReady => _ticketReadyController.stream;
 
   /// Creates a [TicketBoardState] for the given project.
   ///
@@ -121,6 +130,13 @@ class TicketBoardState extends ChangeNotifier {
   /// a default instance is created.
   TicketBoardState(this.projectId, {PersistenceService? persistence})
       : _persistence = persistence ?? PersistenceService();
+
+  @override
+  void dispose() {
+    _bulkReviewCompleteController.close();
+    _ticketReadyController.close();
+    super.dispose();
+  }
 
   /// Unmodifiable view of all tickets.
   List<TicketData> get tickets => List.unmodifiable(_tickets);
@@ -667,10 +683,10 @@ class TicketBoardState extends ChangeNotifier {
       if (allDepsComplete) {
         updateTicket(ticket.id, (t) => t.copyWith(status: TicketStatus.ready));
 
-        // Fire callback after the ticket has been updated
+        // Emit event after the ticket has been updated
         final readyTicket = getTicket(ticket.id);
         if (readyTicket != null) {
-          onTicketReady?.call(readyTicket);
+          _ticketReadyController.add(readyTicket);
         }
       }
     }
@@ -943,7 +959,7 @@ class TicketBoardState extends ChangeNotifier {
   /// Checked draft tickets are promoted to [TicketStatus.ready].
   /// Unchecked draft tickets are deleted. Returns to detail mode.
   ///
-  /// If [onBulkReviewComplete] is set, invokes it with the counts of
+  /// Emits a [BulkReviewResult] on [onBulkReviewComplete] with the counts of
   /// approved and rejected tickets.
   void approveBulk() {
     final approvedCount = _proposalCheckedIds.length;
@@ -990,11 +1006,11 @@ class TicketBoardState extends ChangeNotifier {
     notifyListeners();
     _autoSave();
 
-    // Notify the event handler that review is complete
-    onBulkReviewComplete?.call(
+    // Emit review completion event
+    _bulkReviewCompleteController.add((
       approvedCount: approvedCount,
       rejectedCount: rejectedCount,
-    );
+    ));
   }
 
   /// Rejects all proposed tickets by deleting them.
@@ -1002,7 +1018,7 @@ class TicketBoardState extends ChangeNotifier {
   /// All draft tickets from the current proposal are deleted.
   /// Returns to detail mode.
   ///
-  /// If [onBulkReviewComplete] is set, invokes it with all tickets
+  /// Emits a [BulkReviewResult] on [onBulkReviewComplete] with all tickets
   /// counted as rejected.
   void rejectAll() {
     final rejectedCount = _proposalTicketIds.length;
@@ -1032,11 +1048,11 @@ class TicketBoardState extends ChangeNotifier {
     notifyListeners();
     _autoSave();
 
-    // Notify the event handler that review is complete
-    onBulkReviewComplete?.call(
+    // Emit review completion event
+    _bulkReviewCompleteController.add((
       approvedCount: 0,
       rejectedCount: rejectedCount,
-    );
+    ));
   }
 
   // ===========================================================================

@@ -24,7 +24,7 @@ class InternalToolsService extends ChangeNotifier {
   ///
   /// The tool handler parses ticket proposals from the input,
   /// stages them in the board for user review, and waits for
-  /// the review to complete via a Completer.
+  /// the review to complete via the board's [TicketBoardState.onBulkReviewComplete] stream.
   void registerTicketTools(TicketBoardState board) {
     _registry.register(InternalToolDefinition(
       name: 'create_ticket',
@@ -169,32 +169,24 @@ class InternalToolsService extends ChangeNotifier {
       }
     }
 
-    // Use a Completer to wait for the user's review decision
-    final completer = Completer<InternalToolResult>();
-
-    // Wire up the callback
-    board.onBulkReviewComplete = ({
-      required int approvedCount,
-      required int rejectedCount,
-    }) {
-      final total = approvedCount + rejectedCount;
+    // Listen for the next bulk review completion event
+    final resultFuture = board.onBulkReviewComplete.first.then((result) {
+      final total = result.approvedCount + result.rejectedCount;
       final String resultText;
-      if (approvedCount == 0) {
+      if (result.approvedCount == 0) {
         resultText =
             'All $total ticket proposals were rejected by the user.';
-      } else if (rejectedCount == 0) {
+      } else if (result.rejectedCount == 0) {
         resultText =
-            'All $approvedCount ticket proposals were approved '
+            'All ${result.approvedCount} ticket proposals were approved '
             'and created.';
       } else {
         resultText =
-            '$approvedCount of $total ticket proposals were approved '
-            'and created. $rejectedCount were rejected.';
+            '${result.approvedCount} of $total ticket proposals were approved '
+            'and created. ${result.rejectedCount} were rejected.';
       }
-
-      completer.complete(InternalToolResult.text(resultText));
-      board.onBulkReviewComplete = null;
-    };
+      return InternalToolResult.text(resultText);
+    });
 
     // Stage proposals
     board.proposeBulk(
@@ -208,6 +200,6 @@ class InternalToolsService extends ChangeNotifier {
       name: 'InternalToolsService',
     );
 
-    return completer.future;
+    return resultFuture;
   }
 }
