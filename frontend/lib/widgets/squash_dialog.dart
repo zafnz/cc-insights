@@ -143,16 +143,15 @@ class _SquashDialogState extends State<SquashDialog>
     final selected = _getSelectedCommits();
     if (selected.length < 2) return;
 
-    // Pre-fill manual tab with concatenated messages (oldest first)
+    // Pre-fill manual tab with commit messages separated by comment headers
+    // (oldest first, matching git's squash message format).
     final reversed = selected.reversed.toList();
-    final concatenated = reversed.map((c) => c.message).join('\n\n');
-    final commented = reversed
-        .map((c) => '#   ${c.sha} ${c.message}')
-        .join('\n');
-
-    _manualMessageController.text = '$concatenated\n\n'
-        '# Squashing ${selected.length} commits:\n'
-        '$commented';
+    final parts = <String>[];
+    for (final c in reversed) {
+      parts.add('# ${c.sha}');
+      parts.add(c.message);
+    }
+    _manualMessageController.text = parts.join('\n\n');
 
     setState(() {
       _showStep2 = true;
@@ -176,17 +175,14 @@ class _SquashDialogState extends State<SquashDialog>
     // Build prompt with commit list (oldest to newest)
     final reversed = selected.reversed.toList();
     final commitList = reversed
-        .map((c) => '- ${c.sha} ${c.message}')
-        .join('\n');
+        .map((c) => '--- ${c.sha} ---\n${c.message}')
+        .join('\n\n');
 
-    final prompt = '''Generate a single git commit message that summarizes these commits being squashed together.
+    final prompt = '''Generate a single git commit message that summarizes these commits being squashed together. Match the style and tone of the original commit messages — if they use bullet points, use bullet points; if they are prose, use prose; if they are terse one-liners, be terse.
 
-Output the commit message between markers like this:
+Output ONLY the commit message between these markers:
 ===BEGIN===
-Short summary line (50-72 chars)
-
-- Bullet point explaining a change
-- Another bullet point
+<your commit message here>
 ===END===
 
 Commits being squashed (oldest to newest):
@@ -292,11 +288,17 @@ $commitList''';
       // Newest commit (first in list)
       final topSha = selected.first.sha;
 
+      final squashShas = selected
+          .where((c) => c.sha != keepSha)
+          .map((c) => c.sha)
+          .toList();
+
       final result = await widget.gitService.squashCommits(
         widget.worktreePath,
         keepSha: keepSha,
         topSha: topSha,
         message: message,
+        squashShas: squashShas,
       );
 
       if (!mounted) return;
@@ -344,7 +346,7 @@ $commitList''';
     final colorScheme = Theme.of(context).colorScheme;
     final size = MediaQuery.of(context).size;
 
-    const dialogWidth = 600.0;
+    const dialogWidth = 840.0;
     final dialogHeight = (size.height * 0.7).clamp(400.0, 700.0);
 
     return Dialog(
@@ -382,13 +384,13 @@ $commitList''';
       child: Row(
         children: [
           Icon(
-            Icons.compress,
+            _showStep2 ? Icons.edit_note : Icons.compress,
             color: colorScheme.onPrimaryContainer,
             size: 20,
           ),
           const SizedBox(width: 8),
           Text(
-            'Squash Commits',
+            _showStep2 ? 'Squash Commit Message' : 'Squash Commits',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -400,7 +402,7 @@ $commitList''';
             widget.branch,
             style: AppFonts.monoTextStyle(
               fontSize: 13,
-              color: colorScheme.onPrimaryContainer,
+              color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
             ),
           ),
         ],
@@ -411,13 +413,18 @@ $commitList''';
   Widget _buildInstructionBar(ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
       child: Row(
         children: [
           Icon(
             Icons.info_outline,
             size: 16,
-            color: colorScheme.onSurfaceVariant,
+            color: colorScheme.primary,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -485,22 +492,40 @@ $commitList''';
         // Summary bar
         if (hasSelection)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainer,
+              border: Border(
+                top: BorderSide(color: colorScheme.outlineVariant),
+              ),
+            ),
             child: Row(
               children: [
                 Icon(
                   Icons.compress,
                   size: 16,
-                  color: colorScheme.onSurfaceVariant,
+                  color: colorScheme.primary.withValues(alpha: 0.7),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${selectedIndices.length} commits selected — will be squashed into 1',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
+                const SizedBox(width: 6),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${selectedIndices.length} commits',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' selected \u2014 will be squashed into 1 commit at position of oldest',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -516,65 +541,61 @@ $commitList''';
     List<int> selectedIndices,
     ColorScheme colorScheme,
   ) {
-    final isSelected = selectedIndices.contains(index);
-    final isRangeStart = _selectedStartIndex == index || _selectedEndIndex == index;
-    final isRangeEnd = _selectedEndIndex == index || _selectedStartIndex == index;
+    final isInRange = selectedIndices.contains(index);
+    final rangeMin = selectedIndices.isEmpty ? -1 : selectedIndices.first;
+    final rangeMax = selectedIndices.isEmpty ? -1 : selectedIndices.last;
+    final isRangeTop = isInRange && index == rangeMin;
+    final isRangeBottom = isInRange && index == rangeMax;
+    final isHandle = isRangeTop || isRangeBottom;
 
     return InkWell(
       onTap: () => _onCommitTapped(index),
       child: Container(
-        color: isSelected
-            ? colorScheme.primary.withValues(alpha: 0.06)
-            : null,
+        constraints: const BoxConstraints(minHeight: 38),
+        decoration: BoxDecoration(
+          color: isInRange
+              ? colorScheme.primary.withValues(alpha: 0.06)
+              : null,
+          border: Border(
+            top: isRangeTop
+                ? BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.35),
+                    width: 2,
+                  )
+                : BorderSide.none,
+            bottom: isRangeBottom
+                ? BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.35),
+                    width: 2,
+                  )
+                : BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                  ),
+          ),
+        ),
         child: Row(
           children: [
             // Left gutter with range indicator
-            Container(
+            SizedBox(
               width: 36,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: isSelected
-                  ? Column(
-                      children: [
-                        if (isRangeStart)
-                          Container(
-                            width: 12,
-                            height: 12,
+              child: Center(
+                child: isHandle
+                    ? _buildRangeHandle(colorScheme)
+                    : isInRange
+                        ? Container(
+                            width: 3,
+                            height: 38,
                             decoration: BoxDecoration(
                               color: colorScheme.primary,
-                              shape: BoxShape.circle,
+                              borderRadius: BorderRadius.circular(1.5),
                             ),
-                          ),
-                        if (!isRangeStart && !isRangeEnd)
-                          Expanded(
-                            child: Container(
-                              width: 3,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        if (!isRangeStart)
-                          Expanded(
-                            child: Container(
-                              width: 3,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        if (isRangeEnd && selectedIndices.length > 1)
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    )
-                  : null,
+                          )
+                        : null,
+              ),
             ),
             // SHA
-            Container(
+            SizedBox(
               width: 60,
-              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
                 commit.sha,
                 style: AppFonts.monoTextStyle(
@@ -583,24 +604,46 @@ $commitList''';
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             // Commit message
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Text(
-                  commit.message,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurface,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+              child: Text(
+                commit.message,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.onSurface,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
             const SizedBox(width: 12),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRangeHandle(ColorScheme colorScheme) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: colorScheme.primary,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: colorScheme.surface,
+          width: 2,
+        ),
+      ),
+      child: Center(
+        child: Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );
@@ -612,7 +655,12 @@ $commitList''';
       children: [
         // Tab bar
         Container(
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainer,
+            border: Border(
+              bottom: BorderSide(color: colorScheme.outlineVariant),
+            ),
+          ),
           child: TabBar(
             controller: _tabController,
             tabs: const [
@@ -659,11 +707,18 @@ $commitList''';
   Widget _buildAutoGeneratedTab(ColorScheme colorScheme) {
     if (_isGeneratingMessage) {
       return Center(
-        child: Column(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
             Text(
               'Generating commit message from ${_getSelectedCommits().length} squashed commits...',
               style: TextStyle(
@@ -694,12 +749,33 @@ $commitList''';
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // AI badge
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                size: 14,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'AI GENERATED',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.primary,
+                  letterSpacing: 0.06 * 10,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Expanded(
             child: SingleChildScrollView(
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  color: colorScheme.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: colorScheme.outlineVariant,
@@ -718,9 +794,8 @@ $commitList''';
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton.icon(
                 onPressed: _isGeneratingMessage || _isSquashing
@@ -745,34 +820,48 @@ $commitList''';
   Widget _buildManualTab(ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: _manualMessageController,
-        maxLines: null,
-        expands: true,
-        autofocus: true,
-        textAlignVertical: TextAlignVertical.top,
-        style: AppFonts.monoTextStyle(
-          fontSize: 13,
-          color: colorScheme.onSurface,
-          height: 1.5,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
-        decoration: InputDecoration(
-          hintText: 'Enter commit message...',
-          hintStyle: AppFonts.monoTextStyle(
-            fontSize: 13,
-            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: colorScheme.outline),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: colorScheme.primary, width: 2),
-          ),
-          contentPadding: const EdgeInsets.all(12),
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: 800.0,
+                height: constraints.maxHeight,
+                child: TextField(
+                  controller: _manualMessageController,
+                  maxLines: null,
+                  expands: true,
+                  autofocus: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: AppFonts.monoTextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurface,
+                    height: 1.5,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter commit message...',
+                    hintStyle: AppFonts.monoTextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                    filled: true,
+                    fillColor: Colors.transparent,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                  enabled: !_isSquashing,
+                ),
+              ),
+            );
+          },
         ),
-        enabled: !_isSquashing,
       ),
     );
   }
@@ -825,7 +914,7 @@ $commitList''';
     final selectedCount = _getSelectedIndices().length;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         border: Border(
@@ -835,9 +924,9 @@ $commitList''';
       child: Row(
         children: [
           Text(
-            'base: ${widget.baseRef} · ${_commits.length} commits total',
+            'base: ${widget.baseRef} \u00b7 ${_commits.length} commits total',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               color: colorScheme.onSurfaceVariant,
             ),
           ),
@@ -846,10 +935,11 @@ $commitList''';
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
           ),
-          const SizedBox(width: 12),
-          FilledButton(
+          const SizedBox(width: 8),
+          FilledButton.icon(
             onPressed: canSquash ? _goToStep2 : null,
-            child: Text('Squash $selectedCount commits'),
+            icon: const Icon(Icons.compress, size: 16),
+            label: Text('Squash $selectedCount commits'),
           ),
         ],
       ),
@@ -861,8 +951,13 @@ $commitList''';
         ((_tabController.index == 0 && _generatedMessage != null) ||
             (_tabController.index == 1 && _manualMessageController.text.trim().isNotEmpty));
 
+    final selected = _getSelectedCommits();
+    final hintText = selected.length >= 2
+        ? 'Squashing commits ${selected.first.sha}..${selected.last.sha}'
+        : '';
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         border: Border(
@@ -870,16 +965,24 @@ $commitList''';
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          if (hintText.isNotEmpty)
+            Text(
+              hintText,
+              style: TextStyle(
+                fontSize: 11,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          const Spacer(),
           TextButton(
             onPressed: _isSquashing ? null : _goBackToStep1,
             child: const Text('Back'),
           ),
-          const SizedBox(width: 12),
-          FilledButton(
+          const SizedBox(width: 8),
+          FilledButton.icon(
             onPressed: canCommit ? _squash : null,
-            child: _isSquashing
+            icon: _isSquashing
                 ? SizedBox(
                     width: 16,
                     height: 16,
@@ -888,7 +991,8 @@ $commitList''';
                       color: colorScheme.onPrimary,
                     ),
                   )
-                : const Text('Commit'),
+                : const Icon(Icons.check, size: 16),
+            label: const Text('Commit'),
           ),
         ],
       ),

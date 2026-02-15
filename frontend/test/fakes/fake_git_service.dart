@@ -617,7 +617,7 @@ class FakeGitService implements GitService {
   final Map<String, MergeResult> squashResults = {};
 
   /// Tracks calls to [squashCommits].
-  final List<({String path, String keepSha, String topSha, String message})>
+  final List<({String path, String keepSha, String topSha, String message, List<String> squashShas})>
       squashCalls = [];
 
   /// If set, [squashCommits] will throw this exception.
@@ -629,12 +629,14 @@ class FakeGitService implements GitService {
     required String keepSha,
     required String topSha,
     required String message,
+    required List<String> squashShas,
   }) async {
     squashCalls.add((
       path: path,
       keepSha: keepSha,
       topSha: topSha,
       message: message,
+      squashShas: squashShas,
     ));
     await _maybeDelay();
     _maybeThrow();

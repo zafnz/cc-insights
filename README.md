@@ -391,6 +391,6 @@ Available models:
 
 ## License
 
-GNU GPL v3 
+GNU GPL v3
 Copyright Nick Clifford
 nick@nickclifford.com

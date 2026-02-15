@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'log_service.dart';
+import 'rebase_scripts.dart';
 
 /// Result of a git status check for a worktree.
 class GitStatus {
@@ -343,8 +344,9 @@ abstract class GitService {
 
   /// Gets commits on current branch that aren't on [targetBranch].
   ///
-  /// Uses `git log targetBranch..HEAD --oneline` to list commits.
-  /// Returns a list of (sha, message) pairs.
+  /// Uses `git log targetBranch..HEAD` with a custom format to list commits.
+  /// Returns a list of (sha, message) pairs where message includes the full
+  /// commit body (subject + body), not just the first line.
   Future<List<({String sha, String message})>> getCommitsAhead(
     String path,
     String targetBranch,
@@ -386,16 +388,19 @@ abstract class GitService {
     required String oldBase,
   });
 
-  /// Squashes a contiguous range of commits into a single commit.
+  /// Squashes selected commits into a single commit.
   ///
   /// [keepSha] is the SHA of the oldest commit in the range — it becomes
-  /// the "pick" target. All commits between [keepSha] and [topSha]
-  /// (inclusive of [topSha], exclusive of [keepSha]) are marked as
-  /// "squash". The resulting single commit uses [message] as its commit
-  /// message.
+  /// the "pick" target. [squashShas] lists the SHAs that should be
+  /// squashed into [keepSha]. Any commits between [keepSha] and [topSha]
+  /// that are NOT in [squashShas] are left as "pick" (preserved).
   ///
-  /// Under the hood this drives `git rebase -i` with a
-  /// `GIT_SEQUENCE_EDITOR` script that rewrites the todo list.
+  /// [topSha] is the SHA of the newest commit in the selected range and
+  /// is used to determine the rebase boundary.
+  ///
+  /// Under the hood this drives `git rebase -i` with a Python
+  /// `GIT_SEQUENCE_EDITOR` that selectively rewrites the todo list,
+  /// and a Python `GIT_EDITOR` that sets the final commit message.
   ///
   /// Returns a [MergeResult] indicating success or conflicts.
   Future<MergeResult> squashCommits(
@@ -403,6 +408,7 @@ abstract class GitService {
     required String keepSha,
     required String topSha,
     required String message,
+    required List<String> squashShas,
   });
 
   /// Pulls from the remote (git pull).
@@ -953,20 +959,22 @@ class RealGitService implements GitService {
     String targetBranch,
   ) async {
     try {
+      // Use a record separator (ASCII 0x1E) to split commits, and a unit
+      // separator (0x1F) between sha and full message (%B = subject + body).
       final output = await _runGit(
-        ['log', '$targetBranch..HEAD', '--oneline'],
+        ['log', '$targetBranch..HEAD', '--format=%h\x1F%B\x1E'],
         workingDirectory: path,
       );
 
       final commits = <({String sha, String message})>[];
-      for (final line in output.split('\n')) {
-        if (line.isEmpty) continue;
-        // Format: "sha message"
-        final spaceIndex = line.indexOf(' ');
-        if (spaceIndex > 0) {
+      for (final record in output.split('\x1E')) {
+        final trimmed = record.trim();
+        if (trimmed.isEmpty) continue;
+        final sepIndex = trimmed.indexOf('\x1F');
+        if (sepIndex > 0) {
           commits.add((
-            sha: line.substring(0, spaceIndex),
-            message: line.substring(spaceIndex + 1),
+            sha: trimmed.substring(0, sepIndex),
+            message: trimmed.substring(sepIndex + 1).trim(),
           ));
         }
       }
@@ -1151,25 +1159,20 @@ class RealGitService implements GitService {
     required String keepSha,
     required String topSha,
     required String message,
+    required List<String> squashShas,
   }) async {
     LogService.instance.info('Git', 'squash', meta: {
       'cwd': path,
       'keep': keepSha,
       'top': topSha,
+      'squashShas': squashShas.join(' '),
     });
 
-    // Write the commit message to a temp file so git can use it.
-    final tmpDir = await Directory.systemTemp.createTemp('cci_squash_');
-    final msgFile = File('${tmpDir.path}/SQUASH_MSG');
-    await msgFile.writeAsString(message);
-
-    // Build a sed script that:
-    //  1. Keeps the first "pick" line (the oldest commit in the range)
-    //  2. Changes all subsequent "pick" lines to "squash"
-    // GIT_SEQUENCE_EDITOR is invoked with the todo file path as $1.
-    final editorScript = "sed -i '' '2,\$s/^pick /squash /' \"\$1\"";
-
     try {
+      // Ensure helper scripts exist on disk.
+      final seqEditor = await RebaseScripts.ensureSequenceEditor();
+      final msgEditor = await RebaseScripts.ensureMessageEditor();
+
       // The parent of keepSha is the rebase base.
       final result = await Process.run(
         'git',
@@ -1177,8 +1180,11 @@ class RealGitService implements GitService {
         workingDirectory: path,
         environment: {
           ...Platform.environment,
-          'GIT_SEQUENCE_EDITOR': editorScript,
-          'GIT_EDITOR': 'true', // Accept the default squash message
+          'GIT_SEQUENCE_EDITOR': seqEditor,
+          'FIRST_PICK': keepSha,
+          'SQUASH_SHAS': squashShas.join(' '),
+          'GIT_EDITOR': msgEditor,
+          'FINAL_MSG': message,
         },
       ).timeout(_mergeTimeout);
 
@@ -1192,36 +1198,15 @@ class RealGitService implements GitService {
             ['rebase', '--abort'],
             workingDirectory: path,
           );
-          tmpDir.deleteSync(recursive: true);
           return const MergeResult(
             hasConflicts: true,
             operation: MergeOperationType.rebase,
           );
         }
-        tmpDir.deleteSync(recursive: true);
         return MergeResult(
           hasConflicts: false,
           operation: MergeOperationType.rebase,
           error: stderr.isNotEmpty ? stderr.trim() : 'Squash failed',
-        );
-      }
-
-      // The rebase succeeded with the default squashed message.
-      // Now amend the commit to use our desired message.
-      final amendResult = await Process.run(
-        'git',
-        ['commit', '--amend', '-F', msgFile.path],
-        workingDirectory: path,
-      ).timeout(timeout);
-
-      tmpDir.deleteSync(recursive: true);
-
-      if (amendResult.exitCode != 0) {
-        return MergeResult(
-          hasConflicts: false,
-          operation: MergeOperationType.rebase,
-          error: 'Squash succeeded but amend failed: '
-              '${(amendResult.stderr as String).trim()}',
         );
       }
 
@@ -1230,14 +1215,12 @@ class RealGitService implements GitService {
         operation: MergeOperationType.rebase,
       );
     } on TimeoutException {
-      tmpDir.deleteSync(recursive: true);
       return MergeResult(
         hasConflicts: false,
         operation: MergeOperationType.rebase,
         error: 'Squash timed out after $_mergeTimeout',
       );
     } on ProcessException catch (e) {
-      tmpDir.deleteSync(recursive: true);
       return MergeResult(
         hasConflicts: false,
         operation: MergeOperationType.rebase,

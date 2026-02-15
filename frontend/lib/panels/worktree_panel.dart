@@ -1455,21 +1455,24 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     required bool hasUpstream,
   }) {
     final items = <Widget>[];
+    final enabledColor = colorScheme.onSurface;
+    final disabledColor = colorScheme.onSurface.withValues(alpha: 0.38);
 
     // Stage & Commit - disabled when no uncommitted changes
+    final stageEnabled = hasUncommitted;
     items.add(
       MenuItemButton(
         leadingIcon: Icon(
           Icons.commit,
           size: 16,
-          color: colorScheme.onSurface,
+          color: stageEnabled ? enabledColor : disabledColor,
         ),
-        onPressed: hasUncommitted
+        onPressed: stageEnabled
             ? () => _handleStageCommit(context)
             : null,
         child: Text(
           'Stage & Commit...',
-          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          style: TextStyle(color: stageEnabled ? enabledColor : disabledColor, fontSize: 13),
         ),
       ),
     );
@@ -1484,14 +1487,14 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           leadingIcon: Icon(
             Icons.merge,
             size: 16,
-            color: colorScheme.onSurface,
+            color: behindBase ? enabledColor : disabledColor,
           ),
           onPressed: behindBase
               ? () => _handleRebase(context)
               : null,
           child: Text(
             'Rebase',
-            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            style: TextStyle(color: behindBase ? enabledColor : disabledColor, fontSize: 13),
           ),
         ),
       );
@@ -1502,32 +1505,33 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           leadingIcon: Icon(
             Icons.call_merge,
             size: 16,
-            color: colorScheme.onSurface,
+            color: behindBase ? enabledColor : disabledColor,
           ),
           onPressed: behindBase
               ? () => _handleMergeFromBase(context)
               : null,
           child: Text(
             'Merge from base',
-            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            style: TextStyle(color: behindBase ? enabledColor : disabledColor, fontSize: 13),
           ),
         ),
       );
 
       // Squash commits - disabled when fewer than 2 commits ahead of base
+      final squashEnabled = aheadOfBase && worktree.data.commitsAheadOfMain >= 2;
       items.add(
         MenuItemButton(
           leadingIcon: Icon(
             Icons.compress,
             size: 16,
-            color: colorScheme.onSurface,
+            color: squashEnabled ? enabledColor : disabledColor,
           ),
-          onPressed: aheadOfBase && worktree.data.commitsAheadOfMain >= 2
+          onPressed: squashEnabled
               ? () => _handleSquash(context)
               : null,
           child: Text(
             'Squash commits',
-            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            style: TextStyle(color: squashEnabled ? enabledColor : disabledColor, fontSize: 13),
           ),
         ),
       );
@@ -1541,12 +1545,12 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         leadingIcon: Icon(
           Icons.settings_backup_restore,
           size: 16,
-          color: colorScheme.onSurface,
+          color: enabledColor,
         ),
         onPressed: () => _handleChangeBase(context),
         child: Text(
           'Change base...',
-          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          style: TextStyle(color: enabledColor, fontSize: 13),
         ),
       ),
     );
@@ -1557,14 +1561,14 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         leadingIcon: Icon(
           Icons.merge_type,
           size: 16,
-          color: colorScheme.onSurface,
+          color: aheadOfBase ? enabledColor : disabledColor,
         ),
         onPressed: aheadOfBase
             ? () => _handleMergeIntoBase(context)
             : null,
         child: Text(
           'Merge into base',
-          style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+          style: TextStyle(color: aheadOfBase ? enabledColor : disabledColor, fontSize: 13),
         ),
       ),
     );
@@ -1578,54 +1582,60 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           leadingIcon: Icon(
             Icons.cloud_download,
             size: 16,
-            color: colorScheme.onSurface,
+            color: enabledColor,
           ),
           menuChildren: [
             MenuItemButton(
               onPressed: worktree.data.commitsAhead == 0
                   ? () => _handlePullFfOnly(context)
                   : null,
-              child: Text(
-                'FF Only',
-                style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+              child: Builder(
+                builder: (context) {
+                  final ffEnabled = worktree.data.commitsAhead == 0;
+                  return Text(
+                    'FF Only',
+                    style: TextStyle(color: ffEnabled ? enabledColor : disabledColor, fontSize: 13),
+                  );
+                },
               ),
             ),
             MenuItemButton(
               onPressed: () => _handlePullMerge(context),
               child: Text(
                 'with Merge',
-                style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+                style: TextStyle(color: enabledColor, fontSize: 13),
               ),
             ),
             MenuItemButton(
               onPressed: () => _handlePullRebase(context),
               child: Text(
                 'with Rebase',
-                style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+                style: TextStyle(color: enabledColor, fontSize: 13),
               ),
             ),
           ],
           child: Text(
             'Pull',
-            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            style: TextStyle(color: enabledColor, fontSize: 13),
           ),
         ),
       );
 
       // Push - disabled when nothing to push (ahead == 0)
+      final pushEnabled = worktree.data.commitsAhead > 0;
       items.add(
         MenuItemButton(
           leadingIcon: Icon(
             Icons.cloud_upload,
             size: 16,
-            color: colorScheme.onSurface,
+            color: pushEnabled ? enabledColor : disabledColor,
           ),
-          onPressed: worktree.data.commitsAhead > 0
+          onPressed: pushEnabled
               ? () => _handlePush(context)
               : null,
           child: Text(
             'Push',
-            style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            style: TextStyle(color: pushEnabled ? enabledColor : disabledColor, fontSize: 13),
           ),
         ),
       );

@@ -290,6 +290,7 @@ class TestGitService implements GitService {
     required String keepSha,
     required String topSha,
     required String message,
+    required List<String> squashShas,
   }) async {
     if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
     return const MergeResult(
