@@ -138,10 +138,9 @@ class AcpProcess {
     Duration timeout = const Duration(seconds: 30),
   }) async {
     final args = config.arguments;
-    stdout.writeln(
+    SdkLogger.instance.info(
       '[ACP SPAWN] ${config.resolvedExecutablePath} ${args.join(' ')}',
     );
-    stdout.flush();
 
     final process = await Process.start(
       config.resolvedExecutablePath,
@@ -211,8 +210,7 @@ class AcpProcess {
       await stderrBufferSub.cancel();
     }
 
-    stdout.writeln('[ACP READY]');
-    stdout.flush();
+    SdkLogger.instance.info('[ACP READY]');
 
     return acp;
   }

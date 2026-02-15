@@ -61,10 +61,9 @@ class CodexProcess {
     String clientVersion = '0.1.0',
     Duration timeout = const Duration(seconds: 30),
   }) async {
-    stdout.writeln(
+    SdkLogger.instance.info(
       '[CODEX SPAWN] ${config.resolvedExecutablePath} app-server',
     );
-    stdout.flush();
     final process = await Process.start(
       config.resolvedExecutablePath,
       ['app-server'],
@@ -89,8 +88,7 @@ class CodexProcess {
       timeout: timeout,
     );
 
-    stdout.writeln('[CODEX READY]');
-    stdout.flush();
+    SdkLogger.instance.info('[CODEX READY]');
 
     return codex;
   }

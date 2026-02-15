@@ -56,8 +56,49 @@ import 'widgets/dialog_observer.dart';
 /// Set this to true before running integration tests that need mock data.
 bool useMockData = false;
 
+/// Whether the LogService pipeline is fully initialized.
+///
+/// Until this is `true`, error handlers use [_originalDebugPrint] directly
+/// (safe, synchronous) and attempt to show a native macOS alert so errors
+/// during early boot are never silently swallowed.
+bool _loggingReady = false;
+
 /// The original debugPrintSynchronously function, saved before we override it.
 const DebugPrintCallback _originalDebugPrint = debugPrintSynchronously;
+
+/// Reports an error that occurs before the logging pipeline is ready.
+///
+/// Prints to stdout via [_originalDebugPrint] (synchronous, safe even before
+/// Flutter's debugPrint override is in place) and fires off a native macOS
+/// alert dialog so the user sees something even if the console is hidden.
+void _earlyBootError(Object error, StackTrace? stack) {
+  _originalDebugPrint('CC Insights early-boot error: $error');
+  if (stack != null) {
+    _originalDebugPrint('$stack');
+  }
+  _showNativeErrorAlert('$error');
+}
+
+/// Attempts to show a native macOS alert dialog via osascript.
+///
+/// Fire-and-forget — silently no-ops on failure or non-macOS platforms.
+void _showNativeErrorAlert(String message) {
+  if (!Platform.isMacOS) return;
+  try {
+    // Escape double quotes for AppleScript string
+    final escaped = message.replaceAll('"', '\\"');
+    // Truncate to avoid overly long dialogs
+    final truncated =
+        escaped.length > 500 ? '${escaped.substring(0, 500)}...' : escaped;
+    Process.start('osascript', [
+      '-e',
+      'display dialog "CC Insights encountered an error during startup:\\n\\n$truncated" '
+          'with title "CC Insights Error" buttons {"OK"} default button "OK"',
+    ]).catchError((_) {}); // fire-and-forget, ignore errors
+  } catch (_) {
+    // Silently ignore — this is best-effort only
+  }
+}
 
 /// Custom debugPrint that logs to LogService while also printing to stdout.
 ///
@@ -91,26 +132,40 @@ void main(List<String> args) async {
   // them through LogService so they appear in the log viewer and can trigger
   // a UI snackbar.
   PlatformDispatcher.instance.onError = (error, stack) {
-    LogService.instance.logUnhandledException(error, stack);
+    if (!_loggingReady) {
+      _earlyBootError(error, stack);
+    } else {
+      LogService.instance.logUnhandledException(error, stack);
+    }
     return true; // handled — don't terminate the app
+  };
+
+  // Catch synchronous framework errors (layout, build, rendering) that
+  // FlutterError.onError handles. Before logging is ready, print directly;
+  // after, route through LogService.
+  FlutterError.onError = (details) {
+    if (!_loggingReady) {
+      _earlyBootError(details.exception, details.stack);
+    } else {
+      FlutterError.presentError(details);
+      LogService.instance.logUnhandledException(
+        details.exception,
+        details.stack,
+      );
+    }
   };
 
   // Initialize runtime config from command line arguments.
   // First positional arg is the working directory.
   // Pass setting definitions so CLI overrides can be parsed and type-coerced.
-  debugPrint('main() args: $args');
   RuntimeConfig.initialize(
     args,
     settingDefinitions: SettingsService.allDefinitions,
-  );
-  debugPrint(
-    'RuntimeConfig.useMockData: ${RuntimeConfig.instance.useMockData}',
   );
 
   // Set the config directory if specified via --config-dir
   final configDir = RuntimeConfig.instance.configDir;
   if (configDir != null) {
-    debugPrint('Using config directory: $configDir');
     PersistenceService.setBaseDir(configDir);
   }
 
@@ -408,8 +463,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // In mock/test mode, mark all agents as available without checking CLI
         _cliAvailability!.markAllAvailable(RuntimeConfig.instance.agents);
       } else {
-        final config = RuntimeConfig.instance;
-        await _cliAvailability!.checkAgents(config.agents);
+        await _cliAvailability!.checkAgents(RuntimeConfig.instance.agents);
 
         if (_cliAvailability!.claudeAvailable) {
           _backend?.discoverModelsForAllAgents();
@@ -563,6 +617,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     }
 
     LogService.instance.info('App', 'CC Insights starting up');
+
+    // Mark logging as ready — error handlers will now use LogService
+    // instead of raw stdout/native alerts.
+    _loggingReady = true;
   }
 
   /// Validates the directory and determines if we need to show a prompt.
