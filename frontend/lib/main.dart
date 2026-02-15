@@ -105,7 +105,6 @@ void _showNativeErrorAlert(String message) {
 /// This replaces Flutter's default debugPrint to capture debug output in the
 /// centralized logging system while preserving the standard console output.
 void _loggingDebugPrint(String? message, {int? wrapWidth}) {
-  // Always forward to stdout (original behavior)
   _originalDebugPrint(message, wrapWidth: wrapWidth);
 
   // Also log to LogService if message is not null/empty

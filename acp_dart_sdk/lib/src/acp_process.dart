@@ -141,12 +141,39 @@ class AcpProcess {
     SdkLogger.instance.info(
       '[ACP SPAWN] ${config.resolvedExecutablePath} ${args.join(' ')}',
     );
-
-    final process = await Process.start(
-      config.resolvedExecutablePath,
-      args,
-      workingDirectory: config.workingDirectory,
-      mode: ProcessStartMode.normal,
+    SdkLogger.instance.info(
+      '[ACP SPAWN] starting process',
+      data: {
+        'executable': config.resolvedExecutablePath,
+        'args': args,
+        'cwd': config.workingDirectory,
+      },
+    );
+    late final Process process;
+    try {
+      process = await Process.start(
+        config.resolvedExecutablePath,
+        args,
+        workingDirectory: config.workingDirectory,
+        mode: ProcessStartMode.normal,
+      );
+    } catch (e, stack) {
+      SdkLogger.instance.error(
+        '[ACP SPAWN] process start failed: $e',
+        data: {
+          'executable': config.resolvedExecutablePath,
+          'args': args,
+          'cwd': config.workingDirectory,
+          'stack': stack.toString(),
+        },
+      );
+      rethrow;
+    }
+    SdkLogger.instance.info(
+      '[ACP SPAWN] process started',
+      data: {
+        'pid': process.pid,
+      },
     );
 
     final stdoutLines = process.stdout

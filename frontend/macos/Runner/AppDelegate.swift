@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import Darwin
 
 @main
 class AppDelegate: FlutterAppDelegate {
@@ -14,6 +15,9 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
+    if ProcessInfo.processInfo.environment["CCI_DISABLE_SIGPIPE_IGNORE"] != "1" {
+      signal(SIGPIPE, SIG_IGN)
+    }
     let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
     channel = FlutterMethodChannel(
       name: "com.nickclifford.ccinsights/window",

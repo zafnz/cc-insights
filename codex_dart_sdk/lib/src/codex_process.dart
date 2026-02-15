@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:agent_sdk_core/agent_sdk_core.dart';
-
 import 'json_rpc.dart';
 
 /// Configuration for spawning Codex app-server.
@@ -64,11 +62,39 @@ class CodexProcess {
     SdkLogger.instance.info(
       '[CODEX SPAWN] ${config.resolvedExecutablePath} app-server',
     );
-    final process = await Process.start(
-      config.resolvedExecutablePath,
-      ['app-server'],
-      workingDirectory: config.workingDirectory,
-      mode: ProcessStartMode.normal,
+    SdkLogger.instance.info(
+      '[CODEX SPAWN] starting process',
+      data: {
+        'executable': config.resolvedExecutablePath,
+        'args': ['app-server'],
+        'cwd': config.workingDirectory,
+      },
+    );
+    late final Process process;
+    try {
+      process = await Process.start(
+        config.resolvedExecutablePath,
+        ['app-server'],
+        workingDirectory: config.workingDirectory,
+        mode: ProcessStartMode.normal,
+      );
+    } catch (e, stack) {
+      SdkLogger.instance.error(
+        '[CODEX SPAWN] process start failed: $e',
+        data: {
+          'executable': config.resolvedExecutablePath,
+          'args': ['app-server'],
+          'cwd': config.workingDirectory,
+          'stack': stack.toString(),
+        },
+      );
+      rethrow;
+    }
+    SdkLogger.instance.info(
+      '[CODEX SPAWN] process started',
+      data: {
+        'pid': process.pid,
+      },
     );
 
     final lines = process.stdout

@@ -303,6 +303,7 @@ class BackendService extends ChangeNotifier {
       unawaited(_refreshModelsForAgent(agentId, type, backend));
     } catch (e) {
       _t('BackendService', 'ERROR starting backend for agent $agentId: $e');
+      debugPrint('Failed to start agent $agentId: $e');
       _agentErrors[agentId] = e.toString();
       _agentErrorIsAgent[agentId] = false;
       _agentBackends.remove(agentId);
