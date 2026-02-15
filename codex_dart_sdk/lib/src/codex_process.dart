@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart';
+
 import 'json_rpc.dart';
 
 /// Configuration for spawning Codex app-server.
