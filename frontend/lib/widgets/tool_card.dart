@@ -72,9 +72,18 @@ Color _getToolColor(ToolKind toolKind) {
 String _getToolSummary(
   ToolKind toolKind,
   Map<String, dynamic> input,
-  String? projectDir,
-) {
+  String? projectDir, {
+  String? toolName,
+}) {
   final config = RuntimeConfig.instance;
+
+  // FileChange with multiple files: show count
+  if (toolName == 'FileChange') {
+    final paths = input['paths'] as List<dynamic>?;
+    if (paths != null && paths.length > 1) {
+      return '${paths.length} files changed';
+    }
+  }
 
   return switch (toolKind) {
     ToolKind.execute => config.bashToolSummary == BashToolSummary.description
@@ -321,7 +330,10 @@ class _ToolSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final summary = _getToolSummary(entry.toolKind, entry.toolInput, projectDir);
+    final summary = _getToolSummary(
+      entry.toolKind, entry.toolInput, projectDir,
+      toolName: entry.toolName,
+    );
     final isError = entry.isError;
     final monoFont = RuntimeConfig.instance.monoFontFamily;
 
@@ -400,6 +412,10 @@ class _ToolInput extends StatelessWidget {
       ToolKind.edit => switch (entry.toolName) {
           'Write' => WriteInputWidget(
               input: entry.toolInput,
+              projectDir: projectDir,
+            ),
+          'FileChange' => FileChangeInputWidget(
+              entry: entry,
               projectDir: projectDir,
             ),
           // Edit, NotebookEdit, and other edit tools

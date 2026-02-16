@@ -705,33 +705,52 @@ class CodexSession implements AgentSession {
 
   Map<String, dynamic> _fileChangeInput(Map<String, dynamic> item) {
     final changes = item['changes'] as List<dynamic>? ?? const [];
-    final paths = changes
-        .whereType<Map<String, dynamic>>()
+    final typedChanges = changes.whereType<Map<String, dynamic>>().toList();
+    final paths = typedChanges
         .map((c) => c['path'] as String?)
         .whereType<String>()
         .toList();
-    final diffs = changes
-        .whereType<Map<String, dynamic>>()
-        .map((c) => c['diff'] as String?)
-        .whereType<String>()
-        .toList();
+
+    // Build per-file structured changes for rich rendering
+    final structuredChanges = <Map<String, dynamic>>[];
+    for (final c in typedChanges) {
+      final path = c['path'] as String?;
+      if (path == null) continue;
+      final kind = c['kind'] as Map<String, dynamic>?;
+      structuredChanges.add({
+        'path': path,
+        'kind': kind?['type'] as String? ?? 'update',
+        if (kind?['move_path'] != null) 'move_path': kind!['move_path'],
+        if (c['diff'] != null) 'diff': c['diff'],
+      });
+    }
 
     return {
       'file_path': paths.isNotEmpty ? paths.first : '',
       if (paths.length > 1) 'paths': paths,
-      if (diffs.isNotEmpty) 'content': diffs.join('\n\n'),
+      'changes': structuredChanges,
     };
   }
 
   Map<String, dynamic> _fileChangeResult(Map<String, dynamic> item) {
     final changes = item['changes'] as List<dynamic>? ?? const [];
-    final diffs = changes
-        .whereType<Map<String, dynamic>>()
-        .map((c) => c['diff'] as String?)
-        .whereType<String>()
-        .toList();
+    final typedChanges = changes.whereType<Map<String, dynamic>>().toList();
+
+    final structuredChanges = <Map<String, dynamic>>[];
+    for (final c in typedChanges) {
+      final path = c['path'] as String?;
+      if (path == null) continue;
+      final kind = c['kind'] as Map<String, dynamic>?;
+      structuredChanges.add({
+        'path': path,
+        'kind': kind?['type'] as String? ?? 'update',
+        if (kind?['move_path'] != null) 'move_path': kind!['move_path'],
+        if (c['diff'] != null) 'diff': c['diff'],
+      });
+    }
+
     return {
-      'diff': diffs.join('\n\n'),
+      'changes': structuredChanges,
     };
   }
 

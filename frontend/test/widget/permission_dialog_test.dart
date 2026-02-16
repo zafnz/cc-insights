@@ -197,7 +197,13 @@ void main() {
           toolName: 'FileChange',
           toolInput: {
             'file_path': '/Users/test/main.dart',
-            'content': '@@ -1,3 +1,4 @@\n+import "foo";',
+            'changes': [
+              {
+                'path': '/Users/test/main.dart',
+                'kind': 'update',
+                'diff': '@@ -1,3 +1,4 @@\n+import "foo";',
+              },
+            ],
           },
         );
 
@@ -208,12 +214,18 @@ void main() {
             findsOneWidget);
       });
 
-      testWidgets('shows file path from enriched input', (tester) async {
+      testWidgets('shows file path from structured changes', (tester) async {
         final request = createFakeRequest(
           toolName: 'FileChange',
           toolInput: {
             'file_path': '/Users/test/main.dart',
-            'content': '@@ -1,3 +1,4 @@',
+            'changes': [
+              {
+                'path': '/Users/test/main.dart',
+                'kind': 'update',
+                'diff': '@@ -1,3 +1,4 @@\n context',
+              },
+            ],
           },
         );
 
@@ -223,28 +235,45 @@ void main() {
         expect(find.textContaining('/Users/test/main.dart'), findsOneWidget);
       });
 
-      testWidgets('shows diff content in code box', (tester) async {
+      testWidgets('shows diff content in DiffView', (tester) async {
         final request = createFakeRequest(
           toolName: 'FileChange',
           toolInput: {
             'file_path': '/Users/test/main.dart',
-            'content': '@@ -1,3 +1,4 @@\n+import "foo";',
+            'changes': [
+              {
+                'path': '/Users/test/main.dart',
+                'kind': 'update',
+                'diff': '@@ -1,3 +1,4 @@\n+import "foo";',
+              },
+            ],
           },
         );
 
         await tester.pumpWidget(createTestApp(request: request));
         await safePumpAndSettle(tester);
 
-        expect(find.textContaining('+import "foo"'), findsOneWidget);
+        expect(find.textContaining('import "foo"'), findsOneWidget);
       });
 
-      testWidgets('shows multiple file paths', (tester) async {
+      testWidgets('shows multiple file paths from changes', (tester) async {
         final request = createFakeRequest(
           toolName: 'FileChange',
           toolInput: {
             'file_path': '/Users/test/main.dart',
             'paths': ['/Users/test/main.dart', '/Users/test/utils.dart'],
-            'content': 'diff1\n\ndiff2',
+            'changes': [
+              {
+                'path': '/Users/test/main.dart',
+                'kind': 'update',
+                'diff': '@@ -1,2 +1,2 @@\n-old\n+new',
+              },
+              {
+                'path': '/Users/test/utils.dart',
+                'kind': 'create',
+                'diff': '@@ -0,0 +1,1 @@\n+content',
+              },
+            ],
           },
         );
 
@@ -255,7 +284,32 @@ void main() {
         expect(find.textContaining('/Users/test/utils.dart'), findsOneWidget);
       });
 
-      testWidgets('handles empty content gracefully', (tester) async {
+      testWidgets('shows kind badges for changes', (tester) async {
+        final request = createFakeRequest(
+          toolName: 'FileChange',
+          toolInput: {
+            'file_path': '/Users/test/main.dart',
+            'changes': [
+              {
+                'path': '/Users/test/main.dart',
+                'kind': 'update',
+              },
+              {
+                'path': '/Users/test/new_file.dart',
+                'kind': 'create',
+              },
+            ],
+          },
+        );
+
+        await tester.pumpWidget(createTestApp(request: request));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('modified'), findsOneWidget);
+        expect(find.text('new'), findsOneWidget);
+      });
+
+      testWidgets('handles empty changes gracefully', (tester) async {
         final request = createFakeRequest(
           toolName: 'FileChange',
           toolInput: {
@@ -266,7 +320,7 @@ void main() {
         await tester.pumpWidget(createTestApp(request: request));
         await safePumpAndSettle(tester);
 
-        // Should render file path without error
+        // Should render file path without error (fallback path)
         expect(find.textContaining('/Users/test/main.dart'), findsOneWidget);
       });
     });

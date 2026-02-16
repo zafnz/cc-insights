@@ -693,6 +693,141 @@ class _OtherAnswerChip extends StatelessWidget {
   }
 }
 
+/// Renders FileChange tool input (Codex) with per-file diffs.
+class FileChangeInputWidget extends StatelessWidget {
+  final ToolUseOutputEntry entry;
+  final String? projectDir;
+
+  const FileChangeInputWidget({
+    super.key,
+    required this.entry,
+    this.projectDir,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final input = entry.toolInput;
+    final changes = input['changes'] as List<dynamic>? ?? const [];
+
+    if (changes.isEmpty) {
+      // Fallback: show file_path only
+      final filePath = input['file_path'] as String? ?? '';
+      return FilePathWidget(
+        filePath: filePath,
+        icon: Icons.edit,
+        projectDir: projectDir,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < changes.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _FileChangeEntry(
+            change: changes[i] as Map<String, dynamic>,
+            projectDir: projectDir,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A single file change entry showing the path, kind badge, and diff.
+class _FileChangeEntry extends StatelessWidget {
+  final Map<String, dynamic> change;
+  final String? projectDir;
+
+  const _FileChangeEntry({required this.change, this.projectDir});
+
+  @override
+  Widget build(BuildContext context) {
+    final path = change['path'] as String? ?? '';
+    final kind = change['kind'] as String? ?? 'update';
+    final diff = change['diff'] as String? ?? '';
+    final movePath = change['move_path'] as String?;
+
+    final (icon, badge) = switch (kind) {
+      'create' => (Icons.add_circle_outline, 'new'),
+      'move' => (Icons.drive_file_move_outline, 'moved'),
+      _ => (Icons.edit, 'modified'),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: FilePathWidget(
+                filePath: path,
+                icon: icon,
+                projectDir: projectDir,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: _badgeColor(kind).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text(
+                badge,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: _badgeColor(kind),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (movePath != null) ...[
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              const Icon(Icons.arrow_forward, size: 12, color: Colors.amber),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  movePath,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (diff.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          DiffView(
+            oldText: '',
+            newText: '',
+            structuredPatch: parseUnifiedDiff(diff),
+            maxHeight: 300,
+          ),
+        ],
+      ],
+    );
+  }
+
+  static Color _badgeColor(String kind) {
+    return switch (kind) {
+      'create' => Colors.green,
+      'move' => Colors.amber,
+      _ => Colors.blue,
+    };
+  }
+}
+
 /// Renders generic tool input.
 class GenericInputWidget extends StatelessWidget {
   final Map<String, dynamic> input;

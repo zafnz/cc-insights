@@ -751,8 +751,13 @@ void main() {
         expect(event.toolKind, ToolKind.edit);
         expect(
             event.toolInput['file_path'], '/Users/zaf/project/src/main.dart');
-        expect(event.toolInput['content'],
-            contains('@@ -1,3 +1,4 @@\n+import "foo";'));
+        final changes =
+            event.toolInput['changes'] as List<Map<String, dynamic>>;
+        expect(changes, hasLength(1));
+        expect(changes.first['path'], '/Users/zaf/project/src/main.dart');
+        expect(changes.first['kind'], 'update');
+        expect(changes.first['diff'],
+            '@@ -1,3 +1,4 @@\n+import "foo";');
         expect(event.toolUseId, 'item-011');
       });
 

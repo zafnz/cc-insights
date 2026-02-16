@@ -132,40 +132,104 @@ class _FileChangeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filePath = input['file_path'] as String? ?? '';
-    final paths = (input['paths'] as List<dynamic>?)
-        ?.whereType<String>()
-        .toList();
-    final content = input['content'] as String? ?? '';
-    final lineCount =
-        content.isEmpty ? 0 : '\n'.allMatches(content).length + 1;
-    final truncatedContent = _truncate(content, 500);
+    final changes = input['changes'] as List<dynamic>?;
 
-    final displayPaths =
-        paths != null && paths.length > 1 ? paths : [filePath];
+    // New structured format with per-file changes
+    if (changes != null && changes.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (int i = 0; i < changes.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            _buildChangeEntry(context, changes[i] as Map<String, dynamic>),
+          ],
+        ],
+      );
+    }
+
+    // Fallback for old format without structured changes
+    final filePath = input['file_path'] as String? ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SelectableText(
+          'File: $filePath',
+          style: monoStyle(fontSize: PermissionFontSizes.filePath),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChangeEntry(BuildContext context, Map<String, dynamic> change) {
+    final path = change['path'] as String? ?? '';
+    final kind = change['kind'] as String? ?? 'update';
+    final diff = change['diff'] as String? ?? '';
+    final movePath = change['move_path'] as String?;
+
+    final kindLabel = switch (kind) {
+      'create' => 'new',
+      'move' => 'moved',
+      _ => 'modified',
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final path in displayPaths)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: SelectableText(
-              'File: $path',
-              style: monoStyle(fontSize: PermissionFontSizes.filePath),
+        Row(
+          children: [
+            Expanded(
+              child: SelectableText(
+                'File: $path',
+                style: monoStyle(fontSize: PermissionFontSizes.filePath),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: _kindColor(kind).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text(
+                kindLabel,
+                style: TextStyle(
+                  fontSize: PermissionFontSizes.smallBadge,
+                  color: _kindColor(kind),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (movePath != null) ...[
+          const SizedBox(height: 2),
+          SelectableText(
+            '→ $movePath',
+            style: monoStyle(
+              fontSize: PermissionFontSizes.filePath,
+              fontStyle: FontStyle.italic,
             ),
           ),
-        if (content.isNotEmpty) ...[
+        ],
+        if (diff.isNotEmpty) ...[
           const SizedBox(height: 4),
-          _ScrollableCodeBox(
-            content: truncatedContent,
-            lineCount: lineCount,
-            backgroundColor:
-                Theme.of(context).colorScheme.surfaceContainerHighest,
+          DiffView(
+            oldText: '',
+            newText: '',
+            structuredPatch: parseUnifiedDiff(diff),
+            maxHeight: 250,
           ),
         ],
       ],
     );
+  }
+
+  static Color _kindColor(String kind) {
+    return switch (kind) {
+      'create' => Colors.green,
+      'move' => Colors.amber,
+      _ => Colors.blue,
+    };
   }
 }
 

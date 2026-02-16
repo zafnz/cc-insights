@@ -5,6 +5,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/fonts.dart';
+import 'diff_view.dart';
 import 'markdown_style_helper.dart';
 
 part 'permission_dialog_tool_content.dart';

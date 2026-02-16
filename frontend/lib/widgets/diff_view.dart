@@ -6,6 +6,65 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../services/runtime_config.dart';
 
+/// Parses a unified diff string into the structuredPatch format
+/// expected by [DiffView.structuredPatch].
+///
+/// Handles the standard unified diff format with `@@ -old,count +new,count @@`
+/// hunk headers and `+`/`-`/` ` prefixed lines.
+List<Map<String, dynamic>> parseUnifiedDiff(String unifiedDiff) {
+  final hunks = <Map<String, dynamic>>[];
+  final rawLines = unifiedDiff.split('\n');
+
+  final hunkHeaderPattern = RegExp(r'^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@');
+
+  Map<String, dynamic>? currentHunk;
+  List<String>? currentLines;
+
+  for (final line in rawLines) {
+    final match = hunkHeaderPattern.firstMatch(line);
+    if (match != null) {
+      // Flush previous hunk
+      if (currentHunk != null) {
+        currentHunk['lines'] = currentLines;
+        hunks.add(currentHunk);
+      }
+
+      final oldStart = int.parse(match.group(1)!);
+      final oldLines =
+          match.group(2)!.isEmpty ? 1 : int.parse(match.group(2)!);
+      final newStart = int.parse(match.group(3)!);
+      final newLines =
+          match.group(4)!.isEmpty ? 1 : int.parse(match.group(4)!);
+
+      currentHunk = {
+        'oldStart': oldStart,
+        'oldLines': oldLines,
+        'newStart': newStart,
+        'newLines': newLines,
+      };
+      currentLines = [];
+      continue;
+    }
+
+    if (currentLines != null && line.isNotEmpty) {
+      // Lines should start with +, -, or space
+      final firstChar = line[0];
+      if (firstChar == '+' || firstChar == '-' || firstChar == ' ') {
+        currentLines.add(line);
+      }
+      // Skip other lines (e.g. "\ No newline at end of file")
+    }
+  }
+
+  // Flush final hunk
+  if (currentHunk != null) {
+    currentHunk['lines'] = currentLines;
+    hunks.add(currentHunk);
+  }
+
+  return hunks;
+}
+
 /// Displays a unified diff view with line numbers and colors.
 ///
 /// This widget computes character-level diffs using diff_match_patch and
