@@ -285,8 +285,8 @@ class _MainScreenState extends State<MainScreen> {
   void _handleEscapeShortcut() {
     final selection = context.read<SelectionState>();
     final chat = selection.selectedChat;
-    if (chat != null && chat.isWorking) {
-      chat.interrupt();
+    if (chat != null && chat.session.isWorking) {
+      chat.session.interrupt();
     }
   }
 
@@ -421,7 +421,9 @@ class _MainScreenState extends State<MainScreen> {
     final projectId = PersistenceService.generateProjectId(projectRoot);
     if (!mounted) return;
     final persistenceService = context.read<PersistenceService>();
-    final restoreService = ProjectRestoreService(persistence: persistenceService);
+    final restoreService = ProjectRestoreService(
+      persistence: persistenceService,
+    );
 
     final archivedChats = await persistenceService.getArchivedChats(
       projectRoot: projectRoot,
@@ -429,9 +431,11 @@ class _MainScreenState extends State<MainScreen> {
 
     final suffix = '/cci/$branch';
     final matchingChats = archivedChats
-        .where((chat) =>
-            chat.originalWorktreePath.endsWith(suffix) ||
-            chat.originalWorktreePath == worktreePath)
+        .where(
+          (chat) =>
+              chat.originalWorktreePath.endsWith(suffix) ||
+              chat.originalWorktreePath == worktreePath,
+        )
         .toList();
 
     for (final archivedRef in matchingChats) {
@@ -762,8 +766,8 @@ class _MainScreenState extends State<MainScreen> {
       case 'worktrees_chats_agents':
         _agentsMergedIntoChats = true;
         return (context) => WorktreesChatsAgentsPanel(
-              onSeparateChats: _separateChatsFromWorktrees,
-            );
+          onSeparateChats: _separateChatsFromWorktrees,
+        );
       default:
         return null;
     }
@@ -861,7 +865,6 @@ class _MainScreenState extends State<MainScreen> {
       ],
     );
   }
-
 
   @override
   Widget build(BuildContext context) {

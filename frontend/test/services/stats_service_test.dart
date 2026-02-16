@@ -35,7 +35,7 @@ void main() {
     projectId = PersistenceService.generateProjectId('/test/project');
     statsService = StatsService(costTracking: costTracking);
 
-    // Initialize RuntimeConfig for ChatState
+    // Initialize RuntimeConfig for Chat
     RuntimeConfig.resetForTesting();
     RuntimeConfig.initialize([]);
   });
@@ -48,39 +48,41 @@ void main() {
   });
 
   group('StatsService.buildProjectStats', () {
-    test('returns empty stats for empty project with no tracking data',
-        () async {
-      // Arrange
-      const projectData = ProjectData(
-        name: 'Test Project',
-        repoRoot: '/test/project',
-      );
-      final primaryWorktree = WorktreeState(
-        const WorktreeData(
-          worktreeRoot: '/test/project',
-          isPrimary: true,
-          branch: 'main',
-        ),
-      );
-      final project = ProjectState(
-        projectData,
-        primaryWorktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      );
+    test(
+      'returns empty stats for empty project with no tracking data',
+      () async {
+        // Arrange
+        const projectData = ProjectData(
+          name: 'Test Project',
+          repoRoot: '/test/project',
+        );
+        final primaryWorktree = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/test/project',
+            isPrimary: true,
+            branch: 'main',
+          ),
+        );
+        final project = ProjectState(
+          projectData,
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        );
 
-      // Act
-      final stats = await statsService.buildProjectStats(
-        project: project,
-        projectId: projectId,
-      );
+        // Act
+        final stats = await statsService.buildProjectStats(
+          project: project,
+          projectId: projectId,
+        );
 
-      // Assert
-      check(stats.projectName).equals('Test Project');
-      check(stats.worktrees).isEmpty();
-      check(stats.totalCost).isCloseTo(0.0, 0.0001);
-      check(stats.totalTokens).equals(0);
-    });
+        // Assert
+        check(stats.projectName).equals('Test Project');
+        check(stats.worktrees).isEmpty();
+        check(stats.totalCost).isCloseTo(0.0, 0.0001);
+        check(stats.totalTokens).equals(0);
+      },
+    );
 
     test('includes historical entries from tracking.jsonl', () async {
       // Arrange
@@ -172,8 +174,8 @@ void main() {
         name: 'Live Chat',
         worktreeRoot: '/test/project',
       );
-      final chat = ChatState(chatData);
-      chat.updateCumulativeUsage(
+      final chat = Chat(chatData);
+      chat.metrics.updateCumulativeUsage(
         usage: const UsageInfo(
           inputTokens: 500,
           outputTokens: 250,
@@ -262,8 +264,8 @@ void main() {
         name: 'Live Chat',
         worktreeRoot: '/test/project',
       );
-      final chat = ChatState(chatData);
-      chat.updateCumulativeUsage(
+      final chat = Chat(chatData);
+      chat.metrics.updateCumulativeUsage(
         usage: const UsageInfo(
           inputTokens: 500,
           outputTokens: 250,
@@ -488,8 +490,8 @@ void main() {
         name: 'Live',
         worktreeRoot: '/test/project',
       );
-      final chat = ChatState(chatData);
-      chat.updateCumulativeUsage(
+      final chat = Chat(chatData);
+      chat.metrics.updateCumulativeUsage(
         usage: const UsageInfo(
           inputTokens: 100,
           outputTokens: 50,
@@ -537,8 +539,9 @@ void main() {
       check(worktree.chats.length).equals(2);
 
       final liveChat = worktree.chats.firstWhere((c) => c.chatName == 'Live');
-      final historicalChat =
-          worktree.chats.firstWhere((c) => c.chatName == 'Historical');
+      final historicalChat = worktree.chats.firstWhere(
+        (c) => c.chatName == 'Historical',
+      );
 
       check(liveChat.isActive).isTrue();
       check(historicalChat.isActive).isFalse();
@@ -594,13 +597,13 @@ void main() {
       );
 
       // Create chats for live worktrees
-      final zetaChat = ChatState(
+      final zetaChat = Chat(
         ChatData.create(
           name: 'Zeta Chat',
           worktreeRoot: '/test/project/zeta-live',
         ),
       );
-      zetaChat.updateCumulativeUsage(
+      zetaChat.metrics.updateCumulativeUsage(
         usage: const UsageInfo(
           inputTokens: 100,
           outputTokens: 50,
@@ -622,13 +625,13 @@ void main() {
         ],
       );
 
-      final alphaChat = ChatState(
+      final alphaChat = Chat(
         ChatData.create(
           name: 'Alpha Chat',
           worktreeRoot: '/test/project/alpha-live',
         ),
       );
-      alphaChat.updateCumulativeUsage(
+      alphaChat.metrics.updateCumulativeUsage(
         usage: const UsageInfo(
           inputTokens: 100,
           outputTokens: 50,

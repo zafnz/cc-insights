@@ -9,7 +9,8 @@ import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/widgets/security_config_group.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
-import 'package:codex_sdk/codex_sdk.dart' show CodexSecurityConfig, CodexSecurityCapabilities;
+import 'package:codex_sdk/codex_sdk.dart'
+    show CodexSecurityConfig, CodexSecurityCapabilities;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -57,9 +58,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
 
   @override
   sdk.BackendCapabilities get capabilities => const sdk.BackendCapabilities(
-        supportsPermissionModeChange: true,
-        supportsModelChange: true,
-      );
+    supportsPermissionModeChange: true,
+    supportsModelChange: true,
+  );
 
   @override
   sdk.BackendCapabilities capabilitiesFor(sdk.BackendType type) {
@@ -152,7 +153,10 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   }
 
   @override
-  void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {}
+  void registerBackendForTesting(
+    sdk.BackendType type,
+    sdk.AgentBackend backend,
+  ) {}
 
   // Agent-keyed API stubs
   @override
@@ -200,7 +204,10 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   @override
   Future<void> discoverModelsForAllAgents() async {}
   @override
-  void registerAgentBackendForTesting(String agentId, sdk.AgentBackend backend) {}
+  void registerAgentBackendForTesting(
+    String agentId,
+    sdk.AgentBackend backend,
+  ) {}
 }
 
 class FakeTransport implements sdk.EventTransport {
@@ -224,8 +231,7 @@ class FakeTransport implements sdk.EventTransport {
   Stream<sdk.TransportStatus> get status => const Stream.empty();
 
   @override
-  Stream<sdk.PermissionRequest> get permissionRequests =>
-      const Stream.empty();
+  Stream<sdk.PermissionRequest> get permissionRequests => const Stream.empty();
 
   @override
   String? get serverModel => null;
@@ -267,7 +273,7 @@ void main() {
       RuntimeConfig.resetForTesting();
     });
 
-    Widget buildTestWidget(chat_model.ChatState chat) {
+    Widget buildTestWidget(chat_model.Chat chat) {
       return MaterialApp(
         home: MultiProvider(
           providers: [
@@ -290,12 +296,16 @@ void main() {
       );
     }
 
-    testWidgets('Claude chat shows single permissions dropdown', (tester) async {
+    testWidgets('Claude chat shows single permissions dropdown', (
+      tester,
+    ) async {
       // Setup: Claude chat
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null));
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null),
+      );
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
@@ -303,8 +313,7 @@ void main() {
       // Verify CompactDropdown with tooltip 'Permissions' is present
       final permissionsDropdown = find.byWidgetPredicate(
         (widget) =>
-            widget is CompactDropdown &&
-            widget.tooltip == 'Permissions',
+            widget is CompactDropdown && widget.tooltip == 'Permissions',
       );
       check(permissionsDropdown.evaluate()).isNotEmpty();
 
@@ -315,14 +324,18 @@ void main() {
     testWidgets('Codex chat shows SecurityConfigGroup widget', (tester) async {
       // Setup: Codex chat
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.codex, null));
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.codex, null),
+      );
       // Initialize with Codex security config
-      chat.setSecurityConfig(const sdk.CodexSecurityConfig(
-        sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
-        approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
-      ));
+      chat.settings.setSecurityConfig(
+        const sdk.CodexSecurityConfig(
+          sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+          approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+        ),
+      );
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
@@ -333,30 +346,32 @@ void main() {
       // Verify standard permissions CompactDropdown is NOT present
       final permissionsDropdown = find.byWidgetPredicate(
         (widget) =>
-            widget is CompactDropdown &&
-            widget.tooltip == 'Permissions',
+            widget is CompactDropdown && widget.tooltip == 'Permissions',
       );
       check(permissionsDropdown.evaluate()).isEmpty();
     });
 
-    testWidgets('Claude dropdown changes call setPermissionMode', (tester) async {
+    testWidgets('Claude dropdown changes call setPermissionMode', (
+      tester,
+    ) async {
       // Setup: Claude chat
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null));
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null),
+      );
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
 
       // Initial permission mode should be Default
-      check(chat.permissionMode).equals(chat_model.PermissionMode.defaultMode);
+      check(chat.settings.permissionMode).equals(chat_model.PermissionMode.defaultMode);
 
       // Find the permissions dropdown
       final permissionsDropdown = find.byWidgetPredicate(
         (widget) =>
-            widget is CompactDropdown &&
-            widget.tooltip == 'Permissions',
+            widget is CompactDropdown && widget.tooltip == 'Permissions',
       );
       check(permissionsDropdown.evaluate()).isNotEmpty();
 
@@ -369,16 +384,19 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Verify permission mode changed
-      check(chat.permissionMode).equals(chat_model.PermissionMode.acceptEdits);
+      check(chat.settings.permissionMode).equals(chat_model.PermissionMode.acceptEdits);
     });
 
-    testWidgets('ACP config options show model and mode selectors',
-        (tester) async {
+    testWidgets('ACP config options show model and mode selectors', (
+      tester,
+    ) async {
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null));
-      chat.setAcpConfigOptions([
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null),
+      );
+      chat.settings.setAcpConfigOptions([
         {
           'id': 'model',
           'name': 'Model',
@@ -415,13 +433,16 @@ void main() {
       check(modeDropdown.evaluate()).isNotEmpty();
     });
 
-    testWidgets('ACP config options show overflow menu for other categories',
-        (tester) async {
+    testWidgets('ACP config options show overflow menu for other categories', (
+      tester,
+    ) async {
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null));
-      chat.setAcpConfigOptions([
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null),
+      );
+      chat.settings.setAcpConfigOptions([
         {
           'id': 'temperature',
           'name': 'Temperature',
@@ -440,13 +461,16 @@ void main() {
       check(overflowDropdown.evaluate()).isNotEmpty();
     });
 
-    testWidgets('ACP dropdown selection sends SetConfigOptionCommand',
-        (tester) async {
+    testWidgets('ACP dropdown selection sends SetConfigOptionCommand', (
+      tester,
+    ) async {
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'ACP Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null));
-      chat.setAcpConfigOptions([
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.acp, null),
+      );
+      chat.settings.setAcpConfigOptions([
         {
           'id': 'model',
           'name': 'Model',
@@ -460,7 +484,7 @@ void main() {
       ]);
 
       final transport = FakeTransport();
-      chat.setTransport(transport);
+      chat.session.setTransport(transport);
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
@@ -484,22 +508,30 @@ void main() {
     testWidgets('Codex group changes call setSecurityConfig', (tester) async {
       // Setup: Codex chat with initial config
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.codex, null));
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.codex, null),
+      );
       // Initialize with Codex security config
-      chat.setSecurityConfig(const sdk.CodexSecurityConfig(
-        sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
-        approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
-      ));
+      chat.settings.setSecurityConfig(
+        const sdk.CodexSecurityConfig(
+          sandboxMode: sdk.CodexSandboxMode.workspaceWrite,
+          approvalPolicy: sdk.CodexApprovalPolicy.onRequest,
+        ),
+      );
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
 
       // Get initial config
-      final initialConfig = chat.securityConfig as sdk.CodexSecurityConfig;
-      check(initialConfig.sandboxMode).equals(sdk.CodexSandboxMode.workspaceWrite);
-      check(initialConfig.approvalPolicy).equals(sdk.CodexApprovalPolicy.onRequest);
+      final initialConfig = chat.settings.securityConfig as sdk.CodexSecurityConfig;
+      check(
+        initialConfig.sandboxMode,
+      ).equals(sdk.CodexSandboxMode.workspaceWrite);
+      check(
+        initialConfig.approvalPolicy,
+      ).equals(sdk.CodexApprovalPolicy.onRequest);
 
       // Open the sandbox popup menu programmatically - a Tooltip overlay from
       // ContextIndicator intercepts taps on the PopupMenuButton in this layout.
@@ -511,24 +543,33 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Select "Read Only"
-      await tester.tap(find.byKey(
-        SecurityConfigGroupKeys.sandboxMenuItem(sdk.CodexSandboxMode.readOnly),
-      ));
+      await tester.tap(
+        find.byKey(
+          SecurityConfigGroupKeys.sandboxMenuItem(
+            sdk.CodexSandboxMode.readOnly,
+          ),
+        ),
+      );
       await safePumpAndSettle(tester);
 
       // Verify config changed
-      final newConfig = chat.securityConfig as sdk.CodexSecurityConfig;
+      final newConfig = chat.settings.securityConfig as sdk.CodexSecurityConfig;
       check(newConfig.sandboxMode).equals(sdk.CodexSandboxMode.readOnly);
-      check(newConfig.approvalPolicy).equals(sdk.CodexApprovalPolicy.onRequest); // unchanged
+      check(
+        newConfig.approvalPolicy,
+      ).equals(sdk.CodexApprovalPolicy.onRequest); // unchanged
     });
 
-    testWidgets('Agent dropdown includes agents from registry when available',
-        (tester) async {
+    testWidgets('Agent dropdown includes agents from registry when available', (
+      tester,
+    ) async {
       // All agents available by default in fake
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null));
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null),
+      );
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
@@ -543,10 +584,12 @@ void main() {
       // (AgentConfig.defaults: 'Claude', 'Codex', 'Gemini')
       check(agentDropdown.items).contains('Claude');
       check(agentDropdown.items).contains('Codex');
-      check(agentDropdown.items).contains('Gemini'); // ACP default is named "Gemini"
+      check(
+        agentDropdown.items,
+      ).contains('Gemini'); // ACP default is named "Gemini"
     });
 
-    testWidgets('Selecting different agent sets chat.agentId', (tester) async {
+    testWidgets('Selecting different agent sets chat.agents.agentId', (tester) async {
       // Codex available, ACP not
       fakeCliAvailability.agentAvailability = {
         'claude-default': true,
@@ -555,15 +598,17 @@ void main() {
       };
 
       final chat = resources.track(
-        chat_model.ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path'),
+        chat_model.Chat.create(name: 'Test Chat', worktreeRoot: '/test/path'),
       );
-      chat.setModel(ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null));
+      chat.settings.setModel(
+        ChatModelCatalog.defaultForBackend(sdk.BackendType.directCli, null),
+      );
 
       await tester.pumpWidget(buildTestWidget(chat));
       await safePumpAndSettle(tester);
 
       // Initial agent ID should be null (not set yet)
-      check(chat.agentId).isNull();
+      check(chat.agents.agentId).isNull();
 
       // Find the agent dropdown
       final agentDropdown = find.byWidgetPredicate(
@@ -580,9 +625,9 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Verify agent ID changed to codex-default
-      check(chat.agentId).equals('codex-default');
+      check(chat.agents.agentId).equals('codex-default');
       // Verify backend changed to Codex
-      check(chat.model.backend).equals(sdk.BackendType.codex);
+      check(chat.settings.model.backend).equals(sdk.BackendType.codex);
     });
   });
 }

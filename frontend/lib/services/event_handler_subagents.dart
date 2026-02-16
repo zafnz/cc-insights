@@ -2,10 +2,16 @@ part of 'event_handler.dart';
 
 /// Subagent lifecycle management (spawn, complete, routing).
 mixin _SubagentMixin on _EventHandlerBase {
-  void _handleSubagentSpawn(ChatState chat, SubagentSpawnEvent event) {
+  void _handleSubagentSpawn(
+    Chat chat,
+    SubagentSpawnEvent event,
+    SessionEventPipeline pipeline,
+  ) {
     // Check if this is a resume of an existing agent
     if (event.isResume && event.resumeAgentId != null) {
-      final existingAgent = chat.findAgentByResumeId(event.resumeAgentId!);
+      final existingAgent = chat.agents.findAgentByResumeId(
+        event.resumeAgentId!,
+      );
       if (existingAgent != null) {
         developer.log(
           'Resuming existing agent: resumeId=${event.resumeAgentId} -> '
@@ -13,9 +19,10 @@ mixin _SubagentMixin on _EventHandlerBase {
           name: 'EventHandler',
         );
 
-        chat.updateAgent(AgentStatus.working, existingAgent.sdkAgentId);
-        _agentIdToConversationId[event.callId] = existingAgent.conversationId;
-        _toolUseIdToAgentId[event.callId] = existingAgent.sdkAgentId;
+        chat.agents.updateAgent(AgentStatus.working, existingAgent.sdkAgentId);
+        pipeline.agentIdToConversationId[event.callId] =
+            existingAgent.conversationId;
+        pipeline.toolUseIdToAgentId[event.callId] = existingAgent.sdkAgentId;
         return;
       } else {
         developer.log(
@@ -28,8 +35,8 @@ mixin _SubagentMixin on _EventHandlerBase {
 
     final descPreview = event.description != null
         ? (event.description!.length > 50
-            ? '${event.description!.substring(0, 50)}...'
-            : event.description!)
+              ? '${event.description!.substring(0, 50)}...'
+              : event.description!)
         : 'null';
     developer.log(
       'Creating subagent: type=${event.agentType ?? "null"}, '
@@ -53,14 +60,18 @@ mixin _SubagentMixin on _EventHandlerBase {
     LogService.instance.debug(
       'Task',
       'Task tool created: type=${event.agentType ?? "unknown"} '
-      'description=${event.description ?? "none"}',
+          'description=${event.description ?? "none"}',
     );
 
-    chat.addSubagentConversation(event.callId, event.agentType, event.description);
+    chat.conversations.addSubagentConversation(
+      event.callId,
+      event.agentType,
+      event.description,
+    );
 
-    final agent = chat.activeAgents[event.callId];
+    final agent = chat.agents.activeAgents[event.callId];
     if (agent != null) {
-      _agentIdToConversationId[event.callId] = agent.conversationId;
+      pipeline.agentIdToConversationId[event.callId] = agent.conversationId;
       developer.log(
         'Subagent created: callId=${event.callId} -> '
         'conversationId=${agent.conversationId}',
@@ -75,8 +86,12 @@ mixin _SubagentMixin on _EventHandlerBase {
     }
   }
 
-  void _handleSubagentComplete(ChatState chat, SubagentCompleteEvent event) {
-    final agentId = _toolUseIdToAgentId[event.callId] ?? event.callId;
+  void _handleSubagentComplete(
+    Chat chat,
+    SubagentCompleteEvent event,
+    SessionEventPipeline pipeline,
+  ) {
+    final agentId = pipeline.toolUseIdToAgentId[event.callId] ?? event.callId;
 
     final AgentStatus agentStatus;
     if (event.status == 'completed') {
@@ -102,7 +117,7 @@ mixin _SubagentMixin on _EventHandlerBase {
       'Task tool finished: status=${event.status ?? "unknown"}',
     );
 
-    chat.updateAgent(
+    chat.agents.updateAgent(
       agentStatus,
       agentId,
       result: event.summary,

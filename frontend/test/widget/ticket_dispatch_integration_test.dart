@@ -97,244 +97,262 @@ void main() {
         ),
       );
 
-      project = resources.track(ProjectState(
-        const ProjectData(name: 'test-project', repoRoot: '/test/repo'),
-        primaryWorktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test-project', repoRoot: '/test/repo'),
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
       selection = resources.track(SelectionState(project));
     });
 
-    test('full dispatch flow: create ticket, dispatch to worktree, verify links and status', () async {
-      // 1. Create a ticket
-      final ticket = ticketBoard.createTicket(
-        title: 'Add dark mode',
-        kind: TicketKind.feature,
-        description: 'Implement dark mode toggle for the app.',
-        priority: TicketPriority.high,
-      );
+    test(
+      'full dispatch flow: create ticket, dispatch to worktree, verify links and status',
+      () async {
+        // 1. Create a ticket
+        final ticket = ticketBoard.createTicket(
+          title: 'Add dark mode',
+          kind: TicketKind.feature,
+          description: 'Implement dark mode toggle for the app.',
+          priority: TicketPriority.high,
+        );
 
-      check(ticket.status).equals(TicketStatus.ready);
-      check(ticket.linkedWorktrees).isEmpty();
-      check(ticket.linkedChats).isEmpty();
+        check(ticket.status).equals(TicketStatus.ready);
+        check(ticket.linkedWorktrees).isEmpty();
+        check(ticket.linkedChats).isEmpty();
 
-      // 2. Verify the branch name derivation
-      final expectedBranch = TicketDispatchService.deriveBranchName(
-        ticket.id,
-        ticket.title,
-      );
-      check(expectedBranch).equals('tkt-1-add-dark-mode');
+        // 2. Verify the branch name derivation
+        final expectedBranch = TicketDispatchService.deriveBranchName(
+          ticket.id,
+          ticket.title,
+        );
+        check(expectedBranch).equals('tkt-1-add-dark-mode');
 
-      // 3. Create an existing worktree to dispatch into
-      // (Using beginInWorktree avoids the complexity of real git worktree
-      // creation while still testing the full state flow)
-      final worktree = WorktreeState(
-        WorktreeData(
-          worktreeRoot: '/test/worktrees/$expectedBranch',
-          isPrimary: false,
-          branch: expectedBranch,
-        ),
-      );
-      project.addLinkedWorktree(worktree);
+        // 3. Create an existing worktree to dispatch into
+        // (Using beginInWorktree avoids the complexity of real git worktree
+        // creation while still testing the full state flow)
+        final worktree = WorktreeState(
+          WorktreeData(
+            worktreeRoot: '/test/worktrees/$expectedBranch',
+            isPrimary: false,
+            branch: expectedBranch,
+          ),
+        );
+        project.addLinkedWorktree(worktree);
 
-      // 4. Create dispatch service
-      final dispatch = TicketDispatchService(
-        ticketBoard: ticketBoard,
-        project: project,
-        selection: selection,
-        worktreeService: WorktreeService(gitService: fakeGit),
-        restoreService: ProjectRestoreService(),
-      );
+        // 4. Create dispatch service
+        final dispatch = TicketDispatchService(
+          ticketBoard: ticketBoard,
+          project: project,
+          selection: selection,
+          worktreeService: WorktreeService(gitService: fakeGit),
+          restoreService: ProjectRestoreService(),
+        );
 
-      // 5. Dispatch to the worktree
-      await dispatch.beginInWorktree(ticket.id, worktree);
+        // 5. Dispatch to the worktree
+        await dispatch.beginInWorktree(ticket.id, worktree);
 
-      // 6. Verify ticket status changed to active
-      final updated = ticketBoard.getTicket(ticket.id)!;
-      check(updated.status).equals(TicketStatus.active);
+        // 6. Verify ticket status changed to active
+        final updated = ticketBoard.getTicket(ticket.id)!;
+        check(updated.status).equals(TicketStatus.active);
 
-      // 7. Verify ticket linked to worktree
-      check(updated.linkedWorktrees).length.equals(1);
-      check(updated.linkedWorktrees.first.worktreeRoot)
-          .equals('/test/worktrees/$expectedBranch');
-      check(updated.linkedWorktrees.first.branch).equals(expectedBranch);
+        // 7. Verify ticket linked to worktree
+        check(updated.linkedWorktrees).length.equals(1);
+        check(
+          updated.linkedWorktrees.first.worktreeRoot,
+        ).equals('/test/worktrees/$expectedBranch');
+        check(updated.linkedWorktrees.first.branch).equals(expectedBranch);
 
-      // 8. Verify ticket linked to chat
-      check(updated.linkedChats).length.equals(1);
-      check(updated.linkedChats.first.chatName).equals(ticket.displayId);
-      check(updated.linkedChats.first.worktreeRoot)
-          .equals('/test/worktrees/$expectedBranch');
+        // 8. Verify ticket linked to chat
+        check(updated.linkedChats).length.equals(1);
+        check(updated.linkedChats.first.chatName).equals(ticket.displayId);
+        check(
+          updated.linkedChats.first.worktreeRoot,
+        ).equals('/test/worktrees/$expectedBranch');
 
-      // 9. Verify chat was added to the worktree
-      check(worktree.chats).length.equals(1);
+        // 9. Verify chat was added to the worktree
+        check(worktree.chats).length.equals(1);
 
-      // 10. Verify chat has the ticket prompt as draft text
-      final chatState = worktree.chats.first;
-      check(chatState.draftText).isNotNull();
-      check(chatState.draftText!).contains('TKT-001');
-      check(chatState.draftText!).contains('Add dark mode');
+        // 10. Verify chat has the ticket prompt as draft text
+        final chatState = worktree.chats.first;
+        check(chatState.viewState.draftText).isNotNull();
+        check(chatState.viewState.draftText).contains('TKT-001');
+        check(chatState.viewState.draftText).contains('Add dark mode');
 
-      // 11. Verify selection was updated
-      check(selection.selectedChat).isNotNull();
-      check(selection.selectedChat!.data.name).equals(ticket.displayId);
-    });
+        // 11. Verify selection was updated
+        check(selection.selectedChat).isNotNull();
+        check(selection.selectedChat!.data.name).equals(ticket.displayId);
+      },
+    );
 
-    test('begin in existing worktree: creates chat in existing worktree', () async {
-      // 1. Create a ticket
-      final ticket = ticketBoard.createTicket(
-        title: 'Fix login bug',
-        kind: TicketKind.bugfix,
-        description: 'Users cannot log in after password reset.',
-      );
+    test(
+      'begin in existing worktree: creates chat in existing worktree',
+      () async {
+        // 1. Create a ticket
+        final ticket = ticketBoard.createTicket(
+          title: 'Fix login bug',
+          kind: TicketKind.bugfix,
+          description: 'Users cannot log in after password reset.',
+        );
 
-      // 2. Create an existing linked worktree
-      final existingWorktree = WorktreeState(
-        const WorktreeData(
-          worktreeRoot: '/test/worktrees/fix-login',
-          isPrimary: false,
-          branch: 'fix-login',
-        ),
-      );
-      project.addLinkedWorktree(existingWorktree);
+        // 2. Create an existing linked worktree
+        final existingWorktree = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/test/worktrees/fix-login',
+            isPrimary: false,
+            branch: 'fix-login',
+          ),
+        );
+        project.addLinkedWorktree(existingWorktree);
 
-      // 3. Create dispatch service
-      final dispatch = TicketDispatchService(
-        ticketBoard: ticketBoard,
-        project: project,
-        selection: selection,
-        worktreeService: WorktreeService(gitService: fakeGit),
-        restoreService: ProjectRestoreService(),
-      );
+        // 3. Create dispatch service
+        final dispatch = TicketDispatchService(
+          ticketBoard: ticketBoard,
+          project: project,
+          selection: selection,
+          worktreeService: WorktreeService(gitService: fakeGit),
+          restoreService: ProjectRestoreService(),
+        );
 
-      // 4. Begin in existing worktree
-      await dispatch.beginInWorktree(ticket.id, existingWorktree);
+        // 4. Begin in existing worktree
+        await dispatch.beginInWorktree(ticket.id, existingWorktree);
 
-      // 5. Verify ticket status changed to active
-      final updated = ticketBoard.getTicket(ticket.id)!;
-      check(updated.status).equals(TicketStatus.active);
+        // 5. Verify ticket status changed to active
+        final updated = ticketBoard.getTicket(ticket.id)!;
+        check(updated.status).equals(TicketStatus.active);
 
-      // 6. Verify ticket linked to the existing worktree
-      check(updated.linkedWorktrees).length.equals(1);
-      check(updated.linkedWorktrees.first.worktreeRoot)
-          .equals('/test/worktrees/fix-login');
-      check(updated.linkedWorktrees.first.branch).equals('fix-login');
+        // 6. Verify ticket linked to the existing worktree
+        check(updated.linkedWorktrees).length.equals(1);
+        check(
+          updated.linkedWorktrees.first.worktreeRoot,
+        ).equals('/test/worktrees/fix-login');
+        check(updated.linkedWorktrees.first.branch).equals('fix-login');
 
-      // 7. Verify ticket linked to chat
-      check(updated.linkedChats).length.equals(1);
-      check(updated.linkedChats.first.chatName).equals(ticket.displayId);
-      check(updated.linkedChats.first.worktreeRoot)
-          .equals('/test/worktrees/fix-login');
+        // 7. Verify ticket linked to chat
+        check(updated.linkedChats).length.equals(1);
+        check(updated.linkedChats.first.chatName).equals(ticket.displayId);
+        check(
+          updated.linkedChats.first.worktreeRoot,
+        ).equals('/test/worktrees/fix-login');
 
-      // 8. Verify chat was added to the worktree
-      check(existingWorktree.chats).length.equals(1);
+        // 8. Verify chat was added to the worktree
+        check(existingWorktree.chats).length.equals(1);
 
-      // 9. Verify selection was updated to the worktree and chat
-      check(selection.selectedChat).isNotNull();
-      check(selection.selectedChat!.data.name).equals(ticket.displayId);
-    });
+        // 9. Verify selection was updated to the worktree and chat
+        check(selection.selectedChat).isNotNull();
+        check(selection.selectedChat!.data.name).equals(ticket.displayId);
+      },
+    );
   });
 
   group('Dispatch flow - status transitions end-to-end', () {
-    test('dispatch -> turn complete -> inReview -> mark complete -> completed', () {
-      // 1. Create a ticket and simulate dispatch by setting status + linking
-      final ticket = ticketBoard.createTicket(
-        title: 'Implement API endpoint',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
+    test(
+      'dispatch -> turn complete -> inReview -> mark complete -> completed',
+      () {
+        // 1. Create a ticket and simulate dispatch by setting status + linking
+        final ticket = ticketBoard.createTicket(
+          title: 'Implement API endpoint',
+          kind: TicketKind.feature,
+          status: TicketStatus.active,
+        );
 
-      final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
-      );
+        final chat = resources.track(
+          Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        );
 
-      // Link the chat to the ticket
-      ticketBoard.linkChat(
-        ticket.id,
-        chat.data.id,
-        chat.data.name,
-        '/tmp/test',
-      );
+        // Link the chat to the ticket
+        ticketBoard.linkChat(
+          ticket.id,
+          chat.data.id,
+          chat.data.name,
+          '/tmp/test',
+        );
 
-      // 2. Create event handler with ticket board
-      final handler = EventHandler(ticketBoard: ticketBoard);
+        // 2. Create event handler with ticket board
+        final handler = EventHandler(ticketBoard: ticketBoard);
 
-      // 3. Simulate agent turn complete
-      final turnEvent = makeTurnCompleteEvent(
-        usage: const TokenUsage(inputTokens: 5000, outputTokens: 2000),
-        costUsd: 0.15,
-        durationMs: 10000,
-      );
-      handler.handleEvent(chat, turnEvent);
+        // 3. Simulate agent turn complete
+        final turnEvent = makeTurnCompleteEvent(
+          usage: const TokenUsage(inputTokens: 5000, outputTokens: 2000),
+          costUsd: 0.15,
+          durationMs: 10000,
+        );
+        handler.handleEvent(chat, turnEvent);
 
-      // 4. Verify ticket transitioned to inReview
-      final afterTurn = ticketBoard.getTicket(ticket.id)!;
-      check(afterTurn.status).equals(TicketStatus.inReview);
+        // 4. Verify ticket transitioned to inReview
+        final afterTurn = ticketBoard.getTicket(ticket.id)!;
+        check(afterTurn.status).equals(TicketStatus.inReview);
 
-      // 5. Verify cost stats were accumulated
-      check(afterTurn.costStats).isNotNull();
-      check(afterTurn.costStats!.totalTokens).equals(7000);
-      check(afterTurn.costStats!.totalCost).equals(0.15);
-      check(afterTurn.costStats!.agentTimeMs).equals(10000);
+        // 5. Verify cost stats were accumulated
+        check(afterTurn.costStats).isNotNull();
+        check(afterTurn.costStats!.totalTokens).equals(7000);
+        check(afterTurn.costStats!.totalCost).equals(0.15);
+        check(afterTurn.costStats!.agentTimeMs).equals(10000);
 
-      // 6. Mark the ticket as completed
-      ticketBoard.markCompleted(ticket.id);
+        // 6. Mark the ticket as completed
+        ticketBoard.markCompleted(ticket.id);
 
-      // 7. Verify terminal status
-      final afterComplete = ticketBoard.getTicket(ticket.id)!;
-      check(afterComplete.status).equals(TicketStatus.completed);
-      check(afterComplete.isTerminal).isTrue();
+        // 7. Verify terminal status
+        final afterComplete = ticketBoard.getTicket(ticket.id)!;
+        check(afterComplete.status).equals(TicketStatus.completed);
+        check(afterComplete.isTerminal).isTrue();
 
-      handler.dispose();
-    });
+        handler.dispose();
+      },
+    );
 
-    test('dispatch -> permission request -> needsInput -> permission response -> active -> turn complete -> inReview', () {
-      // 1. Create an active ticket with linked chat
-      final ticket = ticketBoard.createTicket(
-        title: 'Refactor database layer',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
+    test(
+      'dispatch -> permission request -> needsInput -> permission response -> active -> turn complete -> inReview',
+      () {
+        // 1. Create an active ticket with linked chat
+        final ticket = ticketBoard.createTicket(
+          title: 'Refactor database layer',
+          kind: TicketKind.feature,
+          status: TicketStatus.active,
+        );
 
-      final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
-      );
+        final chat = resources.track(
+          Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        );
 
-      ticketBoard.linkChat(
-        ticket.id,
-        chat.data.id,
-        chat.data.name,
-        '/tmp/test',
-      );
+        ticketBoard.linkChat(
+          ticket.id,
+          chat.data.id,
+          chat.data.name,
+          '/tmp/test',
+        );
 
-      final handler = EventHandler(ticketBoard: ticketBoard);
+        final handler = EventHandler(ticketBoard: ticketBoard);
 
-      // 2. Simulate permission request -> needsInput
-      final permEvent = makePermissionRequestEvent();
-      handler.handleEvent(chat, permEvent);
+        // 2. Simulate permission request -> needsInput
+        final permEvent = makePermissionRequestEvent();
+        handler.handleEvent(chat, permEvent);
 
-      final afterPerm = ticketBoard.getTicket(ticket.id)!;
-      check(afterPerm.status).equals(TicketStatus.needsInput);
+        final afterPerm = ticketBoard.getTicket(ticket.id)!;
+        check(afterPerm.status).equals(TicketStatus.needsInput);
 
-      // 3. Simulate permission response -> back to active
-      handler.handlePermissionResponse(chat);
+        // 3. Simulate permission response -> back to active
+        handler.handlePermissionResponse(chat);
 
-      final afterResponse = ticketBoard.getTicket(ticket.id)!;
-      check(afterResponse.status).equals(TicketStatus.active);
+        final afterResponse = ticketBoard.getTicket(ticket.id)!;
+        check(afterResponse.status).equals(TicketStatus.active);
 
-      // 4. Simulate turn complete -> inReview
-      final turnEvent = makeTurnCompleteEvent(
-        usage: const TokenUsage(inputTokens: 3000, outputTokens: 1000),
-        costUsd: 0.08,
-        durationMs: 5000,
-      );
-      handler.handleEvent(chat, turnEvent);
+        // 4. Simulate turn complete -> inReview
+        final turnEvent = makeTurnCompleteEvent(
+          usage: const TokenUsage(inputTokens: 3000, outputTokens: 1000),
+          costUsd: 0.08,
+          durationMs: 5000,
+        );
+        handler.handleEvent(chat, turnEvent);
 
-      final afterTurn = ticketBoard.getTicket(ticket.id)!;
-      check(afterTurn.status).equals(TicketStatus.inReview);
+        final afterTurn = ticketBoard.getTicket(ticket.id)!;
+        check(afterTurn.status).equals(TicketStatus.inReview);
 
-      handler.dispose();
-    });
+        handler.dispose();
+      },
+    );
 
     test('multiple turns accumulate cost stats correctly', () {
       final ticket = ticketBoard.createTicket(
@@ -344,7 +362,7 @@ void main() {
       );
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
 
       ticketBoard.linkChat(
@@ -397,7 +415,7 @@ void main() {
       );
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
 
       ticketBoard.linkChat(
@@ -446,7 +464,7 @@ void main() {
       );
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
 
       // Link chat to ticket A
@@ -458,8 +476,9 @@ void main() {
       );
 
       // 2. Verify B is blocked
-      check(ticketBoard.getTicket(ticketB.id)!.status)
-          .equals(TicketStatus.blocked);
+      check(
+        ticketBoard.getTicket(ticketB.id)!.status,
+      ).equals(TicketStatus.blocked);
 
       // 3. Complete ticket A (simulating user marking complete after agent work)
       ticketBoard.markCompleted(ticketA.id);
@@ -469,8 +488,9 @@ void main() {
       check(updatedB.status).equals(TicketStatus.ready);
 
       // 5. Ticket A should be completed
-      check(ticketBoard.getTicket(ticketA.id)!.status)
-          .equals(TicketStatus.completed);
+      check(
+        ticketBoard.getTicket(ticketA.id)!.status,
+      ).equals(TicketStatus.completed);
     });
 
     test('completing one of multiple deps does not unblock', () {
@@ -495,15 +515,17 @@ void main() {
       ticketBoard.markCompleted(dep1.id);
 
       // Dependent should still be blocked (dep2 not complete)
-      check(ticketBoard.getTicket(dependent.id)!.status)
-          .equals(TicketStatus.blocked);
+      check(
+        ticketBoard.getTicket(dependent.id)!.status,
+      ).equals(TicketStatus.blocked);
 
       // Now complete dep2
       ticketBoard.markCompleted(dep2.id);
 
       // Now dependent should be unblocked
-      check(ticketBoard.getTicket(dependent.id)!.status)
-          .equals(TicketStatus.ready);
+      check(
+        ticketBoard.getTicket(dependent.id)!.status,
+      ).equals(TicketStatus.ready);
     });
   });
 
@@ -521,12 +543,14 @@ void main() {
           branch: 'main',
         ),
       );
-      project = resources.track(ProjectState(
-        const ProjectData(name: 'Test Project', repoRoot: '/test/repo'),
-        primaryWorktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'Test Project', repoRoot: '/test/repo'),
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
       selection = resources.track(SelectionState(project));
       viewState = resources.track(TicketViewState(ticketBoard));
       bulkState = resources.track(BulkProposalState(ticketBoard));
@@ -540,12 +564,8 @@ void main() {
               ChangeNotifierProvider<TicketRepository>.value(
                 value: ticketBoard,
               ),
-              ChangeNotifierProvider<TicketViewState>.value(
-                value: viewState,
-              ),
-              ChangeNotifierProvider<BulkProposalState>.value(
-                value: bulkState,
-              ),
+              ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+              ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
               ChangeNotifierProvider<ProjectState>.value(value: project),
               ChangeNotifierProvider<SelectionState>.value(value: selection),
               Provider<GitService>.value(value: fakeGit),
@@ -556,8 +576,9 @@ void main() {
       );
     }
 
-    testWidgets('Open linked chat button appears after dispatch linking',
-        (tester) async {
+    testWidgets('Open linked chat button appears after dispatch linking', (
+      tester,
+    ) async {
       // 1. Create a ticket
       final ticket = ticketBoard.createTicket(
         title: 'Test linked chat visibility',
@@ -593,40 +614,40 @@ void main() {
       expect(find.text('Open linked chat'), findsOneWidget);
     });
 
-    testWidgets('Linked work section shows worktree and chat info after dispatch',
-        (tester) async {
-      // 1. Create a ticket with linked worktree and chat
-      final ticket = ticketBoard.createTicket(
-        title: 'Test linked work display',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
-      ticketBoard.linkWorktree(
-        ticket.id,
-        '/test/worktree/path',
-        'tkt-1-test-linked-work-display',
-      );
-      ticketBoard.linkChat(
-        ticket.id,
-        'chat-123',
-        'TKT-001',
-        '/test/worktree/path',
-      );
-      viewState.selectTicket(ticket.id);
+    testWidgets(
+      'Linked work section shows worktree and chat info after dispatch',
+      (tester) async {
+        // 1. Create a ticket with linked worktree and chat
+        final ticket = ticketBoard.createTicket(
+          title: 'Test linked work display',
+          kind: TicketKind.feature,
+          status: TicketStatus.active,
+        );
+        ticketBoard.linkWorktree(
+          ticket.id,
+          '/test/worktree/path',
+          'tkt-1-test-linked-work-display',
+        );
+        ticketBoard.linkChat(
+          ticket.id,
+          'chat-123',
+          'TKT-001',
+          '/test/worktree/path',
+        );
+        viewState.selectTicket(ticket.id);
 
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
 
-      // 2. Verify linked work section shows worktree branch and chat name
-      expect(
-        find.text('tkt-1-test-linked-work-display'),
-        findsOneWidget,
-      );
-      expect(find.text('TKT-001'), findsWidgets); // Also in header
-    });
+        // 2. Verify linked work section shows worktree branch and chat name
+        expect(find.text('tkt-1-test-linked-work-display'), findsOneWidget);
+        expect(find.text('TKT-001'), findsWidgets); // Also in header
+      },
+    );
 
-    testWidgets('Begin buttons disabled for active dispatched ticket',
-        (tester) async {
+    testWidgets('Begin buttons disabled for active dispatched ticket', (
+      tester,
+    ) async {
       // 1. Create a dispatched (active) ticket
       final ticket = ticketBoard.createTicket(
         title: 'Active dispatched ticket',
@@ -657,8 +678,9 @@ void main() {
       );
     });
 
-    testWidgets('Mark Complete and Cancel hidden for completed ticket',
-        (tester) async {
+    testWidgets('Mark Complete and Cancel hidden for completed ticket', (
+      tester,
+    ) async {
       // 1. Create a completed ticket
       final ticket = ticketBoard.createTicket(
         title: 'Completed dispatched ticket',
@@ -676,10 +698,7 @@ void main() {
         find.byKey(TicketDetailPanelKeys.markCompleteButton),
         findsNothing,
       );
-      expect(
-        find.byKey(TicketDetailPanelKeys.cancelButton),
-        findsNothing,
-      );
+      expect(find.byKey(TicketDetailPanelKeys.cancelButton), findsNothing);
 
       // 3. Begin buttons should be disabled (completed is not ready/needsInput)
       final beginNewWt = tester.widget<FilledButton>(
@@ -712,16 +731,20 @@ void main() {
       );
 
       // 3. Build prompt using dispatch service
-      final project = resources.track(ProjectState(
-        const ProjectData(name: 'test', repoRoot: '/tmp/test-repo'),
-        WorktreeState(const WorktreeData(
-          worktreeRoot: '/tmp/test-repo',
-          isPrimary: true,
-          branch: 'main',
-        )),
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/tmp/test-repo'),
+          WorktreeState(
+            const WorktreeData(
+              worktreeRoot: '/tmp/test-repo',
+              isPrimary: true,
+              branch: 'main',
+            ),
+          ),
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
       final selection = resources.track(SelectionState(project));
 
       final dispatch = TicketDispatchService(
@@ -781,10 +804,12 @@ void main() {
       final reloaded = ticketBoard2.getTicket(ticket.id)!;
       check(reloaded.status).equals(TicketStatus.active);
       check(reloaded.linkedWorktrees.length).equals(1);
-      check(reloaded.linkedWorktrees.first.worktreeRoot)
-          .equals('/path/to/worktree');
-      check(reloaded.linkedWorktrees.first.branch)
-          .equals('tkt-1-persistent-linking-test');
+      check(
+        reloaded.linkedWorktrees.first.worktreeRoot,
+      ).equals('/path/to/worktree');
+      check(
+        reloaded.linkedWorktrees.first.branch,
+      ).equals('tkt-1-persistent-linking-test');
       check(reloaded.linkedChats.length).equals(1);
       check(reloaded.linkedChats.first.chatId).equals('chat-persist-123');
       check(reloaded.linkedChats.first.chatName).equals('TKT-001');

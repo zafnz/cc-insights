@@ -41,8 +41,10 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
     // Size animation: small -> big (slow) -> hold -> small (fast)
     _sizeAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 10, end: 70)
-            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        tween: Tween<double>(
+          begin: 10,
+          end: 70,
+        ).chain(CurveTween(curve: Curves.easeOutCubic)),
         weight: 50, // Grow phase
       ),
       TweenSequenceItem(
@@ -50,8 +52,10 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
         weight: 25, // Hold at max size while shaking
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 70, end: 10)
-            .chain(CurveTween(curve: Curves.easeInQuad)),
+        tween: Tween<double>(
+          begin: 70,
+          end: 10,
+        ).chain(CurveTween(curve: Curves.easeInQuad)),
         weight: 25, // Shrink phase
       ),
     ]).animate(_controller);
@@ -63,10 +67,7 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
         weight: 50, // No shake during growth
       ),
       // Shake sequence during hold
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 0.15),
-        weight: 2.5,
-      ),
+      TweenSequenceItem(tween: Tween<double>(begin: 0, end: 0.15), weight: 2.5),
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.15, end: -0.15),
         weight: 5,
@@ -83,10 +84,7 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
         tween: Tween<double>(begin: -0.12, end: 0.08),
         weight: 4,
       ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.08, end: 0),
-        weight: 3.5,
-      ),
+      TweenSequenceItem(tween: Tween<double>(begin: 0.08, end: 0), weight: 3.5),
       TweenSequenceItem(
         tween: ConstantTween<double>(0),
         weight: 25, // No shake during shrink
@@ -96,17 +94,18 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
     // Opacity: fade in quickly, hold, then fade out
     _opacityAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 0,
+          end: 1,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 10,
       ),
+      TweenSequenceItem(tween: ConstantTween<double>(1), weight: 70),
       TweenSequenceItem(
-        tween: ConstantTween<double>(1),
-        weight: 70,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 1,
+          end: 0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 20,
       ),
     ]).animate(_controller);
@@ -272,11 +271,7 @@ class CreateWorktreeCard extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.add,
-                size: 14,
-                color: colorScheme.onSurfaceVariant,
-              ),
+              Icon(Icons.add, size: 14, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
@@ -379,7 +374,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   // ---------------------------------------------------------------------------
 
   Future<void> _handleStageCommit(BuildContext context) async {
-    LogService.instance.info('WorktreeMenu', 'Stage & Commit: ${worktree.data.branch}');
+    LogService.instance.info(
+      'WorktreeMenu',
+      'Stage & Commit: ${worktree.data.branch}',
+    );
     final gitService = context.read<GitService>();
     final askAiService = context.read<AskAiService>();
     final fileSystemService = context.read<FileSystemService>();
@@ -398,7 +396,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   Future<void> _handleRebase(BuildContext context) async {
     final data = worktree.data;
     final baseRef = data.baseRef ?? 'main';
-    LogService.instance.info('WorktreeMenu', 'Rebase: ${data.branch} onto $baseRef');
+    LogService.instance.info(
+      'WorktreeMenu',
+      'Rebase: ${data.branch} onto $baseRef',
+    );
     final gitService = context.read<GitService>();
 
     await showConflictResolutionDialog(
@@ -416,7 +417,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   Future<void> _handleMergeFromBase(BuildContext context) async {
     final data = worktree.data;
     final baseRef = data.baseRef ?? 'main';
-    LogService.instance.info('WorktreeMenu', 'Merge from base: $baseRef into ${data.branch}');
+    LogService.instance.info(
+      'WorktreeMenu',
+      'Merge from base: $baseRef into ${data.branch}',
+    );
     final gitService = context.read<GitService>();
 
     await showConflictResolutionDialog(
@@ -463,7 +467,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     final newBase = result.base;
     if (newBase == previousValue) return;
 
-    LogService.instance.notice('WorktreeMenu', 'Base changed: ${worktree.data.branch} ${previousValue ?? "none"} -> $newBase');
+    LogService.instance.notice(
+      'WorktreeMenu',
+      'Base changed: ${worktree.data.branch} ${previousValue ?? "none"} -> $newBase',
+    );
     worktree.setBase(newBase);
 
     try {
@@ -478,7 +485,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       LogService.instance.logUnhandledException(e, stack);
       worktree.setBase(previousValue);
       if (context.mounted) {
-        showErrorSnackBar(context, 'Failed to update base branch. Please try again.');
+        showErrorSnackBar(
+          context,
+          'Failed to update base branch. Please try again.',
+        );
       }
       return;
     }
@@ -486,7 +496,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     _refreshStatus();
 
     if (result.rebase && context.mounted) {
-      LogService.instance.info('WorktreeMenu', 'Rebase onto new base: ${worktree.data.branch} -> $newBase');
+      LogService.instance.info(
+        'WorktreeMenu',
+        'Rebase onto new base: ${worktree.data.branch} -> $newBase',
+      );
       final gitService = context.read<GitService>();
 
       await showConflictResolutionDialog(
@@ -540,11 +553,20 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     _refreshStatus();
   }
 
-  Future<void> _handlePush(BuildContext context, {bool setUpstream = false}) async {
-    LogService.instance.info('WorktreeMenu', 'Push: ${worktree.data.branch}${setUpstream ? ' (set upstream)' : ''}');
+  Future<void> _handlePush(
+    BuildContext context, {
+    bool setUpstream = false,
+  }) async {
+    LogService.instance.info(
+      'WorktreeMenu',
+      'Push: ${worktree.data.branch}${setUpstream ? ' (set upstream)' : ''}',
+    );
     final gitService = context.read<GitService>();
     try {
-      await gitService.push(worktree.data.worktreeRoot, setUpstream: setUpstream);
+      await gitService.push(
+        worktree.data.worktreeRoot,
+        setUpstream: setUpstream,
+      );
     } catch (e) {
       if (!context.mounted) return;
       showErrorSnackBar(context, 'Push failed: $e');
@@ -554,7 +576,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   }
 
   Future<void> _handlePullFfOnly(BuildContext context) async {
-    LogService.instance.info('WorktreeMenu', 'Pull FF-only: ${worktree.data.branch}');
+    LogService.instance.info(
+      'WorktreeMenu',
+      'Pull FF-only: ${worktree.data.branch}',
+    );
     final gitService = context.read<GitService>();
     final result = await gitService.pullFfOnly(worktree.data.worktreeRoot);
     if (result.error != null && context.mounted) {
@@ -642,11 +667,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       );
       menuItems.add(
         MenuItemButton(
-          leadingIcon: Icon(
-            Icons.add,
-            size: 16,
-            color: colorScheme.onSurface,
-          ),
+          leadingIcon: Icon(Icons.add, size: 16, color: colorScheme.onSurface),
           onPressed: () {
             context.read<SelectionState>().showCreateWorktreePanel();
           },
@@ -680,24 +701,22 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
               return MenuItemButton(
                 onPressed: () {
                   worktree.toggleTag(tag.name);
-                  persistence.updateWorktreeTags(
-                    projectRoot: project.data.repoRoot,
-                    worktreePath: worktree.data.worktreeRoot,
-                    tags: List.of(worktree.tags),
-                  ).catchError((Object e, StackTrace stack) {
-                    LogService.instance.logUnhandledException(e, stack);
-                    worktree.toggleTag(tag.name); // revert
-                  });
+                  persistence
+                      .updateWorktreeTags(
+                        projectRoot: project.data.repoRoot,
+                        worktreePath: worktree.data.worktreeRoot,
+                        tags: List.of(worktree.tags),
+                      )
+                      .catchError((Object e, StackTrace stack) {
+                        LogService.instance.logUnhandledException(e, stack);
+                        worktree.toggleTag(tag.name); // revert
+                      });
                   setState(() {});
                 },
                 leadingIcon: SizedBox(
                   width: 20,
                   child: isChecked
-                      ? Icon(
-                          Icons.check,
-                          size: 14,
-                          color: colorScheme.primary,
-                        )
+                      ? Icon(Icons.check, size: 14, color: colorScheme.primary)
                       : null,
                 ),
                 trailingIcon: Container(
@@ -710,10 +729,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                 ),
                 child: Text(
                   tag.name,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurface,
-                  ),
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurface),
                 ),
               );
             }).toList(),
@@ -760,9 +776,9 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             color: colorScheme.onSurface,
           ),
           onPressed: () {
-            context
-                .read<SelectionState>()
-                .showCreateWorktreePanel(baseBranch: worktree.data.branch);
+            context.read<SelectionState>().showCreateWorktreePanel(
+              baseBranch: worktree.data.branch,
+            );
           },
           child: Text(
             'Branch off this worktree',
@@ -850,12 +866,13 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           size: 16,
           color: stageEnabled ? enabledColor : disabledColor,
         ),
-        onPressed: stageEnabled
-            ? () => _handleStageCommit(context)
-            : null,
+        onPressed: stageEnabled ? () => _handleStageCommit(context) : null,
         child: Text(
           'Stage & Commit...',
-          style: TextStyle(color: stageEnabled ? enabledColor : disabledColor, fontSize: 13),
+          style: TextStyle(
+            color: stageEnabled ? enabledColor : disabledColor,
+            fontSize: 13,
+          ),
         ),
       ),
     );
@@ -872,12 +889,13 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             size: 16,
             color: behindBase ? enabledColor : disabledColor,
           ),
-          onPressed: behindBase
-              ? () => _handleRebase(context)
-              : null,
+          onPressed: behindBase ? () => _handleRebase(context) : null,
           child: Text(
             'Rebase',
-            style: TextStyle(color: behindBase ? enabledColor : disabledColor, fontSize: 13),
+            style: TextStyle(
+              color: behindBase ? enabledColor : disabledColor,
+              fontSize: 13,
+            ),
           ),
         ),
       );
@@ -890,18 +908,20 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             size: 16,
             color: behindBase ? enabledColor : disabledColor,
           ),
-          onPressed: behindBase
-              ? () => _handleMergeFromBase(context)
-              : null,
+          onPressed: behindBase ? () => _handleMergeFromBase(context) : null,
           child: Text(
             'Merge from base',
-            style: TextStyle(color: behindBase ? enabledColor : disabledColor, fontSize: 13),
+            style: TextStyle(
+              color: behindBase ? enabledColor : disabledColor,
+              fontSize: 13,
+            ),
           ),
         ),
       );
 
       // Squash commits - disabled when fewer than 2 commits ahead of base
-      final squashEnabled = aheadOfBase && worktree.data.commitsAheadOfMain >= 2;
+      final squashEnabled =
+          aheadOfBase && worktree.data.commitsAheadOfMain >= 2;
       items.add(
         MenuItemButton(
           leadingIcon: Icon(
@@ -909,12 +929,13 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             size: 16,
             color: squashEnabled ? enabledColor : disabledColor,
           ),
-          onPressed: squashEnabled
-              ? () => _handleSquash(context)
-              : null,
+          onPressed: squashEnabled ? () => _handleSquash(context) : null,
           child: Text(
             'Squash commits',
-            style: TextStyle(color: squashEnabled ? enabledColor : disabledColor, fontSize: 13),
+            style: TextStyle(
+              color: squashEnabled ? enabledColor : disabledColor,
+              fontSize: 13,
+            ),
           ),
         ),
       );
@@ -946,12 +967,13 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
           size: 16,
           color: aheadOfBase ? enabledColor : disabledColor,
         ),
-        onPressed: aheadOfBase
-            ? () => _handleMergeIntoBase(context)
-            : null,
+        onPressed: aheadOfBase ? () => _handleMergeIntoBase(context) : null,
         child: Text(
           'Merge into base',
-          style: TextStyle(color: aheadOfBase ? enabledColor : disabledColor, fontSize: 13),
+          style: TextStyle(
+            color: aheadOfBase ? enabledColor : disabledColor,
+            fontSize: 13,
+          ),
         ),
       ),
     );
@@ -977,7 +999,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                   final ffEnabled = worktree.data.commitsAhead == 0;
                   return Text(
                     'FF Only',
-                    style: TextStyle(color: ffEnabled ? enabledColor : disabledColor, fontSize: 13),
+                    style: TextStyle(
+                      color: ffEnabled ? enabledColor : disabledColor,
+                      fontSize: 13,
+                    ),
                   );
                 },
               ),
@@ -1013,12 +1038,13 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
             size: 16,
             color: pushEnabled ? enabledColor : disabledColor,
           ),
-          onPressed: pushEnabled
-              ? () => _handlePush(context)
-              : null,
+          onPressed: pushEnabled ? () => _handlePush(context) : null,
           child: Text(
             'Push',
-            style: TextStyle(color: pushEnabled ? enabledColor : disabledColor, fontSize: 13),
+            style: TextStyle(
+              color: pushEnabled ? enabledColor : disabledColor,
+              fontSize: 13,
+            ),
           ),
         ),
       );
@@ -1040,7 +1066,10 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
     } catch (e, stack) {
       LogService.instance.logUnhandledException(e, stack);
       if (context.mounted) {
-        showErrorSnackBar(context, 'Failed to hide worktree. Please try again.');
+        showErrorSnackBar(
+          context,
+          'Failed to hide worktree. Please try again.',
+        );
       }
       return;
     }
@@ -1096,14 +1125,18 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
       } catch (e, stack) {
         LogService.instance.logUnhandledException(e, stack);
         if (context.mounted) {
-          showErrorSnackBar(context, 'Failed to archive chats. Worktree deletion aborted to prevent data loss.');
+          showErrorSnackBar(
+            context,
+            'Failed to archive chats. Worktree deletion aborted to prevent data loss.',
+          );
         }
         return;
       }
     }
 
-    final deleteBranch =
-        settings.getEffectiveValue<bool>('behavior.deleteBranchWithWorktree');
+    final deleteBranch = settings.getEffectiveValue<bool>(
+      'behavior.deleteBranchWithWorktree',
+    );
 
     if (!context.mounted) return;
     final result = await showDeleteWorktreeDialog(
@@ -1134,22 +1167,29 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    // Listen to worktree (git status) and all chats (permissions).
+    // Listen to worktree (git status) and all chat session/permission states.
+    final chatListenables = <Listenable>[
+      for (final chat in worktree.chats) chat.permissions,
+      for (final chat in worktree.chats) chat.session,
+    ];
     return ListenableBuilder(
-      listenable: Listenable.merge([worktree, ...worktree.chats]),
+      listenable: Listenable.merge([worktree, ...chatListenables]),
       builder: (context, _) {
         final data = worktree.data;
         // Check if any chat in this worktree has a pending permission
-        final hasAnyPermissionPending =
-            worktree.chats.any((chat) => chat.isWaitingForPermission);
-        final hasAnyActiveChat =
-            worktree.chats.any((chat) => chat.isWorking);
+        final hasAnyPermissionPending = worktree.chats.any(
+          (chat) => chat.permissions.isWaitingForPermission,
+        );
+        final hasAnyActiveChat = worktree.chats.any(
+          (chat) => chat.session.isWorking,
+        );
 
         Widget item = MenuAnchor(
           controller: _menuController,
-          builder: (BuildContext context, MenuController controller, Widget? child) {
-            return child!;
-          },
+          builder:
+              (BuildContext context, MenuController controller, Widget? child) {
+                return child!;
+              },
           menuChildren: _buildMenuChildren(context),
           alignmentOffset: const Offset(0, 0),
           style: MenuStyle(
@@ -1175,115 +1215,119 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
               _menuController.open(position: details.localPosition);
             },
             child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: colorScheme.surfaceContainerHighest,
-                  width: 1,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: colorScheme.surfaceContainerHighest,
+                    width: 1,
+                  ),
                 ),
               ),
-            ),
-            child: Material(
-              color: isSelected
-                  ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-                  : Colors.transparent,
-              child: InkWell(
-                onTap: () => _handleTap(context),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top row: spinner + branch name + permission indicator
-                    Row(
-                      children: [
-                        // Activity spinner
-                        if (hasAnyActiveChat)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: _WorktreeActivitySpinner(
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        // Hidden indicator
-                        if (worktree.hidden)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 4),
-                            child: Icon(
-                              Icons.visibility_off,
-                              size: 12,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        // Branch name (normal weight, ~13px)
-                        Expanded(
-                          child: Text(
-                            data.branch,
-                            style: textTheme.bodyMedium,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        // Permission indicator (orange bell)
-                        if (hasAnyPermissionPending)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 4),
-                            child: Icon(
-                              Icons.notifications_active,
-                              size: 14,
-                              color: Colors.orange,
-                            ),
-                          ),
-                      ],
+              child: Material(
+                color: isSelected
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                    : Colors.transparent,
+                child: InkWell(
+                  onTap: () => _handleTap(context),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
                     ),
-                    // Tag pills
-                    if (worktree.tags.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3),
-                        child: Builder(
-                          builder: (BuildContext tagContext) {
-                            final settings = tagContext.read<SettingsService>();
-                            return _TagPills(
-                              tagNames: worktree.tags,
-                              availableTags: settings.availableTags,
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 2),
-                    // Path + status on same line (muted, monospace, ~11px)
-                    // Primary worktree: show full path trimmed from the start.
-                    // Linked worktrees: cost/token summary instead of path.
-                    Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (data.isPrimary)
-                          Expanded(
-                            child: Directionality(
-                              textDirection: TextDirection.rtl,
-                              child: Text(
-                                data.worktreeRoot,
-                                style: textTheme.bodySmall?.copyWith(
+                        // Top row: spinner + branch name + permission indicator
+                        Row(
+                          children: [
+                            // Activity spinner
+                            if (hasAnyActiveChat)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: _WorktreeActivitySpinner(
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                            // Hidden indicator
+                            if (worktree.hidden)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: Icon(
+                                  Icons.visibility_off,
+                                  size: 12,
                                   color: colorScheme.onSurfaceVariant,
                                 ),
+                              ),
+                            // Branch name (normal weight, ~13px)
+                            Expanded(
+                              child: Text(
+                                data.branch,
+                                style: textTheme.bodyMedium,
                                 overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
                               ),
                             ),
-                          )
-                        else
-                          Expanded(
-                            child: RuntimeConfig.instance.showWorktreeCost
-                                ? _WorktreeCostSummary(worktree: worktree)
-                                : const SizedBox.shrink(),
+                            // Permission indicator (orange bell)
+                            if (hasAnyPermissionPending)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.notifications_active,
+                                  size: 14,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                          ],
+                        ),
+                        // Tag pills
+                        if (worktree.tags.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Builder(
+                              builder: (BuildContext tagContext) {
+                                final settings = tagContext
+                                    .read<SettingsService>();
+                                return _TagPills(
+                                  tagNames: worktree.tags,
+                                  availableTags: settings.availableTags,
+                                );
+                              },
+                            ),
                           ),
-                        // Inline status indicators
-                        InlineStatusIndicators(data: data),
+                        const SizedBox(height: 2),
+                        // Path + status on same line (muted, monospace, ~11px)
+                        // Primary worktree: show full path trimmed from the start.
+                        // Linked worktrees: cost/token summary instead of path.
+                        Row(
+                          children: [
+                            if (data.isPrimary)
+                              Expanded(
+                                child: Directionality(
+                                  textDirection: TextDirection.rtl,
+                                  child: Text(
+                                    data.worktreeRoot,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              )
+                            else
+                              Expanded(
+                                child: RuntimeConfig.instance.showWorktreeCost
+                                    ? _WorktreeCostSummary(worktree: worktree)
+                                    : const SizedBox.shrink(),
+                              ),
+                            // Inline status indicators
+                            InlineStatusIndicators(data: data),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
             ),
           ),
         );

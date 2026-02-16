@@ -84,14 +84,14 @@ class SelectionState extends ChangeNotifier {
   /// Follows the hierarchy: returns the selected chat within the selected
   /// worktree. Returns null if no worktree is selected or if the selected
   /// worktree has no selected chat.
-  ChatState? get selectedChat => selectedWorktree?.selectedChat;
+  Chat? get selectedChat => selectedWorktree?.selectedChat;
 
   /// The currently selected conversation, if any.
   ///
   /// Follows the hierarchy: returns the selected conversation within the
   /// selected chat. Returns null if no chat is selected.
   ConversationData? get selectedConversation =>
-      selectedChat?.selectedConversation;
+      selectedChat?.conversations.selectedConversation;
 
   /// The currently selected file path, if any.
   String? get selectedFilePath => _selectedFilePath;
@@ -126,13 +126,13 @@ class SelectionState extends ChangeNotifier {
   void selectWorktree(WorktreeState worktree) {
     // Mark the previously selected chat as no longer viewed
     final previousChat = selectedChat;
-    previousChat?.markAsNotViewed();
+    previousChat?.viewState.markAsNotViewed();
 
     _project.selectWorktree(worktree);
 
     // Mark the newly selected worktree's chat as viewed (if any)
     final newChat = worktree.selectedChat;
-    newChat?.markAsViewed();
+    newChat?.viewState.markAsViewed();
 
     // Close project settings panel if it's open
     if (_contentPanelMode == ContentPanelMode.projectSettings) {
@@ -150,11 +150,11 @@ class SelectionState extends ChangeNotifier {
   /// If the chat's history has not been loaded yet, triggers lazy-loading
   /// in the background. The chat is shown immediately (possibly empty), and
   /// entries appear when loading completes via [notifyListeners].
-  void selectChat(ChatState chat) {
+  void selectChat(Chat chat) {
     // Mark the previously selected chat as no longer viewed
     final previousChat = selectedChat;
     if (previousChat != null && previousChat != chat) {
-      previousChat.markAsNotViewed();
+      previousChat.viewState.markAsNotViewed();
     }
 
     // Clear any previous error
@@ -162,9 +162,9 @@ class SelectionState extends ChangeNotifier {
 
     selectedWorktree?.selectChat(chat);
     // Reset to primary conversation when selecting a chat
-    chat.resetToMainConversation();
+    chat.conversations.resetToMainConversation();
     // Mark the newly selected chat as viewed (clears unread count)
-    chat.markAsViewed();
+    chat.viewState.markAsViewed();
     notifyListeners();
 
     // Lazy-load chat history if not already loaded
@@ -176,8 +176,8 @@ class SelectionState extends ChangeNotifier {
   /// This runs asynchronously and does not block the UI. When loading
   /// completes, the chat's entries are populated and [notifyListeners]
   /// is called to update the UI.
-  Future<void> _loadChatHistoryIfNeeded(ChatState chat) async {
-    if (chat.hasLoadedHistory) {
+  Future<void> _loadChatHistoryIfNeeded(Chat chat) async {
+    if (chat.conversations.hasLoadedHistory) {
       return;
     }
 
@@ -197,10 +197,7 @@ class SelectionState extends ChangeNotifier {
       LogService.instance.error(
         'SelectionState',
         'Failed to load chat history: ${chat.data.name}: $e',
-        meta: {
-          'chatId': chat.data.id,
-          'stack': stackTrace.toString(),
-        },
+        meta: {'chatId': chat.data.id, 'stack': stackTrace.toString()},
       );
       if (_disposed) return;
       _isLoadingChatHistory = false;
@@ -216,7 +213,7 @@ class SelectionState extends ChangeNotifier {
   /// conversation data directly; the chat will determine whether to use null
   /// (for primary) or the conversation ID (for subagents).
   void selectConversation(ConversationData conversation) {
-    selectedChat?.selectConversation(
+    selectedChat?.conversations.selectConversation(
       conversation.isPrimary ? null : conversation.id,
     );
     notifyListeners();
@@ -257,14 +254,17 @@ class SelectionState extends ChangeNotifier {
   ///
   /// Does nothing if the chat's worktree is not currently selected.
   Future<void> closeChat(
-    ChatState chat,
+    Chat chat,
     ProjectRestoreService restoreService, {
     bool archive = false,
   }) async {
     final worktree = selectedWorktree;
     if (worktree == null) return;
 
-    LogService.instance.notice('Chat', 'Chat closed: "${chat.data.name}" in ${worktree.data.branch}');
+    LogService.instance.notice(
+      'Chat',
+      'Chat closed: "${chat.data.name}" in ${worktree.data.branch}',
+    );
 
     // Perform the close operation (archives or deletes)
     await restoreService.closeChat(
@@ -284,7 +284,7 @@ class SelectionState extends ChangeNotifier {
   /// Creates a new chat in the currently selected worktree.
   ///
   /// This method:
-  /// 1. Creates a new ChatState with the worktree's welcome screen settings
+  /// 1. Creates a new Chat with the worktree's welcome screen settings
   /// 2. Persists the chat to projects.json
   /// 3. Adds the chat to the worktree state
   /// 4. Selects the new chat
@@ -299,7 +299,7 @@ class SelectionState extends ChangeNotifier {
 
     final previousChat = selectedChat;
     if (previousChat != null) {
-      previousChat.markAsNotViewed();
+      previousChat.viewState.markAsNotViewed();
     }
 
     worktree.selectChat(null);

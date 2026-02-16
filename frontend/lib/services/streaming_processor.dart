@@ -1,11 +1,7 @@
 import 'dart:async';
 
 import 'package:agent_sdk_core/agent_sdk_core.dart'
-    show
-        BackendProvider,
-        StreamDeltaEvent,
-        StreamDeltaKind,
-        ToolKind;
+    show BackendProvider, StreamDeltaEvent, StreamDeltaKind, ToolKind;
 
 import '../models/chat.dart';
 import '../models/output_entry.dart';
@@ -26,7 +22,7 @@ class StreamingProcessor {
   final Map<String, List<OutputEntry>> activeStreamingEntries;
 
   /// Resolves a parentCallId to a conversation ID.
-  final String Function(ChatState, String?) _resolveConversationId;
+  final String Function(Chat, String?) _resolveConversationId;
 
   /// Tracks streaming entries by (conversationId, contentBlockIndex).
   final Map<(String, int), OutputEntry> _streamingBlocks = {};
@@ -35,7 +31,7 @@ class StreamingProcessor {
   String? _streamingConversationId;
 
   /// Chat reference for the current streaming session.
-  ChatState? _streamingChat;
+  Chat? _streamingChat;
 
   /// Throttle timer for batching UI updates during streaming.
   Timer? _notifyTimer;
@@ -46,12 +42,12 @@ class StreamingProcessor {
   StreamingProcessor({
     required Map<String, ToolUseOutputEntry> toolCallIndex,
     required this.activeStreamingEntries,
-    required String Function(ChatState, String?) resolveConversationId,
-  })  : _toolCallIndex = toolCallIndex,
+    required String Function(Chat, String?) resolveConversationId,
+  }) : _toolCallIndex = toolCallIndex,
        _resolveConversationId = resolveConversationId;
 
   /// Handle a streaming delta event.
-  void handleDelta(ChatState chat, StreamDeltaEvent event) {
+  void handleDelta(Chat chat, StreamDeltaEvent event) {
     switch (event.kind) {
       case StreamDeltaKind.messageStart:
         _onMessageStart(chat, event.parentCallId);
@@ -70,17 +66,13 @@ class StreamingProcessor {
     }
   }
 
-  void _onMessageStart(ChatState chat, String? parentCallId) {
+  void _onMessageStart(Chat chat, String? parentCallId) {
     _streamingConversationId = _resolveConversationId(chat, parentCallId);
     _streamingChat = chat;
     _streamingBlocks.clear();
   }
 
-  void _onContentBlockStart(
-    ChatState chat,
-    int index,
-    StreamDeltaEvent event,
-  ) {
+  void _onContentBlockStart(Chat chat, int index, StreamDeltaEvent event) {
     final convId = _streamingConversationId;
     if (convId == null) return;
 
@@ -119,15 +111,11 @@ class StreamingProcessor {
     }
 
     _streamingBlocks[(convId, index)] = entry;
-    chat.addOutputEntry(convId, entry);
+    chat.conversations.addOutputEntry(convId, entry);
     activeStreamingEntries.putIfAbsent(convId, () => []).add(entry);
   }
 
-  void _onContentBlockDelta(
-    ChatState chat,
-    int index,
-    StreamDeltaEvent event,
-  ) {
+  void _onContentBlockDelta(Chat chat, int index, StreamDeltaEvent event) {
     final convId = _streamingConversationId;
     if (convId == null) return;
 
@@ -163,12 +151,12 @@ class StreamingProcessor {
     }
   }
 
-  void _onMessageStop(ChatState chat) {
+  void _onMessageStop(Chat chat) {
     _notifyTimer?.cancel();
     _notifyTimer = null;
     if (_hasPendingNotify) {
       _hasPendingNotify = false;
-      chat.notifyListeners();
+      chat.conversations.notifyMutation();
     }
 
     _streamingBlocks.clear();
@@ -178,15 +166,12 @@ class StreamingProcessor {
 
   void _scheduleNotify() {
     _hasPendingNotify = true;
-    _notifyTimer ??= Timer.periodic(
-      const Duration(milliseconds: 50),
-      (_) {
-        if (_hasPendingNotify && _streamingChat != null) {
-          _hasPendingNotify = false;
-          _streamingChat!.notifyListeners();
-        }
-      },
-    );
+    _notifyTimer ??= Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (_hasPendingNotify && _streamingChat != null) {
+        _hasPendingNotify = false;
+        _streamingChat!.conversations.notifyMutation();
+      }
+    });
   }
 
   /// Clears in-flight streaming state.
@@ -207,7 +192,7 @@ class StreamingProcessor {
     }
 
     if (_streamingChat != null) {
-      _streamingChat!.notifyListeners();
+      _streamingChat!.conversations.notifyMutation();
     }
 
     _streamingBlocks.clear();
@@ -218,9 +203,7 @@ class StreamingProcessor {
 
   /// Removes streaming state for specific conversations.
   void clearConversations(Set<String> conversationIds) {
-    _streamingBlocks.removeWhere(
-      (key, _) => conversationIds.contains(key.$1),
-    );
+    _streamingBlocks.removeWhere((key, _) => conversationIds.contains(key.$1));
     activeStreamingEntries.removeWhere(
       (convId, _) => conversationIds.contains(convId),
     );

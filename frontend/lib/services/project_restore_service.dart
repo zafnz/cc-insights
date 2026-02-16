@@ -26,7 +26,7 @@ import 'runtime_config.dart';
 /// The restore process follows the persistence architecture:
 /// 1. Load `projects.json` to find the project by root path
 /// 2. Restore `ProjectState` and `WorktreeState` objects
-/// 3. Create `ChatState` objects (without loading history)
+/// 3. Create `Chat` objects (without loading history)
 /// 4. History is loaded lazily when a chat is selected
 class ProjectRestoreService {
   final PersistenceService _persistence;
@@ -40,9 +40,9 @@ class ProjectRestoreService {
     PersistenceService? persistence,
     CostTrackingService? costTracking,
     ProjectConfigService? configService,
-  })  : _persistence = persistence ?? PersistenceService(),
-        _costTracking = costTracking ?? CostTrackingService(),
-        _configService = configService ?? ProjectConfigService();
+  }) : _persistence = persistence ?? PersistenceService(),
+       _costTracking = costTracking ?? CostTrackingService(),
+       _configService = configService ?? ProjectConfigService();
 
   /// Restores or creates a project for the given root path.
   ///
@@ -188,7 +188,7 @@ class ProjectRestoreService {
     String projectRoot, {
     String? defaultBase,
   }) async {
-    final chats = <ChatState>[];
+    final chats = <Chat>[];
 
     for (final chatRef in worktreeInfo.chats) {
       final chatState = await _restoreChat(
@@ -218,12 +218,12 @@ class ProjectRestoreService {
 
   /// Restores a chat from persistence data.
   ///
-  /// Creates ChatState with:
+  /// Creates Chat with:
   /// - Chat ID and name from ChatReference
   /// - Model and permission mode from ChatMeta (if exists)
   /// - Last session ID from ChatReference (for session resume)
   /// - Empty entries (history is lazy-loaded)
-  Future<ChatState> _restoreChat(
+  Future<Chat> _restoreChat(
     ChatReference chatRef,
     String worktreePath,
     String projectId,
@@ -260,8 +260,10 @@ class ProjectRestoreService {
         final name = meta.backendName;
         final driver = _normalizeDriver(meta.backendType);
         if (name != null) {
-          final replacement =
-              RuntimeConfig.instance.agentByNameAndDriver(name, driver);
+          final replacement = RuntimeConfig.instance.agentByNameAndDriver(
+            name,
+            driver,
+          );
           if (replacement != null) {
             meta = meta.copyWith(agentId: replacement.id);
           } else {
@@ -273,15 +275,18 @@ class ProjectRestoreService {
       }
     }
 
-    final chatState = ChatState(chatData, agentId: meta.agentId);
+    final chatState = Chat(chatData, agentId: meta.agentId);
 
     // Initialize persistence with both projectId and projectRoot
     // The projectRoot is needed for updating lastSessionId in projects.json
-    await chatState.initPersistence(projectId, projectRoot: projectRoot);
+    await chatState.persistence.initPersistence(
+      projectId,
+      projectRoot: projectRoot,
+    );
 
     _applyMetaToChat(chatState, meta);
-    chatState.setHasStartedFromRestore(meta.hasStarted);
-    chatState.restoreFromMeta(
+    chatState.session.setHasStartedFromRestore(meta.hasStarted);
+    chatState.metrics.restoreFromMeta(
       meta.context,
       meta.usage,
       modelUsage: meta.modelUsage,
@@ -290,7 +295,7 @@ class ProjectRestoreService {
 
     // Restore the last session ID for session resume
     if (chatRef.lastSessionId != null) {
-      chatState.setLastSessionIdFromRestore(chatRef.lastSessionId);
+      chatState.session.setLastSessionIdFromRestore(chatRef.lastSessionId);
       developer.log(
         'Restored session ID for chat ${chatRef.chatId}: ${chatRef.lastSessionId}',
         name: 'ProjectRestoreService',
@@ -299,7 +304,7 @@ class ProjectRestoreService {
 
     // Mark as missing agent if validation failed
     if (missingAgentMessage != null) {
-      chatState.markAgentMissing(missingAgentMessage);
+      chatState.agents.markAgentMissing(missingAgentMessage);
     }
 
     developer.log(
@@ -318,22 +323,26 @@ class ProjectRestoreService {
     };
   }
 
-  /// Applies ChatMeta settings to a ChatState.
-  void _applyMetaToChat(ChatState chat, ChatMeta meta) {
+  /// Applies ChatMeta settings to a Chat.
+  void _applyMetaToChat(Chat chat, ChatMeta meta) {
     final backend = ChatModelCatalog.backendFromValue(meta.backendType);
-    chat.setModel(ChatModelCatalog.defaultForBackend(backend, meta.model));
+    chat.settings.setModel(
+      ChatModelCatalog.defaultForBackend(backend, meta.model),
+    );
 
     // Restore security config from meta (notifyChange: false to avoid spurious notifications)
     if (backend == sdk.BackendType.codex && meta.codexSandboxMode != null) {
       // Codex chat with security config
-      chat.setSecurityConfig(
+      chat.settings.setSecurityConfig(
         sdk.CodexSecurityConfig(
           sandboxMode: sdk.CodexSandboxMode.fromWire(meta.codexSandboxMode!),
           approvalPolicy: meta.codexApprovalPolicy != null
               ? sdk.CodexApprovalPolicy.fromWire(meta.codexApprovalPolicy!)
               : sdk.CodexApprovalPolicy.onRequest,
           workspaceWriteOptions: meta.codexWorkspaceWriteOptions != null
-              ? sdk.CodexWorkspaceWriteOptions.fromJson(meta.codexWorkspaceWriteOptions!)
+              ? sdk.CodexWorkspaceWriteOptions.fromJson(
+                  meta.codexWorkspaceWriteOptions!,
+                )
               : null,
           webSearch: meta.codexWebSearch != null
               ? sdk.CodexWebSearchMode.fromWire(meta.codexWebSearch!)
@@ -343,7 +352,7 @@ class ProjectRestoreService {
       );
     } else {
       // Claude chat or old meta without Codex fields
-      chat.setSecurityConfig(
+      chat.settings.setSecurityConfig(
         sdk.ClaudeSecurityConfig(
           permissionMode: sdk.PermissionMode.fromString(meta.permissionMode),
         ),
@@ -402,16 +411,11 @@ class ProjectRestoreService {
     final newProject = ProjectInfo(
       id: projectId,
       name: projectName,
-      worktrees: {
-        projectRoot: const WorktreeInfo.primary(name: 'main'),
-      },
+      worktrees: {projectRoot: const WorktreeInfo.primary(name: 'main')},
     );
 
     final updatedIndex = currentIndex.copyWith(
-      projects: {
-        ...currentIndex.projects,
-        projectRoot: newProject,
-      },
+      projects: {...currentIndex.projects, projectRoot: newProject},
     );
 
     await _persistence.saveProjectsIndex(updatedIndex);
@@ -422,14 +426,14 @@ class ProjectRestoreService {
     );
   }
 
-  /// Loads chat history from persistence into a ChatState.
+  /// Loads chat history from persistence into a Chat.
   ///
   /// This should be called when a chat is selected to lazy-load its history.
   /// The entries are added without triggering persistence (they're already
   /// persisted).
   ///
   /// Returns the number of entries loaded.
-  Future<int> loadChatHistory(ChatState chat, String projectId) async {
+  Future<int> loadChatHistory(Chat chat, String projectId) async {
     try {
       final entries = await _persistence.loadChatHistory(
         projectId,
@@ -437,14 +441,14 @@ class ProjectRestoreService {
       );
 
       if (entries.isNotEmpty) {
-        chat.loadEntriesFromPersistence(entries);
+        chat.conversations.loadEntriesFromPersistence(entries);
         LogService.instance.debug(
           'ProjectRestoreService',
           'Restored chat "${chat.data.name}" (${chat.data.id}): loaded ${entries.length} entries',
           meta: {'chatId': chat.data.id, 'chatName': chat.data.name},
         );
       } else {
-        chat.markHistoryAsLoaded();
+        chat.conversations.markHistoryAsLoaded();
         LogService.instance.debug(
           'ProjectRestoreService',
           'Chat "${chat.data.name}" (${chat.data.id}): no persisted history',
@@ -465,7 +469,7 @@ class ProjectRestoreService {
         },
       );
       // Mark as loaded anyway to prevent repeated attempts
-      chat.markHistoryAsLoaded();
+      chat.conversations.markHistoryAsLoaded();
       return 0;
     }
   }
@@ -476,10 +480,10 @@ class ProjectRestoreService {
   Future<void> addChatToWorktree(
     String projectRoot,
     String worktreePath,
-    ChatState chat,
+    Chat chat,
   ) async {
     final projectId = PersistenceService.generateProjectId(projectRoot);
-    await chat.initPersistence(projectId, projectRoot: projectRoot);
+    await chat.persistence.initPersistence(projectId, projectRoot: projectRoot);
 
     // Update projects.json with the new chat
     final projectsIndex = await _persistence.loadProjectsIndex();
@@ -505,27 +509,18 @@ class ProjectRestoreService {
     }
 
     // Add the chat reference
-    final chatRef = ChatReference(
-      name: chat.data.name,
-      chatId: chat.data.id,
-    );
+    final chatRef = ChatReference(name: chat.data.name, chatId: chat.data.id);
 
     final updatedWorktree = worktree.copyWith(
       chats: [...worktree.chats, chatRef],
     );
 
     final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
+      worktrees: {...project.worktrees, worktreePath: updatedWorktree},
     );
 
     final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
+      projects: {...projectsIndex.projects, projectRoot: updatedProject},
     );
 
     await _persistence.saveProjectsIndex(updatedIndex);
@@ -555,10 +550,10 @@ class ProjectRestoreService {
   Future<void> closeChat(
     String projectRoot,
     String worktreePath,
-    ChatState chat, {
+    Chat chat, {
     bool archive = false,
   }) async {
-    final projectId = chat.projectId;
+    final projectId = chat.persistence.projectId;
     final chatId = chat.data.id;
 
     developer.log(
@@ -567,7 +562,7 @@ class ProjectRestoreService {
     );
 
     // Stop active session if any
-    await chat.stopSession();
+    await chat.session.stop();
 
     // Save cost tracking before deleting/archiving the chat
     if (projectId != null) {
@@ -617,7 +612,7 @@ class ProjectRestoreService {
   Future<void> _saveCostTracking(
     String projectId,
     String worktreePath,
-    ChatState chat,
+    Chat chat,
   ) async {
     try {
       // Extract worktree name from path (last component)
@@ -627,9 +622,9 @@ class ProjectRestoreService {
       final entry = CostTrackingEntry.fromChat(
         worktreeName: worktreeName,
         chatName: chat.data.name,
-        modelUsage: chat.modelUsage,
-        timing: chat.timingStats,
-        backend: chat.backendLabel,
+        modelUsage: chat.metrics.modelUsage,
+        timing: chat.metrics.timingStats,
+        backend: chat.agents.backendLabel,
       );
 
       // Append to tracking.jsonl
@@ -674,9 +669,9 @@ class ProjectRestoreService {
   ///
   /// This method:
   /// 1. Moves the chat reference from the archived list to the target worktree
-  /// 2. Creates a [ChatState] from the persisted chat files
-  /// 3. Returns the [ChatState] for the caller to add to the [WorktreeState]
-  Future<ChatState> restoreArchivedChat(
+  /// 2. Creates a [Chat] from the persisted chat files
+  /// 3. Returns the [Chat] for the caller to add to the [WorktreeState]
+  Future<Chat> restoreArchivedChat(
     ArchivedChatReference archivedRef,
     String worktreePath,
     String projectId,
@@ -689,7 +684,7 @@ class ProjectRestoreService {
       chatId: archivedRef.chatId,
     );
 
-    // Reuse existing _restoreChat to create runtime ChatState
+    // Reuse existing _restoreChat to create runtime Chat
     final chatRef = archivedRef.toChatReference();
     return _restoreChat(chatRef, worktreePath, projectId, projectRoot);
   }

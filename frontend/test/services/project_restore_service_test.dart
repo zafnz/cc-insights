@@ -16,7 +16,7 @@ void main() {
   setUp(() async {
     // Create a temporary directory for each test
     tempDir = await Directory.systemTemp.createTemp('project_restore_test_');
-    // Redirect PersistenceService to temp dir so ChatState.initPersistence
+    // Redirect PersistenceService to temp dir so Chat.initPersistence
     // doesn't create directories in ~/.ccinsights/projects/
     PersistenceService.setBaseDir('${tempDir.path}/.ccinsights');
   });
@@ -70,14 +70,8 @@ void main() {
                 projectRoot: const WorktreeInfo.primary(
                   name: 'main',
                   chats: [
-                    ChatReference(
-                      name: 'Chat 1',
-                      chatId: 'chat-123',
-                    ),
-                    ChatReference(
-                      name: 'Chat 2',
-                      chatId: 'chat-456',
-                    ),
+                    ChatReference(name: 'Chat 1', chatId: 'chat-123'),
+                    ChatReference(name: 'Chat 2', chatId: 'chat-456'),
                   ],
                 ),
               },
@@ -185,10 +179,7 @@ void main() {
         await persistence.saveChatMeta(
           projectId,
           'chat-meta-test',
-          ChatMeta.create(
-            model: 'opus',
-            permissionMode: 'acceptEdits',
-          ),
+          ChatMeta.create(model: 'opus', permissionMode: 'acceptEdits'),
         );
 
         final service = ProjectRestoreService(persistence: persistence);
@@ -198,8 +189,8 @@ void main() {
 
         // Assert
         final chat = project.primaryWorktree.chats[0];
-        check(chat.model).equals(ChatModelCatalog.claudeModels.last);
-        check(chat.permissionMode).equals(PermissionMode.acceptEdits);
+        check(chat.settings.model).equals(ChatModelCatalog.claudeModels.last);
+        check(chat.settings.permissionMode).equals(PermissionMode.acceptEdits);
       });
     });
 
@@ -211,11 +202,8 @@ void main() {
         final persistence = _TestPersistenceService(tempDir.path);
 
         // Create chat state
-        final chat = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: projectRoot,
-        );
-        await chat.initPersistence(projectId);
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: projectRoot);
+        await chat.persistence.initPersistence(projectId);
 
         // Write some entries to the chat history file
         final entries = [
@@ -255,11 +243,8 @@ void main() {
         final projectId = PersistenceService.generateProjectId(projectRoot);
         final persistence = _TestPersistenceService(tempDir.path);
 
-        final chat = ChatState.create(
-          name: 'Empty Chat',
-          worktreeRoot: projectRoot,
-        );
-        await chat.initPersistence(projectId);
+        final chat = Chat.create(name: 'Empty Chat', worktreeRoot: projectRoot);
+        await chat.persistence.initPersistence(projectId);
 
         final service = ProjectRestoreService(persistence: persistence);
 
@@ -293,10 +278,7 @@ void main() {
         );
         await persistence.saveProjectsIndex(projectsIndex);
 
-        final chat = ChatState.create(
-          name: 'New Chat',
-          worktreeRoot: projectRoot,
-        );
+        final chat = Chat.create(name: 'New Chat', worktreeRoot: projectRoot);
 
         final service = ProjectRestoreService(persistence: persistence);
 
@@ -310,22 +292,22 @@ void main() {
         check(worktree.chats.length).equals(1);
         check(worktree.chats[0].name).equals('New Chat');
         check(worktree.chats[0].chatId).equals(chat.data.id);
-        check(chat.projectId).equals(projectId);
+        check(chat.persistence.projectId).equals(projectId);
       });
     });
   });
 
-  group('ChatState.loadEntriesFromPersistence', () {
+  group('Chat.loadEntriesFromPersistence', () {
     test('replaces existing entries without triggering persistence', () {
       // Arrange
-      final chat = ChatState.create(name: 'Test', worktreeRoot: '/path');
-      chat.addEntry(
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/path');
+      chat.conversations.addEntry(
         UserInputEntry(timestamp: DateTime.now(), text: 'Original'),
       );
       check(chat.data.primaryConversation.entries.length).equals(1);
 
       // Act
-      chat.loadEntriesFromPersistence([
+      chat.conversations.loadEntriesFromPersistence([
         UserInputEntry(
           timestamp: DateTime.parse('2025-01-27T10:00:00.000Z'),
           text: 'Restored 1',
@@ -346,12 +328,12 @@ void main() {
 
     test('notifies listeners when entries are loaded', () {
       // Arrange
-      final chat = ChatState.create(name: 'Test', worktreeRoot: '/path');
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/path');
       var notified = false;
-      chat.addListener(() => notified = true);
+      chat.conversations.addListener(() => notified = true);
 
       // Act
-      chat.loadEntriesFromPersistence([
+      chat.conversations.loadEntriesFromPersistence([
         UserInputEntry(timestamp: DateTime.now(), text: 'Test'),
       ]);
 
@@ -360,16 +342,16 @@ void main() {
     });
   });
 
-  group('ChatState.hasLoadedHistory', () {
+  group('Chat.hasLoadedHistory', () {
     test('returns false when no entries', () {
-      final chat = ChatState.create(name: 'Test', worktreeRoot: '/path');
-      check(chat.hasLoadedHistory).isFalse();
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/path');
+      check(chat.conversations.hasLoadedHistory).isFalse();
     });
 
     test('returns true when marked as loaded', () {
-      final chat = ChatState.create(name: 'Test', worktreeRoot: '/path');
-      chat.markHistoryAsLoaded();
-      check(chat.hasLoadedHistory).isTrue();
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/path');
+      chat.conversations.markHistoryAsLoaded();
+      check(chat.conversations.hasLoadedHistory).isTrue();
     });
   });
 }

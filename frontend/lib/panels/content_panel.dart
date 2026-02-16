@@ -18,7 +18,10 @@ class ContentPanel extends StatelessWidget {
     final selection = context.watch<SelectionState>();
 
     return switch (selection.contentPanelMode) {
-      ContentPanelMode.conversation => _buildConversationPanel(context, selection),
+      ContentPanelMode.conversation => _buildConversationPanel(
+        context,
+        selection,
+      ),
       ContentPanelMode.createWorktree => const PanelWrapper(
         title: 'Create Worktree',
         icon: Icons.account_tree,
@@ -32,7 +35,10 @@ class ContentPanel extends StatelessWidget {
     };
   }
 
-  Widget _buildConversationPanel(BuildContext context, SelectionState selection) {
+  Widget _buildConversationPanel(
+    BuildContext context,
+    SelectionState selection,
+  ) {
     final chat = selection.selectedChat;
 
     if (chat == null) {
@@ -44,20 +50,21 @@ class ContentPanel extends StatelessWidget {
     }
 
     return ListenableBuilder(
-      listenable: chat,
+      listenable: chat.conversations,
       builder: (context, _) {
-        final conversation = chat.selectedConversation;
+        final conversation = chat.conversations.selectedConversation;
 
         // Build the title: "Conversation" or "Conversation - <name>"
         String title = 'Conversation';
         if (conversation.isPrimary) {
-          title = 'Conversation - ${chat.data.name}';
+          title = 'Conversation - ${chat.conversations.data.name}';
         } else {
-          final subagentTitle = conversation.taskDescription ??
+          final subagentTitle =
+              conversation.taskDescription ??
               'Subagent #${conversation.subagentNumber ?? '?'}';
           title = 'Conversation - $subagentTitle';
         }
-      
+
         return PanelWrapper(
           title: title,
           icon: Icons.chat_bubble_outline,

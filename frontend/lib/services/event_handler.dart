@@ -36,7 +36,7 @@ import '../models/output_entry.dart';
 import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
 import 'log_service.dart';
-import 'streaming_processor.dart';
+import 'session_event_pipeline.dart';
 import 'ticket_event_bridge.dart';
 
 part 'event_handler_lifecycle.dart';
@@ -48,61 +48,42 @@ part 'event_handler_subagents.dart';
 /// event processing, and cleanup methods. Session lifecycle and subagent
 /// management are in part file mixins.
 class _EventHandlerBase {
-  /// Tool pairing: callId → entry (for updating with result later).
-  final Map<String, ToolUseOutputEntry> _toolCallIndex = {};
-
-  /// Agent routing: parentCallId (SDK agent ID) → conversationId.
-  final Map<String, String> _agentIdToConversationId = {};
-
-  /// Maps new Task callId → original agent's sdkAgentId (for resumed agents).
-  final Map<String, String> _toolUseIdToAgentId = {};
-
-  /// Tracks whether assistant output was added during the current turn.
-  final Map<String, bool> _hasAssistantOutputThisTurn = {};
-
-  /// Tracks whether we're expecting a context summary message.
-  final Map<String, bool> _expectingContextSummary = {};
-
   /// Rate limit state for displaying rate limit information.
   final RateLimitState? rateLimitState;
 
   /// Bridge for ticket status transitions based on chat events.
   final TicketEventBridge _ticketBridge;
 
-  /// Streaming delta processor with its own state machine.
-  late final StreamingProcessor _streaming;
+  /// Active per-session pipelines keyed by chat ID.
+  final Map<String, SessionEventPipeline> _pipelines = {};
 
-  _EventHandlerBase({
-    this.rateLimitState,
-    TicketRepository? ticketBoard,
-  }) : _ticketBridge = TicketEventBridge(ticketBoard: ticketBoard) {
-    _streaming = StreamingProcessor(
-      toolCallIndex: _toolCallIndex,
-      activeStreamingEntries: _activeStreamingEntries,
-      resolveConversationId: _resolveConversationId,
-    );
-  }
-
-  /// Streaming entries shared between StreamingProcessor and finalization
-  /// in _handleText/_handleToolInvocation.
-  final Map<String, List<OutputEntry>> _activeStreamingEntries = {};
+  _EventHandlerBase({this.rateLimitState, TicketRepository? ticketBoard})
+    : _ticketBridge = TicketEventBridge(ticketBoard: ticketBoard);
 
   /// The current ticket board state, if any.
   TicketRepository? get ticketBoard => _ticketBridge.ticketBoard;
 
-  set ticketBoard(TicketRepository? value) =>
-      _ticketBridge.ticketBoard = value;
+  set ticketBoard(TicketRepository? value) => _ticketBridge.ticketBoard = value;
 
-  /// The ticket event bridge for external callers (e.g. ChatState).
+  /// The ticket event bridge for external callers (e.g. Chat).
   TicketEventBridge get ticketBridge => _ticketBridge;
 
-  /// Resolves a parentCallId to a conversation ID.
-  String _resolveConversationId(ChatState chat, String? parentCallId) {
-    if (parentCallId == null) {
-      return chat.data.primaryConversation.id;
-    }
-    return _agentIdToConversationId[parentCallId] ??
-        chat.data.primaryConversation.id;
+  SessionEventPipeline _pipelineFor(Chat chat) {
+    return _pipelines.putIfAbsent(
+      chat.data.id,
+      () => SessionEventPipeline(chatId: chat.data.id),
+    );
+  }
+
+  /// Starts a fresh per-session pipeline for the chat.
+  void beginSession(String chatId) {
+    _pipelines.remove(chatId)?.dispose();
+    _pipelines[chatId] = SessionEventPipeline(chatId: chatId);
+  }
+
+  /// Disposes the per-session pipeline for the chat.
+  void endSession(String chatId) {
+    _pipelines.remove(chatId)?.dispose();
   }
 }
 
@@ -110,33 +91,32 @@ class _EventHandlerBase {
 ///
 /// Responsibilities:
 /// - Processing typed InsightsEvent objects and creating appropriate OutputEntry objects
-/// - Tool use → tool result pairing via [_toolCallIndex]
-/// - Conversation routing via parentCallId → [_agentIdToConversationId]
+/// - Tool use -> tool result pairing via session pipeline
+/// - Conversation routing via parentCallId -> session pipeline mapping
 ///
 /// Extracted concerns:
-/// - Streaming delta processing → [StreamingProcessor]
-/// - Chat title generation → ChatTitleService
-/// - Ticket status transitions → [TicketEventBridge]
+/// - Streaming delta processing -> [StreamingProcessor] via [SessionEventPipeline]
+/// - Chat title generation -> ChatTitleService
+/// - Ticket status transitions -> [TicketEventBridge]
 class EventHandler extends _EventHandlerBase
     with _LifecycleMixin, _SubagentMixin {
-  EventHandler({
-    super.rateLimitState,
-    super.ticketBoard,
-  });
+  EventHandler({super.rateLimitState, super.ticketBoard});
 
   /// Handle an incoming InsightsEvent.
-  void handleEvent(ChatState chat, InsightsEvent event) {
+  void handleEvent(Chat chat, InsightsEvent event) {
+    final pipeline = _pipelineFor(chat);
+
     switch (event) {
       case final ToolInvocationEvent e:
-        _handleToolInvocation(chat, e);
+        _handleToolInvocation(chat, e, pipeline);
       case final ToolCompletionEvent e:
-        _handleToolCompletion(chat, e);
+        _handleToolCompletion(chat, e, pipeline);
       case final TextEvent e:
-        _handleText(chat, e);
+        _handleText(chat, e, pipeline);
       case final UserInputEvent e:
-        _handleUserInput(chat, e);
+        _handleUserInput(chat, e, pipeline);
       case final TurnCompleteEvent e:
-        _handleTurnComplete(chat, e);
+        _handleTurnComplete(chat, e, pipeline);
       case final SessionInitEvent e:
         _handleSessionInit(chat, e);
       case final ConfigOptionsEvent e:
@@ -148,13 +128,13 @@ class EventHandler extends _EventHandlerBase
       case final SessionStatusEvent e:
         _handleSessionStatus(chat, e);
       case final ContextCompactionEvent e:
-        _handleCompaction(chat, e);
+        _handleCompaction(chat, e, pipeline);
       case final SubagentSpawnEvent e:
-        _handleSubagentSpawn(chat, e);
+        _handleSubagentSpawn(chat, e, pipeline);
       case final SubagentCompleteEvent e:
-        _handleSubagentComplete(chat, e);
+        _handleSubagentComplete(chat, e, pipeline);
       case final StreamDeltaEvent e:
-        _streaming.handleDelta(chat, e);
+        pipeline.streaming.handleDelta(chat, e);
       case final UsageUpdateEvent e:
         _handleUsageUpdate(chat, e);
       case PermissionRequestEvent e:
@@ -166,11 +146,18 @@ class EventHandler extends _EventHandlerBase
 
   // -- Tool event processing --
 
-  void _handleToolInvocation(ChatState chat, ToolInvocationEvent event) {
-    final conversationId = _resolveConversationId(chat, event.parentCallId);
+  void _handleToolInvocation(
+    Chat chat,
+    ToolInvocationEvent event,
+    SessionEventPipeline pipeline,
+  ) {
+    final conversationId = pipeline.resolveConversationId(
+      chat,
+      event.parentCallId,
+    );
 
     // Check for streaming entries to finalize
-    final streamingEntries = _activeStreamingEntries[conversationId];
+    final streamingEntries = pipeline.activeStreamingEntries[conversationId];
     if (streamingEntries != null && streamingEntries.isNotEmpty) {
       for (final entry in streamingEntries) {
         if (entry is ToolUseOutputEntry && entry.toolUseId == event.callId) {
@@ -179,8 +166,8 @@ class EventHandler extends _EventHandlerBase
             ..addAll(Map<String, dynamic>.from(event.input));
           entry.isStreaming = false;
           entry.addRawMessage(event.raw ?? {});
-          chat.persistStreamingEntry(entry);
-          chat.notifyListeners();
+          chat.persistence.persistStreamingEntry(entry);
+          chat.conversations.notifyMutation();
           return;
         }
       }
@@ -197,55 +184,69 @@ class EventHandler extends _EventHandlerBase
     );
 
     entry.addRawMessage(event.raw ?? {});
-    _toolCallIndex[event.callId] = entry;
-    chat.addOutputEntry(conversationId, entry);
+    pipeline.toolCallIndex[event.callId] = entry;
+    chat.conversations.addOutputEntry(conversationId, entry);
   }
 
-  void _handleToolCompletion(ChatState chat, ToolCompletionEvent event) {
-    final entry = _toolCallIndex[event.callId];
+  void _handleToolCompletion(
+    Chat chat,
+    ToolCompletionEvent event,
+    SessionEventPipeline pipeline,
+  ) {
+    final entry = pipeline.toolCallIndex[event.callId];
 
     if (entry != null) {
       entry.updateResult(event.output, event.isError);
       entry.addRawMessage(event.raw ?? {});
-      chat.persistToolResult(event.callId, event.output, event.isError);
-      chat.notifyListeners();
+      chat.persistence.persistToolResult(
+        event.callId,
+        event.output,
+        event.isError,
+      );
+      chat.conversations.notifyMutation();
     }
 
     if (event.callId.isNotEmpty) {
-      chat.removePendingPermissionByToolUseId(event.callId);
+      final before = chat.permissions.pendingPermissionCount;
+      chat.permissions.removeByToolUseId(event.callId);
+      if (chat.permissions.pendingPermissionCount != before) {
+        chat.session.notifyPermissionQueueChanged();
+      }
     }
   }
 
   // -- Text & message processing --
 
-  void _handleText(ChatState chat, TextEvent event) {
-    final chatId = chat.data.id;
-
+  void _handleText(Chat chat, TextEvent event, SessionEventPipeline pipeline) {
     // Check if this is a context summary (after compaction).
     final isSynthetic = event.extensions?['claude.isSynthetic'] == true;
-    if ((_expectingContextSummary[chatId] ?? false) && isSynthetic) {
-      _expectingContextSummary[chatId] = false;
+    if (pipeline.expectingContextSummary && isSynthetic) {
+      pipeline.expectingContextSummary = false;
       if (event.text.isNotEmpty) {
-        chat.addEntry(ContextSummaryEntry(
-          timestamp: DateTime.now(),
-          summary: event.text,
-        ));
+        chat.conversations.addEntry(
+          ContextSummaryEntry(timestamp: DateTime.now(), summary: event.text),
+        );
       }
       return;
     }
 
-    final conversationId = _resolveConversationId(chat, event.parentCallId);
+    final conversationId = pipeline.resolveConversationId(
+      chat,
+      event.parentCallId,
+    );
 
     // Check for streaming entries to finalize
-    final streamingEntries = _activeStreamingEntries.remove(conversationId);
+    final streamingEntries = pipeline.activeStreamingEntries.remove(
+      conversationId,
+    );
     if (streamingEntries != null && streamingEntries.isNotEmpty) {
       for (final entry in streamingEntries) {
         if (entry is TextOutputEntry) {
           entry.text = event.text;
           entry.isStreaming = false;
           entry.addRawMessage(event.raw ?? {});
-          chat.persistStreamingEntry(entry);
-          chat.notifyListeners();
+          chat.persistence.persistStreamingEntry(entry);
+          chat.conversations.notifyMutation();
           return;
         }
       }
@@ -273,25 +274,25 @@ class EventHandler extends _EventHandlerBase
     );
 
     entry.addRawMessage(event.raw ?? {});
-    chat.addOutputEntry(conversationId, entry);
+    chat.conversations.addOutputEntry(conversationId, entry);
 
     if (event.parentCallId == null) {
-      _hasAssistantOutputThisTurn[chat.data.id] = true;
+      pipeline.hasAssistantOutputThisTurn = true;
     }
   }
 
-  void _handleUserInput(ChatState chat, UserInputEvent event) {
-    final chatId = chat.data.id;
-
-    if (event.isSynthetic ||
-        (_expectingContextSummary[chatId] ?? false)) {
-      _expectingContextSummary[chatId] = false;
+  void _handleUserInput(
+    Chat chat,
+    UserInputEvent event,
+    SessionEventPipeline pipeline,
+  ) {
+    if (event.isSynthetic || pipeline.expectingContextSummary) {
+      pipeline.expectingContextSummary = false;
 
       if (event.text.isNotEmpty) {
-        chat.addEntry(ContextSummaryEntry(
-          timestamp: DateTime.now(),
-          summary: event.text,
-        ));
+        chat.conversations.addEntry(
+          ContextSummaryEntry(timestamp: DateTime.now(), summary: event.text),
+        );
       }
       return;
     }
@@ -305,10 +306,9 @@ class EventHandler extends _EventHandlerBase
       if (match != null) {
         final output = match.group(1)?.trim() ?? '';
         if (output.isNotEmpty) {
-          chat.addEntry(SystemNotificationEntry(
-            timestamp: DateTime.now(),
-            message: output,
-          ));
+          chat.conversations.addEntry(
+            SystemNotificationEntry(timestamp: DateTime.now(), message: output),
+          );
         }
       }
       return;
@@ -321,46 +321,31 @@ class EventHandler extends _EventHandlerBase
   ///
   /// Delegates to [TicketEventBridge] to transition linked tickets back
   /// to active from needsInput.
-  void handlePermissionResponse(ChatState chat) {
+  void handlePermissionResponse(Chat chat) {
     _ticketBridge.onPermissionResponse(chat);
   }
 
-  /// Clears in-flight streaming state.
+  /// Clears in-flight streaming state for all active pipelines.
   void clearStreamingState() {
-    _streaming.clearStreamingState();
+    for (final pipeline in _pipelines.values) {
+      pipeline.clearStreamingState();
+    }
   }
 
   // -- Cleanup --
 
   /// Removes tracking state associated with a specific chat.
-  void clearChat(
-    String chatId, {
-    required Set<String> agentIds,
-    required Set<String> conversationIds,
-  }) {
-    // Chat-keyed maps
-    _hasAssistantOutputThisTurn.remove(chatId);
-    _expectingContextSummary.remove(chatId);
-
-    // Agent-keyed maps
-    for (final agentId in agentIds) {
-      _agentIdToConversationId.remove(agentId);
-    }
-    _toolUseIdToAgentId.removeWhere((_, agentId) => agentIds.contains(agentId));
-
-    // Streaming
-    _streaming.clearConversations(conversationIds);
+  void clearChat(String chatId) {
+    endSession(chatId);
   }
 
   /// Clears all internal state.
   void clear() {
-    _toolCallIndex.clear();
-    _agentIdToConversationId.clear();
-    _toolUseIdToAgentId.clear();
-    _hasAssistantOutputThisTurn.clear();
-    _expectingContextSummary.clear();
-    _activeStreamingEntries.clear();
-    _streaming.clear();
+    final pipelines = _pipelines.values.toList(growable: false);
+    _pipelines.clear();
+    for (final pipeline in pipelines) {
+      pipeline.dispose();
+    }
   }
 
   /// Disposes of resources.

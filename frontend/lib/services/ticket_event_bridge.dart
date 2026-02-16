@@ -1,7 +1,5 @@
 import 'package:agent_sdk_core/agent_sdk_core.dart'
-    show
-        BackendProvider,
-        TurnCompleteEvent;
+    show BackendProvider, TurnCompleteEvent;
 
 import '../models/chat.dart';
 import '../models/ticket.dart';
@@ -16,7 +14,7 @@ class TicketEventBridge {
   TicketRepository? _ticketBoard;
 
   TicketEventBridge({TicketRepository? ticketBoard})
-      : _ticketBoard = ticketBoard;
+    : _ticketBoard = ticketBoard;
 
   /// The current ticket board state, if any.
   TicketRepository? get ticketBoard => _ticketBoard;
@@ -27,7 +25,7 @@ class TicketEventBridge {
   ///
   /// Transitions non-terminal linked tickets to [TicketStatus.inReview] and
   /// accumulates cost/usage statistics from the turn.
-  void onTurnComplete(ChatState chat, TurnCompleteEvent event) {
+  void onTurnComplete(Chat chat, TurnCompleteEvent event) {
     final board = _ticketBoard;
     if (board == null) return;
 
@@ -62,7 +60,7 @@ class TicketEventBridge {
   ///
   /// When a linked chat requests permission, transitions linked tickets
   /// to [TicketStatus.needsInput] so the user knows attention is needed.
-  void onPermissionRequest(ChatState chat) {
+  void onPermissionRequest(Chat chat) {
     final board = _ticketBoard;
     if (board == null) return;
 
@@ -78,7 +76,7 @@ class TicketEventBridge {
   ///
   /// Transitions linked tickets back to [TicketStatus.active] from
   /// [TicketStatus.needsInput].
-  void onPermissionResponse(ChatState chat) {
+  void onPermissionResponse(Chat chat) {
     final board = _ticketBoard;
     if (board == null) return;
 

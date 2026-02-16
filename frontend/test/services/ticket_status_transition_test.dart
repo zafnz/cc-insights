@@ -8,7 +8,8 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
-import 'package:cc_insights_v2/state/ticket_board_state.dart' show TicketRepository;
+import 'package:cc_insights_v2/state/ticket_board_state.dart'
+    show TicketRepository;
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -61,13 +62,13 @@ PermissionRequestEvent makePermissionRequestEvent({
 void main() {
   final resources = TestResources();
 
-  late ChatState chat;
+  late Chat chat;
   late EventHandler handler;
   late TicketRepository ticketBoard;
 
   setUp(() {
     chat = resources.track(
-      ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test'),
+      Chat.create(name: 'Test Chat', worktreeRoot: '/tmp/test'),
     );
     ticketBoard = resources.track(TicketRepository('test-project'));
     handler = EventHandler(ticketBoard: ticketBoard);
@@ -199,24 +200,27 @@ void main() {
   });
 
   group('EventHandler - permission response ticket transitions', () {
-    test('permission response transitions ticket from needsInput to active', () {
-      final ticket = ticketBoard.createTicket(
-        title: 'Waiting ticket',
-        kind: TicketKind.feature,
-        status: TicketStatus.needsInput,
-      );
-      ticketBoard.linkChat(
-        ticket.id,
-        chat.data.id,
-        chat.data.name,
-        '/tmp/test',
-      );
+    test(
+      'permission response transitions ticket from needsInput to active',
+      () {
+        final ticket = ticketBoard.createTicket(
+          title: 'Waiting ticket',
+          kind: TicketKind.feature,
+          status: TicketStatus.needsInput,
+        );
+        ticketBoard.linkChat(
+          ticket.id,
+          chat.data.id,
+          chat.data.name,
+          '/tmp/test',
+        );
 
-      handler.handlePermissionResponse(chat);
+        handler.handlePermissionResponse(chat);
 
-      final updated = ticketBoard.getTicket(ticket.id)!;
-      check(updated.status).equals(TicketStatus.active);
-    });
+        final updated = ticketBoard.getTicket(ticket.id)!;
+        check(updated.status).equals(TicketStatus.active);
+      },
+    );
 
     test('permission response does not transition non-needsInput tickets', () {
       final ticket = ticketBoard.createTicket(

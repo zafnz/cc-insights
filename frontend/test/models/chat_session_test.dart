@@ -217,8 +217,7 @@ class FakeTestSession implements TestSession {
     required String toolName,
     required Map<String, dynamic> toolInput,
     String? toolUseId,
-  }) async =>
-      const PermissionDenyResponse(message: 'Test deny');
+  }) async => const PermissionDenyResponse(message: 'Test deny');
 
   /// Emit an error to the events stream.
   void emitError(Object error) {
@@ -269,30 +268,31 @@ void main() {
     await resources.disposeAll();
   });
 
-  group('ChatState Session Lifecycle', () {
+  group('Chat Session Lifecycle', () {
     group('initial state', () {
       test('hasActiveSession is false initially', () {
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
-        check(state.hasActiveSession).isFalse();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.idle);
       });
 
       test('pendingPermission is null initially', () {
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
-        check(state.pendingPermission).isNull();
+        check(state.permissions.pendingPermission).isNull();
       });
 
       test('isWaitingForPermission is false initially', () {
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
-        check(state.isWaitingForPermission).isFalse();
+        check(state.permissions.isWaitingForPermission).isFalse();
       });
     });
 
@@ -300,21 +300,22 @@ void main() {
       test('creates session and subscribes to streams', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path/to/worktree'),
+          Chat.create(name: 'Test', worktreeRoot: '/path/to/worktree'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
         // Act
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello Claude',
         );
 
         // Assert
-        check(state.hasActiveSession).isTrue();
+        check(state.session.hasActiveSession).isTrue();
+        check(state.session.sessionPhase).equals(SessionPhase.active);
         check(backend.lastPrompt).equals('Hello Claude');
         check(backend.lastCwd).equals('/path/to/worktree');
         check(backend.lastOptions).isNotNull();
@@ -324,15 +325,15 @@ void main() {
       test('notifies listeners when session starts', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
@@ -345,25 +346,26 @@ void main() {
       test('throws StateError when session already active', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'First session',
         );
 
         // Act & Assert
-        await check(
-          state.startSession(
+        await expectLater(
+          state.session.start(
             backend: backend,
-              eventHandler: eventHandler,
+            eventHandler: eventHandler,
             prompt: 'Second session',
           ),
-        ).throws<StateError>();
+          throwsA(isA<StateError>()),
+        );
       });
 
       test('throws StateError when chat has no worktree root', () async {
@@ -374,32 +376,33 @@ void main() {
           worktreeRoot: null,
           primaryConversation: ConversationData.primary(id: 'conv-1'),
         );
-        final state = resources.track(ChatState(chatData));
+        final state = resources.track(Chat(chatData));
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
 
         // Act & Assert
-        await check(
-          state.startSession(
+        await expectLater(
+          state.session.start(
             backend: backend,
-              eventHandler: eventHandler,
+            eventHandler: eventHandler,
             prompt: 'Hello',
           ),
-        ).throws<StateError>();
+          throwsA(isA<StateError>()),
+        );
       });
 
       test('passes correct permission mode to backend', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         // Use app's PermissionMode
-        state.setPermissionMode(PermissionMode.acceptEdits);
+        state.settings.setPermissionMode(PermissionMode.acceptEdits);
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
 
         // Act
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
@@ -408,8 +411,9 @@ void main() {
         // Assert - the SDK permission mode should be acceptEdits
         check(backend.lastOptions).isNotNull();
         // Compare to SDK's PermissionMode
-        check(backend.lastOptions!.permissionMode)
-            .equals(sdk.PermissionMode.acceptEdits);
+        check(
+          backend.lastOptions!.permissionMode,
+        ).equals(sdk.PermissionMode.acceptEdits);
       });
     });
 
@@ -417,20 +421,20 @@ void main() {
       test('adds UserInputEntry and sends to session', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Initial',
         );
 
         // Act
-        await state.sendMessage('Follow-up message');
+        await state.session.sendMessage('Follow-up message');
 
         // Assert
         check(session.sentMessages).contains('Follow-up message');
@@ -446,11 +450,14 @@ void main() {
       test('throws StateError when no active session', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
         // Act & Assert
-        await check(state.sendMessage('Hello')).throws<StateError>();
+        await expectLater(
+          state.session.sendMessage('Hello'),
+          throwsA(isA<StateError>()),
+        );
       });
     });
 
@@ -458,75 +465,80 @@ void main() {
       test('cancels subscriptions and kills session', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
         // Act
-        await state.stopSession();
+        await state.session.stop();
 
         // Assert
-        check(state.hasActiveSession).isFalse();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.ended);
         check(session.killCalled).isTrue();
       });
 
       test('clears pending permission and active agents', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
         // Add a pending permission and an agent
-        state.setPendingPermission(createFakePermissionRequest());
-        state.addSubagentConversation('agent-1', 'Test Agent', 'Task desc');
+        state.permissions.add(createFakePermissionRequest());
+        state.conversations.addSubagentConversation(
+          'agent-1',
+          'Test Agent',
+          'Task desc',
+        );
 
-        check(state.pendingPermission).isNotNull();
-        check(state.activeAgents).isNotEmpty();
+        check(state.permissions.pendingPermission).isNotNull();
+        check(state.agents.activeAgents.keys).isNotEmpty();
 
         // Act
-        await state.stopSession();
+        await state.session.stop();
 
         // Assert
-        check(state.pendingPermission).isNull();
-        check(state.activeAgents).isEmpty();
+        check(state.permissions.pendingPermission).isNull();
+        check(state.agents.activeAgents.keys).isEmpty();
       });
 
       test('notifies listeners', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         backend.sessionToReturn = FakeTestSession();
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        await state.stopSession();
+        await state.session.stop();
 
         // Assert
         check(notified).isTrue();
@@ -535,14 +547,62 @@ void main() {
       test('does nothing when no session active', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
         // Act - should not throw
-        await state.stopSession();
+        await state.session.stop();
 
         // Assert
-        check(state.hasActiveSession).isFalse();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.ended);
+      });
+
+      test('is idempotent when called concurrently', () async {
+        // Arrange
+        final state = resources.track(
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
+        );
+        final backend = FakeBackendService();
+        final session = FakeTestSession();
+        backend.sessionToReturn = session;
+        await state.session.start(
+          backend: backend,
+          eventHandler: eventHandler,
+          prompt: 'Hello',
+        );
+
+        // Act
+        await Future.wait([state.session.stop(), state.session.stop()]);
+
+        // Assert
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.ended);
+      });
+    });
+
+    group('clearSession()', () {
+      test('tears down active session state', () async {
+        // Arrange
+        final state = resources.track(
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
+        );
+        final backend = FakeBackendService();
+        backend.sessionToReturn = FakeTestSession();
+        await state.session.start(
+          backend: backend,
+          eventHandler: eventHandler,
+          prompt: 'Hello',
+        );
+        check(state.session.hasActiveSession).isTrue();
+
+        // Act
+        state.session.clear();
+        await Future<void>.delayed(Duration.zero);
+
+        // Assert
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.ended);
       });
     });
 
@@ -550,41 +610,40 @@ void main() {
       test('sets permission and notifies listeners', () {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         var notified = false;
-        state.addListener(() => notified = true);
+        state.permissions.addListener(() => notified = true);
 
         final request = createFakePermissionRequest();
 
         // Act
-        state.setPendingPermission(request);
+        state.permissions.add(request);
 
         // Assert
-        check(state.pendingPermission).equals(request);
-        check(state.isWaitingForPermission).isTrue();
+        check(state.permissions.pendingPermission).equals(request);
+        check(state.permissions.isWaitingForPermission).isTrue();
         check(notified).isTrue();
       });
 
-      test('ignores null when setPendingPermission is called', () {
+      test('does not change queue when no additional request is added', () {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
-        state.setPendingPermission(createFakePermissionRequest());
-        check(state.pendingPermission).isNotNull();
-        check(state.pendingPermissionCount).equals(1);
+        state.permissions.add(createFakePermissionRequest());
+        check(state.permissions.pendingPermission).isNotNull();
+        check(state.permissions.pendingPermissionCount).equals(1);
 
         var notified = false;
-        state.addListener(() => notified = true);
+        state.permissions.addListener(() => notified = true);
 
-        // Act - null is ignored in the queue model
-        state.setPendingPermission(null);
+        // Act - no additional request added
 
         // Assert - permission is still pending (null was ignored)
-        check(state.pendingPermission).isNotNull();
-        check(state.isWaitingForPermission).isTrue();
-        check(state.pendingPermissionCount).equals(1);
+        check(state.permissions.pendingPermission).isNotNull();
+        check(state.permissions.isWaitingForPermission).isTrue();
+        check(state.permissions.pendingPermissionCount).equals(1);
         check(notified).isFalse(); // No notification since nothing changed
       });
     });
@@ -593,33 +652,33 @@ void main() {
       test('allows permission and clears pending', () {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final request = createFakePermissionRequest();
-        state.setPendingPermission(request);
+        state.permissions.add(request);
 
         var notified = false;
-        state.addListener(() => notified = true);
+        state.permissions.addListener(() => notified = true);
 
         // Act
-        state.allowPermission();
+        state.permissions.allow();
 
         // Assert
-        check(state.pendingPermission).isNull();
+        check(state.permissions.pendingPermission).isNull();
         check(notified).isTrue();
       });
 
       test('does nothing when no pending permission', () {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
         // Act - should not throw
-        state.allowPermission();
+        state.permissions.allow();
 
         // Assert
-        check(state.pendingPermission).isNull();
+        check(state.permissions.pendingPermission).isNull();
       });
     });
 
@@ -627,33 +686,33 @@ void main() {
       test('denies permission and clears pending', () {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final request = createFakePermissionRequest();
-        state.setPendingPermission(request);
+        state.permissions.add(request);
 
         var notified = false;
-        state.addListener(() => notified = true);
+        state.permissions.addListener(() => notified = true);
 
         // Act
-        state.denyPermission('User denied');
+        state.permissions.deny('User denied');
 
         // Assert
-        check(state.pendingPermission).isNull();
+        check(state.permissions.pendingPermission).isNull();
         check(notified).isTrue();
       });
 
       test('does nothing when no pending permission', () {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
 
         // Act - should not throw
-        state.denyPermission('Denied');
+        state.permissions.deny('Denied');
 
         // Assert
-        check(state.pendingPermission).isNull();
+        check(state.permissions.pendingPermission).isNull();
       });
     });
 
@@ -661,13 +720,13 @@ void main() {
       test('_handleError adds error entry to conversation', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
@@ -681,11 +740,12 @@ void main() {
 
         // Assert
         final entries = state.data.primaryConversation.entries;
-        final errorEntries =
-            entries.whereType<TextOutputEntry>().where(
-              (e) => e.contentType == 'error',
-            );
+        final errorEntries = entries.whereType<TextOutputEntry>().where(
+          (e) => e.contentType == 'error',
+        );
         check(errorEntries).isNotEmpty();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.errored);
       });
     });
 
@@ -693,23 +753,23 @@ void main() {
       test('_handleSessionEnd cleans up state', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
         );
 
         // Add pending permission
-        state.setPendingPermission(createFakePermissionRequest());
+        state.permissions.add(createFakePermissionRequest());
 
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act - complete the stream (simulates session end)
         session.completeStream();
@@ -718,8 +778,9 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         // Assert
-        check(state.hasActiveSession).isFalse();
-        check(state.pendingPermission).isNull();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.sessionPhase).equals(SessionPhase.ended);
+        check(state.permissions.pendingPermission).isNull();
         check(notified).isTrue();
       });
     });
@@ -728,13 +789,13 @@ void main() {
       test('sets pending permission when request received', () async {
         // Arrange
         final state = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/path'),
+          Chat.create(name: 'Test', worktreeRoot: '/path'),
         );
         final backend = FakeBackendService();
         final session = FakeTestSession();
         backend.sessionToReturn = session;
 
-        await state.startSession(
+        await state.session.start(
           backend: backend,
           eventHandler: eventHandler,
           prompt: 'Hello',
@@ -748,8 +809,8 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         // Assert
-        check(state.pendingPermission).equals(request);
-        check(state.isWaitingForPermission).isTrue();
+        check(state.permissions.pendingPermission).equals(request);
+        check(state.permissions.isWaitingForPermission).isTrue();
       });
     });
   });

@@ -121,8 +121,9 @@ class WorktreeData {
       conflictOperation: clearConflictOperation
           ? null
           : (conflictOperation ?? this.conflictOperation),
-      upstreamBranch:
-          clearUpstreamBranch ? null : (upstreamBranch ?? this.upstreamBranch),
+      upstreamBranch: clearUpstreamBranch
+          ? null
+          : (upstreamBranch ?? this.upstreamBranch),
       commitsAheadOfMain: commitsAheadOfMain ?? this.commitsAheadOfMain,
       commitsBehindMain: commitsBehindMain ?? this.commitsBehindMain,
       isRemoteBase: isRemoteBase ?? this.isRemoteBase,
@@ -195,8 +196,8 @@ class WorktreeData {
 class WorktreeState extends ChangeNotifier {
   WorktreeData _data;
 
-  final List<ChatState> _chats;
-  ChatState? _selectedChat;
+  final List<Chat> _chats;
+  Chat? _selectedChat;
 
   /// Tag names assigned to this worktree.
   List<String> _tags;
@@ -252,7 +253,7 @@ class WorktreeState extends ChangeNotifier {
   /// [base] is the per-worktree base branch (null = use project default).
   WorktreeState(
     this._data, {
-    List<ChatState>? chats,
+    List<Chat>? chats,
     List<String>? tags,
     String? base,
     bool hidden = false,
@@ -270,9 +271,7 @@ class WorktreeState extends ChangeNotifier {
   /// Looks up the agent by [agentId] (or the global default) and uses its
   /// permission / sandbox settings. Falls back to backend-based defaults
   /// when no agent is configured.
-  static sdk.SecurityConfig _resolveSecurityConfigFromAgent([
-    String? agentId,
-  ]) {
+  static sdk.SecurityConfig _resolveSecurityConfigFromAgent([String? agentId]) {
     final id = agentId ?? RuntimeConfig.instance.defaultAgentId;
     final agent = RuntimeConfig.instance.agentById(id);
     if (agent != null) {
@@ -315,13 +314,13 @@ class WorktreeState extends ChangeNotifier {
   /// The list of chats in this worktree.
   ///
   /// Returns an unmodifiable view of the chats list.
-  List<ChatState> get chats => List.unmodifiable(_chats);
+  List<Chat> get chats => List.unmodifiable(_chats);
 
   /// The currently selected chat in this worktree, if any.
   ///
   /// When switching worktrees, the selection is preserved so users can
   /// return to their previous context.
-  ChatState? get selectedChat => _selectedChat;
+  Chat? get selectedChat => _selectedChat;
 
   /// Draft text for the welcome screen (before any chat is created).
   /// Public field for direct access from UI.
@@ -342,9 +341,7 @@ class WorktreeState extends ChangeNotifier {
     // If backend changed, update security config from the agent's settings
     final backendChanged = value.backend != welcomeModel.backend;
     if (backendChanged) {
-      _welcomeSecurityConfig = _resolveSecurityConfigFromAgent(
-        _welcomeAgentId,
-      );
+      _welcomeSecurityConfig = _resolveSecurityConfigFromAgent(_welcomeAgentId);
     }
 
     _welcomeModelOverride = value;
@@ -366,7 +363,9 @@ class WorktreeState extends ChangeNotifier {
   /// Derived from [welcomeSecurityConfig] for backward compatibility.
   /// Returns default mode if the security config is not a ClaudeSecurityConfig.
   PermissionMode get welcomePermissionMode {
-    if (_welcomeSecurityConfig case sdk.ClaudeSecurityConfig(:final permissionMode)) {
+    if (_welcomeSecurityConfig case sdk.ClaudeSecurityConfig(
+      :final permissionMode,
+    )) {
       // Convert sdk.PermissionMode to PermissionMode
       return PermissionMode.fromApiName(permissionMode.value);
     }
@@ -377,7 +376,9 @@ class WorktreeState extends ChangeNotifier {
     // Only update if current config is Claude
     if (_welcomeSecurityConfig is sdk.ClaudeSecurityConfig) {
       final sdkMode = sdk.PermissionMode.fromString(value.apiName);
-      _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(permissionMode: sdkMode);
+      _welcomeSecurityConfig = sdk.ClaudeSecurityConfig(
+        permissionMode: sdkMode,
+      );
       notifyListeners();
     }
   }
@@ -485,7 +486,7 @@ class WorktreeState extends ChangeNotifier {
   /// Sets the selected chat.
   ///
   /// The [chat] should be one of the chats in [chats], or null to deselect.
-  void selectChat(ChatState? chat) {
+  void selectChat(Chat? chat) {
     _selectedChat = chat;
     notifyListeners();
   }
@@ -493,8 +494,11 @@ class WorktreeState extends ChangeNotifier {
   /// Adds a chat to this worktree.
   ///
   /// Optionally selects the newly added chat if [select] is true.
-  void addChat(ChatState chat, {bool select = false}) {
-    LogService.instance.notice('Chat', 'Chat created: "${chat.data.name}" in ${_data.branch}');
+  void addChat(Chat chat, {bool select = false}) {
+    LogService.instance.notice(
+      'Chat',
+      'Chat created: "${chat.data.name}" in ${_data.branch}',
+    );
     _chats.add(chat);
     if (select) {
       _selectedChat = chat;
@@ -507,11 +511,11 @@ class WorktreeState extends ChangeNotifier {
   /// Before disposing, captures the chat's cost/token data into
   /// [_closedChatUsage] so worktree-level aggregation remains accurate.
   /// If the removed chat was selected, the selection is cleared.
-  void removeChat(ChatState chat) {
+  void removeChat(Chat chat) {
     // Capture cost data before disposing
-    final usage = chat.cumulativeUsage;
+    final usage = chat.metrics.cumulativeUsage;
     if (usage.totalTokens > 0 || usage.costUsd > 0) {
-      final backend = chat.backendLabel;
+      final backend = chat.agents.backendLabel;
       final existing = _closedChatUsage[backend];
       if (existing != null) {
         _closedChatUsage[backend] = _ClosedChatUsage(
@@ -552,9 +556,9 @@ class WorktreeState extends ChangeNotifier {
 
     // Add active chat data (skip chats with no usage)
     for (final chat in _chats) {
-      final usage = chat.cumulativeUsage;
+      final usage = chat.metrics.cumulativeUsage;
       if (usage.totalTokens == 0 && usage.costUsd == 0) continue;
-      final backend = chat.backendLabel;
+      final backend = chat.agents.backendLabel;
       final existing = result[backend];
       if (existing != null) {
         result[backend] = (
@@ -574,7 +578,7 @@ class WorktreeState extends ChangeNotifier {
 
   @override
   void dispose() {
-    // Dispose all ChatState instances before clearing.
+    // Dispose all Chat instances before clearing.
     for (final chat in _chats) {
       chat.dispose();
     }
@@ -589,8 +593,5 @@ class _ClosedChatUsage {
   final int totalTokens;
   final double costUsd;
 
-  const _ClosedChatUsage({
-    required this.totalTokens,
-    required this.costUsd,
-  });
+  const _ClosedChatUsage({required this.totalTokens, required this.costUsd});
 }

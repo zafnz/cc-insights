@@ -13,7 +13,7 @@ class StatsService {
   final CostTrackingService _costTracking;
 
   StatsService({required CostTrackingService costTracking})
-      : _costTracking = costTracking;
+    : _costTracking = costTracking;
 
   /// Builds project statistics by merging historical and live data.
   ///
@@ -44,15 +44,17 @@ class StatsService {
 
       final chatStats = <ChatStats>[];
       for (final chat in worktree.chats) {
-        chatStats.add(ChatStats(
-          chatName: chat.data.name,
-          worktree: worktreeName,
-          backend: chat.backendLabel,
-          modelUsage: chat.modelUsage,
-          timing: chat.timingStats,
-          timestamp: DateTime.now().toUtc().toIso8601String(),
-          isActive: true,
-        ));
+        chatStats.add(
+          ChatStats(
+            chatName: chat.data.name,
+            worktree: worktreeName,
+            backend: chat.agents.backendLabel,
+            modelUsage: chat.metrics.modelUsage,
+            timing: chat.metrics.timingStats,
+            timestamp: DateTime.now().toUtc().toIso8601String(),
+            isActive: true,
+          ),
+        );
       }
 
       worktreeChatMap[worktreeName] = chatStats;
@@ -98,12 +100,14 @@ class StatsService {
         backends.add(chat.backend);
       }
 
-      worktreeStatsList.add(WorktreeStats(
-        worktreeName: worktreeName,
-        worktreePath: worktreePath,
-        chats: chats,
-        backends: backends,
-      ));
+      worktreeStatsList.add(
+        WorktreeStats(
+          worktreeName: worktreeName,
+          worktreePath: worktreePath,
+          chats: chats,
+          backends: backends,
+        ),
+      );
     }
 
     // Sort worktrees: active first (alphabetical), then deleted (alphabetical)

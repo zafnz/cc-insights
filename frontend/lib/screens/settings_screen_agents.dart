@@ -180,8 +180,8 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
               final project = context.read<ProjectState>();
               for (final worktree in project.allWorktrees) {
                 for (final chat in worktree.chats) {
-                  if (chat.agentId == agentId) {
-                    unawaited(chat.terminateForAgentRemoval());
+                  if (chat.agents.agentId == agentId) {
+                    unawaited(chat.agents.terminateForAgentRemoval());
                   }
                 }
               }
@@ -325,80 +325,88 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                 ),
                 const SizedBox(height: 16),
                 // CLI Path
-                Builder(builder: (context) {
-                  final cliService = context.watch<CliAvailabilityService>();
-                  final isAvailable = _selectedAgentId != null &&
-                      cliService.isAgentAvailable(_selectedAgentId!);
-                  final resolvedPath = _selectedAgentId != null
-                      ? cliService.resolvedPathForAgent(_selectedAgentId!)
-                      : null;
-                  final showAutoDetected =
-                      _cliPathController.text.trim().isEmpty;
+                Builder(
+                  builder: (context) {
+                    final cliService = context.watch<CliAvailabilityService>();
+                    final isAvailable =
+                        _selectedAgentId != null &&
+                        cliService.isAgentAvailable(_selectedAgentId!);
+                    final resolvedPath = _selectedAgentId != null
+                        ? cliService.resolvedPathForAgent(_selectedAgentId!)
+                        : null;
+                    final showAutoDetected = _cliPathController.text
+                        .trim()
+                        .isEmpty;
 
-                  return _FormField(
-                    label: 'CLI Path',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _cliPathController,
-                                style: mono,
-                                decoration: InputDecoration(
-                                  hintText: 'Auto-detect',
-                                  hintStyle: mono.copyWith(
-                                    color: colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.5),
+                    return _FormField(
+                      label: 'CLI Path',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _cliPathController,
+                                  style: mono,
+                                  decoration: InputDecoration(
+                                    hintText: 'Auto-detect',
+                                    hintStyle: mono.copyWith(
+                                      color: colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
+                                  onSubmitted: (_) => _saveCurrentAgent(),
+                                  onTapOutside: (_) => _saveCurrentAgent(),
                                 ),
-                                onSubmitted: (_) => _saveCurrentAgent(),
-                                onTapOutside: (_) => _saveCurrentAgent(),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: const Icon(Icons.folder_open, size: 18),
-                              tooltip: 'Browse',
-                              constraints: const BoxConstraints(
-                                minWidth: 32,
-                                minHeight: 32,
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(Icons.folder_open, size: 18),
+                                tooltip: 'Browse',
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                                padding: EdgeInsets.zero,
+                                onPressed: _pickCliPath,
                               ),
-                              padding: EdgeInsets.zero,
-                              onPressed: _pickCliPath,
-                            ),
-                          ],
-                        ),
-                        if (showAutoDetected && isAvailable && resolvedPath != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              resolvedPath,
-                              style: mono.copyWith(
-                                fontSize: 11,
-                                color: colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.6),
-                              ),
-                            ),
+                            ],
                           ),
-                        if (showAutoDetected && !isAvailable && cliService.checked)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: _CliNotFoundMessage(driver: _driver),
-                          ),
-                      ],
-                    ),
-                  );
-                }),
+                          if (showAutoDetected &&
+                              isAvailable &&
+                              resolvedPath != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                resolvedPath,
+                                style: mono.copyWith(
+                                  fontSize: 11,
+                                  color: colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                          if (showAutoDetected &&
+                              !isAvailable &&
+                              cliService.checked)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: _CliNotFoundMessage(driver: _driver),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 16),
                 // CLI Arguments
                 _FormField(
@@ -409,8 +417,9 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                     decoration: InputDecoration(
                       hintText: 'Optional',
                       hintStyle: mono.copyWith(
-                        color: colorScheme.onSurfaceVariant
-                            .withValues(alpha: 0.5),
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
@@ -428,62 +437,66 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                 // Default Model (Claude and Codex only — ACP has no model concept)
                 if (_driver == 'claude' || _driver == 'codex') ...[
                   const SizedBox(height: 16),
-                  Builder(builder: (context) {
-                    final bs = context.watch<BackendService>();
-                    final isLoading = _selectedAgentId != null &&
-                        (bs.isModelListLoadingForAgent(_selectedAgentId!) ||
-                            bs.isStartingForAgent(_selectedAgentId!));
-                    final modelOpts = _modelOptionsForDriver(_driver);
+                  Builder(
+                    builder: (context) {
+                      final bs = context.watch<BackendService>();
+                      final isLoading =
+                          _selectedAgentId != null &&
+                          (bs.isModelListLoadingForAgent(_selectedAgentId!) ||
+                              bs.isStartingForAgent(_selectedAgentId!));
+                      final modelOpts = _modelOptionsForDriver(_driver);
 
-                    return _FormField(
-                      label: 'Default Model',
-                      child: isLoading && modelOpts.length <= 1
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant
-                                      .withValues(alpha: 0.5),
+                      return _FormField(
+                        label: 'Default Model',
+                        child: isLoading && modelOpts.length <= 1
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
                                 ),
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.5),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Discovering models...',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: colorScheme.onSurfaceVariant,
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Discovering models...',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _buildDropdownWithDescriptions(
+                                value:
+                                    modelOpts.any((o) => o.$1 == _defaultModel)
+                                    ? _defaultModel
+                                    : modelOpts.first.$1,
+                                options: modelOpts,
+                                onChanged: (value) {
+                                  setState(() => _defaultModel = value);
+                                  _saveCurrentAgent();
+                                },
                               ),
-                            )
-                          : _buildDropdownWithDescriptions(
-                              value: modelOpts.any((o) => o.$1 == _defaultModel)
-                                  ? _defaultModel
-                                  : modelOpts.first.$1,
-                              options: modelOpts,
-                              onChanged: (value) {
-                                setState(() => _defaultModel = value);
-                                _saveCurrentAgent();
-                              },
-                            ),
-                    );
-                  }),
+                      );
+                    },
+                  ),
                 ],
                 // Default Permissions (Claude only)
                 if (_driver == 'claude') ...[
@@ -512,10 +525,12 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                     label: 'Security',
                     child: SecurityConfigGroup(
                       config: CodexSecurityConfig(
-                        sandboxMode:
-                            CodexSandboxMode.fromNameOrWire(_codexSandboxMode),
+                        sandboxMode: CodexSandboxMode.fromNameOrWire(
+                          _codexSandboxMode,
+                        ),
                         approvalPolicy: CodexApprovalPolicy.fromNameOrWire(
-                            _codexApprovalPolicy),
+                          _codexApprovalPolicy,
+                        ),
                       ),
                       capabilities: CodexSecurityCapabilities(),
                       onConfigChanged: (config) {
@@ -539,8 +554,9 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                     decoration: InputDecoration(
                       hintText: 'KEY=VALUE\nONE_PER_LINE',
                       hintStyle: mono.copyWith(
-                        color: colorScheme.onSurfaceVariant
-                            .withValues(alpha: 0.5),
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                       isDense: true,
                       contentPadding: const EdgeInsets.all(10),
@@ -631,28 +647,25 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
           value: value,
           isDense: true,
           isExpanded: true,
-          style: TextStyle(
-            fontSize: 13,
-            color: colorScheme.onSurface,
-          ),
+          style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
           dropdownColor: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
           // Show just label + description hint in the collapsed button.
           selectedItemBuilder: hasDescriptions
               ? (context) => options.map((opt) {
-                    final desc = opt.$3;
-                    return Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        desc.isNotEmpty ? '${opt.$2}  ·  $desc' : opt.$2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: colorScheme.onSurface,
-                        ),
+                  final desc = opt.$3;
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      desc.isNotEmpty ? '${opt.$2}  ·  $desc' : opt.$2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurface,
                       ),
-                    );
-                  }).toList()
+                    ),
+                  );
+                }).toList()
               : null,
           items: options
               .map(
@@ -668,8 +681,9 @@ class _AgentsSettingsContentState extends State<_AgentsSettingsContent> {
                               opt.$3,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.7),
+                                color: colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.7,
+                                ),
                               ),
                             ),
                           ],
@@ -758,11 +772,7 @@ class _AgentRow extends StatelessWidget {
               // Default indicator
               if (isDefault) ...[
                 const SizedBox(width: 6),
-                Icon(
-                  Icons.star,
-                  size: 16,
-                  color: colorScheme.primary,
-                ),
+                Icon(Icons.star, size: 16, color: colorScheme.primary),
               ],
             ],
           ),
@@ -786,7 +796,8 @@ class _CliNotFoundMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final driverLabel = driver.substring(0, 1).toUpperCase() + driver.substring(1);
+    final driverLabel =
+        driver.substring(0, 1).toUpperCase() + driver.substring(1);
     final installUrl = _installUrls[driver];
 
     return Row(
@@ -827,10 +838,7 @@ class _CliNotFoundMessage extends StatelessWidget {
 }
 
 class _FormField extends StatelessWidget {
-  const _FormField({
-    required this.label,
-    required this.child,
-  });
+  const _FormField({required this.label, required this.child});
 
   final String label;
   final Widget child;

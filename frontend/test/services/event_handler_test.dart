@@ -125,10 +125,7 @@ UserInputEvent makeUserInput({
 }
 
 /// Helper to create SessionInitEvent with default boilerplate fields.
-SessionInitEvent makeSessionInit({
-  String? model,
-  Map<String, dynamic>? raw,
-}) {
+SessionInitEvent makeSessionInit({String? model, Map<String, dynamic>? raw}) {
   return SessionInitEvent(
     id: _nextId(),
     timestamp: DateTime.now(),
@@ -234,11 +231,11 @@ StreamDeltaEvent makeStreamDelta({
 
 void main() {
   group('EventHandler - Task 4b: Tool Events', () {
-    late ChatState chat;
+    late Chat chat;
     late EventHandler handler;
 
     setUp(() {
-      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+      chat = Chat.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
       handler = EventHandler();
       _idCounter = 0; // Reset counter for each test
     });
@@ -311,10 +308,7 @@ void main() {
 
       test('adds raw message to entry', () {
         final rawMsg = {'type': 'tool_use', 'debug': 'test'};
-        final event = makeToolInvocation(
-          callId: 'tool-789',
-          raw: rawMsg,
-        );
+        final event = makeToolInvocation(callId: 'tool-789', raw: rawMsg);
 
         handler.handleEvent(chat, event);
 
@@ -511,574 +505,665 @@ void main() {
     // through compaction events in Task 4c
   });
 
-  group('EventHandler - Task 4c: Text, User Input, Lifecycle, Compaction, Turn Complete', () {
-    late ChatState chat;
-    late EventHandler handler;
+  group(
+    'EventHandler - Task 4c: Text, User Input, Lifecycle, Compaction, Turn Complete',
+    () {
+      late Chat chat;
+      late EventHandler handler;
 
-    setUp(() {
-      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
-      handler = EventHandler();
-      _idCounter = 0;
-    });
-
-    tearDown(() {
-      handler.dispose();
-      chat.dispose();
-    });
-
-    group('_handleText', () {
-      test('creates TextOutputEntry with contentType text', () {
-        handler.handleEvent(chat, makeText(
-          text: 'Hello, world!',
-          kind: TextKind.text,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<TextOutputEntry>();
-
-        final textEntry = entries.first as TextOutputEntry;
-        check(textEntry.text).equals('Hello, world!');
-        check(textEntry.contentType).equals('text');
-        check(textEntry.errorType).isNull();
+      setUp(() {
+        chat = Chat.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+        handler = EventHandler();
+        _idCounter = 0;
       });
 
-      test('creates thinking entry with contentType thinking', () {
-        handler.handleEvent(chat, makeText(
-          text: 'Let me think...',
-          kind: TextKind.thinking,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<TextOutputEntry>();
-
-        final textEntry = entries.first as TextOutputEntry;
-        check(textEntry.text).equals('Let me think...');
-        check(textEntry.contentType).equals('thinking');
-        check(textEntry.errorType).isNull();
+      tearDown(() {
+        handler.dispose();
+        chat.dispose();
       });
 
-      test('creates error entry with errorType error', () {
-        handler.handleEvent(chat, makeText(
-          text: 'Error occurred',
-          kind: TextKind.error,
-        ));
+      group('_handleText', () {
+        test('creates TextOutputEntry with contentType text', () {
+          handler.handleEvent(
+            chat,
+            makeText(text: 'Hello, world!', kind: TextKind.text),
+          );
 
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<TextOutputEntry>();
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<TextOutputEntry>();
 
-        final textEntry = entries.first as TextOutputEntry;
-        check(textEntry.text).equals('Error occurred');
-        check(textEntry.contentType).equals('text');
-        check(textEntry.errorType).equals('error');
-      });
+          final textEntry = entries.first as TextOutputEntry;
+          check(textEntry.text).equals('Hello, world!');
+          check(textEntry.contentType).equals('text');
+          check(textEntry.errorType).isNull();
+        });
 
-      test('marks assistant output for main agent only', () {
-        // Main agent text (parentCallId null)
-        handler.handleEvent(chat, makeText(
-          text: 'Main agent response',
-          parentCallId: null,
-        ));
+        test('creates thinking entry with contentType thinking', () {
+          handler.handleEvent(
+            chat,
+            makeText(text: 'Let me think...', kind: TextKind.thinking),
+          );
 
-        // Trigger turn complete to see if flag is read
-        handler.handleEvent(chat, makeTurnComplete());
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<TextOutputEntry>();
 
-        // The flag should have been set and then reset
-        // We verify indirectly - no system notification should be added
-        // since we had assistant output
-        final entries = chat.data.primaryConversation.entries;
-        // Should be: 1 text entry + 0 system notifications (because flag was set)
-        check(entries.length).equals(1);
-      });
+          final textEntry = entries.first as TextOutputEntry;
+          check(textEntry.text).equals('Let me think...');
+          check(textEntry.contentType).equals('thinking');
+          check(textEntry.errorType).isNull();
+        });
 
-      test('does NOT mark assistant output for subagent', () {
-        // Subagent text (parentCallId set)
-        handler.handleEvent(chat, makeText(
-          text: 'Subagent response',
-          parentCallId: 'agent-123',
-        ));
+        test('creates error entry with errorType error', () {
+          handler.handleEvent(
+            chat,
+            makeText(text: 'Error occurred', kind: TextKind.error),
+          );
 
-        // Trigger turn complete with result but flag not set
-        handler.handleEvent(chat, makeTurnComplete(
-          result: 'No output message',
-        ));
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<TextOutputEntry>();
 
-        // Should create system notification because flag wasn't set
-        final entries = chat.data.primaryConversation.entries;
-        final hasSystemNotification = entries.any((e) => e is SystemNotificationEntry);
-        check(hasSystemNotification).isTrue();
-      });
+          final textEntry = entries.first as TextOutputEntry;
+          check(textEntry.text).equals('Error occurred');
+          check(textEntry.contentType).equals('text');
+          check(textEntry.errorType).equals('error');
+        });
 
-      test('creates ContextSummaryEntry when expecting compaction summary and synthetic', () {
-        // Trigger compaction without inline summary
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          preTokens: 50000,
-          summary: null,
-        ));
+        test('marks assistant output for main agent only', () {
+          // Main agent text (parentCallId null)
+          handler.handleEvent(
+            chat,
+            makeText(text: 'Main agent response', parentCallId: null),
+          );
 
-        // Now send a synthetic TextEvent (as the new protocol does)
-        handler.handleEvent(chat, makeText(
-          text: 'This is the compaction summary',
-          extensions: {'claude.isSynthetic': true},
-        ));
+          // Trigger turn complete to see if flag is read
+          handler.handleEvent(chat, makeTurnComplete());
 
-        final entries = chat.data.primaryConversation.entries;
-        // AutoCompactionEntry + ContextSummaryEntry
-        check(entries.length).equals(2);
-        check(entries[0]).isA<AutoCompactionEntry>();
-        check(entries[1]).isA<ContextSummaryEntry>();
+          // The flag should have been set and then reset
+          // We verify indirectly - no system notification should be added
+          // since we had assistant output
+          final entries = chat.data.primaryConversation.entries;
+          // Should be: 1 text entry + 0 system notifications (because flag was set)
+          check(entries.length).equals(1);
+        });
 
-        final summary = entries[1] as ContextSummaryEntry;
-        check(summary.summary).equals('This is the compaction summary');
-      });
+        test('does NOT mark assistant output for subagent', () {
+          // Subagent text (parentCallId set)
+          handler.handleEvent(
+            chat,
+            makeText(text: 'Subagent response', parentCallId: 'agent-123'),
+          );
 
-      test('synthetic TextEvent without prior compaction creates normal TextOutputEntry', () {
-        // No compaction event first — just a synthetic text
-        handler.handleEvent(chat, makeText(
-          text: 'Some synthetic text',
-          extensions: {'claude.isSynthetic': true},
-        ));
+          // Trigger turn complete with result but flag not set
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(result: 'No output message'),
+          );
 
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<TextOutputEntry>();
-      });
+          // Should create system notification because flag wasn't set
+          final entries = chat.data.primaryConversation.entries;
+          final hasSystemNotification = entries.any(
+            (e) => e is SystemNotificationEntry,
+          );
+          check(hasSystemNotification).isTrue();
+        });
 
-      test('non-synthetic TextEvent after compaction creates normal TextOutputEntry', () {
-        // Trigger compaction without summary
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          preTokens: 50000,
-          summary: null,
-        ));
+        test(
+          'creates ContextSummaryEntry when expecting compaction summary and synthetic',
+          () {
+            // Trigger compaction without inline summary
+            handler.handleEvent(
+              chat,
+              makeCompaction(
+                trigger: CompactionTrigger.auto,
+                preTokens: 50000,
+                summary: null,
+              ),
+            );
 
-        // Send a non-synthetic TextEvent — both conditions not met
-        handler.handleEvent(chat, makeText(
-          text: 'Normal assistant response',
-        ));
+            // Now send a synthetic TextEvent (as the new protocol does)
+            handler.handleEvent(
+              chat,
+              makeText(
+                text: 'This is the compaction summary',
+                extensions: {'claude.isSynthetic': true},
+              ),
+            );
 
-        final entries = chat.data.primaryConversation.entries;
-        // AutoCompactionEntry + TextOutputEntry (not ContextSummaryEntry)
-        check(entries.length).equals(2);
-        check(entries[0]).isA<AutoCompactionEntry>();
-        check(entries[1]).isA<TextOutputEntry>();
-      });
+            final entries = chat.data.primaryConversation.entries;
+            // AutoCompactionEntry + ContextSummaryEntry
+            check(entries.length).equals(2);
+            check(entries[0]).isA<AutoCompactionEntry>();
+            check(entries[1]).isA<ContextSummaryEntry>();
 
-      test('resets expectingContextSummary flag after synthetic TextEvent', () {
-        // Trigger compaction without summary
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          summary: null,
-        ));
-
-        // First synthetic text creates summary
-        handler.handleEvent(chat, makeText(
-          text: 'Summary',
-          extensions: {'claude.isSynthetic': true},
-        ));
-
-        // Second synthetic text should be normal (flag was reset)
-        handler.handleEvent(chat, makeText(
-          text: 'Not a summary',
-          extensions: {'claude.isSynthetic': true},
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        // AutoCompactionEntry + ContextSummaryEntry + TextOutputEntry
-        check(entries.length).equals(3);
-        check(entries[1]).isA<ContextSummaryEntry>();
-        check(entries[2]).isA<TextOutputEntry>();
-      });
-    });
-
-    group('_handleUserInput', () {
-      test('creates ContextSummaryEntry for synthetic messages', () {
-        handler.handleEvent(chat, makeUserInput(
-          text: 'This is a context summary',
-          isSynthetic: true,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<ContextSummaryEntry>();
-
-        final summary = entries.first as ContextSummaryEntry;
-        check(summary.summary).equals('This is a context summary');
-      });
-
-      test('creates SystemNotificationEntry for local command replay', () {
-        handler.handleEvent(chat, makeUserInput(
-          text: '<local-command-stdout>Cost: \$0.50</local-command-stdout>',
-          extensions: {'isReplay': true},
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<SystemNotificationEntry>();
-
-        final notification = entries.first as SystemNotificationEntry;
-        check(notification.message).equals('Cost: \$0.50');
-      });
-
-      test('creates ContextSummaryEntry when expectingContextSummary flag is set', () {
-        // First trigger compaction without summary
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          preTokens: 45000,
-          summary: null, // No summary yet
-        ));
-
-        // Now send user message - should be treated as summary
-        handler.handleEvent(chat, makeUserInput(
-          text: 'Compacted summary here',
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        // Should be: AutoCompactionEntry + ContextSummaryEntry
-        check(entries.length).equals(2);
-        check(entries[1]).isA<ContextSummaryEntry>();
-
-        final summary = entries[1] as ContextSummaryEntry;
-        check(summary.summary).equals('Compacted summary here');
-      });
-
-      test('resets expectingContextSummary flag after handling', () {
-        // Trigger compaction without summary
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          summary: null,
-        ));
-
-        // First user message creates summary
-        handler.handleEvent(chat, makeUserInput(text: 'Summary'));
-
-        // Second user message should NOT create summary (flag was reset)
-        handler.handleEvent(chat, makeUserInput(text: 'Normal message'));
-
-        final entries = chat.data.primaryConversation.entries;
-        // Should be: AutoCompactionEntry + ContextSummaryEntry (not 2 summaries)
-        check(entries.length).equals(2);
-      });
-
-      test('no-op for normal user messages', () {
-        // Normal user messages don't create entries (ChatState.sendMessage does that)
-        handler.handleEvent(chat, makeUserInput(
-          text: 'Hello Claude',
-          isSynthetic: false,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(0);
-      });
-    });
-
-    group('_handleSessionInit', () {
-      test('no-op', () {
-        handler.handleEvent(chat, makeSessionInit(
-          model: 'claude-sonnet-4-5',
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(0);
-      });
-    });
-
-    group('_handleSessionStatus', () {
-      test('sets compacting to true', () {
-        check(chat.isCompacting).isFalse();
-
-        handler.handleEvent(chat, makeSessionStatus(
-          status: SessionStatus.compacting,
-        ));
-
-        check(chat.isCompacting).isTrue();
-      });
-
-      test('sets compacting to false', () {
-        // First set to true
-        handler.handleEvent(chat, makeSessionStatus(
-          status: SessionStatus.compacting,
-        ));
-        check(chat.isCompacting).isTrue();
-
-        // Then set to false (any non-compacting status)
-        handler.handleEvent(chat, makeSessionStatus(
-          status: SessionStatus.ended,
-        ));
-
-        check(chat.isCompacting).isFalse();
-      });
-
-      test('syncs permission mode from extensions', () {
-        handler.handleEvent(chat, makeSessionStatus(
-          status: SessionStatus.resuming,
-          extensions: {'permissionMode': 'plan'},
-        ));
-
-        check(chat.permissionMode).equals(PermissionMode.plan);
-      });
-    });
-
-    group('_handleCompaction', () {
-      test('creates AutoCompactionEntry with token message', () {
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          preTokens: 45000,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<AutoCompactionEntry>();
-
-        final compaction = entries.first as AutoCompactionEntry;
-        check(compaction.message).equals('Was 45.0K tokens');
-        check(compaction.isManual).isFalse();
-      });
-
-      test('creates AutoCompactionEntry with manual flag', () {
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.manual,
-          preTokens: 30000,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.first).isA<AutoCompactionEntry>();
-
-        final compaction = entries.first as AutoCompactionEntry;
-        check(compaction.isManual).isTrue();
-      });
-
-      test('creates ContextClearedEntry for cleared trigger', () {
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.cleared,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<ContextClearedEntry>();
-      });
-
-      test('sets expectingContextSummary when no summary provided', () {
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          preTokens: 50000,
-          summary: null,
-        ));
-
-        // Send synthetic TextEvent (matches real protocol flow)
-        handler.handleEvent(chat, makeText(
-          text: 'Summary text',
-          extensions: {'claude.isSynthetic': true},
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        // AutoCompactionEntry + ContextSummaryEntry
-        check(entries.length).equals(2);
-        check(entries[1]).isA<ContextSummaryEntry>();
-      });
-
-      test('creates ContextSummaryEntry when summary is provided', () {
-        handler.handleEvent(chat, makeCompaction(
-          trigger: CompactionTrigger.auto,
-          preTokens: 50000,
-          summary: 'Immediate summary',
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        // AutoCompactionEntry + ContextSummaryEntry
-        check(entries.length).equals(2);
-        check(entries[1]).isA<ContextSummaryEntry>();
-
-        final summary = entries[1] as ContextSummaryEntry;
-        check(summary.summary).equals('Immediate summary');
-      });
-    });
-
-    group('_handleTurnComplete', () {
-      test('updates cumulative usage for main agent', () {
-        const usage = TokenUsage(
-          inputTokens: 1000,
-          outputTokens: 500,
-          cacheReadTokens: 100,
-          cacheCreationTokens: 50,
+            final summary = entries[1] as ContextSummaryEntry;
+            check(summary.summary).equals('This is the compaction summary');
+          },
         );
 
-        final modelUsage = {
-          'claude-sonnet-4-5': const ModelTokenUsage(
+        test(
+          'synthetic TextEvent without prior compaction creates normal TextOutputEntry',
+          () {
+            // No compaction event first — just a synthetic text
+            handler.handleEvent(
+              chat,
+              makeText(
+                text: 'Some synthetic text',
+                extensions: {'claude.isSynthetic': true},
+              ),
+            );
+
+            final entries = chat.data.primaryConversation.entries;
+            check(entries.length).equals(1);
+            check(entries.first).isA<TextOutputEntry>();
+          },
+        );
+
+        test(
+          'non-synthetic TextEvent after compaction creates normal TextOutputEntry',
+          () {
+            // Trigger compaction without summary
+            handler.handleEvent(
+              chat,
+              makeCompaction(
+                trigger: CompactionTrigger.auto,
+                preTokens: 50000,
+                summary: null,
+              ),
+            );
+
+            // Send a non-synthetic TextEvent — both conditions not met
+            handler.handleEvent(
+              chat,
+              makeText(text: 'Normal assistant response'),
+            );
+
+            final entries = chat.data.primaryConversation.entries;
+            // AutoCompactionEntry + TextOutputEntry (not ContextSummaryEntry)
+            check(entries.length).equals(2);
+            check(entries[0]).isA<AutoCompactionEntry>();
+            check(entries[1]).isA<TextOutputEntry>();
+          },
+        );
+
+        test(
+          'resets expectingContextSummary flag after synthetic TextEvent',
+          () {
+            // Trigger compaction without summary
+            handler.handleEvent(
+              chat,
+              makeCompaction(trigger: CompactionTrigger.auto, summary: null),
+            );
+
+            // First synthetic text creates summary
+            handler.handleEvent(
+              chat,
+              makeText(
+                text: 'Summary',
+                extensions: {'claude.isSynthetic': true},
+              ),
+            );
+
+            // Second synthetic text should be normal (flag was reset)
+            handler.handleEvent(
+              chat,
+              makeText(
+                text: 'Not a summary',
+                extensions: {'claude.isSynthetic': true},
+              ),
+            );
+
+            final entries = chat.data.primaryConversation.entries;
+            // AutoCompactionEntry + ContextSummaryEntry + TextOutputEntry
+            check(entries.length).equals(3);
+            check(entries[1]).isA<ContextSummaryEntry>();
+            check(entries[2]).isA<TextOutputEntry>();
+          },
+        );
+      });
+
+      group('_handleUserInput', () {
+        test('creates ContextSummaryEntry for synthetic messages', () {
+          handler.handleEvent(
+            chat,
+            makeUserInput(text: 'This is a context summary', isSynthetic: true),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<ContextSummaryEntry>();
+
+          final summary = entries.first as ContextSummaryEntry;
+          check(summary.summary).equals('This is a context summary');
+        });
+
+        test('creates SystemNotificationEntry for local command replay', () {
+          handler.handleEvent(
+            chat,
+            makeUserInput(
+              text: '<local-command-stdout>Cost: \$0.50</local-command-stdout>',
+              extensions: {'isReplay': true},
+            ),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<SystemNotificationEntry>();
+
+          final notification = entries.first as SystemNotificationEntry;
+          check(notification.message).equals('Cost: \$0.50');
+        });
+
+        test(
+          'creates ContextSummaryEntry when expectingContextSummary flag is set',
+          () {
+            // First trigger compaction without summary
+            handler.handleEvent(
+              chat,
+              makeCompaction(
+                trigger: CompactionTrigger.auto,
+                preTokens: 45000,
+                summary: null, // No summary yet
+              ),
+            );
+
+            // Now send user message - should be treated as summary
+            handler.handleEvent(
+              chat,
+              makeUserInput(text: 'Compacted summary here'),
+            );
+
+            final entries = chat.data.primaryConversation.entries;
+            // Should be: AutoCompactionEntry + ContextSummaryEntry
+            check(entries.length).equals(2);
+            check(entries[1]).isA<ContextSummaryEntry>();
+
+            final summary = entries[1] as ContextSummaryEntry;
+            check(summary.summary).equals('Compacted summary here');
+          },
+        );
+
+        test('resets expectingContextSummary flag after handling', () {
+          // Trigger compaction without summary
+          handler.handleEvent(
+            chat,
+            makeCompaction(trigger: CompactionTrigger.auto, summary: null),
+          );
+
+          // First user message creates summary
+          handler.handleEvent(chat, makeUserInput(text: 'Summary'));
+
+          // Second user message should NOT create summary (flag was reset)
+          handler.handleEvent(chat, makeUserInput(text: 'Normal message'));
+
+          final entries = chat.data.primaryConversation.entries;
+          // Should be: AutoCompactionEntry + ContextSummaryEntry (not 2 summaries)
+          check(entries.length).equals(2);
+        });
+
+        test('no-op for normal user messages', () {
+          // Normal user messages don't create entries (Chat.sendMessage does that)
+          handler.handleEvent(
+            chat,
+            makeUserInput(text: 'Hello Claude', isSynthetic: false),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(0);
+        });
+      });
+
+      group('_handleSessionInit', () {
+        test('no-op', () {
+          handler.handleEvent(
+            chat,
+            makeSessionInit(model: 'claude-sonnet-4-5'),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(0);
+        });
+      });
+
+      group('_handleSessionStatus', () {
+        test('sets compacting to true', () {
+          check(chat.session.isCompacting).isFalse();
+
+          handler.handleEvent(
+            chat,
+            makeSessionStatus(status: SessionStatus.compacting),
+          );
+
+          check(chat.session.isCompacting).isTrue();
+        });
+
+        test('sets compacting to false', () {
+          // First set to true
+          handler.handleEvent(
+            chat,
+            makeSessionStatus(status: SessionStatus.compacting),
+          );
+          check(chat.session.isCompacting).isTrue();
+
+          // Then set to false (any non-compacting status)
+          handler.handleEvent(
+            chat,
+            makeSessionStatus(status: SessionStatus.ended),
+          );
+
+          check(chat.session.isCompacting).isFalse();
+        });
+
+        test('syncs permission mode from extensions', () {
+          handler.handleEvent(
+            chat,
+            makeSessionStatus(
+              status: SessionStatus.resuming,
+              extensions: {'permissionMode': 'plan'},
+            ),
+          );
+
+          check(chat.settings.permissionMode).equals(PermissionMode.plan);
+        });
+      });
+
+      group('_handleCompaction', () {
+        test('creates AutoCompactionEntry with token message', () {
+          handler.handleEvent(
+            chat,
+            makeCompaction(trigger: CompactionTrigger.auto, preTokens: 45000),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<AutoCompactionEntry>();
+
+          final compaction = entries.first as AutoCompactionEntry;
+          check(compaction.message).equals('Was 45.0K tokens');
+          check(compaction.isManual).isFalse();
+        });
+
+        test('creates AutoCompactionEntry with manual flag', () {
+          handler.handleEvent(
+            chat,
+            makeCompaction(trigger: CompactionTrigger.manual, preTokens: 30000),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.first).isA<AutoCompactionEntry>();
+
+          final compaction = entries.first as AutoCompactionEntry;
+          check(compaction.isManual).isTrue();
+        });
+
+        test('creates ContextClearedEntry for cleared trigger', () {
+          handler.handleEvent(
+            chat,
+            makeCompaction(trigger: CompactionTrigger.cleared),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<ContextClearedEntry>();
+        });
+
+        test('sets expectingContextSummary when no summary provided', () {
+          handler.handleEvent(
+            chat,
+            makeCompaction(
+              trigger: CompactionTrigger.auto,
+              preTokens: 50000,
+              summary: null,
+            ),
+          );
+
+          // Send synthetic TextEvent (matches real protocol flow)
+          handler.handleEvent(
+            chat,
+            makeText(
+              text: 'Summary text',
+              extensions: {'claude.isSynthetic': true},
+            ),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          // AutoCompactionEntry + ContextSummaryEntry
+          check(entries.length).equals(2);
+          check(entries[1]).isA<ContextSummaryEntry>();
+        });
+
+        test('creates ContextSummaryEntry when summary is provided', () {
+          handler.handleEvent(
+            chat,
+            makeCompaction(
+              trigger: CompactionTrigger.auto,
+              preTokens: 50000,
+              summary: 'Immediate summary',
+            ),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          // AutoCompactionEntry + ContextSummaryEntry
+          check(entries.length).equals(2);
+          check(entries[1]).isA<ContextSummaryEntry>();
+
+          final summary = entries[1] as ContextSummaryEntry;
+          check(summary.summary).equals('Immediate summary');
+        });
+      });
+
+      group('_handleTurnComplete', () {
+        test('updates cumulative usage for main agent', () {
+          const usage = TokenUsage(
             inputTokens: 1000,
             outputTokens: 500,
             cacheReadTokens: 100,
             cacheCreationTokens: 50,
-            costUsd: 0.05,
-            contextWindow: 200000,
-          ),
-        };
+          );
 
-        handler.handleEvent(chat, makeTurnComplete(
-          usage: usage,
-          costUsd: 0.05,
-          modelUsage: modelUsage,
-        ));
+          final modelUsage = {
+            'claude-sonnet-4-5': const ModelTokenUsage(
+              inputTokens: 1000,
+              outputTokens: 500,
+              cacheReadTokens: 100,
+              cacheCreationTokens: 50,
+              costUsd: 0.05,
+              contextWindow: 200000,
+            ),
+          };
 
-        // Verify usage was updated
-        check(chat.cumulativeUsage.inputTokens).equals(1000);
-        check(chat.cumulativeUsage.outputTokens).equals(500);
-        check(chat.cumulativeUsage.cacheReadTokens).equals(100);
-        check(chat.cumulativeUsage.cacheCreationTokens).equals(50);
-      });
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(
+              usage: usage,
+              costUsd: 0.05,
+              modelUsage: modelUsage,
+            ),
+          );
 
-      test('sets working to false for main agent', () {
-        // Simulate working state
-        chat.setWorking(true);
-        check(chat.isWorking).isTrue();
+          // Verify usage was updated
+          check(chat.metrics.cumulativeUsage.inputTokens).equals(1000);
+          check(chat.metrics.cumulativeUsage.outputTokens).equals(500);
+          check(chat.metrics.cumulativeUsage.cacheReadTokens).equals(100);
+          check(chat.metrics.cumulativeUsage.cacheCreationTokens).equals(50);
+        });
 
-        handler.handleEvent(chat, makeTurnComplete());
+        test('sets working to false for main agent', () {
+          // Simulate working state
+          chat.session.setWorking(true);
+          check(chat.session.isWorking).isTrue();
 
-        check(chat.isWorking).isFalse();
-      });
+          handler.handleEvent(chat, makeTurnComplete());
 
-      test('updates agent status for subagent (completed)', () {
-        // Create a subagent first
-        chat.addSubagentConversation('agent-123', 'Explore', 'Search task');
-        check(chat.activeAgents['agent-123']?.status).equals(AgentStatus.working);
+          check(chat.session.isWorking).isFalse();
+        });
 
-        // Send turn complete for subagent
-        handler.handleEvent(chat, makeTurnComplete(
-          subtype: 'success',
-          extensions: {'parent_tool_use_id': 'agent-123'},
-        ));
+        test('updates agent status for subagent (completed)', () {
+          // Create a subagent first
+          chat.conversations.addSubagentConversation(
+            'agent-123',
+            'Explore',
+            'Search task',
+          );
+          check(
+            chat.agents.activeAgents['agent-123']?.status,
+          ).equals(AgentStatus.working);
 
-        check(chat.activeAgents['agent-123']?.status).equals(AgentStatus.completed);
-      });
+          // Send turn complete for subagent
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(
+              subtype: 'success',
+              extensions: {'parent_tool_use_id': 'agent-123'},
+            ),
+          );
 
-      test('updates agent status for subagent (error subtypes)', () {
-        // Create a subagent first
-        chat.addSubagentConversation('agent-456', 'Plan', 'Plan task');
+          check(
+            chat.agents.activeAgents['agent-123']?.status,
+          ).equals(AgentStatus.completed);
+        });
 
-        // Send error turn complete
-        handler.handleEvent(chat, makeTurnComplete(
-          subtype: 'error_max_turns',
-          extensions: {'parent_tool_use_id': 'agent-456'},
-        ));
+        test('updates agent status for subagent (error subtypes)', () {
+          // Create a subagent first
+          chat.conversations.addSubagentConversation(
+            'agent-456',
+            'Plan',
+            'Plan task',
+          );
 
-        check(chat.activeAgents['agent-456']?.status).equals(AgentStatus.error);
-      });
+          // Send error turn complete
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(
+              subtype: 'error_max_turns',
+              extensions: {'parent_tool_use_id': 'agent-456'},
+            ),
+          );
 
-      test('creates SystemNotificationEntry when no assistant output and result present', () {
-        // Don't send any assistant text (flag not set)
-        handler.handleEvent(chat, makeTurnComplete(
-          result: 'Unknown skill: clear',
-        ));
+          check(
+            chat.agents.activeAgents['agent-456']?.status,
+          ).equals(AgentStatus.error);
+        });
 
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<SystemNotificationEntry>();
+        test(
+          'creates SystemNotificationEntry when no assistant output and result present',
+          () {
+            // Don't send any assistant text (flag not set)
+            handler.handleEvent(
+              chat,
+              makeTurnComplete(result: 'Unknown skill: clear'),
+            );
 
-        final notification = entries.first as SystemNotificationEntry;
-        check(notification.message).equals('Unknown skill: clear');
-      });
+            final entries = chat.data.primaryConversation.entries;
+            check(entries.length).equals(1);
+            check(entries.first).isA<SystemNotificationEntry>();
 
-      test('does not create notification when result is null', () {
-        handler.handleEvent(chat, makeTurnComplete(
-          result: null,
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(0);
-      });
-
-      test('does not create notification when result is empty', () {
-        handler.handleEvent(chat, makeTurnComplete(
-          result: '',
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(0);
-      });
-
-      test('resets hasAssistantOutputThisTurn flag', () {
-        // Send text to set the flag
-        handler.handleEvent(chat, makeText(text: 'Response'));
-
-        // Send turn complete
-        handler.handleEvent(chat, makeTurnComplete());
-
-        // Send another turn complete with result
-        // Should create notification because flag was reset
-        handler.handleEvent(chat, makeTurnComplete(
-          result: 'Next turn message',
-        ));
-
-        final entries = chat.data.primaryConversation.entries;
-        // TextEntry + SystemNotificationEntry
-        check(entries.length).equals(2);
-        check(entries[1]).isA<SystemNotificationEntry>();
-      });
-
-      test('calculates cost for Codex events using pricing table', () {
-        const usage = TokenUsage(
-          inputTokens: 1000000,
-          outputTokens: 100000,
-          cacheReadTokens: 500000,
+            final notification = entries.first as SystemNotificationEntry;
+            check(notification.message).equals('Unknown skill: clear');
+          },
         );
 
-        final modelUsage = {
-          'gpt-5.2-codex': const ModelTokenUsage(
+        test('does not create notification when result is null', () {
+          handler.handleEvent(chat, makeTurnComplete(result: null));
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(0);
+        });
+
+        test('does not create notification when result is empty', () {
+          handler.handleEvent(chat, makeTurnComplete(result: ''));
+
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(0);
+        });
+
+        test('resets hasAssistantOutputThisTurn flag', () {
+          // Send text to set the flag
+          handler.handleEvent(chat, makeText(text: 'Response'));
+
+          // Send turn complete
+          handler.handleEvent(chat, makeTurnComplete());
+
+          // Send another turn complete with result
+          // Should create notification because flag was reset
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(result: 'Next turn message'),
+          );
+
+          final entries = chat.data.primaryConversation.entries;
+          // TextEntry + SystemNotificationEntry
+          check(entries.length).equals(2);
+          check(entries[1]).isA<SystemNotificationEntry>();
+        });
+
+        test('calculates cost for Codex events using pricing table', () {
+          const usage = TokenUsage(
             inputTokens: 1000000,
             outputTokens: 100000,
             cacheReadTokens: 500000,
-            contextWindow: 192000,
-          ),
-        };
+          );
 
-        handler.handleEvent(chat, makeTurnComplete(
-          provider: BackendProvider.codex,
-          usage: usage,
-          modelUsage: modelUsage,
-        ));
+          final modelUsage = {
+            'gpt-5.2-codex': const ModelTokenUsage(
+              inputTokens: 1000000,
+              outputTokens: 100000,
+              cacheReadTokens: 500000,
+              contextWindow: 192000,
+            ),
+          };
 
-        // gpt-5.2-codex: 1M * 1.75/1M + 500k * 0.175/1M + 100k * 14.00/1M
-        //              = 1.75 + 0.0875 + 1.4 = 3.2375
-        check(chat.cumulativeUsage.costUsd).isCloseTo(3.2375, 0.0001);
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(
+              provider: BackendProvider.codex,
+              usage: usage,
+              modelUsage: modelUsage,
+            ),
+          );
+
+          // gpt-5.2-codex: 1M * 1.75/1M + 500k * 0.175/1M + 100k * 14.00/1M
+          //              = 1.75 + 0.0875 + 1.4 = 3.2375
+          check(chat.metrics.cumulativeUsage.costUsd).isCloseTo(3.2375, 0.0001);
+        });
+
+        test('does not override Claude cost with pricing table', () {
+          const usage = TokenUsage(inputTokens: 1000, outputTokens: 500);
+
+          final modelUsage = {
+            'claude-sonnet-4-5': const ModelTokenUsage(
+              inputTokens: 1000,
+              outputTokens: 500,
+              costUsd: 0.05,
+              contextWindow: 200000,
+            ),
+          };
+
+          handler.handleEvent(
+            chat,
+            makeTurnComplete(
+              provider: BackendProvider.claude,
+              usage: usage,
+              costUsd: 0.05,
+              modelUsage: modelUsage,
+            ),
+          );
+
+          // Cost should be exactly what Claude reported, not recalculated
+          check(chat.metrics.cumulativeUsage.costUsd).equals(0.05);
+        });
       });
-
-      test('does not override Claude cost with pricing table', () {
-        const usage = TokenUsage(
-          inputTokens: 1000,
-          outputTokens: 500,
-        );
-
-        final modelUsage = {
-          'claude-sonnet-4-5': const ModelTokenUsage(
-            inputTokens: 1000,
-            outputTokens: 500,
-            costUsd: 0.05,
-            contextWindow: 200000,
-          ),
-        };
-
-        handler.handleEvent(chat, makeTurnComplete(
-          provider: BackendProvider.claude,
-          usage: usage,
-          costUsd: 0.05,
-          modelUsage: modelUsage,
-        ));
-
-        // Cost should be exactly what Claude reported, not recalculated
-        check(chat.cumulativeUsage.costUsd).equals(0.05);
-      });
-    });
-  });
+    },
+  );
 
   group('EventHandler - Task 4d: Streaming Delta Handling', () {
-    late ChatState chat;
+    late Chat chat;
     late EventHandler handler;
 
     setUp(() {
-      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+      chat = Chat.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
       handler = EventHandler();
       _idCounter = 0;
     });
@@ -1091,14 +1176,20 @@ void main() {
     group('text block streaming', () {
       test('blockStart creates streaming TextOutputEntry for text block', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start text block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          extensions: {},
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 0,
+            extensions: {},
+          ),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         check(entries.length).equals(1);
@@ -1112,25 +1203,34 @@ void main() {
 
       test('text delta appends text to TextOutputEntry', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start text block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
 
         // Send text deltas
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 0,
-          textDelta: 'Hello',
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 0,
-          textDelta: ' world',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'Hello',
+          ),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: ' world',
+          ),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         final textEntry = entries.first as TextOutputEntry;
@@ -1140,24 +1240,30 @@ void main() {
 
       test('blockStop marks entry as not streaming', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start and stream text
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 0,
-          textDelta: 'Complete text',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'Complete text',
+          ),
+        );
 
         // Stop block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStop,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStop, blockIndex: 0),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         final textEntry = entries.first as TextOutputEntry;
@@ -1166,23 +1272,32 @@ void main() {
 
       test('messageStop cancels timer and clears streaming state', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start text block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
 
         // Stream some text
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 0,
-          textDelta: 'Text',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'Text',
+          ),
+        );
 
         // Stop message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStop));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStop),
+        );
 
         // Verify entry exists but streaming state is cleared
         final entries = chat.data.primaryConversation.entries;
@@ -1191,49 +1306,70 @@ void main() {
     });
 
     group('thinking block streaming', () {
-      test('blockStart creates streaming TextOutputEntry for thinking block', () {
-        // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+      test(
+        'blockStart creates streaming TextOutputEntry for thinking block',
+        () {
+          // Start message
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(kind: StreamDeltaKind.messageStart),
+          );
 
-        // Start thinking block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          extensions: {'block_type': 'thinking'},
-        ));
+          // Start thinking block
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(
+              kind: StreamDeltaKind.blockStart,
+              blockIndex: 0,
+              extensions: {'block_type': 'thinking'},
+            ),
+          );
 
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<TextOutputEntry>();
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<TextOutputEntry>();
 
-        final textEntry = entries.first as TextOutputEntry;
-        check(textEntry.text).equals('');
-        check(textEntry.contentType).equals('thinking');
-        check(textEntry.isStreaming).isTrue();
-      });
+          final textEntry = entries.first as TextOutputEntry;
+          check(textEntry.text).equals('');
+          check(textEntry.contentType).equals('thinking');
+          check(textEntry.isStreaming).isTrue();
+        },
+      );
 
       test('thinking delta appends text to thinking TextOutputEntry', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start thinking block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          extensions: {'block_type': 'thinking'},
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 0,
+            extensions: {'block_type': 'thinking'},
+          ),
+        );
 
         // Send thinking deltas
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.thinking,
-          blockIndex: 0,
-          textDelta: 'Let me ',
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.thinking,
-          blockIndex: 0,
-          textDelta: 'think...',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.thinking,
+            blockIndex: 0,
+            textDelta: 'Let me ',
+          ),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.thinking,
+            blockIndex: 0,
+            textDelta: 'think...',
+          ),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         final textEntry = entries.first as TextOutputEntry;
@@ -1243,40 +1379,55 @@ void main() {
     });
 
     group('tool use streaming', () {
-      test('blockStart creates streaming ToolUseOutputEntry for tool block', () {
-        // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+      test(
+        'blockStart creates streaming ToolUseOutputEntry for tool block',
+        () {
+          // Start message
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(kind: StreamDeltaKind.messageStart),
+          );
 
-        // Start tool block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          callId: 'tool-123',
-          extensions: {'tool_name': 'Read'},
-        ));
+          // Start tool block
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(
+              kind: StreamDeltaKind.blockStart,
+              blockIndex: 0,
+              callId: 'tool-123',
+              extensions: {'tool_name': 'Read'},
+            ),
+          );
 
-        final entries = chat.data.primaryConversation.entries;
-        check(entries.length).equals(1);
-        check(entries.first).isA<ToolUseOutputEntry>();
+          final entries = chat.data.primaryConversation.entries;
+          check(entries.length).equals(1);
+          check(entries.first).isA<ToolUseOutputEntry>();
 
-        final toolEntry = entries.first as ToolUseOutputEntry;
-        check(toolEntry.toolName).equals('Read');
-        check(toolEntry.toolUseId).equals('tool-123');
-        check(toolEntry.toolInput).isEmpty();
-        check(toolEntry.isStreaming).isTrue();
-      });
+          final toolEntry = entries.first as ToolUseOutputEntry;
+          check(toolEntry.toolName).equals('Read');
+          check(toolEntry.toolUseId).equals('tool-123');
+          check(toolEntry.toolInput).isEmpty();
+          check(toolEntry.isStreaming).isTrue();
+        },
+      );
 
       test('blockStart registers tool entry in toolCallIndex', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start tool block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          callId: 'tool-456',
-          extensions: {'tool_name': 'Bash'},
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 0,
+            callId: 'tool-456',
+            extensions: {'tool_name': 'Bash'},
+          ),
+        );
 
         // Verify pairing works by sending a completion
         final completion = makeToolCompletion(
@@ -1292,27 +1443,39 @@ void main() {
 
       test('toolInput delta accumulates on ToolUseOutputEntry', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start tool block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          callId: 'tool-789',
-          extensions: {'tool_name': 'Edit'},
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 0,
+            callId: 'tool-789',
+            extensions: {'tool_name': 'Edit'},
+          ),
+        );
 
         // Send tool input deltas
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.toolInput,
-          blockIndex: 0,
-          jsonDelta: '{"file',
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.toolInput,
-          blockIndex: 0,
-          jsonDelta: '":"test.txt"}',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.toolInput,
+            blockIndex: 0,
+            jsonDelta: '{"file',
+          ),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.toolInput,
+            blockIndex: 0,
+            jsonDelta: '":"test.txt"}',
+          ),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         final toolEntry = entries.first as ToolUseOutputEntry;
@@ -1322,21 +1485,27 @@ void main() {
 
       test('blockStop marks tool entry as not streaming', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start tool block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          callId: 'tool-stop',
-          extensions: {'tool_name': 'Write'},
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 0,
+            callId: 'tool-stop',
+            extensions: {'tool_name': 'Write'},
+          ),
+        );
 
         // Stop block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStop,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStop, blockIndex: 0),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         final toolEntry = entries.first as ToolUseOutputEntry;
@@ -1347,38 +1516,53 @@ void main() {
     group('multiple blocks', () {
       test('multiple blocks create separate entries at different indices', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Start thinking block at index 0
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-          extensions: {'block_type': 'thinking'},
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.thinking,
-          blockIndex: 0,
-          textDelta: 'Thinking...',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 0,
+            extensions: {'block_type': 'thinking'},
+          ),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.thinking,
+            blockIndex: 0,
+            textDelta: 'Thinking...',
+          ),
+        );
 
         // Start text block at index 1
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 1,
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 1,
-          textDelta: 'Response text',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 1),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 1,
+            textDelta: 'Response text',
+          ),
+        );
 
         // Start tool block at index 2
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 2,
-          callId: 'tool-multi',
-          extensions: {'tool_name': 'Read'},
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.blockStart,
+            blockIndex: 2,
+            callId: 'tool-multi',
+            extensions: {'tool_name': 'Read'},
+          ),
+        );
 
         final entries = chat.data.primaryConversation.entries;
         check(entries.length).equals(3);
@@ -1404,8 +1588,12 @@ void main() {
         // with SubagentSpawnEvent is tested in Task 4e.
 
         // Create subagent conversation
-        chat.addSubagentConversation('agent-123', 'Explore', 'Search task');
-        final agent = chat.activeAgents['agent-123']!;
+        chat.conversations.addSubagentConversation(
+          'agent-123',
+          'Explore',
+          'Search task',
+        );
+        final agent = chat.agents.activeAgents['agent-123']!;
         final subagentConvId = agent.conversationId;
         final subagentConv = chat.data.subagentConversations[subagentConvId]!;
 
@@ -1414,22 +1602,29 @@ void main() {
         // parentCallId is null vs non-null
 
         // Main agent streaming (parentCallId: null) should go to primary
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 0,
-          textDelta: 'Primary output',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'Primary output',
+          ),
+        );
 
         // Verify it went to primary conversation
         check(chat.data.primaryConversation.entries.length).equals(1);
         check(subagentConv.entries.length).equals(0);
 
-        final textEntry = chat.data.primaryConversation.entries.first as TextOutputEntry;
+        final textEntry =
+            chat.data.primaryConversation.entries.first as TextOutputEntry;
         check(textEntry.text).equals('Primary output');
       });
     });
@@ -1437,13 +1632,16 @@ void main() {
     group('messageStart context', () {
       test('messageStart sets streaming conversation context', () {
         // Start message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         // Verify context is set by starting a block
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
 
         // Should create entry in primary conversation
         check(chat.data.primaryConversation.entries.length).equals(1);
@@ -1451,18 +1649,24 @@ void main() {
 
       test('messageStart clears previous streaming blocks', () {
         // First message
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
 
         // Second message (should clear state)
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
 
         // Should have two entries (one from each message)
         check(chat.data.primaryConversation.entries.length).equals(2);
@@ -1473,11 +1677,14 @@ void main() {
       test('deltas without prior blockStart are ignored (no crash)', () {
         // Send delta without starting message or block
         expect(() {
-          handler.handleEvent(chat, makeStreamDelta(
-            kind: StreamDeltaKind.text,
-            blockIndex: 0,
-            textDelta: 'Orphaned delta',
-          ));
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(
+              kind: StreamDeltaKind.text,
+              blockIndex: 0,
+              textDelta: 'Orphaned delta',
+            ),
+          );
         }, returnsNormally);
 
         // No entries should be created
@@ -1485,13 +1692,16 @@ void main() {
       });
 
       test('blockStop without prior blockStart is ignored', () {
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
 
         expect(() {
-          handler.handleEvent(chat, makeStreamDelta(
-            kind: StreamDeltaKind.blockStop,
-            blockIndex: 0,
-          ));
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(kind: StreamDeltaKind.blockStop, blockIndex: 0),
+          );
         }, returnsNormally);
       });
     });
@@ -1499,16 +1709,22 @@ void main() {
     group('clearStreamingState', () {
       test('clearStreamingState finalizes in-flight entries and notifies', () {
         // Start streaming
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.text,
-          blockIndex: 0,
-          textDelta: 'Interrupted',
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(
+            kind: StreamDeltaKind.text,
+            blockIndex: 0,
+            textDelta: 'Interrupted',
+          ),
+        );
 
         // Clear streaming state
         handler.clearStreamingState();
@@ -1523,22 +1739,28 @@ void main() {
 
       test('clearStreamingState clears all internal state', () {
         // Start streaming
-        handler.handleEvent(chat, makeStreamDelta(kind: StreamDeltaKind.messageStart));
-        handler.handleEvent(chat, makeStreamDelta(
-          kind: StreamDeltaKind.blockStart,
-          blockIndex: 0,
-        ));
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.messageStart),
+        );
+        handler.handleEvent(
+          chat,
+          makeStreamDelta(kind: StreamDeltaKind.blockStart, blockIndex: 0),
+        );
 
         // Clear
         handler.clearStreamingState();
 
         // Starting new deltas should not crash (state was cleared)
         expect(() {
-          handler.handleEvent(chat, makeStreamDelta(
-            kind: StreamDeltaKind.text,
-            blockIndex: 0,
-            textDelta: 'New message',
-          ));
+          handler.handleEvent(
+            chat,
+            makeStreamDelta(
+              kind: StreamDeltaKind.text,
+              blockIndex: 0,
+              textDelta: 'New message',
+            ),
+          );
         }, returnsNormally);
       });
     });
@@ -1589,11 +1811,11 @@ void main() {
   }
 
   group('EventHandler - Task 4e: Subagent Routing + Title Generation', () {
-    late ChatState chat;
+    late Chat chat;
     late EventHandler handler;
 
     setUp(() {
-      chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
+      chat = Chat.create(name: 'Test Chat', worktreeRoot: '/tmp/test');
       handler = EventHandler();
       _idCounter = 0;
     });
@@ -1605,42 +1827,50 @@ void main() {
 
     group('_handleSubagentSpawn', () {
       test('creates subagent conversation with agentType and description', () {
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-123',
-          agentType: 'Explore',
-          description: 'Search for files',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-123',
+            agentType: 'Explore',
+            description: 'Search for files',
+          ),
+        );
 
         // Verify subagent was created
-        check(chat.activeAgents.length).equals(1);
-        final agent = chat.activeAgents['task-123'];
+        check(chat.agents.activeAgents.length).equals(1);
+        final agent = chat.agents.activeAgents['task-123'];
         check(agent).isNotNull();
         check(agent!.status).equals(AgentStatus.working);
 
         // Verify subagent conversation exists
         check(chat.data.subagentConversations.length).equals(1);
-        final subagentConv = chat.data.subagentConversations[agent.conversationId];
+        final subagentConv =
+            chat.data.subagentConversations[agent.conversationId];
         check(subagentConv).isNotNull();
       });
 
       test('maps callId to conversation for routing', () {
         // Create subagent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-456',
-          agentType: 'Plan',
-          description: 'Plan implementation',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-456',
+            agentType: 'Plan',
+            description: 'Plan implementation',
+          ),
+        );
 
-        final agent = chat.activeAgents['task-456']!;
+        final agent = chat.agents.activeAgents['task-456']!;
 
         // Now send a text event with parentCallId - should route to subagent conversation
-        handler.handleEvent(chat, makeText(
-          text: 'Subagent output',
-          parentCallId: 'task-456',
-        ));
+        handler.handleEvent(
+          chat,
+          makeText(text: 'Subagent output', parentCallId: 'task-456'),
+        );
 
         // Verify the text went to the subagent conversation
-        final subagentConv = chat.data.subagentConversations[agent.conversationId]!;
+        final subagentConv =
+            chat.data.subagentConversations[agent.conversationId]!;
         check(subagentConv.entries.length).equals(1);
         check(subagentConv.entries.first).isA<TextOutputEntry>();
 
@@ -1650,44 +1880,60 @@ void main() {
 
       test('resumes existing agent (updates status, maps routing)', () {
         // First, create an agent and complete it
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-original',
-          agentType: 'Explore',
-          description: 'Original task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-original',
+            agentType: 'Explore',
+            description: 'Original task',
+          ),
+        );
 
-        final originalAgent = chat.activeAgents['task-original']!;
+        final originalAgent = chat.agents.activeAgents['task-original']!;
 
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-original',
-          agentId: 'abc123', // Resume ID
-          status: 'completed',
-          summary: 'First round complete',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(
+            callId: 'task-original',
+            agentId: 'abc123', // Resume ID
+            status: 'completed',
+            summary: 'First round complete',
+          ),
+        );
 
         // Verify agent completed
-        check(chat.activeAgents['task-original']!.status).equals(AgentStatus.completed);
-        check(chat.activeAgents['task-original']!.resumeId).equals('abc123');
+        check(
+          chat.agents.activeAgents['task-original']!.status,
+        ).equals(AgentStatus.completed);
+        check(
+          chat.agents.activeAgents['task-original']!.resumeId,
+        ).equals('abc123');
 
         // Now resume the same agent with a new Task call
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-resumed',
-          agentType: 'Explore',
-          description: 'Continue task',
-          isResume: true,
-          resumeAgentId: 'abc123',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-resumed',
+            agentType: 'Explore',
+            description: 'Continue task',
+            isResume: true,
+            resumeAgentId: 'abc123',
+          ),
+        );
 
         // Verify agent status updated to working
-        check(chat.activeAgents['task-original']!.status).equals(AgentStatus.working);
+        check(
+          chat.agents.activeAgents['task-original']!.status,
+        ).equals(AgentStatus.working);
 
         // Verify new callId routes to the same conversation
-        handler.handleEvent(chat, makeText(
-          text: 'Resumed output',
-          parentCallId: 'task-resumed',
-        ));
+        handler.handleEvent(
+          chat,
+          makeText(text: 'Resumed output', parentCallId: 'task-resumed'),
+        );
 
-        final subagentConv = chat.data.subagentConversations[originalAgent.conversationId]!;
+        final subagentConv =
+            chat.data.subagentConversations[originalAgent.conversationId]!;
         check(subagentConv.entries.length).equals(1);
         final textEntry = subagentConv.entries.first as TextOutputEntry;
         check(textEntry.text).equals('Resumed output');
@@ -1695,42 +1941,51 @@ void main() {
 
       test('falls through to create when resumeAgentId not found', () {
         // Try to resume a non-existent agent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-new',
-          agentType: 'Explore',
-          description: 'New task',
-          isResume: true,
-          resumeAgentId: 'nonexistent',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-new',
+            agentType: 'Explore',
+            description: 'New task',
+            isResume: true,
+            resumeAgentId: 'nonexistent',
+          ),
+        );
 
         // Should create a new agent instead
-        check(chat.activeAgents.length).equals(1);
-        final agent = chat.activeAgents['task-new'];
+        check(chat.agents.activeAgents.length).equals(1);
+        final agent = chat.agents.activeAgents['task-new'];
         check(agent).isNotNull();
         check(agent!.status).equals(AgentStatus.working);
       });
 
       test('handles missing agentType gracefully', () {
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-no-type',
-          agentType: null,
-          description: 'Task description',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-no-type',
+            agentType: null,
+            description: 'Task description',
+          ),
+        );
 
         // Should still create the agent
-        check(chat.activeAgents.length).equals(1);
+        check(chat.agents.activeAgents.length).equals(1);
         check(chat.data.subagentConversations.length).equals(1);
       });
 
       test('handles missing description gracefully', () {
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-no-desc',
-          agentType: 'Explore',
-          description: null,
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-no-desc',
+            agentType: 'Explore',
+            description: null,
+          ),
+        );
 
         // Should still create the agent
-        check(chat.activeAgents.length).equals(1);
+        check(chat.agents.activeAgents.length).equals(1);
         check(chat.data.subagentConversations.length).equals(1);
       });
     });
@@ -1738,23 +1993,31 @@ void main() {
     group('_handleSubagentComplete', () {
       test('updates agent to completed', () {
         // Create subagent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-123',
-          agentType: 'Explore',
-          description: 'Search task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-123',
+            agentType: 'Explore',
+            description: 'Search task',
+          ),
+        );
 
-        check(chat.activeAgents['task-123']!.status).equals(AgentStatus.working);
+        check(
+          chat.agents.activeAgents['task-123']!.status,
+        ).equals(AgentStatus.working);
 
         // Complete the agent
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-123',
-          agentId: 'abc123',
-          status: 'completed',
-          summary: 'Task finished successfully',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(
+            callId: 'task-123',
+            agentId: 'abc123',
+            status: 'completed',
+            summary: 'Task finished successfully',
+          ),
+        );
 
-        final agent = chat.activeAgents['task-123']!;
+        final agent = chat.agents.activeAgents['task-123']!;
         check(agent.status).equals(AgentStatus.completed);
         check(agent.result).equals('Task finished successfully');
         check(agent.resumeId).equals('abc123');
@@ -1762,116 +2025,151 @@ void main() {
 
       test('updates agent to error for error statuses', () {
         // Create subagent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-456',
-          agentType: 'Plan',
-          description: 'Plan task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-456',
+            agentType: 'Plan',
+            description: 'Plan task',
+          ),
+        );
 
         // Complete with error
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-456',
-          status: 'error_max_turns',
-          summary: 'Max turns exceeded',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(
+            callId: 'task-456',
+            status: 'error_max_turns',
+            summary: 'Max turns exceeded',
+          ),
+        );
 
-        final agent = chat.activeAgents['task-456']!;
+        final agent = chat.agents.activeAgents['task-456']!;
         check(agent.status).equals(AgentStatus.error);
         check(agent.result).equals('Max turns exceeded');
       });
 
       test('uses _toolUseIdToAgentId for resumed agents', () {
         // Create and complete original agent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-original',
-          agentType: 'Explore',
-          description: 'Original task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-original',
+            agentType: 'Explore',
+            description: 'Original task',
+          ),
+        );
 
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-original',
-          agentId: 'abc123',
-          status: 'completed',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(
+            callId: 'task-original',
+            agentId: 'abc123',
+            status: 'completed',
+          ),
+        );
 
         // Resume the agent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-resumed',
-          isResume: true,
-          resumeAgentId: 'abc123',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-resumed',
+            isResume: true,
+            resumeAgentId: 'abc123',
+          ),
+        );
 
         // Complete the resumed agent - should update the original agent
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-resumed',
-          agentId: 'abc123',
-          status: 'completed',
-          summary: 'Resume complete',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(
+            callId: 'task-resumed',
+            agentId: 'abc123',
+            status: 'completed',
+            summary: 'Resume complete',
+          ),
+        );
 
         // Verify the original agent was updated
-        final agent = chat.activeAgents['task-original']!;
+        final agent = chat.agents.activeAgents['task-original']!;
         check(agent.status).equals(AgentStatus.completed);
         check(agent.result).equals('Resume complete');
       });
 
       test('defaults to completed for unknown status', () {
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-789',
-          agentType: 'Explore',
-          description: 'Task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-789',
+            agentType: 'Explore',
+            description: 'Task',
+          ),
+        );
 
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-789',
-          status: 'unknown_status',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(callId: 'task-789', status: 'unknown_status'),
+        );
 
-        check(chat.activeAgents['task-789']!.status).equals(AgentStatus.completed);
+        check(
+          chat.agents.activeAgents['task-789']!.status,
+        ).equals(AgentStatus.completed);
       });
 
       test('handles null status', () {
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-null',
-          agentType: 'Plan',
-          description: 'Task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-null',
+            agentType: 'Plan',
+            description: 'Task',
+          ),
+        );
 
-        handler.handleEvent(chat, makeSubagentComplete(
-          callId: 'task-null',
-          status: null,
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentComplete(callId: 'task-null', status: null),
+        );
 
-        check(chat.activeAgents['task-null']!.status).equals(AgentStatus.completed);
+        check(
+          chat.agents.activeAgents['task-null']!.status,
+        ).equals(AgentStatus.completed);
       });
     });
 
     group('conversation routing', () {
       test('messages with parentCallId route to subagent conversation', () {
         // Create subagent
-        handler.handleEvent(chat, makeSubagentSpawn(
-          callId: 'task-123',
-          agentType: 'Explore',
-          description: 'Search task',
-        ));
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-123',
+            agentType: 'Explore',
+            description: 'Search task',
+          ),
+        );
 
-        final agent = chat.activeAgents['task-123']!;
+        final agent = chat.agents.activeAgents['task-123']!;
 
         // Send text with parentCallId
-        handler.handleEvent(chat, makeText(
-          text: 'Subagent text',
-          parentCallId: 'task-123',
-        ));
+        handler.handleEvent(
+          chat,
+          makeText(text: 'Subagent text', parentCallId: 'task-123'),
+        );
 
         // Send tool invocation with parentCallId
-        handler.handleEvent(chat, makeToolInvocation(
-          callId: 'tool-sub',
-          toolName: 'Read',
-          parentCallId: 'task-123',
-        ));
+        handler.handleEvent(
+          chat,
+          makeToolInvocation(
+            callId: 'tool-sub',
+            toolName: 'Read',
+            parentCallId: 'task-123',
+          ),
+        );
 
         // Verify both went to subagent conversation
-        final subagentConv = chat.data.subagentConversations[agent.conversationId]!;
+        final subagentConv =
+            chat.data.subagentConversations[agent.conversationId]!;
         check(subagentConv.entries.length).equals(2);
         check(subagentConv.entries[0]).isA<TextOutputEntry>();
         check(subagentConv.entries[1]).isA<ToolUseOutputEntry>();
@@ -1882,22 +2180,131 @@ void main() {
 
       test('messages without parentCallId route to primary', () {
         // Send text without parentCallId
-        handler.handleEvent(chat, makeText(
-          text: 'Main text',
-          parentCallId: null,
-        ));
+        handler.handleEvent(
+          chat,
+          makeText(text: 'Main text', parentCallId: null),
+        );
 
         // Send tool invocation without parentCallId
-        handler.handleEvent(chat, makeToolInvocation(
-          callId: 'tool-main',
-          toolName: 'Bash',
-          parentCallId: null,
-        ));
+        handler.handleEvent(
+          chat,
+          makeToolInvocation(
+            callId: 'tool-main',
+            toolName: 'Bash',
+            parentCallId: null,
+          ),
+        );
 
         // Verify both went to primary conversation
         check(chat.data.primaryConversation.entries.length).equals(2);
         check(chat.data.primaryConversation.entries[0]).isA<TextOutputEntry>();
-        check(chat.data.primaryConversation.entries[1]).isA<ToolUseOutputEntry>();
+        check(
+          chat.data.primaryConversation.entries[1],
+        ).isA<ToolUseOutputEntry>();
+      });
+    });
+
+    group('SessionEventPipeline isolation', () {
+      test('does not leak subagent routing state between chats', () async {
+        // Ensure the second chat gets a distinct timestamp-based ID.
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        final otherChat = Chat.create(
+          name: 'Other Chat',
+          worktreeRoot: '/tmp/other',
+        );
+        addTearDown(otherChat.dispose);
+
+        handler.beginSession(chat.data.id);
+        handler.beginSession(otherChat.data.id);
+
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-shared',
+            agentType: 'Explore',
+            description: 'Chat A subagent',
+          ),
+        );
+
+        handler.handleEvent(
+          otherChat,
+          makeText(text: 'Other chat output', parentCallId: 'task-shared'),
+        );
+
+        check(otherChat.data.primaryConversation.entries.length).equals(1);
+        check(
+          otherChat.data.primaryConversation.entries.first,
+        ).isA<TextOutputEntry>();
+        final entry =
+            otherChat.data.primaryConversation.entries.first as TextOutputEntry;
+        check(entry.text).equals('Other chat output');
+      });
+
+      test('resets routing state when session ends and restarts', () {
+        handler.beginSession(chat.data.id);
+        handler.handleEvent(
+          chat,
+          makeSubagentSpawn(
+            callId: 'task-1',
+            agentType: 'Plan',
+            description: 'First session task',
+          ),
+        );
+
+        final subagent = chat.agents.activeAgents['task-1']!;
+        handler.handleEvent(
+          chat,
+          makeText(text: 'First session output', parentCallId: 'task-1'),
+        );
+        check(
+          chat
+              .data
+              .subagentConversations[subagent.conversationId]!
+              .entries
+              .length,
+        ).equals(1);
+
+        handler.endSession(chat.data.id);
+        handler.beginSession(chat.data.id);
+
+        handler.handleEvent(
+          chat,
+          makeText(text: 'New session output', parentCallId: 'task-1'),
+        );
+
+        check(chat.data.primaryConversation.entries.length).equals(1);
+        final primaryEntry =
+            chat.data.primaryConversation.entries.single as TextOutputEntry;
+        check(primaryEntry.text).equals('New session output');
+        check(
+          chat
+              .data
+              .subagentConversations[subagent.conversationId]!
+              .entries
+              .length,
+        ).equals(1);
+      });
+
+      test('resets tool pairing state when session ends and restarts', () {
+        handler.beginSession(chat.data.id);
+        handler.handleEvent(
+          chat,
+          makeToolInvocation(callId: 'tool-1', toolName: 'Read'),
+        );
+
+        final toolEntry =
+            chat.data.primaryConversation.entries.single as ToolUseOutputEntry;
+        check(toolEntry.result).isNull();
+
+        handler.endSession(chat.data.id);
+        handler.beginSession(chat.data.id);
+
+        handler.handleEvent(
+          chat,
+          makeToolCompletion(callId: 'tool-1', output: 'late completion'),
+        );
+
+        check(toolEntry.result).isNull();
       });
     });
 

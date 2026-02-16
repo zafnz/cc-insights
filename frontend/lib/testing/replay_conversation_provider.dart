@@ -13,7 +13,7 @@ import 'message_log_player.dart';
 /// requiring an actual backend connection.
 class ReplayConversationProvider extends ChangeNotifier {
   final MessageLogPlayer _player;
-  final ChatState _chat;
+  final Chat _chat;
 
   bool _isPlaying = false;
   bool _isLoaded = false;
@@ -21,11 +21,9 @@ class ReplayConversationProvider extends ChangeNotifier {
   List<OutputEntry> _entries = [];
   double _speedMultiplier = 1.0;
 
-  ReplayConversationProvider({
-    required String logFilePath,
-    ChatState? chat,
-  })  : _player = MessageLogPlayer(logFilePath),
-        _chat = chat ?? _createDefaultChat();
+  ReplayConversationProvider({required String logFilePath, Chat? chat})
+    : _player = MessageLogPlayer(logFilePath),
+      _chat = chat ?? _createDefaultChat();
 
   /// Whether the log file has been loaded.
   bool get isLoaded => _isLoaded;
@@ -47,7 +45,7 @@ class ReplayConversationProvider extends ChangeNotifier {
   }
 
   /// The chat being populated with replayed messages.
-  ChatState get chat => _chat;
+  Chat get chat => _chat;
 
   /// Statistics about the loaded log file.
   Map<String, dynamic> get stats => _player.stats;
@@ -65,7 +63,7 @@ class ReplayConversationProvider extends ChangeNotifier {
     if (!_isLoaded || _isPlaying) return;
     if (_currentIndex >= _entries.length) {
       _currentIndex = 0;
-      _chat.clearEntries();
+      _chat.conversations.clearEntries();
     }
 
     _isPlaying = true;
@@ -74,7 +72,7 @@ class ReplayConversationProvider extends ChangeNotifier {
     try {
       await for (final entry in _replayFrom(_currentIndex)) {
         if (!_isPlaying) break;
-        _chat.addEntry(entry);
+        _chat.conversations.addEntry(entry);
         _currentIndex++;
         notifyListeners();
       }
@@ -94,7 +92,7 @@ class ReplayConversationProvider extends ChangeNotifier {
   void stop() {
     _isPlaying = false;
     _currentIndex = 0;
-    _chat.clearEntries();
+    _chat.conversations.clearEntries();
     notifyListeners();
   }
 
@@ -104,7 +102,7 @@ class ReplayConversationProvider extends ChangeNotifier {
     _isPlaying = false;
 
     while (_currentIndex < _entries.length) {
-      _chat.addEntry(_entries[_currentIndex]);
+      _chat.conversations.addEntry(_entries[_currentIndex]);
       _currentIndex++;
     }
     notifyListeners();
@@ -113,7 +111,7 @@ class ReplayConversationProvider extends ChangeNotifier {
   /// Step forward one entry.
   void stepForward() {
     if (!_isLoaded || _currentIndex >= _entries.length) return;
-    _chat.addEntry(_entries[_currentIndex]);
+    _chat.conversations.addEntry(_entries[_currentIndex]);
     _currentIndex++;
     notifyListeners();
   }
@@ -143,9 +141,9 @@ class ReplayConversationProvider extends ChangeNotifier {
     }
   }
 
-  static ChatState _createDefaultChat() {
+  static Chat _createDefaultChat() {
     // Create a minimal project/worktree/chat structure for testing
-    return ChatState(
+    return Chat(
       const ChatData(
         id: 'replay-chat',
         name: 'Replay Session',
@@ -168,24 +166,19 @@ ProjectState createReplayProject() {
     ),
   );
 
-  final chat = ChatState(
+  final chat = Chat(
     const ChatData(
       id: 'replay-chat',
       name: 'Replay Session',
       createdAt: null,
-      primaryConversation: ConversationData.primary(
-        id: 'replay-conversation',
-      ),
+      primaryConversation: ConversationData.primary(id: 'replay-conversation'),
     ),
   );
 
   worktree.addChat(chat, select: true);
 
   return ProjectState(
-    const ProjectData(
-      name: 'Replay Test',
-      repoRoot: '/tmp/replay-test',
-    ),
+    const ProjectData(name: 'Replay Test', repoRoot: '/tmp/replay-test'),
     worktree,
   );
 }

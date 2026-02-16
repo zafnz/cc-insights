@@ -57,8 +57,7 @@ class _WorktreePanelState extends State<WorktreePanel> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final project = context.watch<ProjectState>();
-    final hasHiddenWorktrees =
-        project.allWorktrees.any((w) => w.hidden);
+    final hasHiddenWorktrees = project.allWorktrees.any((w) => w.hidden);
 
     return PanelWrapper(
       title: 'Worktrees',
@@ -79,11 +78,7 @@ class _WorktreePanelState extends State<WorktreePanel> {
           },
           child: Row(
             children: [
-              Icon(
-                Icons.restore,
-                size: 16,
-                color: colorScheme.onSurface,
-              ),
+              Icon(Icons.restore, size: 16, color: colorScheme.onSurface),
               const SizedBox(width: 8),
               Text(
                 'Restore Worktree...',
@@ -100,10 +95,7 @@ class _WorktreePanelState extends State<WorktreePanel> {
 
 /// Compact "Hidden <switch>" toggle for the worktree panel header.
 class _HiddenToggle extends StatelessWidget {
-  const _HiddenToggle({
-    required this.showHidden,
-    required this.onChanged,
-  });
+  const _HiddenToggle({required this.showHidden, required this.onChanged});
 
   final bool showHidden;
   final ValueChanged<bool> onChanged;
@@ -117,10 +109,7 @@ class _HiddenToggle extends StatelessWidget {
       children: [
         Text(
           'Hidden',
-          style: TextStyle(
-            fontSize: 11,
-            color: colorScheme.onSurfaceVariant,
-          ),
+          style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(width: 2),
         SizedBox(
@@ -188,10 +177,11 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
     for (final worktree in worktrees) {
       for (final chat in worktree.chats) {
         // Track initial permission count
-        _prevPermissionCounts[chat.data.id] = chat.pendingPermissionCount;
+        _prevPermissionCounts[chat.data.id] =
+            chat.permissions.pendingPermissionCount;
 
         void listener() {
-          final currentCount = chat.pendingPermissionCount;
+          final currentCount = chat.permissions.pendingPermissionCount;
           final prevCount = _prevPermissionCounts[chat.data.id] ?? 0;
 
           // Trigger bell if permission count increased AND this is not the
@@ -207,8 +197,8 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
           _prevPermissionCounts[chat.data.id] = currentCount;
         }
 
-        chat.addListener(listener);
-        _chatListeners.add(() => chat.removeListener(listener));
+        chat.permissions.addListener(listener);
+        _chatListeners.add(() => chat.permissions.removeListener(listener));
       }
     }
   }
@@ -295,7 +285,12 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
           itemBuilder: (context, index) {
             final item = treeItems[index];
             return switch (item) {
-              _WorktreeTreeItem(:final worktree, :final depth, :final isLast, :final ancestorIsLast) =>
+              _WorktreeTreeItem(
+                :final worktree,
+                :final depth,
+                :final isLast,
+                :final ancestorIsLast,
+              ) =>
                 _TreeIndentWrapper(
                   depth: depth,
                   isLast: isLast,
@@ -308,10 +303,10 @@ class _WorktreeListContentState extends State<_WorktreeListContent> {
                     onTap: () => selection.selectWorktree(worktree),
                   ),
                 ),
-              _BaseMarkerTreeItem(:final baseRef) =>
-                _BaseMarker(baseRef: baseRef),
-              _GhostTreeItem() =>
-                const CreateWorktreeCard(),
+              _BaseMarkerTreeItem(:final baseRef) => _BaseMarker(
+                baseRef: baseRef,
+              ),
+              _GhostTreeItem() => const CreateWorktreeCard(),
             };
           },
         ),

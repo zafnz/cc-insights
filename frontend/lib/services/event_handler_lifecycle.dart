@@ -2,67 +2,73 @@ part of 'event_handler.dart';
 
 /// Session lifecycle, configuration, compaction, and turn management.
 mixin _LifecycleMixin on _EventHandlerBase {
-  void _handleSessionInit(ChatState chat, SessionInitEvent event) {
+  void _handleSessionInit(Chat chat, SessionInitEvent event) {
     // Sync the server-reported model to the chat's model dropdown so the UI
     // shows the actual resolved model (e.g. "gpt-5.2-codex" instead of
     // "Default (server)").
     final serverModel = event.model;
     if (serverModel != null && serverModel.isNotEmpty) {
-      final models = ChatModelCatalog.forBackend(chat.model.backend);
+      final models = ChatModelCatalog.forBackend(chat.settings.model.backend);
       final match = models.where((m) => m.id == serverModel).toList();
       if (match.isNotEmpty) {
-        chat.syncModelFromServer(match.first);
+        chat.settings.syncModelFromServer(match.first);
       } else {
         // Model not in catalog — add it dynamically so the dropdown shows it
         final resolved = ChatModel(
           id: serverModel,
           label: serverModel,
-          backend: chat.model.backend,
+          backend: chat.settings.model.backend,
         );
-        chat.syncModelFromServer(resolved);
+        chat.settings.syncModelFromServer(resolved);
       }
     }
 
     // Sync the server-reported reasoning effort to the chat so the dropdown
     // reflects what the server is actually using.
     final effort = ReasoningEffort.fromString(event.reasoningEffort);
-    if (effort != null && effort != chat.reasoningEffort) {
-      chat.syncReasoningEffortFromServer(effort);
+    if (effort != null && effort != chat.settings.reasoningEffort) {
+      chat.settings.syncReasoningEffortFromServer(effort);
     }
   }
 
-  void _handleConfigOptions(ChatState chat, ConfigOptionsEvent event) {
-    chat.setAcpConfigOptions(event.configOptions);
+  void _handleConfigOptions(Chat chat, ConfigOptionsEvent event) {
+    chat.settings.setAcpConfigOptions(event.configOptions);
   }
 
-  void _handleAvailableCommands(ChatState chat, AvailableCommandsEvent event) {
-    chat.setAcpAvailableCommands(event.availableCommands);
+  void _handleAvailableCommands(Chat chat, AvailableCommandsEvent event) {
+    chat.settings.setAcpAvailableCommands(event.availableCommands);
   }
 
-  void _handleSessionMode(ChatState chat, SessionModeEvent event) {
-    chat.setAcpSessionMode(
+  void _handleSessionMode(Chat chat, SessionModeEvent event) {
+    chat.settings.setAcpSessionMode(
       currentModeId: event.currentModeId,
       availableModes: event.availableModes,
     );
   }
 
-  void _handleSessionStatus(ChatState chat, SessionStatusEvent event) {
+  void _handleSessionStatus(Chat chat, SessionStatusEvent event) {
     if (event.status == SessionStatus.compacting) {
-      chat.setCompacting(true);
+      chat.session.setCompacting(true);
     } else {
-      chat.setCompacting(false);
+      chat.session.setCompacting(false);
     }
 
     final permMode = event.extensions?['permissionMode'] as String?;
     if (permMode != null) {
-      chat.setPermissionMode(PermissionMode.fromApiName(permMode));
+      chat.settings.setPermissionMode(PermissionMode.fromApiName(permMode));
     }
   }
 
-  void _handleCompaction(ChatState chat, ContextCompactionEvent event) {
+  void _handleCompaction(
+    Chat chat,
+    ContextCompactionEvent event,
+    SessionEventPipeline pipeline,
+  ) {
     if (event.trigger == CompactionTrigger.cleared) {
-      chat.addEntry(ContextClearedEntry(timestamp: DateTime.now()));
-      chat.resetContext();
+      chat.conversations.addEntry(
+        ContextClearedEntry(timestamp: DateTime.now()),
+      );
+      chat.metrics.resetContext();
       return;
     }
 
@@ -71,23 +77,28 @@ mixin _LifecycleMixin on _EventHandlerBase {
         : null;
     final isManual = event.trigger == CompactionTrigger.manual;
 
-    chat.addEntry(AutoCompactionEntry(
-      timestamp: DateTime.now(),
-      message: message,
-      isManual: isManual,
-    ));
+    chat.conversations.addEntry(
+      AutoCompactionEntry(
+        timestamp: DateTime.now(),
+        message: message,
+        isManual: isManual,
+      ),
+    );
 
     if (event.summary != null) {
-      chat.addEntry(ContextSummaryEntry(
-        timestamp: DateTime.now(),
-        summary: event.summary!,
-      ));
+      chat.conversations.addEntry(
+        ContextSummaryEntry(timestamp: DateTime.now(), summary: event.summary!),
+      );
     } else {
-      _expectingContextSummary[chat.data.id] = true;
+      pipeline.expectingContextSummary = true;
     }
   }
 
-  void _handleTurnComplete(ChatState chat, TurnCompleteEvent event) {
+  void _handleTurnComplete(
+    Chat chat,
+    TurnCompleteEvent event,
+    SessionEventPipeline pipeline,
+  ) {
     final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
 
     // Extract usage
@@ -157,7 +168,7 @@ mixin _LifecycleMixin on _EventHandlerBase {
     if (parentCallId == null) {
       // Main agent result
       if (usageInfo != null) {
-        chat.updateCumulativeUsage(
+        chat.metrics.updateCumulativeUsage(
           usage: usageInfo,
           totalCostUsd: totalCostUsd,
           modelUsage: modelUsageList,
@@ -168,24 +179,22 @@ mixin _LifecycleMixin on _EventHandlerBase {
       final lastStepUsage =
           event.extensions?['lastStepUsage'] as Map<String, dynamic>?;
       if (lastStepUsage != null) {
-        chat.updateContextFromUsage(lastStepUsage);
+        chat.metrics.updateContextFromUsage(lastStepUsage);
       }
 
-      chat.setWorking(false);
+      chat.session.setWorking(false);
 
       // Handle no-output result
-      final chatId = chat.data.id;
       final result = event.result;
-      if (!(_hasAssistantOutputThisTurn[chatId] ?? false) &&
+      if (!pipeline.hasAssistantOutputThisTurn &&
           result != null &&
           result.isNotEmpty) {
-        chat.addEntry(SystemNotificationEntry(
-          timestamp: DateTime.now(),
-          message: result,
-        ));
+        chat.conversations.addEntry(
+          SystemNotificationEntry(timestamp: DateTime.now(), message: result),
+        );
       }
 
-      _hasAssistantOutputThisTurn[chatId] = false;
+      pipeline.hasAssistantOutputThisTurn = false;
 
       // Ticket status transitions
       _ticketBridge.onTurnComplete(chat, event);
@@ -205,19 +214,19 @@ mixin _LifecycleMixin on _EventHandlerBase {
         status = AgentStatus.completed;
       }
 
-      chat.updateAgent(status, parentCallId);
+      chat.agents.updateAgent(status, parentCallId);
     }
   }
 
-  void _handleUsageUpdate(ChatState chat, UsageUpdateEvent event) {
+  void _handleUsageUpdate(Chat chat, UsageUpdateEvent event) {
     final outputTokens =
         (event.stepUsage['output_tokens'] as num?)?.toInt() ?? 0;
-    chat.addInTurnOutputTokens(outputTokens);
+    chat.metrics.addInTurnOutputTokens(outputTokens);
 
     final parentCallId = event.extensions?['parent_tool_use_id'] as String?;
     if (parentCallId != null) return;
 
-    chat.updateContextFromUsage(event.stepUsage);
+    chat.metrics.updateContextFromUsage(event.stepUsage);
   }
 
   /// Formats token count with K suffix for readability.

@@ -24,12 +24,12 @@ void main() {
     final resources = TestResources();
     late ProjectState project;
     late SelectionState selectionState;
-    late ChatState chat;
+    late Chat chat;
     late BackendService backendService;
     late FakeCliAvailabilityService fakeCliAvailability;
 
     /// Creates a chat with the specified number of entries.
-    ChatState createChatWithEntries(String name, int entryCount) {
+    Chat createChatWithEntries(String name, int entryCount) {
       final entries = List.generate(
         entryCount,
         (i) => TextOutputEntry(
@@ -39,7 +39,7 @@ void main() {
         ),
       );
 
-      return ChatState(
+      return Chat(
         ChatData(
           id: 'chat-$name',
           name: name,
@@ -56,29 +56,39 @@ void main() {
     }
 
     /// Creates a chat with tool entries.
-    ChatState createChatWithToolEntries(String name, int entryCount) {
+    Chat createChatWithToolEntries(String name, int entryCount) {
       final entries = <OutputEntry>[];
 
       for (var i = 0; i < entryCount; i++) {
         // Add a text entry
-        entries.add(TextOutputEntry(
-          timestamp: DateTime.now().subtract(Duration(minutes: entryCount - i)),
-          text: 'Text before tool $i - ${'x' * 100}',
-          contentType: 'text',
-        ));
+        entries.add(
+          TextOutputEntry(
+            timestamp: DateTime.now().subtract(
+              Duration(minutes: entryCount - i),
+            ),
+            text: 'Text before tool $i - ${'x' * 100}',
+            contentType: 'text',
+          ),
+        );
 
         // Add a tool entry
-        entries.add(ToolUseOutputEntry(
-          timestamp:
-              DateTime.now().subtract(Duration(minutes: entryCount - i, seconds: 30)),
-          toolName: 'Bash',
-          toolKind: ToolKind.execute,
-          toolUseId: 'tool-$i',
-          toolInput: {'command': 'echo "test $i"', 'description': 'Test command $i'},
-        )..updateResult('Output for test $i\n${'y' * 50}', false));
+        entries.add(
+          ToolUseOutputEntry(
+            timestamp: DateTime.now().subtract(
+              Duration(minutes: entryCount - i, seconds: 30),
+            ),
+            toolName: 'Bash',
+            toolKind: ToolKind.execute,
+            toolUseId: 'tool-$i',
+            toolInput: {
+              'command': 'echo "test $i"',
+              'description': 'Test command $i',
+            },
+          )..updateResult('Output for test $i\n${'y' * 50}', false),
+        );
       }
 
-      return ChatState(
+      return Chat(
         ChatData(
           id: 'chat-$name',
           name: name,
@@ -106,15 +116,14 @@ void main() {
         chats: [chat],
       );
 
-      project = resources.track(ProjectState(
-        const ProjectData(
-          name: 'Test Project',
-          repoRoot: '/test',
+      project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'Test Project', repoRoot: '/test'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
         ),
-        worktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      );
 
       selectionState = resources.track(SelectionState(project));
       backendService = resources.track(BackendService());
@@ -125,7 +134,7 @@ void main() {
       await resources.disposeAll();
     });
 
-    Widget buildTestWidget({ChatState? overrideChat}) {
+    Widget buildTestWidget({Chat? overrideChat}) {
       // Ensure chat is in worktree if overriding
       if (overrideChat != null &&
           !project.primaryWorktree.chats.contains(overrideChat)) {
@@ -211,7 +220,7 @@ void main() {
             text: 'New message that just arrived!',
             contentType: 'text',
           );
-          chat.addEntry(newEntry);
+          chat.conversations.addEntry(newEntry);
           await tester.pump();
 
           // Scroll position should stay at 100 - no auto-scroll since user was scrolled up
@@ -252,11 +261,13 @@ void main() {
           final initialPosition = tester.getTopLeft(firstVisibleEntry);
 
           // Add a new entry
-          chat.addEntry(TextOutputEntry(
-            timestamp: DateTime.now(),
-            text: 'New streaming content',
-            contentType: 'text',
-          ));
+          chat.conversations.addEntry(
+            TextOutputEntry(
+              timestamp: DateTime.now(),
+              text: 'New streaming content',
+              contentType: 'text',
+            ),
+          );
           await tester.pump();
 
           // Get the new position of the first visible entry
@@ -306,11 +317,13 @@ void main() {
           );
 
           // Add a new entry (simulating streaming)
-          toolChat.addEntry(TextOutputEntry(
-            timestamp: DateTime.now(),
-            text: 'New message arriving while tool card is expanded',
-            contentType: 'text',
-          ));
+          toolChat.conversations.addEntry(
+            TextOutputEntry(
+              timestamp: DateTime.now(),
+              text: 'New message arriving while tool card is expanded',
+              contentType: 'text',
+            ),
+          );
           await tester.pump();
 
           // EXPECTED: Tool card should still be expanded
@@ -358,11 +371,13 @@ void main() {
           );
 
           // Add a new entry
-          toolChat.addEntry(TextOutputEntry(
-            timestamp: DateTime.now(),
-            text: 'New message while multiple cards expanded',
-            contentType: 'text',
-          ));
+          toolChat.conversations.addEntry(
+            TextOutputEntry(
+              timestamp: DateTime.now(),
+              text: 'New message while multiple cards expanded',
+              contentType: 'text',
+            ),
+          );
           await tester.pump();
 
           // EXPECTED: Same number of cards should remain expanded

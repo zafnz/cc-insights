@@ -27,11 +27,11 @@ class TicketDispatchService {
     required SelectionState selection,
     required WorktreeService worktreeService,
     ProjectRestoreService? restoreService,
-  })  : _ticketBoard = ticketBoard,
-        _project = project,
-        _selection = selection,
-        _worktreeService = worktreeService,
-        _restoreService = restoreService ?? ProjectRestoreService();
+  }) : _ticketBoard = ticketBoard,
+       _project = project,
+       _selection = selection,
+       _worktreeService = worktreeService,
+       _restoreService = restoreService ?? ProjectRestoreService();
 
   /// Derives a git-safe branch name from a ticket.
   ///
@@ -117,7 +117,9 @@ class TicketDispatchService {
       if (incompleteDeps.isNotEmpty) {
         buffer.writeln('## Incomplete Dependencies (potential blockers)');
         for (final dep in incompleteDeps) {
-          buffer.writeln('- [ ] ${dep.displayId}: ${dep.title} (${dep.status.label})');
+          buffer.writeln(
+            '- [ ] ${dep.displayId}: ${dep.title} (${dep.status.label})',
+          );
         }
         buffer.writeln();
       }
@@ -164,7 +166,10 @@ class TicketDispatchService {
     _project.addLinkedWorktree(worktreeState, select: true);
 
     // 5. Create chat and persist it
-    final chatState = _createAndConfigureChat(ticket, worktreeState.data.worktreeRoot);
+    final chatState = _createAndConfigureChat(
+      ticket,
+      worktreeState.data.worktreeRoot,
+    );
     await _restoreService.addChatToWorktree(
       _project.data.repoRoot,
       worktreeState.data.worktreeRoot,
@@ -219,7 +224,10 @@ class TicketDispatchService {
     );
 
     // 1. Create chat and persist it
-    final chatState = _createAndConfigureChat(ticket, worktree.data.worktreeRoot);
+    final chatState = _createAndConfigureChat(
+      ticket,
+      worktree.data.worktreeRoot,
+    );
     await _restoreService.addChatToWorktree(
       _project.data.repoRoot,
       worktree.data.worktreeRoot,
@@ -256,14 +264,14 @@ class TicketDispatchService {
   }
 
   /// Creates a chat for a ticket and sets its draft text to the ticket prompt.
-  ChatState _createAndConfigureChat(TicketData ticket, String worktreeRoot) {
-    final chatState = ChatState.create(
+  Chat _createAndConfigureChat(TicketData ticket, String worktreeRoot) {
+    final chatState = Chat.create(
       name: ticket.displayId,
       worktreeRoot: worktreeRoot,
     );
 
     final prompt = buildTicketPrompt(ticket, _ticketBoard.tickets);
-    chatState.draftText = prompt;
+    chatState.viewState.draftText = prompt;
 
     return chatState;
   }

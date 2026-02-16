@@ -23,8 +23,9 @@ class ChatsPanel extends StatelessWidget {
     final selection = context.read<SelectionState>();
     final persistenceService = context.read<PersistenceService>();
     final restoreService = context.read<ProjectRestoreService>();
-    final projectId =
-        PersistenceService.generateProjectId(project.data.repoRoot);
+    final projectId = PersistenceService.generateProjectId(
+      project.data.repoRoot,
+    );
 
     showArchivedChatsDialog(
       context: context,
@@ -84,7 +85,7 @@ class _ChatsListContentState extends State<_ChatsListContent> {
   Future<void> _closeChat(
     BuildContext context,
     SelectionState selection,
-    ChatState chat,
+    Chat chat,
   ) async {
     final restoreService = context.read<ProjectRestoreService>();
     final settings = context.read<SettingsService>();
@@ -111,8 +112,9 @@ class _ChatsListContentState extends State<_ChatsListContent> {
             final selection = context.read<SelectionState>();
             final persistenceService = context.read<PersistenceService>();
             final restoreService = context.read<ProjectRestoreService>();
-            final projectId =
-                PersistenceService.generateProjectId(project.data.repoRoot);
+            final projectId = PersistenceService.generateProjectId(
+              project.data.repoRoot,
+            );
 
             showArchivedChatsDialog(
               context: context,
@@ -130,23 +132,24 @@ class _ChatsListContentState extends State<_ChatsListContent> {
   }
 
   /// Ensures we have a GlobalKey for each chat.
-  void _ensureKeysForChats(List<ChatState> chats) {
+  void _ensureKeysForChats(List<Chat> chats) {
     for (final chat in chats) {
       _chatKeys.putIfAbsent(chat.data.id, () => GlobalKey());
     }
   }
 
   /// Sets up listeners for permission changes on all chats.
-  void _setupChatListeners(List<ChatState> chats) {
+  void _setupChatListeners(List<Chat> chats) {
     // Remove old listeners
     _removeChatListeners();
 
     for (final chat in chats) {
       // Track initial permission count
-      _prevPermissionCounts[chat.data.id] = chat.pendingPermissionCount;
+      _prevPermissionCounts[chat.data.id] =
+          chat.permissions.pendingPermissionCount;
 
       void listener() {
-        final currentCount = chat.pendingPermissionCount;
+        final currentCount = chat.permissions.pendingPermissionCount;
         final prevCount = _prevPermissionCounts[chat.data.id] ?? 0;
 
         // Trigger bell if permission count increased
@@ -159,8 +162,8 @@ class _ChatsListContentState extends State<_ChatsListContent> {
         _prevPermissionCounts[chat.data.id] = currentCount;
       }
 
-      chat.addListener(listener);
-      _chatListeners.add(() => chat.removeListener(listener));
+      chat.permissions.addListener(listener);
+      _chatListeners.add(() => chat.permissions.removeListener(listener));
     }
   }
 
@@ -246,7 +249,7 @@ class _ChatsListContentState extends State<_ChatsListContent> {
                 isSelected: isSelected,
                 onTap: () => selection.selectChat(chat),
                 onClose: () => _closeChat(context, selection, chat),
-                onRename: (newName) => chat.rename(newName),
+                onRename: (newName) => chat.conversations.rename(newName),
               );
             },
           ),
@@ -303,8 +306,10 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
     // Size animation: small -> big (slow) -> hold -> small (fast)
     _sizeAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 10, end: 70)
-            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        tween: Tween<double>(
+          begin: 10,
+          end: 70,
+        ).chain(CurveTween(curve: Curves.easeOutCubic)),
         weight: 50, // Grow phase
       ),
       TweenSequenceItem(
@@ -312,8 +317,10 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
         weight: 25, // Hold at max size while shaking
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 70, end: 10)
-            .chain(CurveTween(curve: Curves.easeInQuad)),
+        tween: Tween<double>(
+          begin: 70,
+          end: 10,
+        ).chain(CurveTween(curve: Curves.easeInQuad)),
         weight: 25, // Shrink phase
       ),
     ]).animate(_controller);
@@ -325,10 +332,7 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
         weight: 50, // No shake during growth
       ),
       // Shake sequence during hold
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 0.15),
-        weight: 2.5,
-      ),
+      TweenSequenceItem(tween: Tween<double>(begin: 0, end: 0.15), weight: 2.5),
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.15, end: -0.15),
         weight: 5,
@@ -345,10 +349,7 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
         tween: Tween<double>(begin: -0.12, end: 0.08),
         weight: 4,
       ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.08, end: 0),
-        weight: 3.5,
-      ),
+      TweenSequenceItem(tween: Tween<double>(begin: 0.08, end: 0), weight: 3.5),
       TweenSequenceItem(
         tween: ConstantTween<double>(0),
         weight: 25, // No shake during shrink
@@ -358,17 +359,18 @@ class _AnimatedBellOverlayState extends State<_AnimatedBellOverlay>
     // Opacity: fade in quickly, hold, then fade out
     _opacityAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 0,
+          end: 1,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 10,
       ),
+      TweenSequenceItem(tween: ConstantTween<double>(1), weight: 70),
       TweenSequenceItem(
-        tween: ConstantTween<double>(1),
-        weight: 70,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 1,
+          end: 0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 20,
       ),
     ]).animate(_controller);
@@ -539,11 +541,7 @@ class NewChatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.add,
-                size: 16,
-                color: colorScheme.onSurfaceVariant,
-              ),
+              Icon(Icons.add, size: 16, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -595,14 +593,14 @@ class _EmptyChatsPlaceholder extends StatelessWidget {
 class ChatStatusIndicator extends StatelessWidget {
   const ChatStatusIndicator({super.key, required this.chat});
 
-  final ChatState chat;
+  final Chat chat;
 
   @override
   Widget build(BuildContext context) {
     const size = 10.0;
 
     // Priority order: permission > working > unread > idle
-    if (chat.isWaitingForPermission) {
+    if (chat.permissions.hasPending) {
       // Orange bell for pending permission
       return const Icon(
         Icons.notifications_active,
@@ -611,7 +609,7 @@ class ChatStatusIndicator extends StatelessWidget {
       );
     }
 
-    if (chat.isWorking) {
+    if (chat.session.isWorking) {
       // RepaintBoundary isolates the spinner's 60 FPS animation
       // repaints so they don't propagate up to the chats panel.
       return RepaintBoundary(
@@ -626,7 +624,7 @@ class ChatStatusIndicator extends StatelessWidget {
       );
     }
 
-    if (chat.hasUnreadMessages) {
+    if (chat.viewState.hasUnreadMessages) {
       // Filled green dot for unread messages
       return Container(
         width: size,
@@ -664,7 +662,7 @@ class _ChatListItem extends StatefulWidget {
     this.onRename,
   });
 
-  final ChatState chat;
+  final Chat chat;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onClose;
@@ -682,14 +680,20 @@ class _ChatListItemState extends State<_ChatListItem> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    // Listen to ChatState changes (e.g., rename) for immediate UI updates
+    // Listen to chat sub-states this row renders.
     return ListenableBuilder(
-      listenable: widget.chat,
+      listenable: Listenable.merge([
+        widget.chat.conversations,
+        widget.chat.session,
+        widget.chat.permissions,
+        widget.chat.viewState,
+      ]),
       builder: (context, _) {
-        final data = widget.chat.data;
+        final data = widget.chat.conversations.data;
 
         // Count subagent conversations
-        final subagentCount = data.subagentConversations.length;
+        final subagentCount =
+            widget.chat.conversations.subagentConversations.length;
 
         return MouseRegion(
           onEnter: (_) => setState(() => _isHovered = true),

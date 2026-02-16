@@ -85,17 +85,11 @@ void main() {
         ChangeNotifierProvider<InternalToolsService>.value(
           value: internalToolsService,
         ),
-        ChangeNotifierProvider<TicketRepository>.value(
-          value: repo,
-        ),
-        ChangeNotifierProvider<BulkProposalState>.value(
-          value: bulkState,
-        ),
+        ChangeNotifierProvider<TicketRepository>.value(value: repo),
+        ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
         ChangeNotifierProvider<ProjectState>.value(value: projectState),
       ],
-      child: const MaterialApp(
-        home: Scaffold(body: SettingsScreen()),
-      ),
+      child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
     );
   }
 
@@ -151,9 +145,7 @@ void main() {
         await safePumpAndSettle(tester);
 
         expect(
-          find.text(
-            'Customize how CC Insights looks and displays information',
-          ),
+          find.text('Customize how CC Insights looks and displays information'),
           findsOneWidget,
         );
       });
@@ -303,16 +295,17 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
 
         expect(
-          find.text('This will reset all settings to their '
-              'default values. This cannot be undone.'),
+          find.text(
+            'This will reset all settings to their '
+            'default values. This cannot be undone.',
+          ),
           findsOneWidget,
         );
         expect(find.text('Cancel'), findsOneWidget);
         expect(find.text('Reset'), findsOneWidget);
       });
 
-      testWidgets('cancel closes dialog without resetting',
-          (tester) async {
+      testWidgets('cancel closes dialog without resetting', (tester) async {
         await tester.pumpWidget(createTestApp());
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
@@ -465,8 +458,9 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      testWidgets('selecting a different agent loads its config',
-          (tester) async {
+      testWidgets('selecting a different agent loads its config', (
+        tester,
+      ) async {
         await tester.pumpWidget(createTestApp());
         await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
@@ -484,8 +478,9 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      testWidgets('claude driver shows Default Permissions, not Codex fields',
-          (tester) async {
+      testWidgets('claude driver shows Default Permissions, not Codex fields', (
+        tester,
+      ) async {
         await tester.pumpWidget(createTestApp());
         await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
@@ -500,8 +495,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      testWidgets('add agent creates new agent and selects it',
-          (tester) async {
+      testWidgets('add agent creates new agent and selects it', (tester) async {
         await tester.pumpWidget(createTestApp());
         await tester.binding.setSurfaceSize(const Size(1200, 900));
         await safePumpAndSettle(tester);
@@ -698,7 +692,7 @@ void main() {
       testWidgets('removing agent terminates affected chats', (tester) async {
         // Create a chat with agentId matching 'claude-default' and add
         // it to the projectState's primary worktree.
-        final chat = ChatState.create(
+        final chat = Chat.create(
           name: 'Test Chat',
           worktreeRoot: '/test',
           agentId: 'claude-default',
@@ -710,7 +704,7 @@ void main() {
         await safePumpAndSettle(tester);
 
         // Verify chat is not terminated yet
-        expect(chat.agentRemoved, false);
+        expect(chat.agents.agentRemoved, false);
 
         // Navigate to Agents category
         await tester.tap(find.text('Agents'));
@@ -736,8 +730,8 @@ void main() {
         await safePumpAndSettle(tester);
 
         // The chat should now be terminated
-        expect(chat.agentRemoved, true);
-        expect(chat.isInputEnabled, false);
+        expect(chat.agents.agentRemoved, true);
+        expect(chat.conversations.isInputEnabled, false);
 
         await tester.binding.setSurfaceSize(null);
       });
@@ -803,6 +797,5 @@ void main() {
         expect(find.text('Command'), findsWidgets);
       });
     });
-
   });
 }

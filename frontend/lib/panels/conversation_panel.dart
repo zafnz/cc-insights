@@ -44,8 +44,10 @@ class _ConversationPanelState extends State<ConversationPanel>
   /// Saved scroll positions indexed by conversation ID
   final Map<String, _ScrollPosition> _savedScrollPositions = {};
 
-  /// The ChatState we're currently listening to.
-  ChatState? _listeningToChat;
+  /// The Chat we're currently listening to.
+  Chat? _listeningToChat;
+  ChatConversationState? _listeningToConversations;
+  ChatPermissionState? _listeningToPermissions;
 
   /// Track which conversation we're viewing to detect conversation changes.
   String? _previousConversationId;
@@ -97,7 +99,9 @@ class _ConversationPanelState extends State<ConversationPanel>
         if (_isAtBottom) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _scrollController.hasClients) {
-              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+              _scrollController.jumpTo(
+                _scrollController.position.maxScrollExtent,
+              );
             }
           });
         }
@@ -284,16 +288,17 @@ class _ConversationPanelState extends State<ConversationPanel>
     _permissionAnimController.dispose();
     _scrollController.dispose();
     _listController.dispose();
-    _listeningToChat?.removeListener(_onChatChanged);
+    _listeningToConversations?.removeListener(_onChatChanged);
+    _listeningToPermissions?.removeListener(_onChatChanged);
     super.dispose();
   }
 
-  /// Called when the ChatState changes (entries added, etc.)
+  /// Called when the Chat changes (entries added, etc.)
   void _onChatChanged() {
     if (!mounted) return;
 
     // Check if new entries were added
-    final conversation = _listeningToChat?.selectedConversation;
+    final conversation = _listeningToChat?.conversations.selectedConversation;
     final currentCount = conversation?.entries.length ?? 0;
     final newEntriesAdded = currentCount > _lastEntryCount;
 
@@ -346,15 +351,19 @@ class _ConversationPanelState extends State<ConversationPanel>
     } else if (!newEntriesAdded && _scrollController.hasClients) {
       // No new entries, but content may have changed (streaming deltas).
       // If user is at bottom and any entry is streaming, keep scrolled down.
-      final hasStreamingEntry = conversation?.entries.any((e) =>
-              (e is TextOutputEntry && e.isStreaming) ||
-              (e is ToolUseOutputEntry && e.isStreaming)) ??
+      final hasStreamingEntry =
+          conversation?.entries.any(
+            (e) =>
+                (e is TextOutputEntry && e.isStreaming) ||
+                (e is ToolUseOutputEntry && e.isStreaming),
+          ) ??
           false;
       if (hasStreamingEntry && _isAtBottom) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _scrollController.hasClients) {
-            _scrollController
-                .jumpTo(_scrollController.position.maxScrollExtent);
+            _scrollController.jumpTo(
+              _scrollController.position.maxScrollExtent,
+            );
           }
         });
       }
@@ -370,14 +379,18 @@ class _ConversationPanelState extends State<ConversationPanel>
     final selection = context.watch<SelectionState>();
     final chat = selection.selectedChat;
 
-    // Listen to ChatState changes for entry updates
+    // Listen to conversation + permission state changes for UI updates.
     if (chat != _listeningToChat) {
-      _listeningToChat?.removeListener(_onChatChanged);
+      _listeningToConversations?.removeListener(_onChatChanged);
+      _listeningToPermissions?.removeListener(_onChatChanged);
       _listeningToChat = chat;
-      chat?.addListener(_onChatChanged);
+      _listeningToConversations = chat?.conversations;
+      _listeningToPermissions = chat?.permissions;
+      _listeningToConversations?.addListener(_onChatChanged);
+      _listeningToPermissions?.addListener(_onChatChanged);
     }
 
-    final conversation = chat?.selectedConversation;
+    final conversation = chat?.conversations.selectedConversation;
 
     // Handle conversation switching - save old position and restore new
     if (conversation?.id != _previousConversationId) {
@@ -391,7 +404,8 @@ class _ConversationPanelState extends State<ConversationPanel>
       _isAtBottom = true;
 
       // Restore saved position (if any), otherwise scroll to bottom
-      if (conversation != null && _savedScrollPositions.containsKey(conversation.id)) {
+      if (conversation != null &&
+          _savedScrollPositions.containsKey(conversation.id)) {
         _scheduleScrollRestore(conversation.id);
       } else {
         _scheduleScrollToBottom();
@@ -404,7 +418,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     }
 
     final isPrimary = conversation.isPrimary;
-    final currentPermission = chat?.pendingPermission;
+    final currentPermission = chat?.permissions.pendingPermission;
     final showPermission = currentPermission != null;
 
     // Update cache and animate
@@ -425,39 +439,41 @@ class _ConversationPanelState extends State<ConversationPanel>
     // Show if we have a cached permission AND either:
     // - animation is animating forward (including value=0 at start)
     // - animation value > 0 (during animation or completed)
-    final shouldShowPermissionWidget = _cachedPermission != null &&
+    final shouldShowPermissionWidget =
+        _cachedPermission != null &&
         (_permissionAnimController.status == AnimationStatus.forward ||
             _permissionAnimController.status == AnimationStatus.completed ||
             _permissionAnimController.value > 0);
 
     // Check if Claude is working (for spinner display)
-    final isWorking = chat?.isWorking ?? false;
-    final isCompacting = chat?.isCompacting ?? false;
+    final isWorking = chat?.session.isWorking ?? false;
+    final isCompacting = chat?.session.isCompacting ?? false;
 
     // Find the agent for this subagent conversation (if any)
     final Agent? agent = !isPrimary && chat != null
-        ? chat.activeAgents.values.cast<Agent?>().firstWhere(
-              (a) => a?.conversationId == conversation.id,
-              orElse: () => null,
-            )
+        ? chat.agents.activeAgents.values.cast<Agent?>().firstWhere(
+            (a) => a?.conversationId == conversation.id,
+            orElse: () => null,
+          )
         : null;
 
     return Column(
       children: [
         // Conversation header - wrapped in ListenableBuilder to rebuild on chat changes
         ListenableBuilder(
-          listenable: chat!,
-          builder: (context, _) => ConversationHeader(
-            conversation: conversation,
-            chat: chat,
-          ),
+          listenable: Listenable.merge([
+            chat!.settings,
+            chat.metrics,
+            chat.session,
+            chat.agents,
+            chat.conversations,
+          ]),
+          builder: (context, _) =>
+              ConversationHeader(conversation: conversation, chat: chat),
         ),
         // Subagent status header (only for subagent conversations)
         if (!isPrimary)
-          SubagentStatusHeader(
-            conversation: conversation,
-            agent: agent,
-          ),
+          SubagentStatusHeader(conversation: conversation, agent: agent),
         // Output entries list
         Expanded(
           child: conversation.entries.isEmpty && !isWorking
@@ -476,30 +492,29 @@ class _ConversationPanelState extends State<ConversationPanel>
                 ),
         ),
         // Bottom area: agent-removed banner, permission widget, or message input
-        if (isPrimary && chat.agentRemoved)
-          _AgentRemovedBanner(message: chat.missingAgentMessage)
+        if (isPrimary && chat.agents.agentRemoved)
+          _AgentRemovedBanner(message: chat.agents.missingAgentMessage)
         else if (isPrimary)
           shouldShowPermissionWidget
               ? _PermissionSection(
                   chat: chat,
                   permission: _cachedPermission,
                   animation: _permissionAnimation,
-                  onClearContextPlanApproval: (chat, planText) =>
-                      context
-                          .read<ChatSessionService>()
-                          .approvePlanWithClearContext(chat, planText),
+                  onClearContextPlanApproval: (chat, planText) => context
+                      .read<ChatSessionService>()
+                      .approvePlanWithClearContext(chat, planText),
                 )
               : MessageInput(
                   key: ValueKey('input-${chat.data.id}'),
-                  initialText: chat.draftText,
-                  onTextChanged: (text) => chat.draftText = text,
+                  initialText: chat.viewState.draftText,
+                  onTextChanged: (text) => chat.viewState.draftText = text,
                   onSubmit: (text, images, displayFormat) =>
                       context.read<ChatSessionService>().submitMessage(
-                            chat,
-                            text: text,
-                            images: images,
-                            displayFormat: displayFormat,
-                          ),
+                        chat,
+                        text: text,
+                        images: images,
+                        displayFormat: displayFormat,
+                      ),
                   isWorking: isWorking,
                   onInterrupt: isWorking
                       ? () => context.read<ChatSessionService>().interrupt(chat)
@@ -508,7 +523,6 @@ class _ConversationPanelState extends State<ConversationPanel>
       ],
     );
   }
-
 }
 
 /// Displays the list of output entries for a conversation.
@@ -523,7 +537,7 @@ class _EntryList extends StatelessWidget {
   });
 
   final ConversationData conversation;
-  final ChatState? chat;
+  final Chat? chat;
   final ScrollController scrollController;
   final ListController listController;
   final bool showWorkingIndicator;
@@ -553,7 +567,7 @@ class _EntryList extends StatelessWidget {
       itemBuilder: (context, index) {
         // Working indicator is at the end (bottom visually)
         if (showIndicator && index == entries.length) {
-          final agentName = switch (chat?.model.backend) {
+          final agentName = switch (chat?.settings.model.backend) {
             sdk.BackendType.codex => 'Codex',
             sdk.BackendType.acp => 'ACP',
             _ => 'Claude',
@@ -561,7 +575,7 @@ class _EntryList extends StatelessWidget {
           return WorkingIndicator(
             agentName: agentName,
             isCompacting: isCompacting,
-            stopwatch: chat?.workingStopwatch,
+            stopwatch: chat?.session.workingStopwatch,
           );
         }
 
@@ -586,10 +600,10 @@ class _PermissionSection extends StatelessWidget {
     required this.onClearContextPlanApproval,
   });
 
-  final ChatState chat;
+  final Chat chat;
   final sdk.PermissionRequest? permission;
   final Animation<double> animation;
-  final Future<void> Function(ChatState, String) onClearContextPlanApproval;
+  final Future<void> Function(Chat, String) onClearContextPlanApproval;
 
   @override
   Widget build(BuildContext context) {
@@ -600,21 +614,21 @@ class _PermissionSection extends StatelessWidget {
     final perm = permission!;
     final isAskUserQuestion = perm.toolName == 'AskUserQuestion';
     final isExitPlanMode = perm.toolName == 'ExitPlanMode';
+    final sessionService = context.read<ChatSessionService>();
 
     Widget dialogWidget;
     if (isAskUserQuestion) {
       dialogWidget = AskUserQuestionDialog(
         request: perm,
         onSubmit: (answers) {
-          chat.allowPermission(
-            updatedInput: {'answers': answers},
-          );
+          sessionService.allowPermission(chat, updatedInput: {'answers': answers});
         },
-        onCancel: () => chat.denyPermission('User cancelled the question'),
+        onCancel: () =>
+            sessionService.denyPermission(chat, 'User cancelled the question'),
       );
     } else {
       final selection = context.read<SelectionState>();
-      final provider = switch (chat.model.backend) {
+      final backendProvider = switch (chat.settings.model.backend) {
         sdk.BackendType.codex => sdk.BackendProvider.codex,
         sdk.BackendType.acp => sdk.BackendProvider.acp,
         sdk.BackendType.directCli => sdk.BackendProvider.claude,
@@ -622,21 +636,23 @@ class _PermissionSection extends StatelessWidget {
       dialogWidget = PermissionDialog(
         request: perm,
         projectDir: selection.selectedChat?.data.worktreeRoot,
-        onAllow: ({
-          Map<String, dynamic>? updatedInput,
-          List<dynamic>? updatedPermissions,
-        }) {
-          chat.allowPermission(
-            updatedInput: updatedInput,
-            updatedPermissions: updatedPermissions,
-          );
-        },
-        onDeny: (message, {bool interrupt = false}) =>
-            chat.denyPermission(message, interrupt: interrupt),
+        onAllow:
+            ({
+              Map<String, dynamic>? updatedInput,
+              List<dynamic>? updatedPermissions,
+            }) {
+              sessionService.allowPermission(
+                chat,
+                updatedInput: updatedInput,
+                updatedPermissions: updatedPermissions,
+              );
+            },
+        onDeny: (message, {bool interrupt = false}) => sessionService
+            .denyPermission(chat, message, interrupt: interrupt),
         onClearContextAndAcceptEdits: isExitPlanMode
             ? (planText) => onClearContextPlanApproval(chat, planText)
             : null,
-        provider: provider,
+        provider: backendProvider,
       );
     }
 
@@ -672,8 +688,8 @@ class _ConversationPlaceholder extends StatelessWidget {
 
 /// Represents a saved scroll position in a conversation list.
 class _ScrollPosition {
-  final int topVisibleIndex;  // Index of the first visible item
-  final double offsetInItem;  // Pixel offset within that item
+  final int topVisibleIndex; // Index of the first visible item
+  final double offsetInItem; // Pixel offset within that item
   final bool wasAtBottom;
 
   _ScrollPosition({

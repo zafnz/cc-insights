@@ -17,7 +17,8 @@ import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
-import 'package:codex_sdk/codex_sdk.dart' show CodexSecurityConfig, CodexSecurityCapabilities;
+import 'package:codex_sdk/codex_sdk.dart'
+    show CodexSecurityConfig, CodexSecurityCapabilities;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -40,7 +41,8 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   Object? createSessionError;
 
   /// Records of createSession calls.
-  final List<_CreateSessionCall> createSessionCalls = []; // ignore: library_private_types_in_public_api
+  final List<_CreateSessionCall> createSessionCalls =
+      []; // ignore: library_private_types_in_public_api
 
   /// Whether the backend is ready.
   bool _isReady = true;
@@ -79,11 +81,10 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   bool isAgentErrorFor(sdk.BackendType type) => false;
 
   @override
-  sdk.BackendCapabilities get capabilities =>
-      const sdk.BackendCapabilities(
-        supportsPermissionModeChange: true,
-        supportsModelChange: true,
-      );
+  sdk.BackendCapabilities get capabilities => const sdk.BackendCapabilities(
+    supportsPermissionModeChange: true,
+    supportsModelChange: true,
+  );
 
   @override
   sdk.BackendCapabilities capabilitiesFor(sdk.BackendType type) {
@@ -137,11 +138,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     List<sdk.ContentBlock>? content,
     sdk.InternalToolRegistry? registry,
   }) async {
-    createSessionCalls.add(_CreateSessionCall(
-      prompt: prompt,
-      cwd: cwd,
-      options: options,
-    ));
+    createSessionCalls.add(
+      _CreateSessionCall(prompt: prompt, cwd: cwd, options: options),
+    );
 
     if (createSessionError != null) {
       throw createSessionError!;
@@ -204,7 +203,10 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   Stream<sdk.RateLimitUpdateEvent> get rateLimits => const Stream.empty();
 
   @override
-  void registerBackendForTesting(sdk.BackendType type, sdk.AgentBackend backend) {
+  void registerBackendForTesting(
+    sdk.BackendType type,
+    sdk.AgentBackend backend,
+  ) {
     // Not needed in these tests
   }
 
@@ -252,6 +254,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
       capabilities: const sdk.BackendCapabilities(),
     );
   }
+
   @override
   Future<sdk.AgentSession> createSessionForAgent({
     required String agentId,
@@ -266,7 +269,10 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
   @override
   Future<void> discoverModelsForAllAgents() async {}
   @override
-  void registerAgentBackendForTesting(String agentId, sdk.AgentBackend backend) {}
+  void registerAgentBackendForTesting(
+    String agentId,
+    sdk.AgentBackend backend,
+  ) {}
 
   void reset() {
     createSessionCalls.clear();
@@ -277,11 +283,7 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
 
 /// Record of a createSession call.
 class _CreateSessionCall {
-  _CreateSessionCall({
-    required this.prompt,
-    required this.cwd,
-    this.options,
-  });
+  _CreateSessionCall({required this.prompt, required this.cwd, this.options});
 
   final String prompt;
   final String cwd;
@@ -370,8 +372,7 @@ class FakeTestSession implements sdk.TestSession {
     required String toolName,
     required Map<String, dynamic> toolInput,
     String? toolUseId,
-  }) async =>
-      const sdk.PermissionDenyResponse(message: 'Test deny');
+  }) async => const sdk.PermissionDenyResponse(message: 'Test deny');
 
   void dispose() {
     _eventsController.close();
@@ -415,7 +416,7 @@ void main() {
     late FakeBackendService fakeBackend;
     late FakeCliAvailabilityService fakeCliAvailability;
     late EventHandler fakeEventHandler;
-    late ChatState testChat;
+    late Chat testChat;
 
     setUp(() {
       fakeBackend = FakeBackendService();
@@ -423,7 +424,7 @@ void main() {
       fakeEventHandler = EventHandler();
 
       // Create a chat for testing (NOT tracked separately - owned by worktree)
-      testChat = ChatState.create(name: 'Test Chat', worktreeRoot: '/test/path');
+      testChat = Chat.create(name: 'Test Chat', worktreeRoot: '/test/path');
 
       final worktree = WorktreeState(
         const WorktreeData(
@@ -440,16 +441,15 @@ void main() {
       );
 
       // ProjectState owns the worktree which owns the chat - only track project
-      project = resources.track(ProjectState(
-        const ProjectData(
-          name: 'Test Project',
-          repoRoot: '/test/path',
+      project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'Test Project', repoRoot: '/test/path'),
+          worktree,
+          linkedWorktrees: [],
+          autoValidate: false,
+          watchFilesystem: false,
         ),
-        worktree,
-        linkedWorktrees: [],
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      );
 
       selectionState = resources.track(SelectionState(project));
       // Select the chat so the conversation panel shows it
@@ -500,8 +500,9 @@ void main() {
     }
 
     group('First message starts session', () {
-      testWidgets('submitting when no active session calls startSession',
-          (tester) async {
+      testWidgets('submitting when no active session calls startSession', (
+        tester,
+      ) async {
         // Setup: session will be created successfully
         final fakeSession = FakeTestSession();
         fakeBackend.sessionToReturn = fakeSession;
@@ -510,7 +511,7 @@ void main() {
         await safePumpAndSettle(tester);
 
         // Verify no active session initially
-        check(testChat.hasActiveSession).isFalse();
+        check(testChat.session.hasActiveSession).isFalse();
         check(fakeBackend.createSessionCalls).isEmpty();
 
         // Type a message and submit
@@ -525,15 +526,17 @@ void main() {
 
         // Verify startSession was called via backend.createSession
         check(fakeBackend.createSessionCalls.length).equals(1);
-        check(fakeBackend.createSessionCalls.first.prompt).equals(
-          'Hello Claude!',
-        );
+        check(
+          fakeBackend.createSessionCalls.first.prompt,
+        ).equals('Hello Claude!');
         check(fakeBackend.createSessionCalls.first.cwd).equals('/test/path');
 
         // Verify user entry was added
         check(testChat.data.primaryConversation.entries.length).equals(1);
-        check(testChat.data.primaryConversation.entries.first.runtimeType.toString())
-            .equals('UserInputEntry');
+        check(
+          testChat.data.primaryConversation.entries.first.runtimeType
+              .toString(),
+        ).equals('UserInputEntry');
       });
 
       testWidgets('startSession failure shows error entry', (tester) async {
@@ -562,8 +565,9 @@ void main() {
     });
 
     group('Subsequent messages sent to session', () {
-      testWidgets('submitting with active session calls sendMessage',
-          (tester) async {
+      testWidgets('submitting with active session calls sendMessage', (
+        tester,
+      ) async {
         // Setup: create a fake session and mark chat as having active session
         final fakeSession = FakeTestSession();
         fakeBackend.sessionToReturn = fakeSession;
@@ -582,7 +586,7 @@ void main() {
 
         // Verify session was started
         check(fakeBackend.createSessionCalls.length).equals(1);
-        check(testChat.hasActiveSession).isTrue();
+        check(testChat.session.hasActiveSession).isTrue();
 
         // Now send a second message
         await tester.enterText(textField, 'Second message');
@@ -612,7 +616,7 @@ void main() {
           toolName: 'Bash',
           toolInput: {'command': 'rm -rf /'},
         );
-        testChat.setPendingPermission(permissionRequest);
+        testChat.permissions.add(permissionRequest);
         await safePumpAndSettle(tester);
 
         // Now permission dialog should be visible using Keys
@@ -627,19 +631,19 @@ void main() {
 
         // Set a pending permission
         final permissionRequest = createFakePermissionRequest();
-        testChat.setPendingPermission(permissionRequest);
+        testChat.permissions.add(permissionRequest);
         await safePumpAndSettle(tester);
 
         // Verify dialog is shown using Key
         expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
-        check(testChat.pendingPermission).isNotNull();
+        check(testChat.permissions.pendingPermission).isNotNull();
 
         // Click Allow button using Key
         await tester.tap(find.byKey(PermissionDialogKeys.allowButton));
         await safePumpAndSettle(tester);
 
         // Verify permission was cleared (allowPermission clears pendingPermission)
-        check(testChat.pendingPermission).isNull();
+        check(testChat.permissions.pendingPermission).isNull();
 
         // Dialog should be gone
         expect(find.byKey(PermissionDialogKeys.dialog), findsNothing);
@@ -651,26 +655,27 @@ void main() {
 
         // Set a pending permission
         final permissionRequest = createFakePermissionRequest();
-        testChat.setPendingPermission(permissionRequest);
+        testChat.permissions.add(permissionRequest);
         await safePumpAndSettle(tester);
 
         // Verify dialog is shown using Key
         expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
-        check(testChat.pendingPermission).isNotNull();
+        check(testChat.permissions.pendingPermission).isNotNull();
 
         // Click Deny button using Key
         await tester.tap(find.byKey(PermissionDialogKeys.denyButton));
         await safePumpAndSettle(tester);
 
         // Verify permission was cleared (denyPermission clears pendingPermission)
-        check(testChat.pendingPermission).isNull();
+        check(testChat.permissions.pendingPermission).isNull();
 
         // Dialog should be gone
         expect(find.byKey(PermissionDialogKeys.dialog), findsNothing);
       });
 
-      testWidgets('permission dialog displays tool name and input',
-          (tester) async {
+      testWidgets('permission dialog displays tool name and input', (
+        tester,
+      ) async {
         await tester.pumpWidget(buildTestWidget());
         await safePumpAndSettle(tester);
 
@@ -679,7 +684,7 @@ void main() {
           toolName: 'Read',
           toolInput: {'file_path': '/secret/file.txt'},
         );
-        testChat.setPendingPermission(permissionRequest);
+        testChat.permissions.add(permissionRequest);
         await safePumpAndSettle(tester);
 
         // Verify dialog is visible and has content
@@ -693,25 +698,37 @@ void main() {
     });
 
     group('Agent removal', () {
-      testWidgets('shows agent removed banner when chat is terminated',
-          (tester) async {
+      testWidgets('shows agent removed banner when chat is terminated', (
+        tester,
+      ) async {
         await tester.pumpWidget(buildTestWidget());
         await safePumpAndSettle(tester);
 
         // Initially no banner
-        expect(find.text('Agent removed \u2014 this chat can no longer send messages'), findsNothing);
+        expect(
+          find.text(
+            'Agent removed \u2014 this chat can no longer send messages',
+          ),
+          findsNothing,
+        );
 
         // Terminate the chat
-        await testChat.terminateForAgentRemoval();
+        await testChat.agents.terminateForAgentRemoval();
         await safePumpAndSettle(tester);
 
         // Banner should be visible
-        expect(find.text('Agent removed \u2014 this chat can no longer send messages'), findsOneWidget);
+        expect(
+          find.text(
+            'Agent removed \u2014 this chat can no longer send messages',
+          ),
+          findsOneWidget,
+        );
         expect(find.byIcon(Icons.block), findsOneWidget);
       });
 
-      testWidgets('hides message input when chat is terminated',
-          (tester) async {
+      testWidgets('hides message input when chat is terminated', (
+        tester,
+      ) async {
         await tester.pumpWidget(buildTestWidget());
         await safePumpAndSettle(tester);
 
@@ -719,7 +736,7 @@ void main() {
         expect(find.byType(TextField), findsOneWidget);
 
         // Terminate the chat
-        await testChat.terminateForAgentRemoval();
+        await testChat.agents.terminateForAgentRemoval();
         await safePumpAndSettle(tester);
 
         // Message input should be gone, replaced by banner

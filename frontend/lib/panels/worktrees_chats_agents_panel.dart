@@ -15,10 +15,7 @@ import 'worktree_panel.dart';
 ///
 /// Created when ChatsAgentsPanel is dropped onto Worktrees.
 class WorktreesChatsAgentsPanel extends StatelessWidget {
-  const WorktreesChatsAgentsPanel({
-    super.key,
-    required this.onSeparateChats,
-  });
+  const WorktreesChatsAgentsPanel({super.key, required this.onSeparateChats});
 
   /// Callback to separate chats (and agents) back into separate panels.
   final VoidCallback onSeparateChats;
@@ -155,10 +152,12 @@ class _WorktreeWithChatsTreeItemState
         ),
         // Chats (nested with indent)
         if (_isExpanded && hasChildren)
-          ...chats.map((chat) => _NestedChatWithAgentsItem(
-                chat: chat,
-                selection: widget.selection,
-              )),
+          ...chats.map(
+            (chat) => _NestedChatWithAgentsItem(
+              chat: chat,
+              selection: widget.selection,
+            ),
+          ),
       ],
     );
   }
@@ -171,7 +170,7 @@ class _NestedChatWithAgentsItem extends StatefulWidget {
     required this.selection,
   });
 
-  final ChatState chat;
+  final Chat chat;
   final SelectionState selection;
 
   @override
@@ -188,9 +187,14 @@ class _NestedChatWithAgentsItemState extends State<_NestedChatWithAgentsItem> {
     final textTheme = Theme.of(context).textTheme;
     final isSelected = widget.selection.selectedChat == widget.chat;
 
-    // Listen to ChatState changes (e.g., rename) for immediate UI updates
+    // Listen to the specific chat sub-states rendered by this row.
     return ListenableBuilder(
-      listenable: widget.chat,
+      listenable: Listenable.merge([
+        widget.chat.conversations,
+        widget.chat.session,
+        widget.chat.permissions,
+        widget.chat.viewState,
+      ]),
       builder: (context, _) {
         final data = widget.chat.data;
         final primaryConversation = data.primaryConversation;
@@ -198,82 +202,89 @@ class _NestedChatWithAgentsItemState extends State<_NestedChatWithAgentsItem> {
         final hasAgents = subagents.isNotEmpty;
 
         return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Chat row (indented under worktree)
-        Material(
-          color: isSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.2)
-              : Colors.transparent,
-          child: Padding(
-            padding:
-                const EdgeInsets.only(left: 28, right: 8, top: 4, bottom: 4),
-            child: Row(
-              children: [
-                // Expand/collapse icon for agents
-                GestureDetector(
-                  onTap: hasAgents
-                      ? () => setState(() => _isExpanded = !_isExpanded)
-                      : null,
-                  child: SizedBox(
-                    width: 14,
-                    child: hasAgents
-                        ? Icon(
-                            _isExpanded
-                                ? Icons.expand_more
-                                : Icons.chevron_right,
-                            size: 12,
-                            color: colorScheme.onSurfaceVariant,
-                          )
-                        : const SizedBox.shrink(),
-                  ),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Chat row (indented under worktree)
+            Material(
+              color: isSelected
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.2)
+                  : Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: 28,
+                  right: 8,
+                  top: 4,
+                  bottom: 4,
                 ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.chat_bubble_outline,
-                  size: 12,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                // Chat name (single-click to select, double-click to rename)
-                Expanded(
-                  child: EditableLabel(
-                    text: data.name,
-                    style: textTheme.bodySmall,
-                    onTap: () => widget.selection.selectChat(widget.chat),
-                    onSubmit: (newName) => widget.chat.rename(newName),
-                  ),
-                ),
-                  if (hasAgents)
-                    Text(
-                      '${subagents.length}',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                child: Row(
+                  children: [
+                    // Expand/collapse icon for agents
+                    GestureDetector(
+                      onTap: hasAgents
+                          ? () => setState(() => _isExpanded = !_isExpanded)
+                          : null,
+                      child: SizedBox(
+                        width: 14,
+                        child: hasAgents
+                            ? Icon(
+                                _isExpanded
+                                    ? Icons.expand_more
+                                    : Icons.chevron_right,
+                                size: 12,
+                                color: colorScheme.onSurfaceVariant,
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    // Chat name (single-click to select, double-click to rename)
+                    Expanded(
+                      child: EditableLabel(
+                        text: data.name,
+                        style: textTheme.bodySmall,
+                        onTap: () => widget.selection.selectChat(widget.chat),
+                        onSubmit: (newName) =>
+                            widget.chat.conversations.rename(newName),
+                      ),
+                    ),
+                    if (hasAgents)
+                      Text(
+                        '${subagents.length}',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-        // Agents (double indented)
-        if (_isExpanded && hasAgents) ...[
-          _DeepNestedAgentItem(
-            conversation: primaryConversation,
-            isSelected:
-                widget.selection.selectedConversation == primaryConversation,
-            onTap: () =>
-                widget.selection.selectConversation(primaryConversation),
-            isPrimary: true,
-          ),
-          ...subagents.map((subagent) => _DeepNestedAgentItem(
-                conversation: subagent,
+            // Agents (double indented)
+            if (_isExpanded && hasAgents) ...[
+              _DeepNestedAgentItem(
+                conversation: primaryConversation,
                 isSelected:
-                    widget.selection.selectedConversation == subagent,
-                onTap: () => widget.selection.selectConversation(subagent),
-                isPrimary: false,
-              )),
-        ],
-      ],
+                    widget.selection.selectedConversation ==
+                    primaryConversation,
+                onTap: () =>
+                    widget.selection.selectConversation(primaryConversation),
+                isPrimary: true,
+              ),
+              ...subagents.map(
+                (subagent) => _DeepNestedAgentItem(
+                  conversation: subagent,
+                  isSelected: widget.selection.selectedConversation == subagent,
+                  onTap: () => widget.selection.selectConversation(subagent),
+                  isPrimary: false,
+                ),
+              ),
+            ],
+          ],
         );
       },
     );
@@ -306,12 +317,13 @@ class _DeepNestedAgentItem extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding:
-              const EdgeInsets.only(left: 56, right: 8, top: 3, bottom: 3),
+          padding: const EdgeInsets.only(left: 56, right: 8, top: 3, bottom: 3),
           child: Row(
             children: [
               Icon(
-                isPrimary ? Icons.chat_bubble_outline : Icons.smart_toy_outlined,
+                isPrimary
+                    ? Icons.chat_bubble_outline
+                    : Icons.smart_toy_outlined,
                 size: 10,
                 color: isPrimary
                     ? colorScheme.primary

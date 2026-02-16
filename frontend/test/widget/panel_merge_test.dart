@@ -87,19 +87,11 @@ void main() {
           ChangeNotifierProvider<CliAvailabilityService>.value(
             value: fakeCliAvailability,
           ),
-          ChangeNotifierProvider<TicketRepository>.value(
-            value: repo,
-          ),
-          ChangeNotifierProvider<TicketViewState>.value(
-            value: viewState,
-          ),
-          ChangeNotifierProvider<BulkProposalState>.value(
-            value: bulkState,
-          ),
+          ChangeNotifierProvider<TicketRepository>.value(value: repo),
+          ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
         ],
-        child: const MaterialApp(
-          home: MainScreen(),
-        ),
+        child: const MaterialApp(home: MainScreen()),
       );
     }
 
@@ -143,6 +135,7 @@ void main() {
       worktreeWatcher.dispose();
       mockBackend.dispose();
       scriptService.dispose();
+      LogService.instance.clearBuffer();
       await resources.disposeAll();
     });
 
@@ -227,7 +220,9 @@ void main() {
         }
       });
 
-      testWidgets('shows placeholder when no worktree selected', (tester) async {
+      testWidgets('shows placeholder when no worktree selected', (
+        tester,
+      ) async {
         await setLargeWindowSize(tester);
         // Create project without initial selection
         project.selectWorktree(null);
@@ -241,7 +236,9 @@ void main() {
     });
 
     group('Agents Panel', () {
-      testWidgets('shows Chat as first entry when chat selected', (tester) async {
+      testWidgets('shows Chat as first entry when chat selected', (
+        tester,
+      ) async {
         await setLargeWindowSize(tester);
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
@@ -361,9 +358,7 @@ void main() {
             home: Scaffold(
               body: DragHandleProvider(
                 dragHandle: const Icon(Icons.drag_indicator),
-                child: ChatsAgentsPanel(
-                  onSeparateAgents: () {},
-                ),
+                child: ChatsAgentsPanel(onSeparateAgents: () {}),
               ),
             ),
           ),
@@ -375,8 +370,9 @@ void main() {
       expect(find.text('Chats'), findsOneWidget);
     });
 
-    testWidgets('onSeparateAgents callback is invoked from context menu',
-        (tester) async {
+    testWidgets('onSeparateAgents callback is invoked from context menu', (
+      tester,
+    ) async {
       var separateCalled = false;
       final project = MockDataFactory.createMockProject();
       final selection = SelectionState(project);
@@ -440,9 +436,7 @@ void main() {
             home: Scaffold(
               body: DragHandleProvider(
                 dragHandle: const Icon(Icons.drag_indicator),
-                child: WorktreesChatsAgentsPanel(
-                  onSeparateChats: () {},
-                ),
+                child: WorktreesChatsAgentsPanel(onSeparateChats: () {}),
               ),
             ),
           ),
@@ -468,9 +462,7 @@ void main() {
             home: Scaffold(
               body: DragHandleProvider(
                 dragHandle: const Icon(Icons.drag_indicator),
-                child: WorktreesChatsAgentsPanel(
-                  onSeparateChats: () {},
-                ),
+                child: WorktreesChatsAgentsPanel(onSeparateChats: () {}),
               ),
             ),
           ),
@@ -484,8 +476,45 @@ void main() {
       }
     });
 
-    testWidgets('onSeparateChats callback is invoked from context menu',
-        (tester) async {
+    testWidgets('updates nested chat name when conversation state changes', (
+      tester,
+    ) async {
+      final project = MockDataFactory.createMockProject();
+      final selection = SelectionState(project);
+      final chat = project.primaryWorktree.chats.first;
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ProjectState>.value(value: project),
+            ChangeNotifierProvider<SelectionState>.value(value: selection),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: DragHandleProvider(
+                dragHandle: const Icon(Icons.drag_indicator),
+                child: WorktreesChatsAgentsPanel(onSeparateChats: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      await safePumpAndSettle(tester);
+
+      const renamed = 'Renamed Nested Chat';
+      chat.conversations.rename(renamed);
+      await tester.pump();
+
+      expect(find.text(renamed), findsOneWidget);
+
+      // Rename logs through LogService, which starts a short-lived timer.
+      LogService.instance.clearBuffer();
+      await tester.pump();
+    });
+
+    testWidgets('onSeparateChats callback is invoked from context menu', (
+      tester,
+    ) async {
       var separateCalled = false;
       final project = MockDataFactory.createMockProject();
       final selection = SelectionState(project);

@@ -80,8 +80,7 @@ void main() {
   // 1. Complete lifecycle: Create -> Dispatch -> Turn Complete -> Mark Done
   // ===========================================================================
   group('Complete lifecycle', () {
-    test(
-        'create tickets manually -> dispatch (link chat) -> simulate turn '
+    test('create tickets manually -> dispatch (link chat) -> simulate turn '
         'complete -> mark done -> verify status transitions', () {
       final ticketBoard = resources.track(
         TicketRepository('test-full-lifecycle'),
@@ -105,7 +104,7 @@ void main() {
       ticketBoard.setStatus(ticket.id, TicketStatus.active);
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
       ticketBoard.linkChat(
         ticket.id,
@@ -151,8 +150,7 @@ void main() {
   // 2. Agent proposal lifecycle
   // ===========================================================================
   group('Agent proposal lifecycle', () {
-    test(
-        'proposeBulk -> user reviews -> approves subset -> verify tickets '
+    test('proposeBulk -> user reviews -> approves subset -> verify tickets '
         'are ready and unchecked are deleted', () {
       final ticketBoard = resources.track(
         TicketRepository('test-proposal-lifecycle'),
@@ -246,20 +244,12 @@ void main() {
     });
 
     test('rejectAll deletes all proposed tickets', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-reject-all'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-reject-all'));
       final bulkState = resources.track(BulkProposalState(ticketBoard));
 
       final proposals = [
-        const TicketProposal(
-          title: 'Task A',
-          kind: TicketKind.feature,
-        ),
-        const TicketProposal(
-          title: 'Task B',
-          kind: TicketKind.feature,
-        ),
+        const TicketProposal(title: 'Task A', kind: TicketKind.feature),
+        const TicketProposal(title: 'Task B', kind: TicketKind.feature),
       ];
 
       final created = bulkState.proposeBulk(
@@ -287,12 +277,9 @@ void main() {
   // 3. Dependency chain: A -> B -> C auto-unblock cascade
   // ===========================================================================
   group('Dependency chain auto-unblock', () {
-    test(
-        'A depends on B, B depends on C -> complete C -> B auto-unblocks -> '
+    test('A depends on B, B depends on C -> complete C -> B auto-unblocks -> '
         'complete B -> A auto-unblocks', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-dep-chain'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-dep-chain'));
 
       // Create tickets: C is foundational, B depends on C, A depends on B
       final c = ticketBoard.createTicket(
@@ -365,17 +352,11 @@ void main() {
 
       // Complete dep1 only
       ticketBoard.markCompleted(dep1.id);
-      expect(
-        ticketBoard.getTicket(dependent.id)!.status,
-        TicketStatus.blocked,
-      );
+      expect(ticketBoard.getTicket(dependent.id)!.status, TicketStatus.blocked);
 
       // Complete dep2 -> now should unblock
       ticketBoard.markCompleted(dep2.id);
-      expect(
-        ticketBoard.getTicket(dependent.id)!.status,
-        TicketStatus.ready,
-      );
+      expect(ticketBoard.getTicket(dependent.id)!.status, TicketStatus.ready);
     });
   });
 
@@ -383,8 +364,7 @@ void main() {
   // 4. Split and complete
   // ===========================================================================
   group('Split and complete', () {
-    test(
-        'create ticket -> split into subtasks -> complete subtasks -> '
+    test('create ticket -> split into subtasks -> complete subtasks -> '
         'parent stays split', () {
       final ticketBoard = resources.track(
         TicketRepository('test-split-complete'),
@@ -436,19 +416,14 @@ void main() {
     });
 
     test('split with empty subtasks throws ArgumentError', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-split-empty'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-split-empty'));
 
       final parent = ticketBoard.createTicket(
         title: 'Task',
         kind: TicketKind.feature,
       );
 
-      expect(
-        () => ticketBoard.splitTicket(parent.id, []),
-        throwsArgumentError,
-      );
+      expect(() => ticketBoard.splitTicket(parent.id, []), throwsArgumentError);
     });
 
     test('split nonexistent ticket throws ArgumentError', () {
@@ -469,8 +444,7 @@ void main() {
   // 5. Search and filter persistence
   // ===========================================================================
   group('Search and filter', () {
-    test(
-        'set search query and filters -> verify filtering -> clear -> '
+    test('set search query and filters -> verify filtering -> clear -> '
         'all visible', () {
       final ticketBoard = resources.track(
         TicketRepository('test-search-filter'),
@@ -552,9 +526,7 @@ void main() {
     });
 
     test('grouped tickets reflect filters and group-by', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-grouped'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-grouped'));
       final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
@@ -604,56 +576,58 @@ void main() {
   // 6. Graph view accuracy
   // ===========================================================================
   group('Graph view accuracy', () {
-    test('graph layout produces correct nodes and edges for dependency chain',
-        () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-graph-layout'),
-      );
+    test(
+      'graph layout produces correct nodes and edges for dependency chain',
+      () {
+        final ticketBoard = resources.track(
+          TicketRepository('test-graph-layout'),
+        );
 
-      // Create A -> B -> C chain
-      final a = ticketBoard.createTicket(
-        title: 'Foundation',
-        kind: TicketKind.feature,
-      );
-      final b = ticketBoard.createTicket(
-        title: 'Middle layer',
-        kind: TicketKind.feature,
-        dependsOn: [a.id],
-      );
-      final c = ticketBoard.createTicket(
-        title: 'Top feature',
-        kind: TicketKind.feature,
-        dependsOn: [b.id],
-      );
+        // Create A -> B -> C chain
+        final a = ticketBoard.createTicket(
+          title: 'Foundation',
+          kind: TicketKind.feature,
+        );
+        final b = ticketBoard.createTicket(
+          title: 'Middle layer',
+          kind: TicketKind.feature,
+          dependsOn: [a.id],
+        );
+        final c = ticketBoard.createTicket(
+          title: 'Top feature',
+          kind: TicketKind.feature,
+          dependsOn: [b.id],
+        );
 
-      // Compute layout
-      final layout = TicketGraphLayout.compute(ticketBoard.tickets);
+        // Compute layout
+        final layout = TicketGraphLayout.compute(ticketBoard.tickets);
 
-      // 3 nodes positioned
-      expect(layout.nodePositions.length, 3);
-      expect(layout.nodePositions.containsKey(a.id), isTrue);
-      expect(layout.nodePositions.containsKey(b.id), isTrue);
-      expect(layout.nodePositions.containsKey(c.id), isTrue);
+        // 3 nodes positioned
+        expect(layout.nodePositions.length, 3);
+        expect(layout.nodePositions.containsKey(a.id), isTrue);
+        expect(layout.nodePositions.containsKey(b.id), isTrue);
+        expect(layout.nodePositions.containsKey(c.id), isTrue);
 
-      // A should be at the top (layer 0), B in middle, C at bottom
-      final aPos = layout.nodePositions[a.id]!;
-      final bPos = layout.nodePositions[b.id]!;
-      final cPos = layout.nodePositions[c.id]!;
+        // A should be at the top (layer 0), B in middle, C at bottom
+        final aPos = layout.nodePositions[a.id]!;
+        final bPos = layout.nodePositions[b.id]!;
+        final cPos = layout.nodePositions[c.id]!;
 
-      expect(aPos.dy, lessThan(bPos.dy));
-      expect(bPos.dy, lessThan(cPos.dy));
+        expect(aPos.dy, lessThan(bPos.dy));
+        expect(bPos.dy, lessThan(cPos.dy));
 
-      // 2 edges: A->B and B->C
-      expect(layout.edges.length, 2);
-      final edgeFromIds = layout.edges.map((e) => e.fromId).toSet();
-      final edgeToIds = layout.edges.map((e) => e.toId).toSet();
-      expect(edgeFromIds, containsAll([a.id, b.id]));
-      expect(edgeToIds, containsAll([b.id, c.id]));
+        // 2 edges: A->B and B->C
+        expect(layout.edges.length, 2);
+        final edgeFromIds = layout.edges.map((e) => e.fromId).toSet();
+        final edgeToIds = layout.edges.map((e) => e.toId).toSet();
+        expect(edgeFromIds, containsAll([a.id, b.id]));
+        expect(edgeToIds, containsAll([b.id, c.id]));
 
-      // Total size should be non-zero
-      expect(layout.totalSize.width, greaterThan(0));
-      expect(layout.totalSize.height, greaterThan(0));
-    });
+        // Total size should be non-zero
+        expect(layout.totalSize.width, greaterThan(0));
+        expect(layout.totalSize.height, greaterThan(0));
+      },
+    );
 
     test('disconnected components are placed side by side', () {
       final ticketBoard = resources.track(
@@ -672,10 +646,7 @@ void main() {
       );
 
       // Component 2: standalone C
-      ticketBoard.createTicket(
-        title: 'Comp2 C',
-        kind: TicketKind.feature,
-      );
+      ticketBoard.createTicket(title: 'Comp2 C', kind: TicketKind.feature);
 
       final layout = TicketGraphLayout.compute(ticketBoard.tickets);
 
@@ -698,10 +669,7 @@ void main() {
         TicketRepository('test-graph-single'),
       );
 
-      ticketBoard.createTicket(
-        title: 'Lone ticket',
-        kind: TicketKind.feature,
-      );
+      ticketBoard.createTicket(title: 'Lone ticket', kind: TicketKind.feature);
 
       final layout = TicketGraphLayout.compute(ticketBoard.tickets);
       expect(layout.nodePositions.length, 1);
@@ -713,8 +681,7 @@ void main() {
   // 7. Persistence full cycle
   // ===========================================================================
   group('Persistence full cycle', () {
-    test(
-        'create various tickets in various states with deps and links -> '
+    test('create various tickets in various states with deps and links -> '
         'save -> recreate and load -> verify everything restored', () async {
       final projectId =
           'test-persist-full-${DateTime.now().millisecondsSinceEpoch}';
@@ -840,16 +807,13 @@ void main() {
   // ===========================================================================
   group('Edge cases', () {
     test('cancel all tickets', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-cancel-all'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-cancel-all'));
 
       final tickets = <TicketData>[];
       for (var i = 0; i < 5; i++) {
-        tickets.add(ticketBoard.createTicket(
-          title: 'Task $i',
-          kind: TicketKind.feature,
-        ));
+        tickets.add(
+          ticketBoard.createTicket(title: 'Task $i', kind: TicketKind.feature),
+        );
       }
 
       // Cancel all
@@ -919,9 +883,7 @@ void main() {
     });
 
     test('very long title is handled correctly', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-long-title'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-long-title'));
 
       final longTitle = 'A' * 500;
       final t = ticketBoard.createTicket(
@@ -938,9 +900,7 @@ void main() {
     });
 
     test('empty description is allowed', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-empty-desc'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-empty-desc'));
 
       final t = ticketBoard.createTicket(
         title: 'No description ticket',
@@ -988,10 +948,7 @@ void main() {
       );
       final viewState = resources.track(TicketViewState(ticketBoard));
 
-      ticketBoard.createTicket(
-        title: 'No category',
-        kind: TicketKind.feature,
-      );
+      ticketBoard.createTicket(title: 'No category', kind: TicketKind.feature);
 
       final grouped = viewState.groupedTickets;
       expect(grouped.containsKey('Uncategorized'), isTrue);
@@ -1008,41 +965,25 @@ void main() {
         kind: TicketKind.feature,
       );
 
-      expect(
-        () => ticketBoard.addDependency(t.id, 999),
-        throwsArgumentError,
-      );
+      expect(() => ticketBoard.addDependency(t.id, 999), throwsArgumentError);
     });
 
     test('self-dependency throws ArgumentError', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-self-dep'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-self-dep'));
 
       final t = ticketBoard.createTicket(
         title: 'Ticket',
         kind: TicketKind.feature,
       );
 
-      expect(
-        () => ticketBoard.addDependency(t.id, t.id),
-        throwsArgumentError,
-      );
+      expect(() => ticketBoard.addDependency(t.id, t.id), throwsArgumentError);
     });
 
     test('duplicate dependency is idempotent', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-dup-dep'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-dup-dep'));
 
-      final a = ticketBoard.createTicket(
-        title: 'A',
-        kind: TicketKind.feature,
-      );
-      final b = ticketBoard.createTicket(
-        title: 'B',
-        kind: TicketKind.feature,
-      );
+      final a = ticketBoard.createTicket(title: 'A', kind: TicketKind.feature);
+      final b = ticketBoard.createTicket(title: 'B', kind: TicketKind.feature);
 
       ticketBoard.addDependency(b.id, a.id);
       ticketBoard.addDependency(b.id, a.id); // duplicate
@@ -1052,9 +993,7 @@ void main() {
     });
 
     test('duplicate worktree link is idempotent', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-dup-link'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-dup-link'));
 
       final t = ticketBoard.createTicket(
         title: 'Ticket',
@@ -1096,10 +1035,7 @@ void main() {
         title: 'T2',
         kind: TicketKind.feature,
       );
-      ticketBoard.createTicket(
-        title: 'T3',
-        kind: TicketKind.feature,
-      );
+      ticketBoard.createTicket(title: 'T3', kind: TicketKind.feature);
 
       ticketBoard.linkChat(t1.id, 'shared-chat', 'Chat', '/path');
       ticketBoard.linkChat(t2.id, 'shared-chat', 'Chat', '/path');
@@ -1110,9 +1046,7 @@ void main() {
     });
 
     test('nextReadyTicket returns highest-priority ready ticket', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-next-ready'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-next-ready'));
       final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
@@ -1178,72 +1112,75 @@ void main() {
   // 9. Dispatch integration with TicketDispatchService
   // ===========================================================================
   group('Dispatch service integration', () {
-    test('beginInWorktree creates chat, links, sets status, navigates', () async {
-      final ticketBoard = resources.track(
-        TicketRepository('test-dispatch-svc'),
-      );
+    test(
+      'beginInWorktree creates chat, links, sets status, navigates',
+      () async {
+        final ticketBoard = resources.track(
+          TicketRepository('test-dispatch-svc'),
+        );
 
-      final primaryWorktree = WorktreeState(
-        const WorktreeData(
-          worktreeRoot: '/test/repo',
-          isPrimary: true,
-          branch: 'main',
-        ),
-      );
-      final project = resources.track(ProjectState(
-        const ProjectData(name: 'test-proj', repoRoot: '/test/repo'),
-        primaryWorktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
-      final selection = resources.track(SelectionState(project));
-      final fakeGit = FakeGitService();
+        final primaryWorktree = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/test/repo',
+            isPrimary: true,
+            branch: 'main',
+          ),
+        );
+        final project = resources.track(
+          ProjectState(
+            const ProjectData(name: 'test-proj', repoRoot: '/test/repo'),
+            primaryWorktree,
+            autoValidate: false,
+            watchFilesystem: false,
+          ),
+        );
+        final selection = resources.track(SelectionState(project));
+        final fakeGit = FakeGitService();
 
-      final ticket = ticketBoard.createTicket(
-        title: 'Implement notifications',
-        kind: TicketKind.feature,
-        description: 'Add push notifications.',
-        priority: TicketPriority.high,
-      );
+        final ticket = ticketBoard.createTicket(
+          title: 'Implement notifications',
+          kind: TicketKind.feature,
+          description: 'Add push notifications.',
+          priority: TicketPriority.high,
+        );
 
-      final worktree = WorktreeState(
-        const WorktreeData(
-          worktreeRoot: '/test/worktrees/notifications',
-          isPrimary: false,
-          branch: 'tkt-1-notifications',
-        ),
-      );
-      project.addLinkedWorktree(worktree);
+        final worktree = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/test/worktrees/notifications',
+            isPrimary: false,
+            branch: 'tkt-1-notifications',
+          ),
+        );
+        project.addLinkedWorktree(worktree);
 
-      final dispatch = TicketDispatchService(
-        ticketBoard: ticketBoard,
-        project: project,
-        selection: selection,
-        worktreeService: WorktreeService(gitService: fakeGit),
-      );
+        final dispatch = TicketDispatchService(
+          ticketBoard: ticketBoard,
+          project: project,
+          selection: selection,
+          worktreeService: WorktreeService(gitService: fakeGit),
+        );
 
-      await dispatch.beginInWorktree(ticket.id, worktree);
+        await dispatch.beginInWorktree(ticket.id, worktree);
 
-      final updated = ticketBoard.getTicket(ticket.id)!;
-      expect(updated.status, TicketStatus.active);
-      expect(updated.linkedWorktrees.length, 1);
-      expect(updated.linkedChats.length, 1);
-      expect(updated.linkedChats.first.chatName, 'TKT-001');
+        final updated = ticketBoard.getTicket(ticket.id)!;
+        expect(updated.status, TicketStatus.active);
+        expect(updated.linkedWorktrees.length, 1);
+        expect(updated.linkedChats.length, 1);
+        expect(updated.linkedChats.first.chatName, 'TKT-001');
 
-      // Chat should have ticket prompt as draft
-      final chat = worktree.chats.first;
-      expect(chat.draftText, isNotNull);
-      expect(chat.draftText!, contains('TKT-001'));
-      expect(chat.draftText!, contains('Implement notifications'));
+        // Chat should have ticket prompt as draft
+        final chat = worktree.chats.first;
+        expect(chat.viewState.draftText, isNotNull);
+        expect(chat.viewState.draftText!, contains('TKT-001'));
+        expect(chat.viewState.draftText!, contains('Implement notifications'));
 
-      // Selection should be updated
-      expect(selection.selectedChat, isNotNull);
-    });
+        // Selection should be updated
+        expect(selection.selectedChat, isNotNull);
+      },
+    );
 
     test('buildTicketPrompt includes dependency context', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-prompt-deps'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-prompt-deps'));
 
       final dep = ticketBoard.createTicket(
         title: 'Database schema',
@@ -1267,12 +1204,14 @@ void main() {
           branch: 'main',
         ),
       );
-      final project = resources.track(ProjectState(
-        const ProjectData(name: 'test', repoRoot: '/test/repo'),
-        primaryWorktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
       final selection = resources.track(SelectionState(project));
 
       final dispatch = TicketDispatchService(
@@ -1330,7 +1269,7 @@ void main() {
       );
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
       ticketBoard.linkChat(ticket.id, chat.data.id, 'TKT-001', '/tmp/test');
 
@@ -1338,17 +1277,11 @@ void main() {
 
       // Permission request -> needsInput
       handler.handleEvent(chat, _makePermissionRequest());
-      expect(
-        ticketBoard.getTicket(ticket.id)!.status,
-        TicketStatus.needsInput,
-      );
+      expect(ticketBoard.getTicket(ticket.id)!.status, TicketStatus.needsInput);
 
       // Permission response -> active
       handler.handlePermissionResponse(chat);
-      expect(
-        ticketBoard.getTicket(ticket.id)!.status,
-        TicketStatus.active,
-      );
+      expect(ticketBoard.getTicket(ticket.id)!.status, TicketStatus.active);
 
       handler.dispose();
     });
@@ -1365,7 +1298,7 @@ void main() {
       );
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
       ticketBoard.linkChat(ticket.id, chat.data.id, 'TKT-001', '/tmp/test');
 
@@ -1380,10 +1313,7 @@ void main() {
           durationMs: 1000,
         ),
       );
-      expect(
-        ticketBoard.getTicket(ticket.id)!.status,
-        TicketStatus.completed,
-      );
+      expect(ticketBoard.getTicket(ticket.id)!.status, TicketStatus.completed);
 
       handler.dispose();
     });
@@ -1400,7 +1330,7 @@ void main() {
       );
 
       final chat = resources.track(
-        ChatState.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
+        Chat.create(name: 'TKT-001', worktreeRoot: '/tmp/test'),
       );
       ticketBoard.linkChat(ticket.id, chat.data.id, 'TKT-001', '/tmp/test');
 
@@ -1440,9 +1370,7 @@ void main() {
   // ===========================================================================
   group('View mode and detail mode', () {
     test('showCreateForm clears selection and sets create mode', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-modes'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-modes'));
       final viewState = resources.track(TicketViewState(ticketBoard));
 
       final t = ticketBoard.createTicket(
@@ -1458,9 +1386,7 @@ void main() {
     });
 
     test('selectTicket sets detail mode', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-select-mode'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-select-mode'));
       final viewState = resources.track(TicketViewState(ticketBoard));
 
       final t = ticketBoard.createTicket(
@@ -1476,9 +1402,7 @@ void main() {
     });
 
     test('setViewMode toggles between list and graph', () {
-      final ticketBoard = resources.track(
-        TicketRepository('test-view-mode'),
-      );
+      final ticketBoard = resources.track(TicketRepository('test-view-mode'));
       final viewState = resources.track(TicketViewState(ticketBoard));
 
       expect(viewState.viewMode, TicketViewMode.list);
@@ -1509,10 +1433,7 @@ void main() {
         tags: {'tag1', 'tag2'},
         dependsOn: [1, 2, 3],
         linkedWorktrees: [
-          const LinkedWorktree(
-            worktreeRoot: '/path/wt',
-            branch: 'branch-name',
-          ),
+          const LinkedWorktree(worktreeRoot: '/path/wt', branch: 'branch-name'),
         ],
         linkedChats: [
           const LinkedChat(
@@ -1546,10 +1467,7 @@ void main() {
       expect(restored.tags, ticket.tags);
       expect(restored.dependsOn, ticket.dependsOn);
       expect(restored.linkedWorktrees.length, 1);
-      expect(
-        restored.linkedWorktrees.first.worktreeRoot,
-        '/path/wt',
-      );
+      expect(restored.linkedWorktrees.first.worktreeRoot, '/path/wt');
       expect(restored.linkedChats.length, 1);
       expect(restored.linkedChats.first.chatId, 'chat-1');
       expect(restored.sourceConversationId, 'conv-123');
@@ -1593,9 +1511,7 @@ void main() {
     });
 
     test('TicketProposal fromJson works with minimal fields', () {
-      final proposal = TicketProposal.fromJson({
-        'title': 'Minimal proposal',
-      });
+      final proposal = TicketProposal.fromJson({'title': 'Minimal proposal'});
 
       expect(proposal.title, 'Minimal proposal');
       expect(proposal.description, '');

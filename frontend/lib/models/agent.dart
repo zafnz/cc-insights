@@ -45,7 +45,7 @@ class Agent {
   /// The SDK's internal agent ID (tool_use_id of the Task tool).
   ///
   /// This ID is the tool_use_id from the Task tool call and is used as the
-  /// key in [ChatState.activeAgents].
+  /// key in [Chat.activeAgents].
   final String sdkAgentId;
 
   /// The ID of the conversation this agent writes output to.

@@ -65,10 +65,7 @@ class StatusBar extends StatelessWidget {
           const _RateLimitStats(),
           const Spacer(),
           // Stats on the right
-          if (showTicketStats)
-            _TicketStats()
-          else
-            _ProjectStats(),
+          if (showTicketStats) _TicketStats() else _ProjectStats(),
         ],
       ),
     );
@@ -153,9 +150,7 @@ class _ClaudeAccountInfo extends StatelessWidget {
         const _StatusBarDot(),
         Text(
           parts.join(' '),
-          style: baseStyle?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
+          style: baseStyle?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -174,11 +169,15 @@ class _ProjectStats extends StatelessWidget {
 
     // Calculate stats from project state
     final worktreeCount = project.allWorktrees.length;
-    final chatCount = project.allWorktrees
-        .fold<int>(0, (sum, wt) => sum + wt.chats.length);
+    final chatCount = project.allWorktrees.fold<int>(
+      0,
+      (sum, wt) => sum + wt.chats.length,
+    );
     final agentCount = project.allWorktrees.fold<int>(
       0,
-      (sum, wt) => sum + wt.chats.fold<int>(
+      (sum, wt) =>
+          sum +
+          wt.chats.fold<int>(
             0,
             (s, chat) => s + chat.data.subagentConversations.length,
           ),
@@ -186,9 +185,11 @@ class _ProjectStats extends StatelessWidget {
     // Sum total cost from all chats across all worktrees
     final totalCost = project.allWorktrees.fold<double>(
       0,
-      (sum, wt) => sum + wt.chats.fold<double>(
+      (sum, wt) =>
+          sum +
+          wt.chats.fold<double>(
             0,
-            (s, chat) => s + chat.cumulativeUsage.costUsd,
+            (s, chat) => s + chat.metrics.cumulativeUsage.costUsd,
           ),
     );
 
@@ -237,7 +238,8 @@ class _RateLimitStats extends StatelessWidget {
   /// Formats a window for the toolbar: "5hr 80% (reset in 3h2m)".
   static String _formatToolbarWindow(RateLimitWindow window) {
     final windowLabel = RateLimitState.formatWindowDuration(
-        window.windowDurationMins);
+      window.windowDurationMins,
+    );
     final resetLabel = RateLimitState.formatResetDuration(window.resetsAt);
     final parts = <String>[
       if (windowLabel != null) windowLabel,
@@ -251,16 +253,16 @@ class _RateLimitStats extends StatelessWidget {
   static String _formatTooltipReset(int? resetsAtEpoch) {
     if (resetsAtEpoch == null) return '';
     final resetsAt = DateTime.fromMillisecondsSinceEpoch(
-        resetsAtEpoch * 1000, isUtc: true)
-        .toLocal();
+      resetsAtEpoch * 1000,
+      isUtc: true,
+    ).toLocal();
     final now = DateTime.now();
     final diff = resetsAt.difference(now);
     if (diff.isNegative) return '';
 
     // Relative day label
     final todayStart = DateTime(now.year, now.month, now.day);
-    final resetDayStart =
-        DateTime(resetsAt.year, resetsAt.month, resetsAt.day);
+    final resetDayStart = DateTime(resetsAt.year, resetsAt.month, resetsAt.day);
     final dayDiff = resetDayStart.difference(todayStart).inDays;
 
     String dayStr;
@@ -270,8 +272,13 @@ class _RateLimitStats extends StatelessWidget {
       dayStr = 'Tomorrow';
     } else {
       const days = [
-        'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-        'Friday', 'Saturday', 'Sunday',
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
       ];
       dayStr = days[resetsAt.weekday - 1];
     }
@@ -280,8 +287,8 @@ class _RateLimitStats extends StatelessWidget {
     final hour12 = resetsAt.hour == 0
         ? 12
         : resetsAt.hour > 12
-            ? resetsAt.hour - 12
-            : resetsAt.hour;
+        ? resetsAt.hour - 12
+        : resetsAt.hour;
     final amPm = resetsAt.hour >= 12 ? 'pm' : 'am';
     final timeStr = resetsAt.minute > 0
         ? '$hour12:${resetsAt.minute.toString().padLeft(2, '0')}$amPm'
@@ -300,9 +307,11 @@ class _RateLimitStats extends StatelessWidget {
     if (rateLimits.primary != null) {
       final w = rateLimits.primary!;
       final windowLabel = RateLimitState.formatWindowDuration(
-          w.windowDurationMins);
+        w.windowDurationMins,
+      );
       tooltipLines.add(
-          'Primary${windowLabel != null ? ' ($windowLabel window)' : ''}');
+        'Primary${windowLabel != null ? ' ($windowLabel window)' : ''}',
+      );
       tooltipLines.add('Used: ${w.usedPercent}%');
       final resetStr = _formatTooltipReset(w.resetsAt);
       if (resetStr.isNotEmpty) tooltipLines.add(resetStr);
@@ -313,9 +322,11 @@ class _RateLimitStats extends StatelessWidget {
     if (rateLimits.secondary != null) {
       final w = rateLimits.secondary!;
       final windowLabel = RateLimitState.formatWindowDuration(
-          w.windowDurationMins);
+        w.windowDurationMins,
+      );
       tooltipLines.add(
-          'Secondary${windowLabel != null ? ' ($windowLabel window)' : ''}');
+        'Secondary${windowLabel != null ? ' ($windowLabel window)' : ''}',
+      );
       tooltipLines.add('Used: ${w.usedPercent}%');
       final resetStr = _formatTooltipReset(w.resetsAt);
       if (resetStr.isNotEmpty) tooltipLines.add(resetStr);
@@ -329,7 +340,9 @@ class _RateLimitStats extends StatelessWidget {
     String displayMode = 'summary';
     try {
       final settings = context.watch<SettingsService>();
-      displayMode = settings.getEffectiveValue<String>('appearance.codexUsageDisplay');
+      displayMode = settings.getEffectiveValue<String>(
+        'appearance.codexUsageDisplay',
+      );
     } on ProviderNotFoundException {
       // No settings provider in tests — use default.
     }
@@ -423,9 +436,7 @@ class _RateLimitStats extends StatelessWidget {
             children: [
               Text(
                 'Codex:',
-                style: baseStyle?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                style: baseStyle?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
               const SizedBox(width: 6),
               ...bars,
@@ -446,8 +457,7 @@ class _RateLimitStats extends StatelessWidget {
         height: 4,
         child: LinearProgressIndicator(
           value: (percent / 100).clamp(0.0, 1.0),
-          backgroundColor:
-              colorScheme.onSurfaceVariant.withValues(alpha: 0.15),
+          backgroundColor: colorScheme.onSurfaceVariant.withValues(alpha: 0.15),
           valueColor: AlwaysStoppedAnimation<Color>(_barColor(percent)),
         ),
       ),

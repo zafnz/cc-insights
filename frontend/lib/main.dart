@@ -94,8 +94,9 @@ void _showNativeErrorAlert(String message) {
     // Escape double quotes for AppleScript string
     final escaped = message.replaceAll('"', '\\"');
     // Truncate to avoid overly long dialogs
-    final truncated =
-        escaped.length > 500 ? '${escaped.substring(0, 500)}...' : escaped;
+    final truncated = escaped.length > 500
+        ? '${escaped.substring(0, 500)}...'
+        : escaped;
     Process.start('osascript', [
       '-e',
       'display dialog "CC Insights encountered an error during startup:\\n\\n$truncated" '
@@ -228,11 +229,7 @@ class CCInsightsApp extends StatefulWidget {
   /// Optional EventHandler instance for dependency injection in tests.
   final EventHandler? eventHandler;
 
-  const CCInsightsApp({
-    super.key,
-    this.backendService,
-    this.eventHandler,
-  });
+  const CCInsightsApp({super.key, this.backendService, this.eventHandler});
 
   @override
   State<CCInsightsApp> createState() => _CCInsightsAppState();
@@ -496,10 +493,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _chatTitleService = ChatTitleService(askAiService: _askAiService);
 
     // Create or use injected EventHandler
-    _eventHandler = widget.eventHandler ??
-        EventHandler(
-          rateLimitState: _rateLimitState,
-        );
+    _eventHandler =
+        widget.eventHandler ?? EventHandler(rateLimitState: _rateLimitState);
 
     // Subscribe to backend-level rate limit events (independent of sessions).
     // This ensures rate limit data is captured even if no chat session is
@@ -529,16 +524,17 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Syncs theme values from [SettingsService] to [ThemeState].
   void _syncThemeFromSettings() {
     if (_settingsService == null || _themeState == null) return;
-    final colorValue = _settingsService!
-        .getEffectiveValue<int>('appearance.seedColor');
-    _themeState!.setSeedColor(Color(colorValue));
-    final modeStr = _settingsService!
-        .getEffectiveValue<String>('appearance.themeMode');
-    _themeState!.setThemeMode(
-      ThemeState.parseThemeMode(modeStr),
+    final colorValue = _settingsService!.getEffectiveValue<int>(
+      'appearance.seedColor',
     );
-    final inputColorValue = _settingsService!
-        .getEffectiveValue<int>('appearance.inputTextColor');
+    _themeState!.setSeedColor(Color(colorValue));
+    final modeStr = _settingsService!.getEffectiveValue<String>(
+      'appearance.themeMode',
+    );
+    _themeState!.setThemeMode(ThemeState.parseThemeMode(modeStr));
+    final inputColorValue = _settingsService!.getEffectiveValue<int>(
+      'appearance.inputTextColor',
+    );
     _themeState!.setInputTextColor(
       inputColorValue == 0 ? null : Color(inputColorValue),
     );
@@ -569,7 +565,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     final logPath = _expandPath(config.loggingFilePath);
 
     // Update minimum level
-    LogService.instance.minimumLevel = _parseLogLevel(config.loggingMinimumLevel);
+    LogService.instance.minimumLevel = _parseLogLevel(
+      config.loggingMinimumLevel,
+    );
 
     // Update file logging
     if (logPath.isEmpty) {
@@ -612,7 +610,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     final logPath = _expandPath(config.loggingFilePath);
 
     // Set minimum level
-    LogService.instance.minimumLevel = _parseLogLevel(config.loggingMinimumLevel);
+    LogService.instance.minimumLevel = _parseLogLevel(
+      config.loggingMinimumLevel,
+    );
 
     // Enable stdout logging if --stdout-log-level was specified
     final stdoutLevel = config.stdoutLogLevel;
@@ -685,10 +685,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Write quit marker if chat has a session ID (indicating it was active)
         // We check lastSessionId instead of hasActiveSession because the session
         // object may already be disposed during app termination
-        if (chat.lastSessionId != null) {
+        if (chat.session.lastSessionId != null) {
           debugPrint(
             'Writing quit marker for chat ${chat.data.id} '
-            '(session: ${chat.lastSessionId}) in '
+            '(session: ${chat.session.lastSessionId}) in '
             'worktree ${worktree.data.worktreeRoot}',
           );
 
@@ -698,12 +698,16 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           );
 
           // Add to UI immediately (synchronous)
-          chat.addEntry(entry);
+          chat.conversations.addEntry(entry);
 
           // But also explicitly persist (async) - collect the future
-          if (chat.projectId != null) {
+          if (chat.persistence.projectId != null) {
             writes.add(
-              persistence.appendChatEntry(chat.projectId!, chat.data.id, entry),
+              persistence.appendChatEntry(
+                chat.persistence.projectId!,
+                chat.data.id,
+                entry,
+              ),
             );
           }
         }
@@ -834,16 +838,18 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// so the [MultiProvider] wraps the Navigator on the same frame that
   /// [MainScreen] appears.
   void _startProjectRestore() {
-    _restoreProject().then((project) {
-      if (mounted) {
-        setState(() => _project = project);
-      }
-    }).catchError((Object error) {
-      debugPrint('Error restoring project: $error');
-      if (mounted) {
-        setState(() => _project = _createFallbackProject());
-      }
-    });
+    _restoreProject()
+        .then((project) {
+          if (mounted) {
+            setState(() => _project = project);
+          }
+        })
+        .catchError((Object error) {
+          debugPrint('Error restoring project: $error');
+          if (mounted) {
+            setState(() => _project = _createFallbackProject());
+          }
+        });
   }
 
   /// Restores the project from persistence.
@@ -876,9 +882,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Builds the welcome screen content (before a project is selected).
   Widget _buildWelcomeContent() {
-    return WelcomeScreen(
-      onProjectSelected: _onProjectSelected,
-    );
+    return WelcomeScreen(onProjectSelected: _onProjectSelected);
   }
 
   /// Builds the CLI required screen (Claude CLI not found).
@@ -1002,7 +1006,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       // Project menu
       onOpenProject: _handleOpenProject,
       onProjectSettings: _projectSelected
-          ? () => _menuActionService.triggerAction(MenuAction.showProjectSettings)
+          ? () =>
+                _menuActionService.triggerAction(MenuAction.showProjectSettings)
           : null,
       onCloseProject: _projectSelected ? _handleCloseProject : null,
 
@@ -1058,16 +1063,16 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           : null,
       onShowSettings: () =>
           _menuActionService.triggerAction(MenuAction.showSettings),
-      onShowLogs: () =>
-          _menuActionService.triggerAction(MenuAction.showLogs),
+      onShowLogs: () => _menuActionService.triggerAction(MenuAction.showLogs),
       onShowStats: _projectSelected
           ? () => _menuActionService.triggerAction(MenuAction.showStats)
           : null,
 
       // Panels
       onToggleMergeChatsAgents: _projectSelected
-          ? () => _menuActionService
-              .triggerAction(MenuAction.toggleMergeChatsAgents)
+          ? () => _menuActionService.triggerAction(
+              MenuAction.toggleMergeChatsAgents,
+            )
           : null,
       agentsMergedIntoChats: _menuActionService.agentsMergedIntoChats,
     );
@@ -1094,9 +1099,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// Providers are injected separately via [_wrapWithProviders] in
   /// [MaterialApp.builder] so they sit above the Navigator's Overlay.
   Widget _buildAppContent() {
-    return _NotificationNavigationListener(
-      child: const MainScreen(),
-    );
+    return _NotificationNavigationListener(child: const MainScreen());
   }
 
   /// Wraps [child] with the project-scoped MultiProvider.
@@ -1150,11 +1153,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         Provider<AskAiService>.value(value: _askAiService!),
         // Persistence service for storing project/chat data
         Provider<PersistenceService>.value(
-            value: _persistenceService ?? PersistenceService()),
-        // Settings service for application preferences
-        ChangeNotifierProvider<SettingsService>.value(
-          value: _settingsService!,
+          value: _persistenceService ?? PersistenceService(),
         ),
+        // Settings service for application preferences
+        ChangeNotifierProvider<SettingsService>.value(value: _settingsService!),
         // Window/layout service for window geometry and panel layout
         ChangeNotifierProvider<WindowLayoutService>.value(
           value: _windowLayoutService!,
@@ -1182,7 +1184,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           ),
           update: (context, project, fileService, selectionState, previous) {
             previous?.syncWithSelectionState();
-            return previous ?? FileManagerState(project, fileService, selectionState);
+            return previous ??
+                FileManagerState(project, fileService, selectionState);
           },
         ),
         // Project config service for reading/writing .ccinsights/config.json
@@ -1206,13 +1209,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           create: (_) => ScriptExecutionService(),
         ),
         // Theme state for dynamic theme switching
-        ChangeNotifierProvider<ThemeState>.value(
-          value: _themeState!,
-        ),
+        ChangeNotifierProvider<ThemeState>.value(value: _themeState!),
         // Rate limit state for displaying Codex rate limits
-        ChangeNotifierProvider<RateLimitState>.value(
-          value: _rateLimitState,
-        ),
+        ChangeNotifierProvider<RateLimitState>.value(value: _rateLimitState),
         // Dialog observer for keyboard focus management
         Provider<DialogObserver>.value(value: _dialogObserver),
         // Menu action service for broadcasting menu actions to MainScreen
@@ -1232,8 +1231,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ),
         // Ticket view state (selection, filters, computed data)
         ChangeNotifierProxyProvider<TicketRepository, TicketViewState>(
-          create: (context) => TicketViewState(context.read<TicketRepository>()),
-          update: (context, repo, previous) => previous ?? TicketViewState(repo),
+          create: (context) =>
+              TicketViewState(context.read<TicketRepository>()),
+          update: (context, repo, previous) =>
+              previous ?? TicketViewState(repo),
         ),
         // Bulk proposal state (proposal workflow)
         ChangeNotifierProxyProvider<TicketRepository, BulkProposalState>(
@@ -1246,7 +1247,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             }
             return state;
           },
-          update: (context, repo, previous) => previous ?? BulkProposalState(repo),
+          update: (context, repo, previous) =>
+              previous ?? BulkProposalState(repo),
         ),
       ],
       child: child,
@@ -1261,10 +1263,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     final projectId = PersistenceService.generateProjectId(
       project.data.repoRoot,
     );
-    final repo = TicketRepository(
-      projectId,
-      storage: TicketStorageService(),
-    );
+    final repo = TicketRepository(projectId, storage: TicketStorageService());
     context.read<EventHandler>().ticketBoard = repo;
     repo.load();
     return repo;
@@ -1343,8 +1342,9 @@ class _NotificationNavigationListenerState
     extends State<_NotificationNavigationListener> {
   StreamSubscription<NotificationNavigationEvent>? _subscription;
 
-  static const _windowChannel =
-      MethodChannel('com.nickclifford.ccinsights/window');
+  static const _windowChannel = MethodChannel(
+    'com.nickclifford.ccinsights/window',
+  );
 
   @override
   void initState() {
@@ -1367,15 +1367,15 @@ class _NotificationNavigationListenerState
     final selection = context.read<SelectionState>();
 
     // Find the worktree matching the event's worktreeRoot
-    final worktree = project.allWorktrees.where(
-      (w) => w.data.worktreeRoot == event.worktreeRoot,
-    ).firstOrNull;
+    final worktree = project.allWorktrees
+        .where((w) => w.data.worktreeRoot == event.worktreeRoot)
+        .firstOrNull;
     if (worktree == null) return;
 
     // Find the chat matching the event's chatId
-    final chat = worktree.chats.where(
-      (c) => c.data.id == event.chatId,
-    ).firstOrNull;
+    final chat = worktree.chats
+        .where((c) => c.data.id == event.chatId)
+        .firstOrNull;
     if (chat == null) return;
 
     // Navigate to the worktree and chat

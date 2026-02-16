@@ -1,4 +1,3 @@
-
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/output_entry.dart';
 import 'package:cc_insights_v2/models/project.dart';
@@ -154,7 +153,7 @@ void main() {
       test('follows hierarchy from worktree', () {
         // Arrange
         final project = createProjectState();
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
         project.primaryWorktree.addChat(chat, select: true);
         final selection = SelectionState(project);
 
@@ -180,7 +179,7 @@ void main() {
           autoValidate: false,
           watchFilesystem: false,
         );
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
         primaryWorktree.addChat(chat, select: true);
         final selection = SelectionState(project);
 
@@ -196,7 +195,7 @@ void main() {
       test('changes selection within current worktree', () {
         // Arrange
         final project = createProjectState();
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
         project.primaryWorktree.addChat(chat);
         final selection = SelectionState(project);
         var notified = false;
@@ -214,7 +213,7 @@ void main() {
         // Arrange
         final project = createProjectState();
         project.selectWorktree(null);
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
         final selection = SelectionState(project);
         var notified = false;
         selection.addListener(() => notified = true);
@@ -240,7 +239,7 @@ void main() {
       test('returns primary conversation by default', () {
         // Arrange
         final project = createProjectState();
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
         project.primaryWorktree.addChat(chat, select: true);
         final selection = SelectionState(project);
 
@@ -252,13 +251,17 @@ void main() {
       test('follows chat conversation selection', () {
         // Arrange
         final project = createProjectState();
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
-        chat.addSubagentConversation('agent-1', 'Explore', 'Task');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
+        chat.conversations.addSubagentConversation(
+          'agent-1',
+          'Explore',
+          'Task',
+        );
         project.primaryWorktree.addChat(chat, select: true);
         final selection = SelectionState(project);
 
         final subagentConv = chat.data.subagentConversations.values.first;
-        chat.selectConversation(subagentConv.id);
+        chat.conversations.selectConversation(subagentConv.id);
 
         // Assert
         check(selection.selectedConversation).isNotNull();
@@ -271,13 +274,13 @@ void main() {
       test('selects primary conversation with null ID', () {
         // Arrange
         final project = createProjectState();
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
-        chat.addSubagentConversation('agent-1', 'Explore', null);
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
+        chat.conversations.addSubagentConversation('agent-1', 'Explore', null);
         project.primaryWorktree.addChat(chat, select: true);
         final selection = SelectionState(project);
 
         final subagentConv = chat.data.subagentConversations.values.first;
-        chat.selectConversation(subagentConv.id);
+        chat.conversations.selectConversation(subagentConv.id);
         var notified = false;
         selection.addListener(() => notified = true);
 
@@ -292,8 +295,8 @@ void main() {
       test('selects subagent conversation by ID', () {
         // Arrange
         final project = createProjectState();
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/repo');
-        chat.addSubagentConversation('agent-1', 'Explore', null);
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/repo');
+        chat.conversations.addSubagentConversation('agent-1', 'Explore', null);
         project.primaryWorktree.addChat(chat, select: true);
         final selection = SelectionState(project);
         final subagentConv = chat.data.subagentConversations.values.first;
@@ -399,9 +402,12 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fakeRestoreService = _FakeProjectRestoreService();
-        final selection = SelectionState(project, restoreService: fakeRestoreService);
+        final selection = SelectionState(
+          project,
+          restoreService: fakeRestoreService,
+        );
 
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
         project.primaryWorktree.addChat(chat);
 
         // Act
@@ -419,11 +425,14 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fakeRestoreService = _FakeProjectRestoreService();
-        final selection = SelectionState(project, restoreService: fakeRestoreService);
+        final selection = SelectionState(
+          project,
+          restoreService: fakeRestoreService,
+        );
 
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
         // Mark history as already loaded to simulate a previously loaded chat
-        chat.markHistoryAsLoaded();
+        chat.conversations.markHistoryAsLoaded();
         project.primaryWorktree.addChat(chat);
 
         // Act
@@ -438,28 +447,31 @@ void main() {
 
       test('hasLoadedHistory returns false for empty chat', () {
         // Arrange
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
 
         // Assert
-        check(chat.hasLoadedHistory).isFalse();
+        check(chat.conversations.hasLoadedHistory).isFalse();
       });
 
       test('hasLoadedHistory returns true when marked as loaded', () {
         // Arrange
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
-        chat.markHistoryAsLoaded();
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
+        chat.conversations.markHistoryAsLoaded();
 
         // Assert
-        check(chat.hasLoadedHistory).isTrue();
+        check(chat.conversations.hasLoadedHistory).isTrue();
       });
 
       test('selectChat sets isLoadingChatHistory during load', () async {
         // Arrange
         final project = createProjectState();
         final fakeRestoreService = _FakeProjectRestoreService();
-        final selection = SelectionState(project, restoreService: fakeRestoreService);
+        final selection = SelectionState(
+          project,
+          restoreService: fakeRestoreService,
+        );
 
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
         project.primaryWorktree.addChat(chat);
 
         // Act
@@ -476,9 +488,12 @@ void main() {
         final fakeRestoreService = _FakeProjectRestoreService(
           shouldThrowOnLoad: true,
         );
-        final selection = SelectionState(project, restoreService: fakeRestoreService);
+        final selection = SelectionState(
+          project,
+          restoreService: fakeRestoreService,
+        );
 
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
         project.primaryWorktree.addChat(chat);
 
         // Act - should not throw
@@ -502,11 +517,14 @@ void main() {
         final fakeRestoreService = _FakeProjectRestoreService(
           shouldThrowOnLoad: true,
         );
-        final selection = SelectionState(project, restoreService: fakeRestoreService);
+        final selection = SelectionState(
+          project,
+          restoreService: fakeRestoreService,
+        );
 
-        final chat1 = ChatState.create(name: 'Chat 1', worktreeRoot: '/repo');
-        final chat2 = ChatState.create(name: 'Chat 2', worktreeRoot: '/repo');
-        chat2.markHistoryAsLoaded();
+        final chat1 = Chat.create(name: 'Chat 1', worktreeRoot: '/repo');
+        final chat2 = Chat.create(name: 'Chat 2', worktreeRoot: '/repo');
+        chat2.conversations.markHistoryAsLoaded();
         project.primaryWorktree.addChat(chat1);
         project.primaryWorktree.addChat(chat2);
 
@@ -526,22 +544,29 @@ void main() {
         // Arrange
         final project = createProjectState();
         final fakeRestoreService = _FakeProjectRestoreService();
-        final selection = SelectionState(project, restoreService: fakeRestoreService);
+        final selection = SelectionState(
+          project,
+          restoreService: fakeRestoreService,
+        );
 
-        final chat = ChatState.create(name: 'Test Chat', worktreeRoot: '/repo');
-        chat.addSubagentConversation('agent-1', 'Explore', 'task');
+        final chat = Chat.create(name: 'Test Chat', worktreeRoot: '/repo');
+        chat.conversations.addSubagentConversation(
+          'agent-1',
+          'Explore',
+          'task',
+        );
         final subagentConv = chat.data.subagentConversations.values.first;
-        chat.selectConversation(subagentConv.id);
+        chat.conversations.selectConversation(subagentConv.id);
         project.primaryWorktree.addChat(chat);
 
         // Pre-condition: subagent is selected
-        check(chat.selectedConversation.isPrimary).isFalse();
+        check(chat.conversations.selectedConversation.isPrimary).isFalse();
 
         // Act
         selection.selectChat(chat);
 
         // Assert - should reset to primary
-        check(chat.selectedConversation.isPrimary).isTrue();
+        check(chat.conversations.selectedConversation.isPrimary).isTrue();
       });
     });
   });
@@ -553,16 +578,13 @@ class _FakeProjectRestoreService extends ProjectRestoreService {
   final bool shouldThrowOnLoad;
   final int entriesToLoad = 0;
 
-  _FakeProjectRestoreService({
-    this.shouldThrowOnLoad = false,
-  });
+  _FakeProjectRestoreService({this.shouldThrowOnLoad = false});
 
   @override
-  Future<int> loadChatHistory(ChatState chat, String projectId) async {
-    loadChatHistoryCalls.add(_LoadChatHistoryCall(
-      chat: chat,
-      projectId: projectId,
-    ));
+  Future<int> loadChatHistory(Chat chat, String projectId) async {
+    loadChatHistoryCalls.add(
+      _LoadChatHistoryCall(chat: chat, projectId: projectId),
+    );
 
     if (shouldThrowOnLoad) {
       throw Exception('Simulated load error');
@@ -572,12 +594,9 @@ class _FakeProjectRestoreService extends ProjectRestoreService {
     if (entriesToLoad > 0) {
       final entries = List.generate(
         entriesToLoad,
-        (i) => UserInputEntry(
-          timestamp: DateTime.now(),
-          text: 'Entry $i',
-        ),
+        (i) => UserInputEntry(timestamp: DateTime.now(), text: 'Entry $i'),
       );
-      chat.loadEntriesFromPersistence(entries);
+      chat.conversations.loadEntriesFromPersistence(entries);
     }
 
     return entriesToLoad;
@@ -586,11 +605,8 @@ class _FakeProjectRestoreService extends ProjectRestoreService {
 
 /// Record of a call to loadChatHistory.
 class _LoadChatHistoryCall {
-  final ChatState chat;
+  final Chat chat;
   final String projectId;
 
-  _LoadChatHistoryCall({
-    required this.chat,
-    required this.projectId,
-  });
+  _LoadChatHistoryCall({required this.chat, required this.projectId});
 }

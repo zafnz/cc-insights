@@ -58,47 +58,32 @@ void main() {
     });
   });
 
-  group('ChatState capability guards', () {
+  group('Chat capability guards', () {
     test('capabilities defaults to all-false before session start', () {
-      final chat = ChatState.create(
-        name: 'Test',
-        worktreeRoot: '/test',
-      );
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/test');
       addTearDown(chat.dispose);
 
-      check(chat.capabilities).equals(const sdk.BackendCapabilities());
+      check(chat.session.capabilities).equals(const sdk.BackendCapabilities());
     });
 
-    test(
-      'setReasoningEffort stores value locally even without capability',
-      () {
-        final chat = ChatState.create(
-          name: 'Test',
-          worktreeRoot: '/test',
-        );
-        addTearDown(chat.dispose);
+    test('setReasoningEffort stores value locally even without capability', () {
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/test');
+      addTearDown(chat.dispose);
 
-        // No session active, capabilities default (no reasoning support)
-        chat.setReasoningEffort(sdk.ReasoningEffort.high);
+      // No session active, capabilities default (no reasoning support)
+      chat.settings.setReasoningEffort(sdk.ReasoningEffort.high);
 
-        check(chat.reasoningEffort).equals(sdk.ReasoningEffort.high);
-      },
-    );
+      check(chat.settings.reasoningEffort).equals(sdk.ReasoningEffort.high);
+    });
 
-    test(
-      'setPermissionMode stores value locally even without capability',
-      () {
-        final chat = ChatState.create(
-          name: 'Test',
-          worktreeRoot: '/test',
-        );
-        addTearDown(chat.dispose);
+    test('setPermissionMode stores value locally even without capability', () {
+      final chat = Chat.create(name: 'Test', worktreeRoot: '/test');
+      addTearDown(chat.dispose);
 
-        chat.setPermissionMode(PermissionMode.acceptEdits);
+      chat.settings.setPermissionMode(PermissionMode.acceptEdits);
 
-        check(chat.permissionMode).equals(PermissionMode.acceptEdits);
-      },
-    );
+      check(chat.settings.permissionMode).equals(PermissionMode.acceptEdits);
+    });
   });
 
   group('BackendService capabilities', () {
@@ -113,8 +98,9 @@ void main() {
       final service = BackendService();
       addTearDown(service.dispose);
 
-      check(service.capabilitiesFor(sdk.BackendType.codex))
-          .equals(const sdk.BackendCapabilities());
+      check(
+        service.capabilitiesFor(sdk.BackendType.codex),
+      ).equals(const sdk.BackendCapabilities());
     });
   });
 }

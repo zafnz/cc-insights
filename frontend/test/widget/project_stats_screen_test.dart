@@ -25,7 +25,9 @@ void main() {
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
-    tempDir = await Directory.systemTemp.createTemp('project_stats_screen_test_');
+    tempDir = await Directory.systemTemp.createTemp(
+      'project_stats_screen_test_',
+    );
     persistence = PersistenceService();
     PersistenceService.setBaseDir(tempDir.path);
 
@@ -46,11 +48,7 @@ void main() {
     List<_ChatStats>? primaryChats,
   }) {
     final primaryWorktree = WorktreeState(
-      WorktreeData(
-        worktreeRoot: tempDir.path,
-        branch: 'main',
-        isPrimary: true,
-      ),
+      WorktreeData(worktreeRoot: tempDir.path, branch: 'main', isPrimary: true),
     );
 
     if (primaryChats != null) {
@@ -59,10 +57,10 @@ void main() {
           name: chatStats.chatName,
           worktreeRoot: tempDir.path,
         );
-        final chat = ChatState(chatData);
+        final chat = Chat(chatData);
 
-        // Inject model usage and timing data into the ChatState
-        chat.restoreFromMeta(
+        // Inject model usage and timing data into the Chat
+        chat.metrics.restoreFromMeta(
           const ContextInfo(currentTokens: 0, maxTokens: 200000),
           const UsageInfo.zero(),
           modelUsage: chatStats.modelUsage,
@@ -73,7 +71,7 @@ void main() {
         final backendType = chatStats.backend == 'codex'
             ? BackendType.codex
             : BackendType.directCli;
-        chat.setModel(ChatModelCatalog.defaultForBackend(backendType, null));
+        chat.settings.setModel(ChatModelCatalog.defaultForBackend(backendType, null));
 
         primaryWorktree.addChat(chat);
       }
@@ -102,9 +100,7 @@ void main() {
         Provider<PersistenceService>.value(value: persistence),
         ChangeNotifierProvider<SelectionState>.value(value: selectionState),
       ],
-      child: const MaterialApp(
-        home: Scaffold(body: ProjectStatsScreen()),
-      ),
+      child: const MaterialApp(home: Scaffold(body: ProjectStatsScreen())),
     );
   }
 
@@ -140,8 +136,9 @@ void main() {
         expect(find.text('Project Stats'), findsOneWidget);
       });
 
-      testWidgets('shows KPI summary cards with formatted values',
-          (tester) async {
+      testWidgets('shows KPI summary cards with formatted values', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -244,8 +241,9 @@ void main() {
         expect(find.text('\$1.50'), findsWidgets);
       });
 
-      testWidgets('tapping worktree row transitions to worktree detail',
-          (tester) async {
+      testWidgets('tapping worktree row transitions to worktree detail', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -448,8 +446,9 @@ void main() {
         expect(find.text('User Response'), findsOneWidget);
       });
 
-      testWidgets('worktree detail shows chat rows with correct badges',
-          (tester) async {
+      testWidgets('worktree detail shows chat rows with correct badges', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -488,8 +487,9 @@ void main() {
         expect(find.text('active'), findsOneWidget);
       });
 
-      testWidgets('tapping chat row transitions to chat detail',
-          (tester) async {
+      testWidgets('tapping chat row transitions to chat detail', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -535,8 +535,9 @@ void main() {
     });
 
     group('Chat Detail View', () {
-      testWidgets('chat detail shows back button returning to worktree',
-          (tester) async {
+      testWidgets('chat detail shows back button returning to worktree', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -637,8 +638,9 @@ void main() {
         expect(find.text('Haiku 4.5'), findsOneWidget);
       });
 
-      testWidgets('chat detail shows timing grid with correct values',
-          (tester) async {
+      testWidgets('chat detail shows timing grid with correct values', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -730,8 +732,9 @@ void main() {
         expect(find.text('Context Window'), findsOneWidget);
       });
 
-      testWidgets('codex chat shows cost in KPI and model table',
-          (tester) async {
+      testWidgets('codex chat shows cost in KPI and model table', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(
@@ -773,8 +776,9 @@ void main() {
         expect(find.text('\$2.50'), findsWidgets);
       });
 
-      testWidgets('chat detail shows correct model display names',
-          (tester) async {
+      testWidgets('chat detail shows correct model display names', (
+        tester,
+      ) async {
         final project = createMockProject(
           primaryChats: [
             _ChatStats(

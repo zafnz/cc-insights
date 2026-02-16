@@ -25,17 +25,18 @@ void main() {
     late FakeCliAvailabilityService fakeCliAvailability;
 
     /// Creates a chat with the specified number of entries.
-    ChatState createChatWithEntries(String name, int entryCount) {
+    Chat createChatWithEntries(String name, int entryCount) {
       final entries = List.generate(
         entryCount,
         (i) => TextOutputEntry(
           timestamp: DateTime.now().subtract(Duration(minutes: entryCount - i)),
-          text: 'Message $i - ${'x' * 100}', // Make messages long enough to scroll
+          text:
+              'Message $i - ${'x' * 100}', // Make messages long enough to scroll
           contentType: 'text',
         ),
       );
 
-      return ChatState(
+      return Chat(
         ChatData(
           id: 'chat-$name',
           name: name,
@@ -70,16 +71,15 @@ void main() {
         chats: [chat1, chat2],
       );
 
-      project = resources.track(ProjectState(
-        const ProjectData(
-          name: 'Test Project',
-          repoRoot: '/test',
+      project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'Test Project', repoRoot: '/test'),
+          worktree,
+          linkedWorktrees: [],
+          autoValidate: false,
+          watchFilesystem: false,
         ),
-        worktree,
-        linkedWorktrees: [],
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      );
 
       selectionState = resources.track(SelectionState(project));
       backendService = resources.track(BackendService());
@@ -181,7 +181,8 @@ void main() {
       expect(controller, isNotNull);
 
       debugPrint(
-          'pixels: ${controller!.position.pixels}, maxScrollExtent: ${controller.position.maxScrollExtent}');
+        'pixels: ${controller!.position.pixels}, maxScrollExtent: ${controller.position.maxScrollExtent}',
+      );
 
       // With a normal ListView, "scrolled to bottom" means at maxScrollExtent.
       // Due to lazy loading, we may not have the full extent yet, but we should
@@ -193,8 +194,9 @@ void main() {
       );
     });
 
-    testWidgets('switching between chats scrolls new chat to bottom',
-        (tester) async {
+    testWidgets('switching between chats scrolls new chat to bottom', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildTestWidget());
       await safePumpAndSettle(tester);
 
@@ -232,8 +234,9 @@ void main() {
       );
     });
 
-    testWidgets('switching back to previous chat restores scroll position',
-        (tester) async {
+    testWidgets('switching back to previous chat restores scroll position', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildTestWidget());
       await safePumpAndSettle(tester);
 

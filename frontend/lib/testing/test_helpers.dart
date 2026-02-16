@@ -64,7 +64,9 @@ Future<void> pumpUntil(
     await tester.pump(step);
   }
   // Log timeout without dumping widget tree (too verbose for CI)
-  debugPrint('pumpUntil timed out${debugLabel != null ? " ($debugLabel)" : ""}');
+  debugPrint(
+    'pumpUntil timed out${debugLabel != null ? " ($debugLabel)" : ""}',
+  );
   throw TestFailure(
     'pumpUntil timed out after $timeout${debugLabel != null ? ": $debugLabel" : ""}',
   );
@@ -150,10 +152,34 @@ class TestResources {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final List<Future<void> Function()> _customCleanup = [];
 
-  /// Track a ChangeNotifier for automatic disposal.
-  T track<T extends ChangeNotifier>(T notifier) {
-    _notifiers.add(notifier);
-    return notifier;
+  /// Track a resource for automatic disposal.
+  ///
+  /// Supports [ChangeNotifier] directly, plus any object exposing a `dispose()`
+  /// method (for example `Chat`).
+  T track<T>(T resource) {
+    if (resource is ChangeNotifier) {
+      _notifiers.add(resource);
+      return resource;
+    }
+
+    try {
+      final disposeFn = (resource as dynamic).dispose;
+      if (disposeFn is! Function) {
+        throw ArgumentError('dispose is not callable');
+      }
+      _customCleanup.add(() async {
+        final result = disposeFn();
+        if (result is Future<void>) {
+          await result;
+        }
+      });
+      return resource;
+    } catch (_) {
+      throw ArgumentError(
+        'Tracked resource must be a ChangeNotifier or expose dispose(): '
+        '${resource.runtimeType}',
+      );
+    }
   }
 
   /// Track a StreamController for automatic closing.
@@ -166,8 +192,9 @@ class TestResources {
   }
 
   /// Track a broadcast StreamController for automatic closing.
-  StreamController<T> trackBroadcastStream<T>(
-      [StreamController<T>? controller]) {
+  StreamController<T> trackBroadcastStream<T>([
+    StreamController<T>? controller,
+  ]) {
     final c = controller ?? StreamController<T>.broadcast();
     _controllers.add(c);
     return c;
@@ -175,7 +202,8 @@ class TestResources {
 
   /// Track a StreamSubscription for automatic cancellation.
   StreamSubscription<T> trackSubscription<T>(
-      StreamSubscription<T> subscription) {
+    StreamSubscription<T> subscription,
+  ) {
     _subscriptions.add(subscription);
     return subscription;
   }
@@ -223,11 +251,11 @@ class TestResources {
 
   /// Get count of tracked resources (useful for debugging).
   Map<String, int> get trackedCounts => {
-        'notifiers': _notifiers.length,
-        'controllers': _controllers.length,
-        'subscriptions': _subscriptions.length,
-        'customCleanup': _customCleanup.length,
-      };
+    'notifiers': _notifiers.length,
+    'controllers': _controllers.length,
+    'subscriptions': _subscriptions.length,
+    'customCleanup': _customCleanup.length,
+  };
 }
 
 // =============================================================================

@@ -28,14 +28,11 @@ class ChatTitleService {
   ///
   /// The method is idempotent - it tracks which chats have had title generation
   /// attempted and won't generate twice for the same chat.
-  void generateChatTitle(ChatState chat, String userMessage) {
+  void generateChatTitle(Chat chat, String userMessage) {
     _generateChatTitleAsync(chat, userMessage);
   }
 
-  Future<void> _generateChatTitleAsync(
-    ChatState chat,
-    String userMessage,
-  ) async {
+  Future<void> _generateChatTitleAsync(Chat chat, String userMessage) async {
     if (_askAiService == null) return;
 
     final config = RuntimeConfig.instance;
@@ -53,7 +50,8 @@ class ChatTitleService {
     _pendingTitleGenerations.add(chat.data.id);
 
     try {
-      final prompt = '''Read the following and produce a short 3-5 word statement succiciently summing up what the request is. It should be concise, do not worry about grammer.
+      final prompt =
+          '''Read the following and produce a short 3-5 word statement succiciently summing up what the request is. It should be concise, do not worry about grammer.
 Your reply should be between ==== marks. eg:
 =====
 Automatic Chat Summary
@@ -73,8 +71,10 @@ $userMessage''';
 
       if (result != null && !result.isError && result.result.isNotEmpty) {
         final rawResult = result.result;
-        final titleMatch = RegExp(r'=+\s*\n(.+?)\n\s*=+', dotAll: true)
-            .firstMatch(rawResult);
+        final titleMatch = RegExp(
+          r'=+\s*\n(.+?)\n\s*=+',
+          dotAll: true,
+        ).firstMatch(rawResult);
 
         String title;
         if (titleMatch != null) {
@@ -92,7 +92,7 @@ $userMessage''';
         }
 
         if (title.isNotEmpty) {
-          chat.rename(title);
+          chat.conversations.rename(title);
         }
       }
     } catch (e) {

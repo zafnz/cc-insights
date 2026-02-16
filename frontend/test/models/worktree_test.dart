@@ -261,8 +261,8 @@ void main() {
 
       test('creates with provided chats', () {
         // Arrange
-        final chat1 = ChatState.create(name: 'Chat 1', worktreeRoot: '/path');
-        final chat2 = ChatState.create(name: 'Chat 2', worktreeRoot: '/path');
+        final chat1 = Chat.create(name: 'Chat 1', worktreeRoot: '/path');
+        final chat2 = Chat.create(name: 'Chat 2', worktreeRoot: '/path');
 
         // Act
         final state = WorktreeState(createTestData(), chats: [chat1, chat2]);
@@ -348,7 +348,7 @@ void main() {
       test('adds chat to list and notifies', () {
         // Arrange
         final state = WorktreeState(createTestData());
-        final chat = ChatState.create(name: 'New Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'New Chat', worktreeRoot: '/path');
         var notified = false;
         state.addListener(() => notified = true);
 
@@ -364,7 +364,7 @@ void main() {
       test('selects chat when select is true', () {
         // Arrange
         final state = WorktreeState(createTestData());
-        final chat = ChatState.create(name: 'New Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'New Chat', worktreeRoot: '/path');
 
         // Act
         state.addChat(chat, select: true);
@@ -376,7 +376,7 @@ void main() {
       test('does not select chat when select is false', () {
         // Arrange
         final state = WorktreeState(createTestData());
-        final chat = ChatState.create(name: 'New Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'New Chat', worktreeRoot: '/path');
 
         // Act
         state.addChat(chat, select: false);
@@ -389,7 +389,7 @@ void main() {
     group('removeChat()', () {
       test('removes chat from list and notifies', () {
         // Arrange
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/path');
         final state = WorktreeState(createTestData(), chats: [chat]);
         var notified = false;
         state.addListener(() => notified = true);
@@ -404,7 +404,7 @@ void main() {
 
       test('clears selection when selected chat is removed', () {
         // Arrange
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/path');
         final state = WorktreeState(createTestData(), chats: [chat]);
         state.selectChat(chat);
 
@@ -417,8 +417,8 @@ void main() {
 
       test('preserves selection when different chat is removed', () {
         // Arrange
-        final chat1 = ChatState.create(name: 'Chat 1', worktreeRoot: '/path');
-        final chat2 = ChatState.create(name: 'Chat 2', worktreeRoot: '/path');
+        final chat1 = Chat.create(name: 'Chat 1', worktreeRoot: '/path');
+        final chat2 = Chat.create(name: 'Chat 2', worktreeRoot: '/path');
         final state = WorktreeState(createTestData(), chats: [chat1, chat2]);
         state.selectChat(chat1);
 
@@ -433,7 +433,7 @@ void main() {
     group('selectChat()', () {
       test('sets selected chat and notifies', () {
         // Arrange
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/path');
         final state = WorktreeState(createTestData(), chats: [chat]);
         var notified = false;
         state.addListener(() => notified = true);
@@ -448,7 +448,7 @@ void main() {
 
       test('clears selection with null', () {
         // Arrange
-        final chat = ChatState.create(name: 'Chat', worktreeRoot: '/path');
+        final chat = Chat.create(name: 'Chat', worktreeRoot: '/path');
         final state = WorktreeState(createTestData(), chats: [chat]);
         state.selectChat(chat);
 
@@ -471,10 +471,7 @@ void main() {
 
       test('initializes from constructor', () {
         // Arrange & Act
-        final state = WorktreeState(
-          createTestData(),
-          base: 'develop',
-        );
+        final state = WorktreeState(createTestData(), base: 'develop');
 
         // Assert
         check(state.base).equals('develop');
@@ -496,10 +493,7 @@ void main() {
 
       test('setBase with same value does not notify listeners', () {
         // Arrange
-        final state = WorktreeState(
-          createTestData(),
-          base: 'develop',
-        );
+        final state = WorktreeState(createTestData(), base: 'develop');
         var notified = false;
         state.addListener(() => notified = true);
 
@@ -513,10 +507,7 @@ void main() {
 
       test('setBase to null clears and notifies', () {
         // Arrange
-        final state = WorktreeState(
-          createTestData(),
-          base: 'develop',
-        );
+        final state = WorktreeState(createTestData(), base: 'develop');
         var notified = false;
         state.addListener(() => notified = true);
 
@@ -546,8 +537,8 @@ void main() {
     group('dispose()', () {
       test('disposes all chats', () {
         // Arrange
-        final chat1 = ChatState.create(name: 'Chat 1', worktreeRoot: '/path');
-        final chat2 = ChatState.create(name: 'Chat 2', worktreeRoot: '/path');
+        final chat1 = Chat.create(name: 'Chat 1', worktreeRoot: '/path');
+        final chat2 = Chat.create(name: 'Chat 2', worktreeRoot: '/path');
         final state = WorktreeState(createTestData(), chats: [chat1, chat2]);
 
         // Act

@@ -14,10 +14,7 @@ import 'worktree_panel.dart';
 /// Created when the Chats panel is dropped onto Worktrees while
 /// agents are still in a separate panel.
 class WorktreesChatsPanel extends StatelessWidget {
-  const WorktreesChatsPanel({
-    super.key,
-    required this.onSeparateChats,
-  });
+  const WorktreesChatsPanel({super.key, required this.onSeparateChats});
 
   /// Callback to separate chats back into a separate panel.
   final VoidCallback onSeparateChats;
@@ -154,10 +151,10 @@ class _WorktreeWithChatsOnlyTreeItemState
         ),
         // Chats (nested with indent, no agents)
         if (_isExpanded && hasChildren)
-          ...chats.map((chat) => _NestedChatOnlyItem(
-                chat: chat,
-                selection: widget.selection,
-              )),
+          ...chats.map(
+            (chat) =>
+                _NestedChatOnlyItem(chat: chat, selection: widget.selection),
+          ),
       ],
     );
   }
@@ -165,66 +162,73 @@ class _WorktreeWithChatsOnlyTreeItemState
 
 /// A nested chat item (without agent expansion).
 class _NestedChatOnlyItem extends StatelessWidget {
-  const _NestedChatOnlyItem({
-    required this.chat,
-    required this.selection,
-  });
+  const _NestedChatOnlyItem({required this.chat, required this.selection});
 
-  final ChatState chat;
+  final Chat chat;
   final SelectionState selection;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final data = chat.data;
     final isSelected = selection.selectedChat == chat;
-    final subagentCount = data.subagentConversations.length;
-
-    return Material(
-      color: isSelected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.2)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: () => selection.selectChat(chat),
-        child: Padding(
-          padding:
-              const EdgeInsets.only(left: 28, right: 8, top: 4, bottom: 4),
-          child: Row(
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 12,
-                color: colorScheme.onSurfaceVariant,
+    return ListenableBuilder(
+      listenable: Listenable.merge([chat.conversations]),
+      builder: (context, _) {
+        final data = chat.data;
+        final subagentCount = data.subagentConversations.length;
+        return Material(
+          color: isSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.2)
+              : Colors.transparent,
+          child: InkWell(
+            onTap: () => selection.selectChat(chat),
+            child: Padding(
+              padding: const EdgeInsets.only(
+                left: 28,
+                right: 8,
+                top: 4,
+                bottom: 4,
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  data.name,
-                  style: textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              // Show agent count badge if there are subagents
-              if (subagentCount > 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(4),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 12,
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                  child: Text(
-                    '$subagentCount',
-                    style: textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSecondaryContainer,
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      data.name,
+                      style: textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-            ],
+                  // Show agent count badge if there are subagents
+                  if (subagentCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '$subagentCount',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -162,8 +162,7 @@ class FakeTestSession implements sdk.TestSession {
     required String toolName,
     required Map<String, dynamic> toolInput,
     String? toolUseId,
-  }) async =>
-      const sdk.PermissionDenyResponse(message: 'Test deny');
+  }) async => const sdk.PermissionDenyResponse(message: 'Test deny');
 }
 
 // =============================================================================
@@ -198,7 +197,7 @@ void main() {
     group('submitMessage', () {
       test('does nothing when text is empty and no images', () async {
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         await service.submitMessage(chat, text: '');
@@ -209,7 +208,7 @@ void main() {
 
       test('does nothing when text is whitespace only', () async {
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         await service.submitMessage(chat, text: '   ');
@@ -222,26 +221,26 @@ void main() {
         fakeBackend.sessionToReturn = session;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
-        chat.draftText = '/clear';
+        chat.viewState.draftText = '/clear';
 
         // Start a session first
-        await chat.startSession(
+        await chat.session.start(
           backend: fakeBackend,
           eventHandler: eventHandler,
           prompt: 'initial',
           internalToolsService: internalTools,
         );
-        check(chat.hasActiveSession).isTrue();
+        check(chat.session.hasActiveSession).isTrue();
 
         // Submit /clear
         await service.submitMessage(chat, text: '/clear');
 
         // Draft should be cleared
-        check(chat.draftText).equals('');
+        check(chat.viewState.draftText).equals('');
         // Session should be reset (no active session, no session ID for resume)
-        check(chat.hasActiveSession).isFalse();
+        check(chat.session.hasActiveSession).isFalse();
       });
 
       test('starts session when no active session', () async {
@@ -249,14 +248,14 @@ void main() {
         fakeBackend.sessionToReturn = session;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
-        chat.draftText = 'Hello';
+        chat.viewState.draftText = 'Hello';
 
         await service.submitMessage(chat, text: 'Hello');
 
         // Draft should be cleared
-        check(chat.draftText).equals('');
+        check(chat.viewState.draftText).equals('');
         // Session should have been created
         check(fakeBackend.createSessionCount).equals(1);
         check(fakeBackend.lastPrompt).equals('Hello');
@@ -270,7 +269,7 @@ void main() {
         fakeBackend.shouldThrow = true;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         await service.submitMessage(chat, text: 'Hello');
@@ -289,17 +288,17 @@ void main() {
         fakeBackend.sessionToReturn = session;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         // Start a session first
-        await chat.startSession(
+        await chat.session.start(
           backend: fakeBackend,
           eventHandler: eventHandler,
           prompt: 'initial',
           internalToolsService: internalTools,
         );
-        check(chat.hasActiveSession).isTrue();
+        check(chat.session.hasActiveSession).isTrue();
 
         // Now send a follow-up message
         await service.submitMessage(chat, text: 'Follow up');
@@ -314,10 +313,10 @@ void main() {
         fakeBackend.sessionToReturn = session;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
-        await chat.startSession(
+        await chat.session.start(
           backend: fakeBackend,
           eventHandler: eventHandler,
           prompt: 'test',
@@ -331,7 +330,7 @@ void main() {
 
       test('handles errors gracefully', () async {
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         // Calling interrupt with no active session - should not throw
@@ -345,7 +344,7 @@ void main() {
         fakeBackend.sessionToReturn = session;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         await service.startSession(
@@ -359,32 +358,34 @@ void main() {
         check(entries.first).isA<UserInputEntry>();
       });
 
-      test('does not add UserInputEntry when showInConversation is false',
-          () async {
-        final session = FakeTestSession();
-        fakeBackend.sessionToReturn = session;
+      test(
+        'does not add UserInputEntry when showInConversation is false',
+        () async {
+          final session = FakeTestSession();
+          fakeBackend.sessionToReturn = session;
 
-        final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
-        );
+          final chat = resources.track(
+            Chat.create(name: 'Test', worktreeRoot: '/test'),
+          );
 
-        await service.startSession(
-          chat,
-          prompt: 'Hidden prompt',
-          showInConversation: false,
-        );
+          await service.startSession(
+            chat,
+            prompt: 'Hidden prompt',
+            showInConversation: false,
+          );
 
-        // No user entry, but session was started
-        final entries = chat.data.primaryConversation.entries;
-        check(entries).isEmpty();
-        check(fakeBackend.createSessionCount).equals(1);
-      });
+          // No user entry, but session was started
+          final entries = chat.data.primaryConversation.entries;
+          check(entries).isEmpty();
+          check(fakeBackend.createSessionCount).equals(1);
+        },
+      );
 
       test('adds error entry on failure', () async {
         fakeBackend.shouldThrow = true;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         await service.startSession(
@@ -410,11 +411,11 @@ void main() {
         fakeBackend.sessionToReturn = session1;
 
         final chat = resources.track(
-          ChatState.create(name: 'Test', worktreeRoot: '/test'),
+          Chat.create(name: 'Test', worktreeRoot: '/test'),
         );
 
         // Start initial session
-        await chat.startSession(
+        await chat.session.start(
           backend: fakeBackend,
           eventHandler: eventHandler,
           prompt: 'initial',
@@ -423,13 +424,15 @@ void main() {
 
         // Set up a pending permission (required for allowPermission to work)
         final completer = Completer<sdk.PermissionResponse>();
-        chat.setPendingPermission(sdk.PermissionRequest(
-          id: 'test-perm',
-          sessionId: 'fake-session-id',
-          toolName: 'ExitPlanMode',
-          toolInput: {},
-          completer: completer,
-        ));
+        chat.permissions.add(
+          sdk.PermissionRequest(
+            id: 'test-perm',
+            sessionId: 'fake-session-id',
+            toolName: 'ExitPlanMode',
+            toolInput: {},
+            completer: completer,
+          ),
+        );
 
         // Switch to session2 for the new session after reset
         fakeBackend.sessionToReturn = session2;
@@ -437,7 +440,7 @@ void main() {
         await service.approvePlanWithClearContext(chat, 'My plan text');
 
         // Verify permission was cleared
-        check(chat.pendingPermission).isNull();
+        check(chat.permissions.pendingPermission).isNull();
 
         // Verify a new session was started (2 total: initial + after plan)
         check(fakeBackend.createSessionCount).equals(2);
@@ -448,9 +451,9 @@ void main() {
 
         // Verify user entry was added
         final entries = chat.data.primaryConversation.entries;
-        final hasApprovalEntry = entries.any((e) =>
-            e is UserInputEntry &&
-            e.text.contains('Plan approved'));
+        final hasApprovalEntry = entries.any(
+          (e) => e is UserInputEntry && e.text.contains('Plan approved'),
+        );
         check(hasApprovalEntry).isTrue();
       });
     });

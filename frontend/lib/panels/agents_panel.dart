@@ -36,16 +36,21 @@ class _AgentsListContent extends StatelessWidget {
       );
     }
 
-    // Watch the ChatState to rebuild when subagents are added/updated.
-    // We use ListenableBuilder to watch the ChatState directly since
-    // it's not provided through Provider (it comes from SelectionState).
+    // Watch only sub-states used by this panel.
     return ListenableBuilder(
-      listenable: selectedChat,
+      listenable: Listenable.merge([
+        selectedChat.conversations,
+        selectedChat.agents,
+      ]),
       builder: (context, _) {
-        final primaryConversation = selectedChat.data.primaryConversation;
-        final subagents =
-            selectedChat.data.subagentConversations.values.toList();
-        final activeAgents = selectedChat.activeAgents;
+        final primaryConversation =
+            selectedChat.conversations.primaryConversation;
+        final subagents = selectedChat
+            .conversations
+            .subagentConversations
+            .values
+            .toList();
+        final activeAgents = selectedChat.agents.activeAgents;
 
         return _buildAgentsList(
           context,
@@ -211,7 +216,8 @@ class _AgentListItem extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     // Primary line: description, or fallback to "Subagent #N"
-    final primaryLabel = conversation.taskDescription ??
+    final primaryLabel =
+        conversation.taskDescription ??
         'Subagent #${conversation.subagentNumber ?? '?'}';
 
     // Secondary line: subagent_type (may be null)
@@ -320,19 +326,11 @@ class _AgentStatusIndicator extends StatelessWidget {
       ),
       AgentStatus.completed => Tooltip(
         message: 'Completed',
-        child: Icon(
-          Icons.check_circle,
-          size: 12,
-          color: colorScheme.primary,
-        ),
+        child: Icon(Icons.check_circle, size: 12, color: colorScheme.primary),
       ),
       AgentStatus.error => Tooltip(
         message: 'Error',
-        child: Icon(
-          Icons.error_outline,
-          size: 12,
-          color: colorScheme.error,
-        ),
+        child: Icon(Icons.error_outline, size: 12, color: colorScheme.error),
       ),
     };
   }

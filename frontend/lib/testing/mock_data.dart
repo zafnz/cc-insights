@@ -27,7 +27,7 @@ String mockDataProjectPath = '/tmp/cc-insights';
 /// Factory class for creating mock data for testing purposes.
 ///
 /// Provides static methods to create sample [ProjectState], [WorktreeState],
-/// and [ChatState] instances with realistic mock data. Useful for:
+/// and [Chat] instances with realistic mock data. Useful for:
 /// - Unit testing model classes
 /// - Integration testing UI components
 /// - Development and demonstration
@@ -96,11 +96,7 @@ class MockDataFactory {
       stagedFiles: 2,
       commitsAhead: 3,
       commitsBehind: 1,
-      chats: [
-        _createThemeImplementationChat(
-          '$wtBasePath/dark-mode',
-        ),
-      ],
+      chats: [_createThemeImplementationChat('$wtBasePath/dark-mode')],
     );
 
     // Create the fix-auth-bug linked worktree with no chats.
@@ -117,10 +113,7 @@ class MockDataFactory {
     );
 
     return ProjectState(
-      ProjectData(
-        name: 'CC-Insights',
-        repoRoot: basePath,
-      ),
+      ProjectData(name: 'CC-Insights', repoRoot: basePath),
       primaryWorktree,
       linkedWorktrees: [darkModeWorktree, authBugWorktree],
       autoValidate: autoValidate,
@@ -145,7 +138,7 @@ class MockDataFactory {
     int commitsAhead = 0,
     int commitsBehind = 0,
     bool hasMergeConflict = false,
-    List<ChatState>? chats,
+    List<Chat>? chats,
   }) {
     return WorktreeState(
       WorktreeData(
@@ -168,7 +161,7 @@ class MockDataFactory {
   /// [worktreeRoot] is the path to the parent worktree.
   /// [entries] is the list of output entries for the primary conversation.
   /// [subagentConversations] is an optional map of subagent conversations.
-  static ChatState createMockChat({
+  static Chat createMockChat({
     required String name,
     required String worktreeRoot,
     List<OutputEntry> entries = const [],
@@ -183,7 +176,7 @@ class MockDataFactory {
       totalUsage: const UsageInfo.zero(),
     );
 
-    return ChatState(
+    return Chat(
       ChatData(
         id: id,
         name: name,
@@ -226,8 +219,7 @@ class MockDataFactory {
       final scriptPath = Platform.script.toFilePath();
       if (scriptPath.contains('frontend')) {
         final idx = scriptPath.indexOf('frontend');
-        final projectRoot =
-            scriptPath.substring(0, idx + 'frontend'.length);
+        final projectRoot = scriptPath.substring(0, idx + 'frontend'.length);
         file = tryPath('$projectRoot/$fileName');
         if (file.existsSync()) return file;
       }
@@ -276,7 +268,7 @@ class MockDataFactory {
   ///
   /// If the log file exists at /tmp/test.msgs.jsonl, loads entries from it.
   /// Otherwise falls back to sample mock data.
-  static ChatState _createInitialSetupChat(String worktreeRoot) {
+  static Chat _createInitialSetupChat(String worktreeRoot) {
     const chatId = 'chat-initial-setup';
     const primaryConversationId = 'conv-primary-$chatId';
     final now = DateTime.now();
@@ -310,9 +302,7 @@ class MockDataFactory {
           timestamp: now.subtract(const Duration(minutes: 27)),
           toolName: 'Read',
           toolUseId: 'tool-read-001',
-          toolInput: {
-            'file_path': '$worktreeRoot/docs/architecture.md',
-          },
+          toolInput: {'file_path': '$worktreeRoot/docs/architecture.md'},
           result: '# CC-Insights Architecture\n\n## Overview\n...',
           isError: false,
           isExpanded: false,
@@ -320,7 +310,7 @@ class MockDataFactory {
       ];
     }
 
-    return ChatState(
+    return Chat(
       ChatData(
         id: chatId,
         name: 'Log Replay',
@@ -374,11 +364,11 @@ class MockDataFactory {
   }
 
   /// Creates the "Add dark mode" chat with an empty primary conversation.
-  static ChatState _createAddDarkModeChat(String worktreeRoot) {
+  static Chat _createAddDarkModeChat(String worktreeRoot) {
     const chatId = 'chat-add-dark-mode';
     const primaryConversationId = 'conv-primary-$chatId';
 
-    return ChatState(
+    return Chat(
       ChatData(
         id: chatId,
         name: 'Add dark mode',
@@ -396,7 +386,7 @@ class MockDataFactory {
   ///
   /// This chat contains enough content to require scrolling, useful for testing
   /// scroll position preservation and other scroll-related behaviors.
-  static ChatState _createLongConversationChat(String worktreeRoot) {
+  static Chat _createLongConversationChat(String worktreeRoot) {
     const chatId = 'chat-long-conversation';
     const primaryConversationId = 'conv-primary-$chatId';
     final now = DateTime.now();
@@ -405,33 +395,40 @@ class MockDataFactory {
     final entries = <OutputEntry>[];
     for (var i = 0; i < 20; i++) {
       final offset = Duration(minutes: 60 - i * 3);
-      entries.add(UserInputEntry(
-        timestamp: now.subtract(offset),
-        text: 'User message $i: Can you help me with task number $i?',
-      ));
-      entries.add(TextOutputEntry(
-        timestamp: now.subtract(offset - const Duration(seconds: 30)),
-        text: 'Assistant response $i: Here is my detailed response to your '
-            'question about task $i. This is a longer message to take up more '
-            'vertical space in the conversation view. I want to make sure '
-            'there is enough content here to require scrolling.',
-        contentType: 'text',
-      ));
+      entries.add(
+        UserInputEntry(
+          timestamp: now.subtract(offset),
+          text: 'User message $i: Can you help me with task number $i?',
+        ),
+      );
+      entries.add(
+        TextOutputEntry(
+          timestamp: now.subtract(offset - const Duration(seconds: 30)),
+          text:
+              'Assistant response $i: Here is my detailed response to your '
+              'question about task $i. This is a longer message to take up more '
+              'vertical space in the conversation view. I want to make sure '
+              'there is enough content here to require scrolling.',
+          contentType: 'text',
+        ),
+      );
       // Add a tool use every few messages to add variety
       if (i % 3 == 0) {
-        entries.add(ToolUseOutputEntry(
-          timestamp: now.subtract(offset - const Duration(seconds: 45)),
-          toolName: 'Read',
-          toolUseId: 'tool-read-long-$i',
-          toolInput: {'file_path': '$worktreeRoot/file_$i.dart'},
-          result: '// File content for file_$i.dart\nclass Example$i {}',
-          isError: false,
-          isExpanded: false,
-        ));
+        entries.add(
+          ToolUseOutputEntry(
+            timestamp: now.subtract(offset - const Duration(seconds: 45)),
+            toolName: 'Read',
+            toolUseId: 'tool-read-long-$i',
+            toolInput: {'file_path': '$worktreeRoot/file_$i.dart'},
+            result: '// File content for file_$i.dart\nclass Example$i {}',
+            isError: false,
+            isExpanded: false,
+          ),
+        );
       }
     }
 
-    return ChatState(
+    return Chat(
       ChatData(
         id: chatId,
         name: 'Long Conversation',
@@ -448,7 +445,7 @@ class MockDataFactory {
   }
 
   /// Creates the "Theme implementation" chat with sample output entries.
-  static ChatState _createThemeImplementationChat(String worktreeRoot) {
+  static Chat _createThemeImplementationChat(String worktreeRoot) {
     const chatId = 'chat-theme-impl';
     const primaryConversationId = 'conv-primary-$chatId';
     final now = DateTime.now();
@@ -478,7 +475,7 @@ class MockDataFactory {
       ),
     ];
 
-    return ChatState(
+    return Chat(
       ChatData(
         id: chatId,
         name: 'Theme implementation',

@@ -19,11 +19,13 @@ void main() {
         sdk.BackendType.directCli,
         'haiku',
       );
-      check(model).equals(const ChatModel(
-        id: 'haiku',
-        label: 'Haiku',
-        backend: sdk.BackendType.directCli,
-      ));
+      check(model).equals(
+        const ChatModel(
+          id: 'haiku',
+          label: 'Haiku',
+          backend: sdk.BackendType.directCli,
+        ),
+      );
     });
 
     test('falls back to first model for unknown', () {
@@ -37,32 +39,47 @@ void main() {
 
   group('PermissionMode.fromApiName', () {
     test('resolves default', () {
-      check(PermissionMode.fromApiName('default'))
-          .equals(PermissionMode.defaultMode);
+      check(
+        PermissionMode.fromApiName('default'),
+      ).equals(PermissionMode.defaultMode);
     });
 
     test('resolves acceptEdits', () {
-      check(PermissionMode.fromApiName('acceptEdits'))
-          .equals(PermissionMode.acceptEdits);
+      check(
+        PermissionMode.fromApiName('acceptEdits'),
+      ).equals(PermissionMode.acceptEdits);
     });
 
     test('resolves plan', () {
-      check(PermissionMode.fromApiName('plan'))
-          .equals(PermissionMode.plan);
+      check(PermissionMode.fromApiName('plan')).equals(PermissionMode.plan);
     });
 
     test('resolves bypassPermissions', () {
-      check(PermissionMode.fromApiName('bypassPermissions'))
-          .equals(PermissionMode.bypass);
+      check(
+        PermissionMode.fromApiName('bypassPermissions'),
+      ).equals(PermissionMode.bypass);
     });
 
     test('falls back to defaultMode for unknown', () {
-      check(PermissionMode.fromApiName('unknown'))
-          .equals(PermissionMode.defaultMode);
+      check(
+        PermissionMode.fromApiName('unknown'),
+      ).equals(PermissionMode.defaultMode);
     });
   });
 
-  group('ChatState default model/permission from RuntimeConfig', () {
+  group('Chat canonical type compatibility', () {
+    test('supports both Chat and Chat constructors', () {
+      final canonical = Chat.create(name: 'Canonical', worktreeRoot: '/tmp');
+      final legacy = Chat.create(name: 'Legacy', worktreeRoot: '/tmp');
+
+      check(canonical).isA<Chat>();
+      check(canonical).isA<Chat>();
+      check(legacy).isA<Chat>();
+      check(legacy).isA<Chat>();
+    });
+  });
+
+  group('Chat default model/permission from RuntimeConfig', () {
     setUp(() {
       RuntimeConfig.resetForTesting();
       RuntimeConfig.initialize([]);
@@ -70,15 +87,15 @@ void main() {
 
     test('uses RuntimeConfig defaults from default agent', () {
       // Default agent is 'claude-default' with defaultModel='opus'.
-      final chat = ChatState(
-        ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
+      final chat = Chat(ChatData.create(name: 'Test', worktreeRoot: '/tmp'));
+      check(chat.settings.model).equals(
+        const ChatModel(
+          id: 'opus',
+          label: 'Opus',
+          backend: sdk.BackendType.directCli,
+        ),
       );
-      check(chat.model).equals(const ChatModel(
-        id: 'opus',
-        label: 'Opus',
-        backend: sdk.BackendType.directCli,
-      ));
-      check(chat.permissionMode).equals(PermissionMode.defaultMode);
+      check(chat.settings.permissionMode).equals(PermissionMode.defaultMode);
     });
 
     test('picks up non-default agent model and permission', () {
@@ -94,15 +111,15 @@ void main() {
       RuntimeConfig.instance.defaultAgentId = 'test-agent';
       RuntimeConfig.instance.defaultPermissionMode = 'acceptEdits';
 
-      final chat = ChatState(
-        ChatData.create(name: 'Test', worktreeRoot: '/tmp'),
+      final chat = Chat(ChatData.create(name: 'Test', worktreeRoot: '/tmp'));
+      check(chat.settings.model).equals(
+        const ChatModel(
+          id: 'haiku',
+          label: 'Haiku',
+          backend: sdk.BackendType.directCli,
+        ),
       );
-      check(chat.model).equals(const ChatModel(
-        id: 'haiku',
-        label: 'Haiku',
-        backend: sdk.BackendType.directCli,
-      ));
-      check(chat.permissionMode).equals(PermissionMode.acceptEdits);
+      check(chat.settings.permissionMode).equals(PermissionMode.acceptEdits);
     });
   });
 
@@ -158,12 +175,8 @@ void main() {
         // Assert
         final createdAt = chat.createdAt;
         check(createdAt).isNotNull();
-        check(
-          createdAt!.isAfter(before) || createdAt == before,
-        ).isTrue();
-        check(
-          createdAt.isBefore(after) || createdAt == after,
-        ).isTrue();
+        check(createdAt!.isAfter(before) || createdAt == before).isTrue();
+        check(createdAt.isBefore(after) || createdAt == after).isTrue();
       });
     });
 
@@ -266,11 +279,11 @@ void main() {
     });
   });
 
-  group('ChatState', () {
+  group('Chat', () {
     group('create() factory', () {
       test('creates state with new ChatData', () {
         // Arrange & Act
-        final state = ChatState.create(
+        final state = Chat.create(
           name: 'Test Chat',
           worktreeRoot: '/path/to/worktree',
         );
@@ -278,20 +291,20 @@ void main() {
         // Assert
         check(state.data.name).equals('Test Chat');
         check(state.data.worktreeRoot).equals('/path/to/worktree');
-        check(state.hasActiveSession).isFalse();
-        check(state.activeAgents).isEmpty();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.agents.activeAgents).isEmpty();
       });
     });
 
     group('rename()', () {
       test('updates name and notifies listeners', () {
         // Arrange
-        final state = ChatState.create(name: 'Original', worktreeRoot: '/path');
+        final state = Chat.create(name: 'Original', worktreeRoot: '/path');
         var notified = false;
-        state.addListener(() => notified = true);
+        state.conversations.addListener(() => notified = true);
 
         // Act
-        state.rename('New Name');
+        state.conversations.rename('New Name');
 
         // Assert
         check(state.data.name).equals('New Name');
@@ -302,15 +315,12 @@ void main() {
     group('addSubagentConversation()', () {
       test('creates conversation and agent', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         var notified = false;
-        state.addListener(() => notified = true);
+        state.conversations.addListener(() => notified = true);
 
         // Act
-        state.addSubagentConversation(
+        state.conversations.addSubagentConversation(
           'sdk-agent-123',
           'Explore',
           'Find all test files',
@@ -318,88 +328,82 @@ void main() {
 
         // Assert
         check(state.data.subagentConversations.length).equals(1);
-        check(state.activeAgents.length).equals(1);
-        check(state.activeAgents['sdk-agent-123']).isNotNull();
+        check(state.agents.activeAgents.length).equals(1);
+        check(state.agents.activeAgents['sdk-agent-123']).isNotNull();
         check(notified).isTrue();
 
         final conversation = state.data.subagentConversations.values.first;
         check(conversation.label).equals('Explore');
         check(conversation.taskDescription).equals('Find all test files');
 
-        final agent = state.activeAgents['sdk-agent-123']!;
+        final agent = state.agents.activeAgents['sdk-agent-123']!;
         check(agent.status).equals(AgentStatus.working);
         check(agent.conversationId).equals(conversation.id);
       });
 
       test('creates multiple subagent conversations', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         // Act - add delay to ensure different timestamp-based IDs
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         await Future<void>.delayed(const Duration(milliseconds: 2));
-        state.addSubagentConversation('agent-2', 'Plan', 'Make a plan');
+        state.conversations.addSubagentConversation(
+          'agent-2',
+          'Plan',
+          'Make a plan',
+        );
 
         // Assert
         check(state.data.subagentConversations.length).equals(2);
-        check(state.activeAgents.length).equals(2);
+        check(state.agents.activeAgents.length).equals(2);
       });
     });
 
     group('selectConversation()', () {
       test('changes selected conversation', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         final subagentConv = state.data.subagentConversations.values.first;
         var notified = false;
-        state.addListener(() => notified = true);
+        state.conversations.addListener(() => notified = true);
 
         // Act
-        state.selectConversation(subagentConv.id);
+        state.conversations.selectConversation(subagentConv.id);
 
         // Assert
-        check(state.selectedConversation.id).equals(subagentConv.id);
-        check(state.isInputEnabled).isFalse();
+        check(
+          state.conversations.selectedConversation.id,
+        ).equals(subagentConv.id);
+        check(state.conversations.isInputEnabled).isFalse();
         check(notified).isTrue();
       });
 
       test('selects primary conversation when null', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         final subagentConv = state.data.subagentConversations.values.first;
-        state.selectConversation(subagentConv.id);
+        state.conversations.selectConversation(subagentConv.id);
 
         // Act
-        state.selectConversation(null);
+        state.conversations.selectConversation(null);
 
         // Assert
-        check(state.selectedConversation.isPrimary).isTrue();
-        check(state.isInputEnabled).isTrue();
+        check(state.conversations.selectedConversation.isPrimary).isTrue();
+        check(state.conversations.isInputEnabled).isTrue();
       });
 
       test('does not notify if same conversation selected', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         var notifyCount = 0;
-        state.addListener(() => notifyCount++);
+        state.conversations.addListener(() => notifyCount++);
 
         // Act
-        state.selectConversation(null);
-        state.selectConversation(null);
+        state.conversations.selectConversation(null);
+        state.conversations.selectConversation(null);
 
         // Assert
         check(notifyCount).equals(0);
@@ -409,46 +413,41 @@ void main() {
     group('isInputEnabled', () {
       test('returns true for primary conversation', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         // Assert
-        check(state.isInputEnabled).isTrue();
+        check(state.conversations.isInputEnabled).isTrue();
       });
 
       test('returns false for subagent conversation', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         final subagentConv = state.data.subagentConversations.values.first;
-        state.selectConversation(subagentConv.id);
+        state.conversations.selectConversation(subagentConv.id);
 
         // Assert
-        check(state.isInputEnabled).isFalse();
+        check(state.conversations.isInputEnabled).isFalse();
       });
     });
 
     group('updateAgent()', () {
       test('updates agent status', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         var notified = false;
-        state.addListener(() => notified = true);
+        state.agents.addListener(() => notified = true);
 
         // Act
-        state.updateAgent(AgentStatus.completed, 'agent-1', result: 'Done');
+        state.agents.updateAgent(
+          AgentStatus.completed,
+          'agent-1',
+          result: 'Done',
+        );
 
         // Assert
-        final agent = state.activeAgents['agent-1']!;
+        final agent = state.agents.activeAgents['agent-1']!;
         check(agent.status).equals(AgentStatus.completed);
         check(agent.result).equals('Done');
         check(notified).isTrue();
@@ -456,15 +455,12 @@ void main() {
 
       test('does nothing for unknown agent', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         var notified = false;
-        state.addListener(() => notified = true);
+        state.agents.addListener(() => notified = true);
 
         // Act
-        state.updateAgent(AgentStatus.completed, 'unknown-agent');
+        state.agents.updateAgent(AgentStatus.completed, 'unknown-agent');
 
         // Assert
         check(notified).isFalse();
@@ -474,16 +470,16 @@ void main() {
     group('addOutputEntry()', () {
       test('adds entry to primary conversation', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         final entry = UserInputEntry(timestamp: DateTime.now(), text: 'Hello');
         var notified = false;
-        state.addListener(() => notified = true);
+        state.conversations.addListener(() => notified = true);
 
         // Act
-        state.addOutputEntry(state.data.primaryConversation.id, entry);
+        state.conversations.addOutputEntry(
+          state.data.primaryConversation.id,
+          entry,
+        );
 
         // Assert
         check(state.data.primaryConversation.entries.length).equals(1);
@@ -495,11 +491,8 @@ void main() {
 
       test('adds entry to subagent conversation', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         final subagentConv = state.data.subagentConversations.values.first;
         final entry = TextOutputEntry(
           timestamp: DateTime.now(),
@@ -508,7 +501,7 @@ void main() {
         );
 
         // Act
-        state.addOutputEntry(subagentConv.id, entry);
+        state.conversations.addOutputEntry(subagentConv.id, entry);
 
         // Assert
         final updatedConv = state.data.subagentConversations[subagentConv.id]!;
@@ -522,88 +515,82 @@ void main() {
     group('session management', () {
       test('setHasActiveSessionForTesting activates session', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        state.setHasActiveSessionForTesting(true);
+        state.session.setHasActiveSessionForTesting(true);
 
         // Assert
-        check(state.hasActiveSession).isTrue();
+        check(state.session.hasActiveSession).isTrue();
         check(notified).isTrue();
       });
 
       test('clearSession deactivates session and clears agents', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setHasActiveSessionForTesting(true);
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setHasActiveSessionForTesting(true);
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        state.clearSession();
+        state.session.clear();
 
         // Assert
-        check(state.hasActiveSession).isFalse();
-        check(state.activeAgents).isEmpty();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.agents.activeAgents).isEmpty();
         check(notified).isTrue();
       });
     });
 
     group('resetSession()', () {
-      test('clears session, sessionId, context, and adds marker entry',
-          () async {
-        // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setHasActiveSessionForTesting(true);
-        state.setLastSessionIdFromRestore('session-123');
-        state.setWorking(true);
-        state.setCompacting(true);
-        state.addSubagentConversation('agent-1', 'Explore', null);
-        var notifyCount = 0;
-        state.addListener(() => notifyCount++);
+      test(
+        'clears session, sessionId, context, and adds marker entry',
+        () async {
+          // Arrange
+          final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+          state.session.setHasActiveSessionForTesting(true);
+          state.session.setLastSessionIdFromRestore('session-123');
+          state.session.setWorking(true);
+          state.session.setCompacting(true);
+          state.conversations.addSubagentConversation(
+            'agent-1',
+            'Explore',
+            null,
+          );
+          var notifyCount = 0;
+          state.session.addListener(() => notifyCount++);
 
-        // Act
-        await state.resetSession();
+          // Act
+          await state.session.reset();
 
-        // Assert
-        check(state.hasActiveSession).isFalse();
-        check(state.lastSessionId).isNull();
-        check(state.activeAgents).isEmpty();
-        check(state.isWorking).isFalse();
-        check(state.isCompacting).isFalse();
-        check(notifyCount).isGreaterThan(0);
+          // Assert
+          check(state.session.hasActiveSession).isFalse();
+          check(state.session.lastSessionId).isNull();
+          check(state.agents.activeAgents).isEmpty();
+          check(state.session.isWorking).isFalse();
+          check(state.session.isCompacting).isFalse();
+          check(notifyCount).isGreaterThan(0);
 
-        // Should have added a ContextClearedEntry
-        final entries = state.data.primaryConversation.entries;
-        check(entries).isNotEmpty();
-        check(entries.last).isA<ContextClearedEntry>();
-      });
+          // Should have added a ContextClearedEntry
+          final entries = state.data.primaryConversation.entries;
+          check(entries).isNotEmpty();
+          check(entries.last).isA<ContextClearedEntry>();
+        },
+      );
 
       test('works when no session is active', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         // Act
-        await state.resetSession();
+        await state.session.reset();
 
         // Assert
-        check(state.hasActiveSession).isFalse();
-        check(state.lastSessionId).isNull();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.session.lastSessionId).isNull();
 
         final entries = state.data.primaryConversation.entries;
         check(entries).length.equals(1);
@@ -614,107 +601,130 @@ void main() {
     group('interrupt()', () {
       test('sets isWorking to false', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setHasActiveSessionForTesting(true);
-        state.setWorking(true);
-        check(state.isWorking).isTrue();
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setHasActiveSessionForTesting(true);
+        state.session.setWorking(true);
+        check(state.session.isWorking).isTrue();
 
         // Act
-        await state.interrupt();
+        await state.session.interrupt();
 
         // Assert
-        check(state.isWorking).isFalse();
+        check(state.session.isWorking).isFalse();
       });
 
       test('updates all working agents to error status', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setHasActiveSessionForTesting(true);
+        state.conversations.addSubagentConversation(
+          'agent-1',
+          'Explore',
+          'Task 1',
         );
-        state.setHasActiveSessionForTesting(true);
-        state.addSubagentConversation('agent-1', 'Explore', 'Task 1');
-        state.addSubagentConversation('agent-2', 'Plan', 'Task 2');
-        state.addSubagentConversation('agent-3', 'general', 'Task 3');
+        state.conversations.addSubagentConversation(
+          'agent-2',
+          'Plan',
+          'Task 2',
+        );
+        state.conversations.addSubagentConversation(
+          'agent-3',
+          'general',
+          'Task 3',
+        );
 
         // Verify all agents are working
-        check(state.activeAgents['agent-1']!.status)
-            .equals(AgentStatus.working);
-        check(state.activeAgents['agent-2']!.status)
-            .equals(AgentStatus.working);
-        check(state.activeAgents['agent-3']!.status)
-            .equals(AgentStatus.working);
+        check(
+          state.agents.activeAgents['agent-1']!.status,
+        ).equals(AgentStatus.working);
+        check(
+          state.agents.activeAgents['agent-2']!.status,
+        ).equals(AgentStatus.working);
+        check(
+          state.agents.activeAgents['agent-3']!.status,
+        ).equals(AgentStatus.working);
 
         // Act
-        await state.interrupt();
+        await state.session.interrupt();
 
         // Assert - all agents should be in error state with "Interrupted" message
-        check(state.activeAgents['agent-1']!.status)
-            .equals(AgentStatus.error);
-        check(state.activeAgents['agent-1']!.result)
-            .equals('Interrupted by user');
-        check(state.activeAgents['agent-2']!.status)
-            .equals(AgentStatus.error);
-        check(state.activeAgents['agent-2']!.result)
-            .equals('Interrupted by user');
-        check(state.activeAgents['agent-3']!.status)
-            .equals(AgentStatus.error);
-        check(state.activeAgents['agent-3']!.result)
-            .equals('Interrupted by user');
+        check(
+          state.agents.activeAgents['agent-1']!.status,
+        ).equals(AgentStatus.error);
+        check(
+          state.agents.activeAgents['agent-1']!.result,
+        ).equals('Interrupted by user');
+        check(
+          state.agents.activeAgents['agent-2']!.status,
+        ).equals(AgentStatus.error);
+        check(
+          state.agents.activeAgents['agent-2']!.result,
+        ).equals('Interrupted by user');
+        check(
+          state.agents.activeAgents['agent-3']!.status,
+        ).equals(AgentStatus.error);
+        check(
+          state.agents.activeAgents['agent-3']!.result,
+        ).equals('Interrupted by user');
       });
 
       test('does not modify already completed agents', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setHasActiveSessionForTesting(true);
+        state.conversations.addSubagentConversation(
+          'agent-1',
+          'Explore',
+          'Task 1',
         );
-        state.setHasActiveSessionForTesting(true);
-        state.addSubagentConversation('agent-1', 'Explore', 'Task 1');
-        state.addSubagentConversation('agent-2', 'Plan', 'Task 2');
+        state.conversations.addSubagentConversation(
+          'agent-2',
+          'Plan',
+          'Task 2',
+        );
 
         // Mark agent-1 as completed before interrupt
-        state.updateAgent(
+        state.agents.updateAgent(
           AgentStatus.completed,
           'agent-1',
           result: 'Completed successfully',
         );
 
-        check(state.activeAgents['agent-1']!.status)
-            .equals(AgentStatus.completed);
-        check(state.activeAgents['agent-2']!.status)
-            .equals(AgentStatus.working);
+        check(
+          state.agents.activeAgents['agent-1']!.status,
+        ).equals(AgentStatus.completed);
+        check(
+          state.agents.activeAgents['agent-2']!.status,
+        ).equals(AgentStatus.working);
 
         // Act
-        await state.interrupt();
+        await state.session.interrupt();
 
         // Assert - agent-1 should still be completed, agent-2 should be interrupted
-        check(state.activeAgents['agent-1']!.status)
-            .equals(AgentStatus.completed);
-        check(state.activeAgents['agent-1']!.result)
-            .equals('Completed successfully');
-        check(state.activeAgents['agent-2']!.status)
-            .equals(AgentStatus.error);
-        check(state.activeAgents['agent-2']!.result)
-            .equals('Interrupted by user');
+        check(
+          state.agents.activeAgents['agent-1']!.status,
+        ).equals(AgentStatus.completed);
+        check(
+          state.agents.activeAgents['agent-1']!.result,
+        ).equals('Completed successfully');
+        check(
+          state.agents.activeAgents['agent-2']!.status,
+        ).equals(AgentStatus.error);
+        check(
+          state.agents.activeAgents['agent-2']!.result,
+        ).equals('Interrupted by user');
       });
 
       test('notifies listeners', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setHasActiveSessionForTesting(true);
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setHasActiveSessionForTesting(true);
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        await state.interrupt();
+        await state.session.interrupt();
 
         // Assert
         check(notified).isTrue();
@@ -722,22 +732,20 @@ void main() {
 
       test('does nothing when no session is active', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setWorking(true);
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        await state.interrupt();
+        await state.session.interrupt();
 
         // Assert - nothing should change
-        check(state.isWorking).isTrue();
-        check(state.activeAgents['agent-1']!.status)
-            .equals(AgentStatus.working);
+        check(state.session.isWorking).isTrue();
+        check(
+          state.agents.activeAgents['agent-1']!.status,
+        ).equals(AgentStatus.working);
         check(notified).isFalse();
       });
     });
@@ -745,59 +753,47 @@ void main() {
     group('dispose()', () {
       test('clears session and agents', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setHasActiveSessionForTesting(true);
-        state.addSubagentConversation('agent-1', 'Explore', null);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setHasActiveSessionForTesting(true);
+        state.conversations.addSubagentConversation('agent-1', 'Explore', null);
 
         // Act
         state.dispose();
 
         // Assert
-        check(state.hasActiveSession).isFalse();
-        check(state.activeAgents).isEmpty();
+        check(state.session.hasActiveSession).isFalse();
+        check(state.agents.activeAgents).isEmpty();
       });
     });
 
     group('lastSessionId', () {
       test('returns null by default', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         // Assert
-        check(state.lastSessionId).isNull();
+        check(state.session.lastSessionId).isNull();
       });
 
       test('setLastSessionIdFromRestore sets the session ID', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         // Act
-        state.setLastSessionIdFromRestore('session-123');
+        state.session.setLastSessionIdFromRestore('session-123');
 
         // Assert
-        check(state.lastSessionId).equals('session-123');
+        check(state.session.lastSessionId).equals('session-123');
       });
 
       test('setLastSessionIdFromRestore does not notify listeners', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         var notified = false;
-        state.addListener(() => notified = true);
+        state.session.addListener(() => notified = true);
 
         // Act
-        state.setLastSessionIdFromRestore('session-123');
+        state.session.setLastSessionIdFromRestore('session-123');
 
         // Assert
         check(notified).isFalse();
@@ -805,69 +801,148 @@ void main() {
 
       test('setLastSessionIdFromRestore can clear the session ID', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setLastSessionIdFromRestore('session-123');
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setLastSessionIdFromRestore('session-123');
 
         // Act
-        state.setLastSessionIdFromRestore(null);
+        state.session.setLastSessionIdFromRestore(null);
 
         // Assert
-        check(state.lastSessionId).isNull();
+        check(state.session.lastSessionId).isNull();
       });
     });
 
     group('initPersistence', () {
       test('accepts projectRoot parameter', () async {
         // Arrange
-        final state = ChatState.create(
+        final state = Chat.create(
           name: 'Test Chat',
           worktreeRoot: '/path/to/worktree',
         );
-        state.persistenceService = _FakePersistenceService();
+        state.persistence.persistenceService = _FakePersistenceService();
 
         // Act - should not throw
-        await state.initPersistence('project-123', projectRoot: '/path/to/project');
+        await state.persistence.initPersistence(
+          'project-123',
+          projectRoot: '/path/to/project',
+        );
 
         // Assert
-        check(state.projectId).equals('project-123');
+        check(state.persistence.projectId).equals('project-123');
       });
 
       test('sets projectId when initialized', () async {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.persistenceService = _FakePersistenceService();
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.persistence.persistenceService = _FakePersistenceService();
 
         // Act
-        await state.initPersistence('test-project-id');
+        await state.persistence.initPersistence('test-project-id');
 
         // Assert
-        check(state.projectId).equals('test-project-id');
+        check(state.persistence.projectId).equals('test-project-id');
       });
     });
 
     group('session ID persistence', () {
-      test('does not persist session ID when persistence not initialized',
-          () async {
-        // Arrange
-        final fakePersistence = _FakePersistenceService();
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
+      test(
+        'does not persist session ID when persistence not initialized',
+        () async {
+          // Arrange
+          final fakePersistence = _FakePersistenceService();
+          final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+          state.persistence.persistenceService = fakePersistence;
+          // Note: intentionally NOT calling initPersistence
+
+          // Act - manually set session ID to simulate session update
+          state.session.setLastSessionIdFromRestore('session-123');
+
+          // Assert
+          check(fakePersistence.updateChatSessionIdCalls).isEmpty();
+        },
+      );
+    });
+
+    group('persistence coordinator', () {
+      Future<void> waitFor(
+        bool Function() condition, {
+        Duration timeout = const Duration(seconds: 2),
+      }) async {
+        final stopwatch = Stopwatch()..start();
+        while (!condition()) {
+          if (stopwatch.elapsed > timeout) {
+            fail('Timed out waiting for condition');
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+
+      test('retries append writes after transient failures', () async {
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        addTearDown(state.dispose);
+        final fakePersistence = _FakePersistenceService()
+          ..appendFailuresBeforeSuccess = 2;
+        state.persistence.persistenceService = fakePersistence;
+        await state.persistence.initPersistence(
+          'project-123',
+          projectRoot: '/project-root',
         );
-        state.persistenceService = fakePersistence;
-        // Note: intentionally NOT calling initPersistence
 
-        // Act - manually set session ID to simulate session update
-        state.setLastSessionIdFromRestore('session-123');
+        state.conversations.addEntry(
+          UserInputEntry(timestamp: DateTime.now(), text: 'hello'),
+        );
 
-        // Assert
-        check(fakePersistence.updateChatSessionIdCalls).isEmpty();
+        await waitFor(() => fakePersistence.appendChatEntryAttempts >= 3);
+        check(fakePersistence.appendChatEntryAttempts).equals(3);
+        check(fakePersistence.appendChatEntryCalls.length).equals(1);
+      });
+
+      test('serializes index writes for consecutive renames', () async {
+        final state = Chat.create(
+          name: 'Original',
+          worktreeRoot: '/path/to/worktree',
+        );
+        addTearDown(state.dispose);
+        final fakePersistence = _FakePersistenceService()
+          ..renameDelay = const Duration(milliseconds: 40);
+        state.persistence.persistenceService = fakePersistence;
+        await state.persistence.initPersistence(
+          'project-123',
+          projectRoot: '/path/to/project',
+        );
+
+        state.conversations.rename('First Name');
+        state.conversations.rename('Second Name');
+
+        await waitFor(() => fakePersistence.renameChatInIndexCalls.length == 2);
+        check(fakePersistence.maxConcurrentRenameCalls).equals(1);
+        check(
+          fakePersistence.renameChatInIndexCalls.map((c) => c.newName).toList(),
+        ).deepEquals(['First Name', 'Second Name']);
+      });
+
+      test('retries index writes after transient failures', () async {
+        final state = Chat.create(
+          name: 'Original',
+          worktreeRoot: '/path/to/worktree',
+        );
+        addTearDown(state.dispose);
+        final fakePersistence = _FakePersistenceService()
+          ..renameFailuresBeforeSuccess = 2;
+        state.persistence.persistenceService = fakePersistence;
+        await state.persistence.initPersistence(
+          'project-123',
+          projectRoot: '/path/to/project',
+        );
+
+        state.conversations.rename('Renamed');
+
+        await waitFor(() => fakePersistence.renameChatInIndexAttempts >= 3);
+        check(fakePersistence.renameChatInIndexAttempts).equals(3);
+        check(fakePersistence.renameChatInIndexCalls.length).equals(1);
+        check(
+          fakePersistence.renameChatInIndexCalls.single.newName,
+        ).equals('Renamed');
       });
     });
 
@@ -891,166 +966,145 @@ void main() {
 
       test('queues multiple concurrent permission requests', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
         final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
         final request3 = createFakeRequest(id: 'req-3', toolName: 'Bash');
 
         // Act - simulate three permission requests arriving concurrently
-        state.addPendingPermission(request1);
-        state.addPendingPermission(request2);
-        state.addPendingPermission(request3);
+        state.permissions.add(request1);
+        state.permissions.add(request2);
+        state.permissions.add(request3);
 
         // Assert - all requests should be queued
-        check(state.pendingPermissionCount).equals(3);
+        check(state.permissions.pendingPermissionCount).equals(3);
         // First request should be the current one
-        check(state.pendingPermission?.id).equals('req-1');
+        check(state.permissions.pendingPermission?.id).equals('req-1');
       });
 
       test('processes permission requests in FIFO order', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
         final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
 
-        state.addPendingPermission(request1);
-        state.addPendingPermission(request2);
+        state.permissions.add(request1);
+        state.permissions.add(request2);
 
         // Act - allow the first request
-        state.allowPermission();
+        state.permissions.allow();
 
         // Assert - second request should now be current
-        check(state.pendingPermission?.id).equals('req-2');
-        check(state.pendingPermissionCount).equals(1);
+        check(state.permissions.pendingPermission?.id).equals('req-2');
+        check(state.permissions.pendingPermissionCount).equals(1);
       });
 
       test('handles allow then processes next in queue', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
         final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
         final request3 = createFakeRequest(id: 'req-3', toolName: 'Bash');
 
-        state.addPendingPermission(request1);
-        state.addPendingPermission(request2);
-        state.addPendingPermission(request3);
+        state.permissions.add(request1);
+        state.permissions.add(request2);
+        state.permissions.add(request3);
 
         // Act & Assert - process all three
-        check(state.pendingPermission?.id).equals('req-1');
-        state.allowPermission();
+        check(state.permissions.pendingPermission?.id).equals('req-1');
+        state.permissions.allow();
 
-        check(state.pendingPermission?.id).equals('req-2');
-        state.allowPermission();
+        check(state.permissions.pendingPermission?.id).equals('req-2');
+        state.permissions.allow();
 
-        check(state.pendingPermission?.id).equals('req-3');
-        state.allowPermission();
+        check(state.permissions.pendingPermission?.id).equals('req-3');
+        state.permissions.allow();
 
-        check(state.pendingPermission).isNull();
-        check(state.pendingPermissionCount).equals(0);
+        check(state.permissions.pendingPermission).isNull();
+        check(state.permissions.pendingPermissionCount).equals(0);
       });
 
       test('handles deny then processes next in queue', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
         final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
 
-        state.addPendingPermission(request1);
-        state.addPendingPermission(request2);
+        state.permissions.add(request1);
+        state.permissions.add(request2);
 
         // Act - deny the first request
-        state.denyPermission('Not allowed');
+        state.permissions.deny('Not allowed');
 
         // Assert - second request should now be current
-        check(state.pendingPermission?.id).equals('req-2');
-        check(state.pendingPermissionCount).equals(1);
+        check(state.permissions.pendingPermission?.id).equals('req-2');
+        check(state.permissions.pendingPermissionCount).equals(1);
       });
 
       test('clears all queued permissions on session clear', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         final request1 = createFakeRequest(id: 'req-1');
         final request2 = createFakeRequest(id: 'req-2');
 
-        state.addPendingPermission(request1);
-        state.addPendingPermission(request2);
-        check(state.pendingPermissionCount).equals(2);
+        state.permissions.add(request1);
+        state.permissions.add(request2);
+        check(state.permissions.pendingPermissionCount).equals(2);
 
         // Act
-        state.clearSession();
+        state.session.clear();
 
         // Assert
-        check(state.pendingPermission).isNull();
-        check(state.pendingPermissionCount).equals(0);
+        check(state.permissions.pendingPermission).isNull();
+        check(state.permissions.pendingPermissionCount).equals(0);
       });
 
       test('isWaitingForPermission is true when queue is not empty', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
 
         // Assert - initially false
-        check(state.isWaitingForPermission).isFalse();
+        check(state.permissions.isWaitingForPermission).isFalse();
 
         // Act - add request
         final request = createFakeRequest(id: 'req-1');
-        state.addPendingPermission(request);
+        state.permissions.add(request);
 
         // Assert - now true
-        check(state.isWaitingForPermission).isTrue();
+        check(state.permissions.isWaitingForPermission).isTrue();
 
         // Act - allow request
-        state.allowPermission();
+        state.permissions.allow();
 
         // Assert - back to false
-        check(state.isWaitingForPermission).isFalse();
+        check(state.permissions.isWaitingForPermission).isFalse();
       });
 
       test('notifies listeners when permission queue changes', () {
         // Arrange
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
         var notifyCount = 0;
-        state.addListener(() => notifyCount++);
+        state.permissions.addListener(() => notifyCount++);
 
         final request1 = createFakeRequest(id: 'req-1');
         final request2 = createFakeRequest(id: 'req-2');
 
         // Act & Assert
-        state.addPendingPermission(request1);
+        state.permissions.add(request1);
         check(notifyCount).equals(1);
 
-        state.addPendingPermission(request2);
+        state.permissions.add(request2);
         check(notifyCount).equals(2);
 
-        state.allowPermission();
+        state.permissions.allow();
         check(notifyCount).equals(3);
 
-        state.denyPermission('denied');
+        state.permissions.deny('denied');
         check(notifyCount).equals(4);
       });
     });
@@ -1074,93 +1128,81 @@ void main() {
       }
 
       test('pauses stopwatch when first permission arrives while working', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
-        check(state.workingStopwatch).isNotNull();
-        check(state.workingStopwatch!.isRunning).isTrue();
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setWorking(true);
+        check(state.session.workingStopwatch).isNotNull();
+        check(state.session.workingStopwatch!.isRunning).isTrue();
 
         // Act - permission request arrives
         final request = createFakeRequest(id: 'req-1');
-        state.addPendingPermission(request);
+        state.permissions.add(request);
 
         // Assert - stopwatch should be paused
-        check(state.workingStopwatch).isNotNull();
-        check(state.workingStopwatch!.isRunning).isFalse();
+        check(state.session.workingStopwatch).isNotNull();
+        check(state.session.workingStopwatch!.isRunning).isFalse();
       });
 
       test('resumes stopwatch when last permission is allowed', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setWorking(true);
 
         final request = createFakeRequest(id: 'req-1');
-        state.addPendingPermission(request);
-        check(state.workingStopwatch!.isRunning).isFalse();
+        state.permissions.add(request);
+        check(state.session.workingStopwatch!.isRunning).isFalse();
 
         // Act - allow the permission
-        state.allowPermission();
+        state.permissions.allow();
 
         // Assert - stopwatch should be running again
-        check(state.workingStopwatch).isNotNull();
-        check(state.workingStopwatch!.isRunning).isTrue();
+        check(state.session.workingStopwatch).isNotNull();
+        check(state.session.workingStopwatch!.isRunning).isTrue();
       });
 
       test('resumes stopwatch when last permission is denied', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setWorking(true);
 
         final request = createFakeRequest(id: 'req-1');
-        state.addPendingPermission(request);
-        check(state.workingStopwatch!.isRunning).isFalse();
+        state.permissions.add(request);
+        check(state.session.workingStopwatch!.isRunning).isFalse();
 
         // Act - deny the permission
-        state.denyPermission('Not allowed');
+        state.permissions.deny('Not allowed');
 
         // Assert - stopwatch should be running again
-        check(state.workingStopwatch).isNotNull();
-        check(state.workingStopwatch!.isRunning).isTrue();
+        check(state.session.workingStopwatch).isNotNull();
+        check(state.session.workingStopwatch!.isRunning).isTrue();
       });
 
-      test('stays paused when one permission is resolved but others remain', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
+      test(
+        'stays paused when one permission is resolved but others remain',
+        () {
+          final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+          state.session.setWorking(true);
 
-        final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
-        final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
-        state.addPendingPermission(request1);
-        state.addPendingPermission(request2);
-        check(state.workingStopwatch!.isRunning).isFalse();
+          final request1 = createFakeRequest(id: 'req-1', toolName: 'Read');
+          final request2 = createFakeRequest(id: 'req-2', toolName: 'Write');
+          state.permissions.add(request1);
+          state.permissions.add(request2);
+          check(state.session.workingStopwatch!.isRunning).isFalse();
 
-        // Act - allow the first permission
-        state.allowPermission();
+          // Act - allow the first permission
+          state.permissions.allow();
 
-        // Assert - still paused because req-2 is pending
-        check(state.workingStopwatch!.isRunning).isFalse();
+          // Assert - still paused because req-2 is pending
+          check(state.session.workingStopwatch!.isRunning).isFalse();
 
-        // Act - allow the second permission
-        state.allowPermission();
+          // Act - allow the second permission
+          state.permissions.allow();
 
-        // Assert - now resumed
-        check(state.workingStopwatch!.isRunning).isTrue();
-      });
+          // Assert - now resumed
+          check(state.session.workingStopwatch!.isRunning).isTrue();
+        },
+      );
 
       test('resumes stopwatch when permission times out and is removed', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
+        final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+        state.session.setWorking(true);
 
         // Create request with toolUseId set (used by removePendingPermissionByToolUseId)
         final completer = Completer<sdk.PermissionResponse>();
@@ -1172,54 +1214,54 @@ void main() {
           toolUseId: 'tool-use-1',
           completer: completer,
         );
-        state.addPendingPermission(request);
-        check(state.workingStopwatch!.isRunning).isFalse();
+        state.permissions.add(request);
+        check(state.session.workingStopwatch!.isRunning).isFalse();
 
         // Act - permission times out (removed by toolUseId)
-        state.removePendingPermissionByToolUseId('tool-use-1');
+        state.permissions.removeByToolUseId('tool-use-1');
 
         // Assert - stopwatch should be running again
-        check(state.workingStopwatch).isNotNull();
-        check(state.workingStopwatch!.isRunning).isTrue();
+        check(state.session.workingStopwatch).isNotNull();
+        check(state.session.workingStopwatch!.isRunning).isTrue();
       });
 
-      test('does not pause stopwatch when permission arrives while not working', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        // Not working - no stopwatch
-        check(state.workingStopwatch).isNull();
+      test(
+        'does not pause stopwatch when permission arrives while not working',
+        () {
+          final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+          // Not working - no stopwatch
+          check(state.session.workingStopwatch).isNull();
 
-        final request = createFakeRequest(id: 'req-1');
-        state.addPendingPermission(request);
+          final request = createFakeRequest(id: 'req-1');
+          state.permissions.add(request);
 
-        // Assert - no stopwatch to pause
-        check(state.workingStopwatch).isNull();
-      });
+          // Assert - no stopwatch to pause
+          check(state.session.workingStopwatch).isNull();
+        },
+      );
 
-      test('does not resume stopwatch after setWorking(false) during permission', () {
-        final state = ChatState.create(
-          name: 'Test Chat',
-          worktreeRoot: '/path',
-        );
-        state.setWorking(true);
+      test(
+        'does not resume stopwatch after setWorking(false) during permission',
+        () {
+          final state = Chat.create(name: 'Test Chat', worktreeRoot: '/path');
+          state.session.setWorking(true);
 
-        final request = createFakeRequest(id: 'req-1');
-        state.addPendingPermission(request);
-        check(state.workingStopwatch!.isRunning).isFalse();
+          final request = createFakeRequest(id: 'req-1');
+          state.permissions.add(request);
+          check(state.session.workingStopwatch!.isRunning).isFalse();
 
-        // Turn completes while waiting for permission
-        state.setWorking(false);
-        check(state.workingStopwatch).isNull();
+          // Turn completes while waiting for permission
+          state.session.setWorking(false);
+          check(state.session.workingStopwatch).isNull();
 
-        // Allow the permission
-        state.allowPermission();
+          // Allow the permission
+          state.permissions.allow();
 
-        // Assert - stopwatch should NOT be resumed since we're no longer working
-        check(state.workingStopwatch).isNull();
-        check(state.isWorking).isFalse();
-      });
+          // Assert - stopwatch should NOT be resumed since we're no longer working
+          check(state.session.workingStopwatch).isNull();
+          check(state.session.isWorking).isFalse();
+        },
+      );
     });
   });
 }
@@ -1227,10 +1269,36 @@ void main() {
 /// Fake PersistenceService for testing that tracks method calls.
 class _FakePersistenceService extends PersistenceService {
   final List<_UpdateChatSessionIdCall> updateChatSessionIdCalls = [];
+  final List<_AppendChatEntryCall> appendChatEntryCalls = [];
+  final List<_RenameChatInIndexCall> renameChatInIndexCalls = [];
+
+  int appendChatEntryAttempts = 0;
+  int appendFailuresBeforeSuccess = 0;
+
+  int renameChatInIndexAttempts = 0;
+  int renameFailuresBeforeSuccess = 0;
+  int activeRenameCalls = 0;
+  int maxConcurrentRenameCalls = 0;
+  Duration renameDelay = Duration.zero;
 
   @override
   Future<void> ensureDirectories(String projectId) async {
     // No-op for testing
+  }
+
+  @override
+  Future<void> appendChatEntry(
+    String projectId,
+    String chatId,
+    OutputEntry entry,
+  ) async {
+    appendChatEntryAttempts++;
+    if (appendChatEntryAttempts <= appendFailuresBeforeSuccess) {
+      throw StateError('append transient failure');
+    }
+    appendChatEntryCalls.add(
+      _AppendChatEntryCall(projectId: projectId, chatId: chatId, entry: entry),
+    );
   }
 
   @override
@@ -1240,12 +1308,48 @@ class _FakePersistenceService extends PersistenceService {
     required String chatId,
     required String? sessionId,
   }) async {
-    updateChatSessionIdCalls.add(_UpdateChatSessionIdCall(
-      projectRoot: projectRoot,
-      worktreePath: worktreePath,
-      chatId: chatId,
-      sessionId: sessionId,
-    ));
+    updateChatSessionIdCalls.add(
+      _UpdateChatSessionIdCall(
+        projectRoot: projectRoot,
+        worktreePath: worktreePath,
+        chatId: chatId,
+        sessionId: sessionId,
+      ),
+    );
+  }
+
+  @override
+  Future<void> renameChatInIndex({
+    required String projectRoot,
+    required String worktreePath,
+    required String chatId,
+    required String newName,
+  }) async {
+    renameChatInIndexAttempts++;
+    if (renameChatInIndexAttempts <= renameFailuresBeforeSuccess) {
+      throw StateError('rename transient failure');
+    }
+
+    activeRenameCalls++;
+    if (activeRenameCalls > maxConcurrentRenameCalls) {
+      maxConcurrentRenameCalls = activeRenameCalls;
+    }
+
+    try {
+      if (renameDelay > Duration.zero) {
+        await Future<void>.delayed(renameDelay);
+      }
+      renameChatInIndexCalls.add(
+        _RenameChatInIndexCall(
+          projectRoot: projectRoot,
+          worktreePath: worktreePath,
+          chatId: chatId,
+          newName: newName,
+        ),
+      );
+    } finally {
+      activeRenameCalls--;
+    }
   }
 }
 
@@ -1261,5 +1365,33 @@ class _UpdateChatSessionIdCall {
     required this.worktreePath,
     required this.chatId,
     required this.sessionId,
+  });
+}
+
+/// Record of a call to appendChatEntry.
+class _AppendChatEntryCall {
+  final String projectId;
+  final String chatId;
+  final OutputEntry entry;
+
+  _AppendChatEntryCall({
+    required this.projectId,
+    required this.chatId,
+    required this.entry,
+  });
+}
+
+/// Record of a call to renameChatInIndex.
+class _RenameChatInIndexCall {
+  final String projectRoot;
+  final String worktreePath;
+  final String chatId;
+  final String newName;
+
+  _RenameChatInIndexCall({
+    required this.projectRoot,
+    required this.worktreePath,
+    required this.chatId,
+    required this.newName,
   });
 }

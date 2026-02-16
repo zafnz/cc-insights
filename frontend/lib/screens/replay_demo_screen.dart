@@ -128,9 +128,7 @@ class _FilePathInput extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outlineVariant),
-        ),
+        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,18 +226,10 @@ class _ReplayContent extends StatelessWidget {
       child: Row(
         children: [
           // Left side: Controls and stats
-          SizedBox(
-            width: 300,
-            child: _ControlPanel(provider: provider),
-          ),
+          SizedBox(width: 300, child: _ControlPanel(provider: provider)),
           const VerticalDivider(width: 1),
           // Right side: Conversation panel
-          Expanded(
-            child: ListenableBuilder(
-              listenable: provider.chat,
-              builder: (context, _) => const ConversationPanel(),
-            ),
-          ),
+          const Expanded(child: ConversationPanel()),
         ],
       ),
     );
@@ -264,9 +254,7 @@ class _ControlPanel extends StatelessWidget {
             _PlaybackControls(provider: provider),
             const Divider(),
             // Statistics
-            Expanded(
-              child: _StatisticsPanel(provider: provider),
-            ),
+            Expanded(child: _StatisticsPanel(provider: provider)),
           ],
         );
       },
@@ -328,24 +316,25 @@ class _PlaybackControls extends StatelessWidget {
                 onPressed: provider.isPlaying ? provider.pause : provider.play,
                 icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow),
                 tooltip: provider.isPlaying ? 'Pause' : 'Play',
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(56, 56),
-                ),
+                style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
               ),
               const SizedBox(width: 8),
               // Step forward
               IconButton.outlined(
                 onPressed:
-                    provider.currentIndex < provider.totalEntries && !provider.isPlaying
-                        ? provider.stepForward
-                        : null,
+                    provider.currentIndex < provider.totalEntries &&
+                        !provider.isPlaying
+                    ? provider.stepForward
+                    : null,
                 icon: const Icon(Icons.skip_next),
                 tooltip: 'Step forward',
               ),
               const SizedBox(width: 8),
               // Play all instantly
               IconButton.filled(
-                onPressed: !provider.isPlaying ? provider.playAllInstantly : null,
+                onPressed: !provider.isPlaying
+                    ? provider.playAllInstantly
+                    : null,
                 icon: const Icon(Icons.fast_forward),
                 tooltip: 'Play all instantly',
               ),
@@ -400,9 +389,7 @@ class _StatisticsPanel extends StatelessWidget {
         children: [
           Text(
             'Log Statistics',
-            style: textTheme.titleSmall?.copyWith(
-              color: colorScheme.primary,
-            ),
+            style: textTheme.titleSmall?.copyWith(color: colorScheme.primary),
           ),
           const SizedBox(height: 12),
           _StatRow('Total lines', '${stats['totalLines'] ?? 0}'),
@@ -410,27 +397,21 @@ class _StatisticsPanel extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'Message Types',
-            style: textTheme.titleSmall?.copyWith(
-              color: colorScheme.primary,
-            ),
+            style: textTheme.titleSmall?.copyWith(color: colorScheme.primary),
           ),
           const SizedBox(height: 8),
           _buildTypeStats(stats['messageTypes'] as Map<String, int>?),
           const SizedBox(height: 16),
           Text(
             'Payload Types',
-            style: textTheme.titleSmall?.copyWith(
-              color: colorScheme.primary,
-            ),
+            style: textTheme.titleSmall?.copyWith(color: colorScheme.primary),
           ),
           const SizedBox(height: 8),
           _buildTypeStats(stats['payloadTypes'] as Map<String, int>?),
           const SizedBox(height: 16),
           Text(
             'Entry Types',
-            style: textTheme.titleSmall?.copyWith(
-              color: colorScheme.primary,
-            ),
+            style: textTheme.titleSmall?.copyWith(color: colorScheme.primary),
           ),
           const SizedBox(height: 8),
           _buildTypeStats(stats['outputEntryTypes'] as Map<String, int>?),
@@ -446,7 +427,9 @@ class _StatisticsPanel extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: types.entries.map((e) => _StatRow(e.key, '${e.value}')).toList(),
+      children: types.entries
+          .map((e) => _StatRow(e.key, '${e.value}'))
+          .toList(),
     );
   }
 }

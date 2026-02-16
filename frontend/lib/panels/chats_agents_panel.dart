@@ -16,10 +16,7 @@ import 'shared_tree_widgets.dart';
 /// Created when the Agents panel is dropped onto the Chats panel.
 /// Shows a tree view with chats as parents and their agents as children.
 class ChatsAgentsPanel extends StatelessWidget {
-  const ChatsAgentsPanel({
-    super.key,
-    required this.onSeparateAgents,
-  });
+  const ChatsAgentsPanel({super.key, required this.onSeparateAgents});
 
   /// Callback to separate agents back into a separate panel.
   final VoidCallback onSeparateAgents;
@@ -57,9 +54,7 @@ class _ChatsAgentsTreeContent extends StatelessWidget {
     final selectedWorktree = selection.selectedWorktree;
 
     if (selectedWorktree == null) {
-      return const EmptyPlaceholder(
-        message: 'Select a worktree to view chats',
-      );
+      return const EmptyPlaceholder(message: 'Select a worktree to view chats');
     }
 
     final chats = selectedWorktree.chats;
@@ -86,10 +81,7 @@ class _ChatsAgentsTreeContent extends StatelessWidget {
           return const NewChatCard();
         }
         final chat = chats[index];
-        return _ChatWithAgentsTreeItem(
-          chat: chat,
-          selection: selection,
-        );
+        return _ChatWithAgentsTreeItem(chat: chat, selection: selection);
       },
     );
   }
@@ -97,12 +89,9 @@ class _ChatsAgentsTreeContent extends StatelessWidget {
 
 /// A chat item with expandable agents underneath.
 class _ChatWithAgentsTreeItem extends StatefulWidget {
-  const _ChatWithAgentsTreeItem({
-    required this.chat,
-    required this.selection,
-  });
+  const _ChatWithAgentsTreeItem({required this.chat, required this.selection});
 
-  final ChatState chat;
+  final Chat chat;
   final SelectionState selection;
 
   @override
@@ -125,9 +114,14 @@ class _ChatWithAgentsTreeItemState extends State<_ChatWithAgentsTreeItem> {
     final textTheme = Theme.of(context).textTheme;
     final isSelected = widget.selection.selectedChat == widget.chat;
 
-    // Listen to ChatState changes (e.g., rename) for immediate UI updates
+    // Listen to the specific chat sub-states rendered by this row.
     return ListenableBuilder(
-      listenable: widget.chat,
+      listenable: Listenable.merge([
+        widget.chat.conversations,
+        widget.chat.session,
+        widget.chat.permissions,
+        widget.chat.viewState,
+      ]),
       builder: (context, _) {
         final data = widget.chat.data;
         final primaryConversation = data.primaryConversation;
@@ -135,121 +129,128 @@ class _ChatWithAgentsTreeItemState extends State<_ChatWithAgentsTreeItem> {
         final hasChildren = subagents.isNotEmpty;
 
         return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Chat row
-        MouseRegion(
-          onEnter: (_) => setState(() => _isHovered = true),
-          onExit: (_) => setState(() => _isHovered = false),
-          child: Material(
-            color: isSelected
-                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : Colors.transparent,
-            child: InkWell(
-              onTap: () => widget.selection.selectChat(widget.chat),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(
-                  children: [
-                    // Expand/collapse icon
-                    GestureDetector(
-                      onTap: hasChildren
-                          ? () => setState(() => _isExpanded = !_isExpanded)
-                          : null,
-                      child: SizedBox(
-                        width: 16,
-                        child: hasChildren
-                            ? Icon(
-                                _isExpanded
-                                    ? Icons.expand_more
-                                    : Icons.chevron_right,
-                                size: 14,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Chat row
+            MouseRegion(
+              onEnter: (_) => setState(() => _isHovered = true),
+              onExit: (_) => setState(() => _isHovered = false),
+              child: Material(
+                color: isSelected
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                    : Colors.transparent,
+                child: InkWell(
+                  onTap: () => widget.selection.selectChat(widget.chat),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        // Expand/collapse icon
+                        GestureDetector(
+                          onTap: hasChildren
+                              ? () => setState(() => _isExpanded = !_isExpanded)
+                              : null,
+                          child: SizedBox(
+                            width: 16,
+                            child: hasChildren
+                                ? Icon(
+                                    _isExpanded
+                                        ? Icons.expand_more
+                                        : Icons.chevron_right,
+                                    size: 14,
+                                    color: colorScheme.onSurfaceVariant,
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        // Chat icon
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 14,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        // Status indicator
+                        ChatStatusIndicator(chat: widget.chat),
+                        const SizedBox(width: 6),
+                        // Chat name (single-click to select, double-click to rename)
+                        Expanded(
+                          child: EditableLabel(
+                            text: data.name,
+                            style: textTheme.bodyMedium,
+                            onTap: () =>
+                                widget.selection.selectChat(widget.chat),
+                            onSubmit: (newName) =>
+                                widget.chat.conversations.rename(newName),
+                          ),
+                        ),
+                        // Close button (visible on hover)
+                        if (_isHovered)
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              iconSize: 14,
+                              onPressed: () => _closeChat(context),
+                              icon: Icon(
+                                Icons.close,
                                 color: colorScheme.onSurfaceVariant,
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    // Chat icon
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      size: 14,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    // Status indicator
-                    ChatStatusIndicator(chat: widget.chat),
-                    const SizedBox(width: 6),
-                    // Chat name (single-click to select, double-click to rename)
-                    Expanded(
-                      child: EditableLabel(
-                        text: data.name,
-                        style: textTheme.bodyMedium,
-                        onTap: () => widget.selection.selectChat(widget.chat),
-                        onSubmit: (newName) => widget.chat.rename(newName),
-                      ),
-                    ),
-                    // Close button (visible on hover)
-                    if (_isHovered)
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          iconSize: 14,
-                          onPressed: () => _closeChat(context),
-                          icon: Icon(
-                            Icons.close,
-                            color: colorScheme.onSurfaceVariant,
+                              ),
+                              tooltip: 'Close chat',
+                            ),
+                          )
+                        // Agent count badge (visible when not hovered)
+                        else if (subagents.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${subagents.length}',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSecondaryContainer,
+                              ),
+                            ),
                           ),
-                          tooltip: 'Close chat',
-                        ),
-                      )
-                    // Agent count badge (visible when not hovered)
-                    else if (subagents.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '${subagents.length}',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSecondaryContainer,
-                          ),
-                        ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        // Agents (nested with indent)
-        if (_isExpanded && hasChildren) ...[
-          // Primary conversation entry
-          _NestedAgentItem(
-            conversation: primaryConversation,
-            isSelected:
-                widget.selection.selectedConversation == primaryConversation,
-            onTap: () =>
-                widget.selection.selectConversation(primaryConversation),
-            isPrimary: true,
-          ),
-          // Subagent entries
-          ...subagents.map((subagent) => _NestedAgentItem(
-                conversation: subagent,
+            // Agents (nested with indent)
+            if (_isExpanded && hasChildren) ...[
+              // Primary conversation entry
+              _NestedAgentItem(
+                conversation: primaryConversation,
                 isSelected:
-                    widget.selection.selectedConversation == subagent,
-                onTap: () => widget.selection.selectConversation(subagent),
-                isPrimary: false,
-              )),
-        ],
-      ],
+                    widget.selection.selectedConversation ==
+                    primaryConversation,
+                onTap: () =>
+                    widget.selection.selectConversation(primaryConversation),
+                isPrimary: true,
+              ),
+              // Subagent entries
+              ...subagents.map(
+                (subagent) => _NestedAgentItem(
+                  conversation: subagent,
+                  isSelected: widget.selection.selectedConversation == subagent,
+                  onTap: () => widget.selection.selectConversation(subagent),
+                  isPrimary: false,
+                ),
+              ),
+            ],
+          ],
         );
       },
     );
@@ -286,7 +287,9 @@ class _NestedAgentItem extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                isPrimary ? Icons.chat_bubble_outline : Icons.smart_toy_outlined,
+                isPrimary
+                    ? Icons.chat_bubble_outline
+                    : Icons.smart_toy_outlined,
                 size: 12,
                 color: isPrimary
                     ? colorScheme.primary

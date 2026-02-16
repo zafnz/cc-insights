@@ -82,22 +82,28 @@ class ConversationHeader extends StatelessWidget {
   });
 
   final ConversationData conversation;
-  final ChatState chat;
+  final Chat chat;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final backendService = context.watch<BackendService>();
+    final settings = chat.settings;
+    final session = chat.session;
+    final metrics = chat.metrics;
+    final agents = chat.agents;
 
     final isSubagent = !conversation.isPrimary;
-    final isAcp = chat.model.backend == sdk.BackendType.acp;
-    final acpConfigWidgets =
-        isAcp ? _buildAcpConfigWidgets(chat) : const <Widget>[];
+    final isAcp = settings.model.backend == sdk.BackendType.acp;
+    final acpConfigWidgets = isAcp
+        ? _buildAcpConfigWidgets(settings)
+        : const <Widget>[];
 
     // Check if backend is starting for this chat's agent
-    final startingAgent = (chat.agentId != null &&
-            backendService.isStartingForAgent(chat.agentId!))
-        ? chat.agentName
+    final startingAgent =
+        (agents.agentId != null &&
+            backendService.isStartingForAgent(agents.agentId!))
+        ? agents.agentName
         : null;
 
     // Don't show the toolbar for subagent conversations (title is in panel header)
@@ -105,27 +111,30 @@ class ConversationHeader extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final isBackendLocked = chat.hasStarted;
+    final isBackendLocked = session.hasStarted;
     // Use agent-keyed capabilities when available
-    final caps = chat.agentId != null
-        ? backendService.capabilitiesForAgent(chat.agentId!)
-        : backendService.capabilitiesFor(chat.model.backend);
+    final caps = agents.agentId != null
+        ? backendService.capabilitiesForAgent(agents.agentId!)
+        : backendService.capabilitiesFor(settings.model.backend);
     const showCost = true;
     final rightWidgets = <Widget>[
-      if (chat.model.backend == sdk.BackendType.codex && chat.hasActiveSession)
-        Builder(builder: (context) {
-          final config = chat.securityConfig;
-          if (config is sdk.CodexSecurityConfig) {
-            return SecurityBadge(config: config);
-          }
-          return const SizedBox.shrink();
-        }),
-      ContextIndicator(tracker: chat.contextTracker),
+      if (settings.model.backend == sdk.BackendType.codex &&
+          session.hasActiveSession)
+        Builder(
+          builder: (context) {
+            final config = settings.securityConfig;
+            if (config is sdk.CodexSecurityConfig) {
+              return SecurityBadge(config: config);
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+      ContextIndicator(tracker: metrics.contextTracker),
       CostIndicator(
-        usage: chat.cumulativeUsage,
-        modelUsage: chat.modelUsage,
-        timingStats: chat.timingStats,
-        agentLabel: chat.agentName,
+        usage: metrics.cumulativeUsage,
+        modelUsage: metrics.modelUsage,
+        timingStats: metrics.timingStats,
+        agentLabel: agents.agentName,
         showCost: showCost,
       ),
     ];
@@ -153,11 +162,13 @@ class ConversationHeader extends StatelessWidget {
               children: [
                 Builder(
                   builder: (context) {
-                    final cliAvailability =
-                        context.watch<CliAvailabilityService>();
+                    final cliAvailability = context
+                        .watch<CliAvailabilityService>();
                     final allAgents = RuntimeConfig.instance.agents;
                     final availableAgents = allAgents
-                        .where((agent) => _isAgentAvailable(agent, cliAvailability))
+                        .where(
+                          (agent) => _isAgentAvailable(agent, cliAvailability),
+                        )
                         .toList();
 
                     // Handle empty agent list gracefully
@@ -166,10 +177,11 @@ class ConversationHeader extends StatelessWidget {
                     }
 
                     // Get current agent name
-                    final currentAgentName = chat.agentName;
+                    final currentAgentName = agents.agentName;
 
-                    final isAgentStarting = chat.agentId != null &&
-                        backendService.isStartingForAgent(chat.agentId!);
+                    final isAgentStarting =
+                        agents.agentId != null &&
+                        backendService.isStartingForAgent(agents.agentId!);
 
                     return CompactDropdown(
                       value: currentAgentName,
@@ -177,7 +189,9 @@ class ConversationHeader extends StatelessWidget {
                       tooltip: 'Agent',
                       isLoading: isAgentStarting,
                       isEnabled:
-                          !isBackendLocked && !isAgentStarting && availableAgents.length > 1,
+                          !isBackendLocked &&
+                          !isAgentStarting &&
+                          availableAgents.length > 1,
                       onChanged: (agentName) {
                         // Find agent by name
                         final selectedAgent = availableAgents.firstWhere(
@@ -192,27 +206,25 @@ class ConversationHeader extends StatelessWidget {
                   },
                 ),
                 if (startingAgent != null)
-                  _buildBackendStartingIndicator(
-                    context,
-                    startingAgent,
-                  ),
+                  _buildBackendStartingIndicator(context, startingAgent),
                 if (!isAcp)
                   Builder(
                     builder: (context) {
                       final models = ChatModelCatalog.forBackend(
-                        chat.model.backend,
+                        settings.model.backend,
                       );
                       final selected = models.firstWhere(
-                        (m) => m.id == chat.model.id,
-                        orElse: () => chat.model,
+                        (m) => m.id == settings.model.id,
+                        orElse: () => settings.model,
                       );
-                      final isModelLoading = caps.supportsModelListing &&
-                          (chat.agentId != null
+                      final isModelLoading =
+                          caps.supportsModelListing &&
+                          (agents.agentId != null
                               ? backendService.isModelListLoadingForAgent(
-                                  chat.agentId!,
+                                  agents.agentId!,
                                 )
                               : backendService.isModelListLoadingFor(
-                                  chat.model.backend,
+                                  settings.model.backend,
                                 ));
                       return CompactDropdown(
                         value: selected.label,
@@ -224,7 +236,7 @@ class ConversationHeader extends StatelessWidget {
                             (m) => m.label == value,
                             orElse: () => selected,
                           );
-                          chat.setModel(model);
+                          settings.setModel(model);
                         },
                       );
                     },
@@ -232,16 +244,16 @@ class ConversationHeader extends StatelessWidget {
                 else
                   ...acpConfigWidgets,
                 // Backend-specific security controls
-                if (chat.model.backend == sdk.BackendType.codex) ...[
+                if (settings.model.backend == sdk.BackendType.codex) ...[
                   Builder(
                     builder: (context) {
-                      final config = chat.securityConfig;
+                      final config = settings.securityConfig;
                       if (config is! sdk.CodexSecurityConfig) {
                         return const SizedBox.shrink();
                       }
-                      final codexCaps = chat.agentId != null
+                      final codexCaps = agents.agentId != null
                           ? backendService.codexSecurityCapabilitiesForAgent(
-                              chat.agentId!,
+                              agents.agentId!,
                             )
                           : backendService.codexSecurityCapabilities;
                       return SecurityConfigGroup(
@@ -249,7 +261,7 @@ class ConversationHeader extends StatelessWidget {
                         capabilities: codexCaps,
                         isEnabled: true,
                         onConfigChanged: (newConfig) {
-                          chat.setSecurityConfig(newConfig);
+                          settings.setSecurityConfig(newConfig);
                         },
                       );
                     },
@@ -257,29 +269,27 @@ class ConversationHeader extends StatelessWidget {
                 ] else if (!isAcp) ...[
                   // Claude: existing single dropdown (unchanged)
                   CompactDropdown(
-                    value: chat.permissionMode.label,
-                    items: PermissionMode.values
-                        .map((m) => m.label)
-                        .toList(),
+                    value: settings.permissionMode.label,
+                    items: PermissionMode.values.map((m) => m.label).toList(),
                     tooltip: 'Permissions',
                     onChanged: (value) {
                       final mode = PermissionMode.values.firstWhere(
                         (m) => m.label == value,
                         orElse: () => PermissionMode.defaultMode,
                       );
-                      chat.setPermissionMode(mode);
+                      settings.setPermissionMode(mode);
                     },
                   ),
                 ],
                 // Reasoning effort dropdown (only for backends that support it)
                 if (caps.supportsReasoningEffort)
                   CompactDropdown(
-                    value: chat.reasoningEffort?.label ?? 'Default',
+                    value: settings.reasoningEffort?.label ?? 'Default',
                     items: reasoningEffortItems,
                     tooltip: 'Reasoning',
                     onChanged: (value) {
                       final effort = reasoningEffortFromLabel(value);
-                      chat.setReasoningEffort(effort);
+                      settings.setReasoningEffort(effort);
                     },
                   ),
               ],
@@ -301,7 +311,7 @@ class ConversationHeader extends StatelessWidget {
 
   Future<void> _handleAgentChange(
     BuildContext context,
-    ChatState chat,
+    Chat chat,
     String agentId,
   ) async {
     // Look up the agent config from RuntimeConfig
@@ -309,9 +319,12 @@ class ConversationHeader extends StatelessWidget {
     if (agentConfig == null) return;
 
     final backendType = agentConfig.backendType;
-    if (backendType == chat.model.backend && chat.agentId == agentId) return;
+    if (backendType == chat.settings.model.backend &&
+        chat.agents.agentId == agentId) {
+      return;
+    }
 
-    if (chat.hasActiveSession) {
+    if (chat.session.hasActiveSession) {
       _showBackendSwitchError(
         context,
         'End the active session before switching agents.',
@@ -319,7 +332,7 @@ class ConversationHeader extends StatelessWidget {
       return;
     }
 
-    if (chat.hasStarted) {
+    if (chat.session.hasStarted) {
       _showBackendSwitchError(
         context,
         'Backend is locked once a chat has started.',
@@ -329,15 +342,15 @@ class ConversationHeader extends StatelessWidget {
 
     // Set agent ID optimistically so the dropdown updates immediately
     // and the loading indicator shows for the correct agent.
-    final previousAgentId = chat.agentId;
-    chat.agentId = agentId;
+    final previousAgentId = chat.agents.agentId;
+    chat.agents.agentId = agentId;
 
     final backendService = context.read<BackendService>();
     await backendService.startAgent(agentId, config: agentConfig);
     final error = backendService.errorForAgent(agentId);
     if (error != null) {
       // Revert to previous agent on failure
-      chat.agentId = previousAgentId;
+      chat.agents.agentId = previousAgentId;
       if (!context.mounted) return;
       if (!backendService.isAgentErrorForAgent(agentId)) {
         _showBackendSwitchError(context, error);
@@ -350,7 +363,7 @@ class ConversationHeader extends StatelessWidget {
       backendType,
       agentConfig.defaultModel,
     );
-    chat.setModel(model);
+    chat.settings.setModel(model);
   }
 
   void _showBackendSwitchError(BuildContext context, String message) {
@@ -385,10 +398,7 @@ class ConversationHeader extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Starting $agentName...',
-            style: TextStyle(
-              fontSize: 12,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -400,44 +410,46 @@ class ConversationHeader extends StatelessWidget {
 // ACP config option helpers
 // -----------------------------------------------------------------------------
 
-List<Widget> _buildAcpConfigWidgets(ChatState chat) {
-  final options = _parseAcpConfigOptions(chat.acpConfigOptions);
+List<Widget> _buildAcpConfigWidgets(ChatSettingsState settings) {
+  final options = _parseAcpConfigOptions(settings.acpConfigOptions);
   if (options.isEmpty &&
-      (chat.acpAvailableModes == null ||
-          (chat.acpAvailableModes?.length ?? 0) <= 1)) {
+      (settings.acpAvailableModes == null ||
+          (settings.acpAvailableModes?.length ?? 0) <= 1)) {
     return const [];
   }
 
   final widgets = <Widget>[];
-  final modelOptions =
-      options.where((o) => o.category == 'model').toList();
+  final modelOptions = options.where((o) => o.category == 'model').toList();
   final modeOptions = options.where((o) => o.category == 'mode').toList();
-  final otherOptions =
-      options.where((o) => o.category != 'model' && o.category != 'mode')
-          .toList();
+  final otherOptions = options
+      .where((o) => o.category != 'model' && o.category != 'mode')
+      .toList();
 
   for (final option in modelOptions) {
-    final widget = _buildAcpOptionDropdown(option, chat);
+    final widget = _buildAcpOptionDropdown(option, settings);
     if (widget != null) widgets.add(widget);
   }
 
   for (final option in modeOptions) {
-    final widget = _buildAcpOptionDropdown(option, chat);
+    final widget = _buildAcpOptionDropdown(option, settings);
     if (widget != null) widgets.add(widget);
   }
 
   if (modeOptions.isEmpty) {
-    final fallback = _buildAcpModeFallback(chat);
+    final fallback = _buildAcpModeFallback(settings);
     if (fallback != null) widgets.add(fallback);
   }
 
-  final overflow = _buildAcpOverflowDropdown(otherOptions, chat);
+  final overflow = _buildAcpOverflowDropdown(otherOptions, settings);
   if (overflow != null) widgets.add(overflow);
 
   return widgets;
 }
 
-Widget? _buildAcpOptionDropdown(_AcpConfigOption option, ChatState chat) {
+Widget? _buildAcpOptionDropdown(
+  _AcpConfigOption option,
+  ChatSettingsState settings,
+) {
   if (option.values.length <= 1) return null;
   final items = option.values.map((v) => v.label).toList();
   final selectedLabel = option.selectedLabel();
@@ -446,20 +458,17 @@ Widget? _buildAcpOptionDropdown(_AcpConfigOption option, ChatState chat) {
     items: items,
     tooltip: option.name,
     onChanged: (valueLabel) {
-      final selectedValue = option.valueForLabel(valueLabel) ??
-          option.values.first.value;
-      chat.setAcpConfigOption(
-        configId: option.id,
-        value: selectedValue,
-      );
+      final selectedValue =
+          option.valueForLabel(valueLabel) ?? option.values.first.value;
+      settings.setAcpConfigOption(configId: option.id, value: selectedValue);
     },
   );
 }
 
-Widget? _buildAcpModeFallback(ChatState chat) {
-  final modes = _parseAcpModes(chat.acpAvailableModes);
+Widget? _buildAcpModeFallback(ChatSettingsState settings) {
+  final modes = _parseAcpModes(settings.acpAvailableModes);
   if (modes.length <= 1) return null;
-  final currentMode = chat.acpCurrentModeId;
+  final currentMode = settings.acpCurrentModeId;
   final selectedLabel = _resolveSelectedLabel(modes, currentMode);
   return CompactDropdown(
     value: selectedLabel,
@@ -470,14 +479,14 @@ Widget? _buildAcpModeFallback(ChatState chat) {
         (mode) => mode.label == valueLabel,
         orElse: () => modes.first,
       );
-      chat.setAcpMode(selected.value.toString());
+      settings.setAcpMode(selected.value.toString());
     },
   );
 }
 
 Widget? _buildAcpOverflowDropdown(
   List<_AcpConfigOption> options,
-  ChatState chat,
+  ChatSettingsState settings,
 ) {
   final items = <String>[];
   final selectionMap = <String, _AcpConfigSelection>{};
@@ -489,8 +498,10 @@ Widget? _buildAcpOverflowDropdown(
       if (selectionMap.containsKey(label)) {
         label = '$label (${option.id})';
       }
-      selectionMap[label] =
-          _AcpConfigSelection(configId: option.id, value: value.value);
+      selectionMap[label] = _AcpConfigSelection(
+        configId: option.id,
+        value: value.value,
+      );
       items.add(label);
     }
   }
@@ -504,7 +515,7 @@ Widget? _buildAcpOverflowDropdown(
     onChanged: (label) {
       final selection = selectionMap[label];
       if (selection == null) return;
-      chat.setAcpConfigOption(
+      settings.setAcpConfigOption(
         configId: selection.configId,
         value: selection.value,
       );
@@ -521,8 +532,7 @@ List<_AcpConfigOption> _parseAcpConfigOptions(
   for (final option in rawOptions) {
     final id = _readString(option, const ['id', 'configId']);
     if (id == null || id.isEmpty) continue;
-    final name =
-        _readString(option, const ['name', 'title', 'label']) ?? id;
+    final name = _readString(option, const ['name', 'title', 'label']) ?? id;
     final category =
         (_readString(option, const ['category', 'group']) ?? 'other')
             .toLowerCase();
@@ -530,18 +540,21 @@ List<_AcpConfigOption> _parseAcpConfigOptions(
       option['values'] ?? option['options'] ?? option['choices'],
     );
     if (values.isEmpty) continue;
-    final currentValue = option['value'] ??
+    final currentValue =
+        option['value'] ??
         option['currentValue'] ??
         option['selectedValue'] ??
         option['defaultValue'];
 
-    parsed.add(_AcpConfigOption(
-      id: id,
-      name: name,
-      category: category,
-      values: values,
-      currentValue: currentValue,
-    ));
+    parsed.add(
+      _AcpConfigOption(
+        id: id,
+        name: name,
+        category: category,
+        values: values,
+        currentValue: currentValue,
+      ),
+    );
   }
 
   return parsed;
@@ -556,16 +569,15 @@ List<_AcpConfigValue> _parseAcpValues(Object? rawValues) {
         final value = map['value'] ?? map['id'] ?? map['name'];
         final label = map['label'] ?? map['name'] ?? map['title'] ?? value;
         if (label != null) {
-          values.add(_AcpConfigValue(
-            value: value ?? label.toString(),
-            label: label.toString(),
-          ));
+          values.add(
+            _AcpConfigValue(
+              value: value ?? label.toString(),
+              label: label.toString(),
+            ),
+          );
         }
       } else if (entry != null) {
-        values.add(_AcpConfigValue(
-          value: entry,
-          label: entry.toString(),
-        ));
+        values.add(_AcpConfigValue(value: entry, label: entry.toString()));
       }
     }
     return values;
@@ -573,9 +585,7 @@ List<_AcpConfigValue> _parseAcpValues(Object? rawValues) {
   return const [];
 }
 
-List<_AcpConfigValue> _parseAcpModes(
-  List<Map<String, dynamic>>? rawModes,
-) {
+List<_AcpConfigValue> _parseAcpModes(List<Map<String, dynamic>>? rawModes) {
   if (rawModes == null || rawModes.isEmpty) return const [];
   final values = <_AcpConfigValue>[];
   for (final mode in rawModes) {
@@ -646,20 +656,14 @@ class _AcpConfigOption {
 }
 
 class _AcpConfigValue {
-  const _AcpConfigValue({
-    required this.value,
-    required this.label,
-  });
+  const _AcpConfigValue({required this.value, required this.label});
 
   final dynamic value;
   final String label;
 }
 
 class _AcpConfigSelection {
-  const _AcpConfigSelection({
-    required this.configId,
-    required this.value,
-  });
+  const _AcpConfigSelection({required this.configId, required this.value});
 
   final String configId;
   final dynamic value;
@@ -720,18 +724,12 @@ class SubagentStatusHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: statusColor.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      statusIcon,
-                      size: 14,
-                      color: statusColor,
-                    ),
+                    Icon(statusIcon, size: 14, color: statusColor),
                     const SizedBox(width: 4),
                     Text(
                       statusLabel,
@@ -804,36 +802,28 @@ class SubagentStatusHeader extends StatelessWidget {
     ColorScheme colorScheme,
   ) {
     return switch (status) {
-      AgentStatus.working => (
-          'Working',
-          colorScheme.primary,
-          Icons.sync,
-        ),
+      AgentStatus.working => ('Working', colorScheme.primary, Icons.sync),
       AgentStatus.waitingTool => (
-          'Waiting for permission',
-          Colors.orange,
-          Icons.hourglass_top,
-        ),
+        'Waiting for permission',
+        Colors.orange,
+        Icons.hourglass_top,
+      ),
       AgentStatus.waitingUser => (
-          'Waiting for input',
-          Colors.orange,
-          Icons.question_mark,
-        ),
+        'Waiting for input',
+        Colors.orange,
+        Icons.question_mark,
+      ),
       AgentStatus.completed => (
-          'Completed',
-          Colors.green,
-          Icons.check_circle_outline,
-        ),
-      AgentStatus.error => (
-          'Error',
-          colorScheme.error,
-          Icons.error_outline,
-        ),
+        'Completed',
+        Colors.green,
+        Icons.check_circle_outline,
+      ),
+      AgentStatus.error => ('Error', colorScheme.error, Icons.error_outline),
       null => (
-          'Inactive',
-          colorScheme.onSurfaceVariant,
-          Icons.pause_circle_outline,
-        ),
+        'Inactive',
+        colorScheme.onSurfaceVariant,
+        Icons.pause_circle_outline,
+      ),
     };
   }
 }
