@@ -89,6 +89,8 @@ class CliProcessConfig {
 
 /// Manages a claude-cli subprocess.
 class CliProcess {
+  static const _backend = 'claude';
+
   CliProcess._({
     required Process process,
     required CliProcessConfig config,
@@ -108,6 +110,10 @@ class CliProcess {
 
   final Process _process;
   final CliProcessConfig _config;
+
+  /// Session ID, set after the handshake completes.
+  /// Used to tag trace log entries for correlation.
+  String? sessionId;
 
   final _messagesController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -222,7 +228,8 @@ class CliProcess {
       }
       _t('CliProcess:stderr', line);
       // Log stderr to SDK logger
-      SdkLogger.instance.logStderr(line);
+      SdkLogger.instance.logStderr(line,
+          backend: _backend, sessionId: sessionId);
       _stderrController.add(line);
     });
 
@@ -258,7 +265,8 @@ class CliProcess {
         _t('CliProcess:recv', 'type=$type${subtype.isNotEmpty ? ' subtype=$subtype' : ''}'
             ' (${line.length} chars)');
         // Log incoming message
-        SdkLogger.instance.logIncoming(json);
+        SdkLogger.instance.logIncoming(json,
+            backend: _backend, sessionId: sessionId);
         _messagesController.add(json);
       } catch (e) {
         // If JSON parsing fails, log it as an error
@@ -286,7 +294,8 @@ class CliProcess {
     _t('CliProcess:send', 'type=$type${subtype.isNotEmpty ? ' subtype=$subtype' : ''}');
 
     // Log outgoing message
-    SdkLogger.instance.logOutgoing(message);
+    SdkLogger.instance.logOutgoing(message,
+        backend: _backend, sessionId: sessionId);
 
     var json = jsonEncode(message);
     // Escape Unicode line terminators that could break JSON Lines parsing

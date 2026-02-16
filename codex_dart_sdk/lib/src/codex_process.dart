@@ -33,8 +33,13 @@ class CodexProcess {
     _setupProtocolLogs();
   }
 
+  static const _backend = 'codex';
+
   final Process _process;
   final JsonRpcClient _client;
+
+  /// Set the session/thread ID so trace log entries include it.
+  set traceSessionId(String? value) => _client.sessionId = value;
 
   final _logsController = StreamController<String>.broadcast();
   final _logEntriesController = StreamController<LogEntry>.broadcast();
@@ -106,7 +111,7 @@ class CodexProcess {
     final client = JsonRpcClient(
       input: lines,
       output: (line) => process.stdin.writeln(line),
-    );
+    )..backend = _backend;
 
     final codex = CodexProcess._(process: process, client: client);
 
@@ -167,7 +172,7 @@ class CodexProcess {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-          SdkLogger.instance.logStderr(line);
+          SdkLogger.instance.logStderr(line, backend: _backend);
           _logsController.add(line);
           _logEntriesController.add(LogEntry(
             level: LogLevel.debug,

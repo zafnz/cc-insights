@@ -58,6 +58,12 @@ class JsonRpcClient {
   final void Function(String) _output;
   final StreamSubscription<String> _inputSub;
 
+  /// Backend label for trace log entries (e.g. 'codex').
+  String? backend;
+
+  /// Session ID for trace log entries, set after thread creation.
+  String? sessionId;
+
   File? _edgeLogFile;
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
   final _serverRequests =
@@ -127,7 +133,8 @@ class JsonRpcClient {
         .replaceAll('\u2028', r'\u2028')
         .replaceAll('\u2029', r'\u2029');
     _logEdge('sdk-stdin', message);
-    SdkLogger.instance.logOutgoing(message);
+    SdkLogger.instance.logOutgoing(message,
+        backend: backend, sessionId: sessionId);
     _protocolLogEntries.add(LogEntry(
       level: LogLevel.debug,
       message: 'SEND',
@@ -157,7 +164,8 @@ class JsonRpcClient {
     }
 
     _logEdge('sdk-stdout', json);
-    SdkLogger.instance.logIncoming(json);
+    SdkLogger.instance.logIncoming(json,
+        backend: backend, sessionId: sessionId);
     _protocolLogEntries.add(LogEntry(
       level: LogLevel.debug,
       message: 'RECV',

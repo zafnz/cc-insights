@@ -21,6 +21,8 @@ class CodexSession implements AgentSession {
         _serverModel = serverModel,
         _serverReasoningEffort = serverReasoningEffort,
         _registry = registry {
+    // Tag the process so trace log entries include the thread/session ID
+    process.traceSessionId = threadId;
     _setupStreams();
   }
 

@@ -138,6 +138,11 @@ class _MockCodexProcess implements CodexProcess {
   Stream<LogEntry> get logEntries => _logEntriesController.stream;
 
   @override
+  set traceSessionId(String? value) {
+    // No-op for test mock.
+  }
+
+  @override
   Future<Map<String, dynamic>> sendRequest(
     String method,
     Map<String, dynamic>? params,

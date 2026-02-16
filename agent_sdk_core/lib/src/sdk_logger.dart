@@ -25,6 +25,7 @@ class LogEntry {
     required this.message,
     required this.timestamp,
     this.direction,
+    this.backend,
     this.sessionId,
     this.data,
     this.text,
@@ -34,6 +35,7 @@ class LogEntry {
   final String message;
   final DateTime timestamp;
   final LogDirection? direction;
+  final String? backend;
   final String? sessionId;
   final Map<String, dynamic>? data;
   final String? text;
@@ -47,6 +49,10 @@ class LogEntry {
 
     if (direction != null) {
       json['direction'] = direction!.name;
+    }
+
+    if (backend != null) {
+      json['backend'] = backend;
     }
 
     if (sessionId != null) {
@@ -79,6 +85,9 @@ class LogEntry {
     buffer.write('[${level.name.toUpperCase()}]');
     if (direction != null) {
       buffer.write('[${direction!.name}]');
+    }
+    if (backend != null) {
+      buffer.write('[backend:$backend]');
     }
     if (sessionId != null) {
       buffer.write('[session:$sessionId]');
@@ -269,31 +278,36 @@ class SdkLogger {
   }
 
   /// Log a message sent TO the CLI (stdin).
-  void logOutgoing(Map<String, dynamic> message, {String? sessionId}) {
+  void logOutgoing(Map<String, dynamic> message,
+      {String? backend, String? sessionId}) {
     if (!_debugEnabled) return;
     _logMessage(
       LogDirection.stdin,
       message,
+      backend: backend,
       sessionId: sessionId,
     );
   }
 
   /// Log a message received FROM the CLI (stdout).
-  void logIncoming(Map<String, dynamic> message, {String? sessionId}) {
+  void logIncoming(Map<String, dynamic> message,
+      {String? backend, String? sessionId}) {
     if (!_debugEnabled) return;
     _logMessage(
       LogDirection.stdout,
       message,
+      backend: backend,
       sessionId: sessionId,
     );
   }
 
   /// Log stderr output from the CLI.
-  void logStderr(String line, {String? sessionId}) {
+  void logStderr(String line, {String? backend, String? sessionId}) {
     if (!_debugEnabled) return;
     _logText(
       LogDirection.stderr,
       line,
+      backend: backend,
       sessionId: sessionId,
     );
   }
@@ -302,6 +316,7 @@ class SdkLogger {
   void _logMessage(
     LogDirection direction,
     Map<String, dynamic> content, {
+    String? backend,
     String? sessionId,
   }) {
     final entry = LogEntry(
@@ -309,6 +324,7 @@ class SdkLogger {
       message: direction == LogDirection.stdin ? 'SEND' : 'RECV',
       timestamp: DateTime.now(),
       direction: direction,
+      backend: backend,
       sessionId: sessionId,
       data: content,
     );
@@ -336,6 +352,7 @@ class SdkLogger {
   void _logText(
     LogDirection direction,
     String text, {
+    String? backend,
     String? sessionId,
   }) {
     final entry = LogEntry(
@@ -343,6 +360,7 @@ class SdkLogger {
       message: direction == LogDirection.stdin ? 'SEND' : 'RECV',
       timestamp: DateTime.now(),
       direction: direction,
+      backend: backend,
       sessionId: sessionId,
       text: text,
     );

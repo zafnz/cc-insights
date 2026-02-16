@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/agent.dart';
@@ -17,6 +18,7 @@ import '../widgets/cost_indicator.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/security_badge.dart';
 import '../widgets/security_config_group.dart';
+import '../widgets/styled_popup_menu.dart';
 import 'compact_dropdown.dart';
 
 // -----------------------------------------------------------------------------
@@ -139,23 +141,27 @@ class ConversationHeader extends StatelessWidget {
       ),
     ];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        border: Border(
-          bottom: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+    return GestureDetector(
+      onSecondaryTapUp: (details) {
+        _showHeaderContextMenu(context, details.globalPosition);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+          border: Border(
+            bottom: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
           ),
         ),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left side: agent, model, and permission dropdowns
-          Expanded(
-            child: Wrap(
+        clipBehavior: Clip.hardEdge,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left side: agent, model, and permission dropdowns
+            Expanded(
+              child: Wrap(
               spacing: 8,
               runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -306,6 +312,30 @@ class ConversationHeader extends StatelessWidget {
           ],
         ],
       ),
+      ),
+    );
+  }
+
+  void _showHeaderContextMenu(BuildContext context, Offset position) {
+    final chatId = chat.data.id;
+    showStyledMenu<String>(
+      context: context,
+      position: menuPositionFromOffset(position),
+      items: [
+        styledMenuItem(
+          value: 'copy_chat_id',
+          child: const Row(
+            children: [
+              Icon(Icons.copy, size: 16),
+              SizedBox(width: 8),
+              Text('Copy Chat ID'),
+            ],
+          ),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: chatId));
+          },
+        ),
+      ],
     );
   }
 

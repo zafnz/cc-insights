@@ -1110,6 +1110,9 @@ class CliSession {
         throw StateError('Session creation timed out: no system init');
       }
 
+      // Tag the process so trace log entries include the session ID
+      process.sessionId = sessionId;
+
       _t('CliSession', '========== SESSION CREATED (${stopwatch.elapsedMilliseconds}ms) ==========');
       _t('CliSession', 'sessionId: $sessionId');
       if (bufferedMessages.isNotEmpty) {

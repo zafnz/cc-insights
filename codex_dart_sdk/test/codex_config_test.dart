@@ -49,6 +49,11 @@ class MockCodexProcess implements CodexProcess {
   Stream<LogEntry> get logEntries => const Stream<LogEntry>.empty();
 
   @override
+  set traceSessionId(String? value) {
+    // No-op for test mock.
+  }
+
+  @override
   Future<void> dispose() async {}
 }
 
