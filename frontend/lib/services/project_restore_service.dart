@@ -408,17 +408,24 @@ class ProjectRestoreService {
     String projectName,
     ProjectsIndex currentIndex,
   ) async {
-    final newProject = ProjectInfo(
-      id: projectId,
-      name: projectName,
-      worktrees: {projectRoot: const WorktreeInfo.primary(name: 'main')},
-    );
+    await _persistence.withProjectsIndexLock(() async {
+      final latestIndex = await _persistence.loadProjectsIndex();
+      final baseIndex = latestIndex.projects.isEmpty
+          ? currentIndex
+          : latestIndex;
 
-    final updatedIndex = currentIndex.copyWith(
-      projects: {...currentIndex.projects, projectRoot: newProject},
-    );
+      final newProject = ProjectInfo(
+        id: projectId,
+        name: projectName,
+        worktrees: {projectRoot: const WorktreeInfo.primary(name: 'main')},
+      );
 
-    await _persistence.saveProjectsIndex(updatedIndex);
+      final updatedIndex = baseIndex.copyWith(
+        projects: {...baseIndex.projects, projectRoot: newProject},
+      );
+
+      await _persistence.saveProjectsIndex(updatedIndex);
+    });
 
     developer.log(
       'Saved new project to persistence: $projectName ($projectId)',
@@ -485,45 +492,48 @@ class ProjectRestoreService {
     final projectId = PersistenceService.generateProjectId(projectRoot);
     await chat.persistence.initPersistence(projectId, projectRoot: projectRoot);
 
-    // Update projects.json with the new chat
-    final projectsIndex = await _persistence.loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+    await _persistence.withProjectsIndexLock(() async {
+      final projectsIndex = await _persistence.loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for path: $projectRoot',
-        name: 'ProjectRestoreService',
-        level: 900, // Warning level
+      if (project == null) {
+        developer.log(
+          'Project not found for path: $projectRoot',
+          name: 'ProjectRestoreService',
+          level: 900, // Warning level
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for path: $worktreePath',
+          name: 'ProjectRestoreService',
+          level: 900, // Warning level
+        );
+        return;
+      }
+
+      if (worktree.chats.any((ref) => ref.chatId == chat.data.id)) {
+        return;
+      }
+
+      final chatRef = ChatReference(name: chat.data.name, chatId: chat.data.id);
+      final updatedWorktree = worktree.copyWith(
+        chats: [...worktree.chats, chatRef],
       );
-      return;
-    }
 
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for path: $worktreePath',
-        name: 'ProjectRestoreService',
-        level: 900, // Warning level
+      final updatedProject = project.copyWith(
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
       );
-      return;
-    }
 
-    // Add the chat reference
-    final chatRef = ChatReference(name: chat.data.name, chatId: chat.data.id);
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
+      );
 
-    final updatedWorktree = worktree.copyWith(
-      chats: [...worktree.chats, chatRef],
-    );
-
-    final updatedProject = project.copyWith(
-      worktrees: {...project.worktrees, worktreePath: updatedWorktree},
-    );
-
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {...projectsIndex.projects, projectRoot: updatedProject},
-    );
-
-    await _persistence.saveProjectsIndex(updatedIndex);
+      await _persistence.saveProjectsIndex(updatedIndex);
+    });
 
     developer.log(
       'Added chat to persistence: ${chat.data.name}',

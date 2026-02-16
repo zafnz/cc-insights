@@ -19,62 +19,77 @@ mixin _IndexMixin on _PersistenceBase {
     required String worktreePath,
     required String chatId,
     required String? sessionId,
-  }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+  }) {
+    return runWithProjectsIndexLock(() async {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for session ID update: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return;
-    }
-
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for session ID update: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return;
-    }
-
-    // Find and update the chat reference
-    final updatedChats = worktree.chats.map((chat) {
-      if (chat.chatId == chatId) {
-        return ChatReference(
-          name: chat.name,
-          chatId: chat.chatId,
-          lastSessionId: sessionId,
+      if (project == null) {
+        developer.log(
+          'Project not found for session ID update: $projectRoot',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
         );
+        return;
       }
-      return chat;
-    }).toList();
 
-    // Rebuild the index with the updated chat
-    final updatedWorktree = worktree.copyWith(chats: updatedChats);
-    final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
-    );
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for session ID update: $worktreePath',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
 
-    await saveProjectsIndex(updatedIndex);
+      var found = false;
+      var changed = false;
+      final updatedChats = worktree.chats.map((chat) {
+        if (chat.chatId == chatId) {
+          found = true;
+          if (chat.lastSessionId == sessionId) {
+            return chat;
+          }
+          changed = true;
+          return ChatReference(
+            name: chat.name,
+            chatId: chat.chatId,
+            lastSessionId: sessionId,
+          );
+        }
+        return chat;
+      }).toList();
 
-    developer.log(
-      'Updated session ID for chat $chatId: ${sessionId ?? 'cleared'}',
-      name: 'PersistenceService',
-    );
+      // Avoid writing stale snapshots when a session update arrives before
+      // the chat reference has been persisted.
+      if (!found) {
+        developer.log(
+          'Chat not found for session ID update: $chatId',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+      if (!changed) {
+        return;
+      }
+
+      final updatedWorktree = worktree.copyWith(chats: updatedChats);
+      final updatedProject = project.copyWith(
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
+      );
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
+      );
+
+      await saveProjectsIndex(updatedIndex);
+
+      developer.log(
+        'Updated session ID for chat $chatId: ${sessionId ?? 'cleared'}',
+        name: 'PersistenceService',
+      );
+    });
   }
 
   /// Renames a chat in the projects.json index.
@@ -87,62 +102,70 @@ mixin _IndexMixin on _PersistenceBase {
     required String worktreePath,
     required String chatId,
     required String newName,
-  }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+  }) {
+    return runWithProjectsIndexLock(() async {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for chat rename: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return;
-    }
-
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for chat rename: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return;
-    }
-
-    // Find and update the chat reference with the new name
-    final updatedChats = worktree.chats.map((chat) {
-      if (chat.chatId == chatId) {
-        return ChatReference(
-          name: newName,
-          chatId: chat.chatId,
-          lastSessionId: chat.lastSessionId,
+      if (project == null) {
+        developer.log(
+          'Project not found for chat rename: $projectRoot',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
         );
+        return;
       }
-      return chat;
-    }).toList();
 
-    // Rebuild the index with the updated chat
-    final updatedWorktree = worktree.copyWith(chats: updatedChats);
-    final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
-    );
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for chat rename: $worktreePath',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
 
-    await saveProjectsIndex(updatedIndex);
+      var found = false;
+      final updatedChats = worktree.chats.map((chat) {
+        if (chat.chatId == chatId) {
+          found = true;
+          if (chat.name == newName) {
+            return chat;
+          }
+          return ChatReference(
+            name: newName,
+            chatId: chat.chatId,
+            lastSessionId: chat.lastSessionId,
+          );
+        }
+        return chat;
+      }).toList();
 
-    developer.log(
-      'Renamed chat $chatId to: $newName',
-      name: 'PersistenceService',
-    );
+      if (!found) {
+        developer.log(
+          'Chat not found for chat rename: $chatId',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final updatedWorktree = worktree.copyWith(chats: updatedChats);
+      final updatedProject = project.copyWith(
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
+      );
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
+      );
+
+      await saveProjectsIndex(updatedIndex);
+
+      developer.log(
+        'Renamed chat $chatId to: $newName',
+        name: 'PersistenceService',
+      );
+    });
   }
 
   /// Removes a chat reference from the projects.json index.
@@ -155,54 +178,52 @@ mixin _IndexMixin on _PersistenceBase {
     required String projectRoot,
     required String worktreePath,
     required String chatId,
-  }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+  }) {
+    return runWithProjectsIndexLock(() async {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for chat removal: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      if (project == null) {
+        developer.log(
+          'Project not found for chat removal: $projectRoot',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for chat removal: $worktreePath',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final updatedChats = worktree.chats
+          .where((chat) => chat.chatId != chatId)
+          .toList();
+      if (updatedChats.length == worktree.chats.length) {
+        return;
+      }
+
+      final updatedWorktree = worktree.copyWith(chats: updatedChats);
+      final updatedProject = project.copyWith(
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
       );
-      return;
-    }
-
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for chat removal: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
       );
-      return;
-    }
 
-    // Filter out the chat with matching chatId
-    final updatedChats =
-        worktree.chats.where((chat) => chat.chatId != chatId).toList();
+      await saveProjectsIndex(updatedIndex);
 
-    // Rebuild the index with the updated chat list
-    final updatedWorktree = worktree.copyWith(chats: updatedChats);
-    final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
-    );
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
-
-    await saveProjectsIndex(updatedIndex);
-
-    developer.log(
-      'Removed chat $chatId from projects.json',
-      name: 'PersistenceService',
-    );
+      developer.log(
+        'Removed chat $chatId from projects.json',
+        name: 'PersistenceService',
+      );
+    });
   }
 
   /// Updates the tags assigned to a worktree in projects.json.
@@ -212,49 +233,45 @@ mixin _IndexMixin on _PersistenceBase {
     required String projectRoot,
     required String worktreePath,
     required List<String> tags,
-  }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+  }) {
+    return runWithProjectsIndexLock(() async {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for tag update: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      if (project == null) {
+        developer.log(
+          'Project not found for tag update: $projectRoot',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for tag update: $worktreePath',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final updatedWorktree = worktree.copyWith(tags: tags);
+      final updatedProject = project.copyWith(
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
       );
-      return;
-    }
-
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for tag update: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
       );
-      return;
-    }
 
-    final updatedWorktree = worktree.copyWith(tags: tags);
-    final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
-    );
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
+      await saveProjectsIndex(updatedIndex);
 
-    await saveProjectsIndex(updatedIndex);
-
-    developer.log(
-      'Updated tags for worktree $worktreePath: $tags',
-      name: 'PersistenceService',
-    );
+      developer.log(
+        'Updated tags for worktree $worktreePath: $tags',
+        name: 'PersistenceService',
+      );
+    });
   }
 
   /// Updates the base branch for a worktree in projects.json.
@@ -266,52 +283,48 @@ mixin _IndexMixin on _PersistenceBase {
     required String projectRoot,
     required String worktreePath,
     required String? base,
-  }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+  }) {
+    return runWithProjectsIndexLock(() async {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for base update: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      if (project == null) {
+        developer.log(
+          'Project not found for base update: $projectRoot',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for base update: $worktreePath',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return;
+      }
+
+      final updatedWorktree = base != null
+          ? worktree.copyWith(base: base)
+          : worktree.copyWith(clearBase: true);
+      final updatedProject = project.copyWith(
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
       );
-      return;
-    }
-
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for base update: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
       );
-      return;
-    }
 
-    final updatedWorktree = base != null
-        ? worktree.copyWith(base: base)
-        : worktree.copyWith(clearBase: true);
-    final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
-    );
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
+      await saveProjectsIndex(updatedIndex);
 
-    await saveProjectsIndex(updatedIndex);
-
-    developer.log(
-      'Updated base for worktree $worktreePath: '
-      '${base ?? 'cleared'}',
-      name: 'PersistenceService',
-    );
+      developer.log(
+        'Updated base for worktree $worktreePath: '
+        '${base ?? 'cleared'}',
+        name: 'PersistenceService',
+      );
+    });
   }
 
   /// Hides a worktree by setting `hidden: true` in projects.json.
@@ -324,66 +337,14 @@ mixin _IndexMixin on _PersistenceBase {
   Future<void> hideWorktreeFromIndex({
     required String projectRoot,
     required String worktreePath,
-  }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
-
-    if (project == null) {
-      developer.log(
-        'Project not found for worktree hide: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return;
-    }
-
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for hide: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return;
-    }
-
-    // Set hidden flag on the worktree
-    final updatedWorktree = worktree.copyWith(hidden: true);
-    final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
-    );
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
-
-    await saveProjectsIndex(updatedIndex);
-
-    developer.log(
-      'Hidden worktree $worktreePath in projects.json (hidden flag set)',
-      name: 'PersistenceService',
-    );
-  }
-
-  /// Unhides a worktree by setting `hidden: false` in projects.json.
-  ///
-  /// Throws on failure — callers are responsible for error handling.
-  Future<void> unhideWorktreeFromIndex({
-    required String projectRoot,
-    required String worktreePath,
-  }) async {
-    try {
+  }) {
+    return runWithProjectsIndexLock(() async {
       final projectsIndex = await loadProjectsIndex();
       final project = projectsIndex.projects[projectRoot];
 
       if (project == null) {
         developer.log(
-          'Project not found for worktree unhide: $projectRoot',
+          'Project not found for worktree hide: $projectRoot',
           name: 'PersistenceService',
           level: _PersistenceBase._kWarningLevel,
         );
@@ -393,40 +354,83 @@ mixin _IndexMixin on _PersistenceBase {
       final worktree = project.worktrees[worktreePath];
       if (worktree == null) {
         developer.log(
-          'Worktree not found for unhide: $worktreePath',
+          'Worktree not found for hide: $worktreePath',
           name: 'PersistenceService',
           level: _PersistenceBase._kWarningLevel,
         );
         return;
       }
 
-      final updatedWorktree = worktree.copyWith(hidden: false);
+      final updatedWorktree = worktree.copyWith(hidden: true);
       final updatedProject = project.copyWith(
-        worktrees: {
-          ...project.worktrees,
-          worktreePath: updatedWorktree,
-        },
+        worktrees: {...project.worktrees, worktreePath: updatedWorktree},
       );
       final updatedIndex = projectsIndex.copyWith(
-        projects: {
-          ...projectsIndex.projects,
-          projectRoot: updatedProject,
-        },
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
       );
 
       await saveProjectsIndex(updatedIndex);
 
       developer.log(
-        'Unhidden worktree $worktreePath in projects.json',
+        'Hidden worktree $worktreePath in projects.json (hidden flag set)',
         name: 'PersistenceService',
       );
-    } catch (e) {
-      developer.log(
-        'Failed to unhide worktree $worktreePath: $e',
-        name: 'PersistenceService',
-        error: e,
-      );
-    }
+    });
+  }
+
+  /// Unhides a worktree by setting `hidden: false` in projects.json.
+  ///
+  /// Throws on failure — callers are responsible for error handling.
+  Future<void> unhideWorktreeFromIndex({
+    required String projectRoot,
+    required String worktreePath,
+  }) {
+    return runWithProjectsIndexLock(() async {
+      try {
+        final projectsIndex = await loadProjectsIndex();
+        final project = projectsIndex.projects[projectRoot];
+
+        if (project == null) {
+          developer.log(
+            'Project not found for worktree unhide: $projectRoot',
+            name: 'PersistenceService',
+            level: _PersistenceBase._kWarningLevel,
+          );
+          return;
+        }
+
+        final worktree = project.worktrees[worktreePath];
+        if (worktree == null) {
+          developer.log(
+            'Worktree not found for unhide: $worktreePath',
+            name: 'PersistenceService',
+            level: _PersistenceBase._kWarningLevel,
+          );
+          return;
+        }
+
+        final updatedWorktree = worktree.copyWith(hidden: false);
+        final updatedProject = project.copyWith(
+          worktrees: {...project.worktrees, worktreePath: updatedWorktree},
+        );
+        final updatedIndex = projectsIndex.copyWith(
+          projects: {...projectsIndex.projects, projectRoot: updatedProject},
+        );
+
+        await saveProjectsIndex(updatedIndex);
+
+        developer.log(
+          'Unhidden worktree $worktreePath in projects.json',
+          name: 'PersistenceService',
+        );
+      } catch (e) {
+        developer.log(
+          'Failed to unhide worktree $worktreePath: $e',
+          name: 'PersistenceService',
+          error: e,
+        );
+      }
+    });
   }
 
   /// Removes a worktree from the projects.json index.
@@ -444,47 +448,42 @@ mixin _IndexMixin on _PersistenceBase {
     required String worktreePath,
     required String projectId,
   }) async {
-    final projectsIndex = await loadProjectsIndex();
-    final project = projectsIndex.projects[projectRoot];
+    final chatIds = await runWithProjectsIndexLock(() async {
+      final projectsIndex = await loadProjectsIndex();
+      final project = projectsIndex.projects[projectRoot];
 
-    if (project == null) {
-      developer.log(
-        'Project not found for worktree removal: $projectRoot',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
+      if (project == null) {
+        developer.log(
+          'Project not found for worktree removal: $projectRoot',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return <String>[];
+      }
+
+      final worktree = project.worktrees[worktreePath];
+      if (worktree == null) {
+        developer.log(
+          'Worktree not found for removal: $worktreePath',
+          name: 'PersistenceService',
+          level: _PersistenceBase._kWarningLevel,
+        );
+        return <String>[];
+      }
+
+      final chatIds = worktree.chats.map((chat) => chat.chatId).toList();
+      final updatedWorktrees = Map<String, WorktreeInfo>.from(project.worktrees)
+        ..remove(worktreePath);
+
+      final updatedProject = project.copyWith(worktrees: updatedWorktrees);
+      final updatedIndex = projectsIndex.copyWith(
+        projects: {...projectsIndex.projects, projectRoot: updatedProject},
       );
-      return [];
-    }
 
-    final worktree = project.worktrees[worktreePath];
-    if (worktree == null) {
-      developer.log(
-        'Worktree not found for removal: $worktreePath',
-        name: 'PersistenceService',
-        level: _PersistenceBase._kWarningLevel,
-      );
-      return [];
-    }
+      await saveProjectsIndex(updatedIndex);
+      return chatIds;
+    });
 
-    // Collect chat IDs for cleanup
-    final chatIds = worktree.chats.map((chat) => chat.chatId).toList();
-
-    // Remove the worktree from the map
-    final updatedWorktrees = Map<String, WorktreeInfo>.from(project.worktrees)
-      ..remove(worktreePath);
-
-    // Rebuild the index without this worktree
-    final updatedProject = project.copyWith(worktrees: updatedWorktrees);
-    final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
-    );
-
-    await saveProjectsIndex(updatedIndex);
-
-    // Delete all chat files for this worktree
     for (final chatId in chatIds) {
       try {
         await deleteChat(projectId, chatId);
@@ -494,7 +493,6 @@ mixin _IndexMixin on _PersistenceBase {
           name: 'PersistenceService',
           error: e,
         );
-        // Continue with other chats
       }
     }
 

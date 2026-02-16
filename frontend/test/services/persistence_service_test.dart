@@ -13,7 +13,9 @@ void main() {
   late _TestPersistenceService persistence;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('persistence_service_test_');
+    tempDir = await Directory.systemTemp.createTemp(
+      'persistence_service_test_',
+    );
     persistence = _TestPersistenceService(tempDir.path);
   });
 
@@ -68,12 +70,7 @@ void main() {
               worktrees: {
                 worktreePath: const WorktreeInfo.primary(
                   name: 'main',
-                  chats: [
-                    ChatReference(
-                      name: 'Test Chat',
-                      chatId: chatId,
-                    ),
-                  ],
+                  chats: [ChatReference(name: 'Test Chat', chatId: chatId)],
                 ),
               },
             ),
@@ -91,8 +88,10 @@ void main() {
 
         // Assert
         final updatedIndex = await persistence.loadProjectsIndex();
-        final updatedChat =
-            updatedIndex.projects[projectRoot]!.worktrees[worktreePath]!.chats[0];
+        final updatedChat = updatedIndex
+            .projects[projectRoot]!
+            .worktrees[worktreePath]!
+            .chats[0];
         check(updatedChat.lastSessionId).equals(sessionId);
       });
 
@@ -134,8 +133,10 @@ void main() {
 
         // Assert
         final updatedIndex = await persistence.loadProjectsIndex();
-        final updatedChat =
-            updatedIndex.projects[projectRoot]!.worktrees[worktreePath]!.chats[0];
+        final updatedChat = updatedIndex
+            .projects[projectRoot]!
+            .worktrees[worktreePath]!
+            .chats[0];
         check(updatedChat.lastSessionId).isNull();
       });
 
@@ -192,62 +193,63 @@ void main() {
         check(worktree!.chats).isEmpty();
       });
 
-      test('only updates the matching chat in a worktree with multiple chats',
-          () async {
-        // Arrange
-        const projectRoot = '/test/project';
-        const worktreePath = '/test/project';
-        const targetChatId = 'chat-2';
-        const otherChatId = 'chat-1';
-        const sessionId = 'new-session';
+      test(
+        'only updates the matching chat in a worktree with multiple chats',
+        () async {
+          // Arrange
+          const projectRoot = '/test/project';
+          const worktreePath = '/test/project';
+          const targetChatId = 'chat-2';
+          const otherChatId = 'chat-1';
+          const sessionId = 'new-session';
 
-        final projectsIndex = ProjectsIndex(
-          projects: {
-            projectRoot: ProjectInfo(
-              id: PersistenceService.generateProjectId(projectRoot),
-              name: 'Test Project',
-              worktrees: {
-                worktreePath: const WorktreeInfo.primary(
-                  name: 'main',
-                  chats: [
-                    ChatReference(
-                      name: 'Chat 1',
-                      chatId: otherChatId,
-                      lastSessionId: 'original-session',
-                    ),
-                    ChatReference(
-                      name: 'Chat 2',
-                      chatId: targetChatId,
-                    ),
-                  ],
-                ),
-              },
-            ),
-          },
-        );
-        await persistence.saveProjectsIndex(projectsIndex);
+          final projectsIndex = ProjectsIndex(
+            projects: {
+              projectRoot: ProjectInfo(
+                id: PersistenceService.generateProjectId(projectRoot),
+                name: 'Test Project',
+                worktrees: {
+                  worktreePath: const WorktreeInfo.primary(
+                    name: 'main',
+                    chats: [
+                      ChatReference(
+                        name: 'Chat 1',
+                        chatId: otherChatId,
+                        lastSessionId: 'original-session',
+                      ),
+                      ChatReference(name: 'Chat 2', chatId: targetChatId),
+                    ],
+                  ),
+                },
+              ),
+            },
+          );
+          await persistence.saveProjectsIndex(projectsIndex);
 
-        // Act
-        await persistence.updateChatSessionId(
-          projectRoot: projectRoot,
-          worktreePath: worktreePath,
-          chatId: targetChatId,
-          sessionId: sessionId,
-        );
+          // Act
+          await persistence.updateChatSessionId(
+            projectRoot: projectRoot,
+            worktreePath: worktreePath,
+            chatId: targetChatId,
+            sessionId: sessionId,
+          );
 
-        // Assert
-        final updatedIndex = await persistence.loadProjectsIndex();
-        final chats =
-            updatedIndex.projects[projectRoot]!.worktrees[worktreePath]!.chats;
+          // Assert
+          final updatedIndex = await persistence.loadProjectsIndex();
+          final chats = updatedIndex
+              .projects[projectRoot]!
+              .worktrees[worktreePath]!
+              .chats;
 
-        // First chat should be unchanged
-        check(chats[0].chatId).equals(otherChatId);
-        check(chats[0].lastSessionId).equals('original-session');
+          // First chat should be unchanged
+          check(chats[0].chatId).equals(otherChatId);
+          check(chats[0].lastSessionId).equals('original-session');
 
-        // Second chat should be updated
-        check(chats[1].chatId).equals(targetChatId);
-        check(chats[1].lastSessionId).equals(sessionId);
-      });
+          // Second chat should be updated
+          check(chats[1].chatId).equals(targetChatId);
+          check(chats[1].lastSessionId).equals(sessionId);
+        },
+      );
 
       test('preserves chat name when updating session ID', () async {
         // Arrange
@@ -265,12 +267,7 @@ void main() {
               worktrees: {
                 worktreePath: const WorktreeInfo.primary(
                   name: 'main',
-                  chats: [
-                    ChatReference(
-                      name: chatName,
-                      chatId: chatId,
-                    ),
-                  ],
+                  chats: [ChatReference(name: chatName, chatId: chatId)],
                 ),
               },
             ),
@@ -288,12 +285,66 @@ void main() {
 
         // Assert
         final updatedIndex = await persistence.loadProjectsIndex();
-        final updatedChat =
-            updatedIndex.projects[projectRoot]!.worktrees[worktreePath]!.chats[0];
+        final updatedChat = updatedIndex
+            .projects[projectRoot]!
+            .worktrees[worktreePath]!
+            .chats[0];
         check(updatedChat.name).equals(chatName);
         check(updatedChat.chatId).equals(chatId);
         check(updatedChat.lastSessionId).equals(sessionId);
       });
+
+      test(
+        'does not save index when chat is missing for session update',
+        () async {
+          // Arrange
+          const projectRoot = '/test/project';
+          const worktreePath = '/test/project';
+          const existingChatId = 'chat-existing';
+          const missingChatId = 'chat-missing';
+          final countingPersistence = _CountingTestPersistenceService(
+            tempDir.path,
+          );
+
+          final projectsIndex = ProjectsIndex(
+            projects: {
+              projectRoot: ProjectInfo(
+                id: PersistenceService.generateProjectId(projectRoot),
+                name: 'Test Project',
+                worktrees: {
+                  worktreePath: const WorktreeInfo.primary(
+                    name: 'main',
+                    chats: [
+                      ChatReference(name: 'Existing', chatId: existingChatId),
+                    ],
+                  ),
+                },
+              ),
+            },
+          );
+          await countingPersistence.saveProjectsIndex(projectsIndex);
+          final savesBefore = countingPersistence.saveCalls;
+
+          // Act
+          await countingPersistence.updateChatSessionId(
+            projectRoot: projectRoot,
+            worktreePath: worktreePath,
+            chatId: missingChatId,
+            sessionId: 'session-ignored',
+          );
+
+          // Assert
+          check(countingPersistence.saveCalls).equals(savesBefore);
+          final updatedIndex = await countingPersistence.loadProjectsIndex();
+          final chats = updatedIndex
+              .projects[projectRoot]!
+              .worktrees[worktreePath]!
+              .chats;
+          check(chats.length).equals(1);
+          check(chats[0].chatId).equals(existingChatId);
+          check(chats[0].lastSessionId).isNull();
+        },
+      );
     });
 
     group('removeChatFromIndex', () {
@@ -311,9 +362,7 @@ void main() {
               worktrees: {
                 worktreePath: const WorktreeInfo.primary(
                   name: 'main',
-                  chats: [
-                    ChatReference(name: 'Test Chat', chatId: chatId),
-                  ],
+                  chats: [ChatReference(name: 'Test Chat', chatId: chatId)],
                 ),
               },
             ),
@@ -335,48 +384,52 @@ void main() {
         check(chats).isEmpty();
       });
 
-      test('removes only matching chat from worktree with multiple chats',
-          () async {
-        // Arrange
-        const projectRoot = '/test/project';
-        const worktreePath = '/test/project';
-        const chatToRemove = 'chat-2';
+      test(
+        'removes only matching chat from worktree with multiple chats',
+        () async {
+          // Arrange
+          const projectRoot = '/test/project';
+          const worktreePath = '/test/project';
+          const chatToRemove = 'chat-2';
 
-        final projectsIndex = ProjectsIndex(
-          projects: {
-            projectRoot: ProjectInfo(
-              id: PersistenceService.generateProjectId(projectRoot),
-              name: 'Test Project',
-              worktrees: {
-                worktreePath: const WorktreeInfo.primary(
-                  name: 'main',
-                  chats: [
-                    ChatReference(name: 'Chat 1', chatId: 'chat-1'),
-                    ChatReference(name: 'Chat 2', chatId: chatToRemove),
-                    ChatReference(name: 'Chat 3', chatId: 'chat-3'),
-                  ],
-                ),
-              },
-            ),
-          },
-        );
-        await persistence.saveProjectsIndex(projectsIndex);
+          final projectsIndex = ProjectsIndex(
+            projects: {
+              projectRoot: ProjectInfo(
+                id: PersistenceService.generateProjectId(projectRoot),
+                name: 'Test Project',
+                worktrees: {
+                  worktreePath: const WorktreeInfo.primary(
+                    name: 'main',
+                    chats: [
+                      ChatReference(name: 'Chat 1', chatId: 'chat-1'),
+                      ChatReference(name: 'Chat 2', chatId: chatToRemove),
+                      ChatReference(name: 'Chat 3', chatId: 'chat-3'),
+                    ],
+                  ),
+                },
+              ),
+            },
+          );
+          await persistence.saveProjectsIndex(projectsIndex);
 
-        // Act
-        await persistence.removeChatFromIndex(
-          projectRoot: projectRoot,
-          worktreePath: worktreePath,
-          chatId: chatToRemove,
-        );
+          // Act
+          await persistence.removeChatFromIndex(
+            projectRoot: projectRoot,
+            worktreePath: worktreePath,
+            chatId: chatToRemove,
+          );
 
-        // Assert
-        final updatedIndex = await persistence.loadProjectsIndex();
-        final chats =
-            updatedIndex.projects[projectRoot]!.worktrees[worktreePath]!.chats;
-        check(chats.length).equals(2);
-        check(chats[0].chatId).equals('chat-1');
-        check(chats[1].chatId).equals('chat-3');
-      });
+          // Assert
+          final updatedIndex = await persistence.loadProjectsIndex();
+          final chats = updatedIndex
+              .projects[projectRoot]!
+              .worktrees[worktreePath]!
+              .chats;
+          check(chats.length).equals(2);
+          check(chats[0].chatId).equals('chat-1');
+          check(chats[1].chatId).equals('chat-3');
+        },
+      );
 
       test('handles missing project gracefully', () async {
         // Arrange - empty index
@@ -423,7 +476,8 @@ void main() {
 
         // Assert - original worktree should be unchanged
         final index = await persistence.loadProjectsIndex();
-        final chats = index.projects[projectRoot]!.worktrees[projectRoot]!.chats;
+        final chats =
+            index.projects[projectRoot]!.worktrees[projectRoot]!.chats;
         check(chats.length).equals(1);
         check(chats[0].chatId).equals('chat-1');
       });
@@ -441,9 +495,7 @@ void main() {
               worktrees: {
                 worktreePath: const WorktreeInfo.primary(
                   name: 'main',
-                  chats: [
-                    ChatReference(name: 'Chat 1', chatId: 'chat-1'),
-                  ],
+                  chats: [ChatReference(name: 'Chat 1', chatId: 'chat-1')],
                 ),
               },
             ),
@@ -460,7 +512,8 @@ void main() {
 
         // Assert - existing chat should remain
         final index = await persistence.loadProjectsIndex();
-        final chats = index.projects[projectRoot]!.worktrees[worktreePath]!.chats;
+        final chats =
+            index.projects[projectRoot]!.worktrees[worktreePath]!.chats;
         check(chats.length).equals(1);
         check(chats[0].chatId).equals('chat-1');
       });
@@ -665,8 +718,7 @@ void main() {
         const projectRoot = '/test/project';
         const worktreePath = '/test/project';
         const chatId = 'chat-to-archive';
-        final projectId =
-            PersistenceService.generateProjectId(projectRoot);
+        final projectId = PersistenceService.generateProjectId(projectRoot);
 
         final projectsIndex = ProjectsIndex(
           projects: {
@@ -716,8 +768,7 @@ void main() {
         const projectRoot = '/test/project';
         const worktreePath = '/test/project';
         const chatId = 'chat-with-files';
-        final projectId =
-            PersistenceService.generateProjectId(projectRoot);
+        final projectId = PersistenceService.generateProjectId(projectRoot);
 
         await persistence.createChatFiles(projectId, chatId);
 
@@ -729,9 +780,7 @@ void main() {
               worktrees: {
                 worktreePath: const WorktreeInfo.primary(
                   name: 'main',
-                  chats: [
-                    ChatReference(name: 'Chat', chatId: chatId),
-                  ],
+                  chats: [ChatReference(name: 'Chat', chatId: chatId)],
                 ),
               },
             ),
@@ -747,8 +796,7 @@ void main() {
         );
 
         // Assert - files should still exist
-        final filesExist =
-            await persistence.chatFilesExist(projectId, chatId);
+        final filesExist = await persistence.chatFilesExist(projectId, chatId);
         check(filesExist).isTrue();
       });
     });
@@ -767,9 +815,7 @@ void main() {
               id: PersistenceService.generateProjectId(projectRoot),
               name: 'Test Project',
               worktrees: {
-                targetWorktreePath: const WorktreeInfo.linked(
-                  name: 'feature',
-                ),
+                targetWorktreePath: const WorktreeInfo.linked(name: 'feature'),
               },
               archivedChats: [
                 ArchivedChatReference(
@@ -871,8 +917,7 @@ void main() {
         // Arrange
         const projectRoot = '/test/project';
         const chatId = 'chat-to-delete';
-        final projectId =
-            PersistenceService.generateProjectId(projectRoot);
+        final projectId = PersistenceService.generateProjectId(projectRoot);
         final archivedAt = DateTime.utc(2025, 6, 15, 10, 30);
 
         // Create chat files on disk
@@ -909,8 +954,7 @@ void main() {
         check(project.archivedChats).isEmpty();
 
         // Assert - files deleted from disk
-        final filesExist =
-            await persistence.chatFilesExist(projectId, chatId);
+        final filesExist = await persistence.chatFilesExist(projectId, chatId);
         check(filesExist).isFalse();
       });
     });
@@ -956,8 +1000,7 @@ void main() {
         check(result[1].chatId).equals('chat-a2');
       });
 
-      test('returns empty list for project with no archived chats',
-          () async {
+      test('returns empty list for project with no archived chats', () async {
         // Arrange
         const projectRoot = '/test/project';
 
@@ -983,7 +1026,6 @@ void main() {
         check(result).isEmpty();
       });
     });
-
   });
 }
 
@@ -1046,21 +1088,16 @@ class _TestPersistenceService extends PersistenceService {
     final worktree = project.worktrees[worktreePath];
     if (worktree == null) return;
 
-    final updatedChats =
-        worktree.chats.where((chat) => chat.chatId != chatId).toList();
+    final updatedChats = worktree.chats
+        .where((chat) => chat.chatId != chatId)
+        .toList();
 
     final updatedWorktree = worktree.copyWith(chats: updatedChats);
     final updatedProject = project.copyWith(
-      worktrees: {
-        ...project.worktrees,
-        worktreePath: updatedWorktree,
-      },
+      worktrees: {...project.worktrees, worktreePath: updatedWorktree},
     );
     final updatedIndex = projectsIndex.copyWith(
-      projects: {
-        ...projectsIndex.projects,
-        projectRoot: updatedProject,
-      },
+      projects: {...projectsIndex.projects, projectRoot: updatedProject},
     );
 
     await saveProjectsIndex(updatedIndex);
@@ -1114,8 +1151,7 @@ class _TestPersistenceService extends PersistenceService {
   @override
   Future<void> deleteChat(String projectId, String chatId) async {
     final jsonlPath = _chatJsonlPath(projectId, chatId);
-    final metaPath =
-        '${_chatsDir(projectId)}/$chatId.meta.json';
+    final metaPath = '${_chatsDir(projectId)}/$chatId.meta.json';
 
     final jsonlFile = File(jsonlPath);
     if (await jsonlFile.exists()) {
@@ -1154,18 +1190,27 @@ class _TestPersistenceService extends PersistenceService {
       await dir.create(recursive: true);
     }
     await File(_chatJsonlPath(projectId, chatId)).writeAsString('');
-    await File(
-      '${_chatsDir(projectId)}/$chatId.meta.json',
-    ).writeAsString('{}');
+    await File('${_chatsDir(projectId)}/$chatId.meta.json').writeAsString('{}');
   }
 
   /// Helper to check if chat files exist on disk.
   Future<bool> chatFilesExist(String projectId, String chatId) async {
-    final jsonlExists =
-        await File(_chatJsonlPath(projectId, chatId)).exists();
+    final jsonlExists = await File(_chatJsonlPath(projectId, chatId)).exists();
     final metaExists = await File(
       '${_chatsDir(projectId)}/$chatId.meta.json',
     ).exists();
     return jsonlExists || metaExists;
+  }
+}
+
+class _CountingTestPersistenceService extends _TestPersistenceService {
+  _CountingTestPersistenceService(super.baseDir);
+
+  int saveCalls = 0;
+
+  @override
+  Future<void> saveProjectsIndex(ProjectsIndex index) async {
+    saveCalls++;
+    await super.saveProjectsIndex(index);
   }
 }

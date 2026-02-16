@@ -31,6 +31,13 @@ class _PersistenceBase {
   /// writes per file path so each write completes before the next begins.
   final Map<String, Future<void>> _writeQueues = {};
 
+  /// Global queue for projects index mutations.
+  ///
+  /// Every read-modify-write operation on `projects.json` must run through
+  /// this queue to avoid stale snapshot overwrites when multiple chats/worktrees
+  /// persist concurrently.
+  Future<void> _projectsIndexMutationQueue = Future<void>.value();
+
   /// The base directory for all CC-Insights data.
   ///
   /// Can be overridden via the --config-dir CLI flag for test isolation.
@@ -190,6 +197,24 @@ class _PersistenceBase {
     }
   }
 
+  /// Runs a projects index mutation in a global critical section.
+  ///
+  /// This serializes all read-modify-write operations on `projects.json`
+  /// across the process.
+  Future<T> runWithProjectsIndexLock<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+
+    _projectsIndexMutationQueue = _projectsIndexMutationQueue.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (e, stackTrace) {
+        completer.completeError(e, stackTrace);
+      }
+    });
+
+    return completer.future;
+  }
+
   /// Loads chat metadata from disk.
   ///
   /// Returns default metadata if the file doesn't exist or is invalid.
@@ -314,7 +339,7 @@ class _PersistenceBase {
         LogService.instance.debug(
           'PersistenceService',
           'Restored chat $chatId: loaded ${processedEntries.length} entries '
-          '($skippedLines corrupted lines skipped)',
+              '($skippedLines corrupted lines skipped)',
           meta: {'chatId': chatId},
         );
       } else {
@@ -478,7 +503,8 @@ class PersistenceService extends _PersistenceBase
   ///
   /// This should be called once during app initialization if a custom
   /// config directory is specified via --config-dir.
-  static void setBaseDir(String baseDir) => _PersistenceBase.setBaseDir(baseDir);
+  static void setBaseDir(String baseDir) =>
+      _PersistenceBase.setBaseDir(baseDir);
 
   /// The base directory for all CC-Insights data.
   static String get baseDir => _PersistenceBase.baseDir;
@@ -496,4 +522,11 @@ class PersistenceService extends _PersistenceBase
   /// - IDs are filesystem-safe
   static String generateProjectId(String projectRoot) =>
       _PersistenceBase.generateProjectId(projectRoot);
+
+  /// Runs a projects index mutation in a global critical section.
+  ///
+  /// Use this for any operation that reads `projects.json`, modifies it,
+  /// then saves it back.
+  Future<T> withProjectsIndexLock<T>(Future<T> Function() action) =>
+      runWithProjectsIndexLock(action);
 }

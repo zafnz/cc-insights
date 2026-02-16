@@ -75,9 +75,7 @@ class WorktreeBranchExistsException extends WorktreeCreationException {
   final String branchName;
 
   WorktreeBranchExistsException(this.branchName)
-      : super(
-          'A branch named "$branchName" already exists.',
-        );
+    : super('A branch named "$branchName" already exists.');
 }
 
 /// Exception thrown when the user tries to create a worktree for a branch
@@ -90,10 +88,10 @@ class WorktreeAlreadyExistsException extends WorktreeCreationException {
   final WorktreeInfo existingWorktree;
 
   WorktreeAlreadyExistsException(this.existingWorktree)
-      : super(
-          'Branch "${existingWorktree.branch}" is already a worktree at: '
-          '${existingWorktree.path}',
-        );
+    : super(
+        'Branch "${existingWorktree.branch}" is already a worktree at: '
+        '${existingWorktree.path}',
+      );
 }
 
 /// Service for creating and managing git worktrees.
@@ -115,10 +113,10 @@ class WorktreeService {
     PersistenceService? persistenceService,
     ProjectConfigService? configService,
     ScriptExecutionService? scriptService,
-  })  : _gitService = gitService ?? const RealGitService(),
-        _persistenceService = persistenceService ?? PersistenceService(),
-        _configService = configService ?? ProjectConfigService(),
-        _scriptService = scriptService;
+  }) : _gitService = gitService ?? const RealGitService(),
+       _persistenceService = persistenceService ?? PersistenceService(),
+       _configService = configService ?? ProjectConfigService(),
+       _scriptService = scriptService;
 
   /// Creates a new worktree and persists it.
   ///
@@ -139,7 +137,10 @@ class WorktreeService {
   }) async {
     final repoRoot = project.data.repoRoot;
 
-    LogService.instance.notice('Worktree', 'Creating workspace: branch=$branch root=$worktreeRoot${base != null ? ' base=$base' : ''}');
+    LogService.instance.notice(
+      'Worktree',
+      'Creating workspace: branch=$branch root=$worktreeRoot${base != null ? ' base=$base' : ''}',
+    );
 
     // 1. Validate worktree root is outside project repo
     if (_isPathInsideRepo(worktreeRoot, repoRoot)) {
@@ -195,7 +196,10 @@ class WorktreeService {
     final config = await _configService.loadConfig(repoRoot);
     final preCreateHook = config.getHook('worktree-pre-create');
     if (preCreateHook != null && preCreateHook.isNotEmpty) {
-      LogService.instance.notice('Worktree', 'Running hook: worktree-pre-create');
+      LogService.instance.notice(
+        'Worktree',
+        'Running hook: worktree-pre-create',
+      );
       final exitCode = await _runHook(
         hookName: 'worktree-pre-create',
         command: preCreateHook,
@@ -241,7 +245,10 @@ class WorktreeService {
     // 9. Run post-create hook if configured
     final postCreateHook = config.getHook('worktree-post-create');
     if (postCreateHook != null && postCreateHook.isNotEmpty) {
-      LogService.instance.notice('Worktree', 'Running hook: worktree-post-create');
+      LogService.instance.notice(
+        'Worktree',
+        'Running hook: worktree-post-create',
+      );
       // Run in the new worktree directory
       final exitCode = await _runHook(
         hookName: 'worktree-post-create',
@@ -265,7 +272,9 @@ class WorktreeService {
     var effectiveBase = base;
     if (effectiveBase == null) {
       final defaultBase = config.defaultBase;
-      if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
+      if (defaultBase != null &&
+          defaultBase.isNotEmpty &&
+          defaultBase != 'auto') {
         effectiveBase = defaultBase;
       }
     }
@@ -287,7 +296,10 @@ class WorktreeService {
     await _persistWorktree(project, worktreeState, base: effectiveBase);
 
     // 14. Return WorktreeState
-    LogService.instance.info('Worktree', 'Workspace created: branch=$sanitizedBranch path=$worktreePath');
+    LogService.instance.info(
+      'Worktree',
+      'Workspace created: branch=$sanitizedBranch path=$worktreePath',
+    );
     return worktreeState;
   }
 
@@ -306,7 +318,10 @@ class WorktreeService {
   }) async {
     final repoRoot = project.data.repoRoot;
 
-    LogService.instance.notice('Worktree', 'Recovering workspace: branch=$branch root=$worktreeRoot');
+    LogService.instance.notice(
+      'Worktree',
+      'Recovering workspace: branch=$branch root=$worktreeRoot',
+    );
 
     // 1. Construct the full worktree path
     final worktreePath = path.join(worktreeRoot, 'cci', branch);
@@ -321,7 +336,10 @@ class WorktreeService {
     final config = await _configService.loadConfig(repoRoot);
     final preCreateHook = config.getHook('worktree-pre-create');
     if (preCreateHook != null && preCreateHook.isNotEmpty) {
-      LogService.instance.notice('Worktree', 'Running hook: worktree-pre-create');
+      LogService.instance.notice(
+        'Worktree',
+        'Running hook: worktree-pre-create',
+      );
       final exitCode = await _runHook(
         hookName: 'worktree-pre-create',
         command: preCreateHook,
@@ -356,7 +374,10 @@ class WorktreeService {
     // 5. Run post-create hook if configured
     final postCreateHook = config.getHook('worktree-post-create');
     if (postCreateHook != null && postCreateHook.isNotEmpty) {
-      LogService.instance.notice('Worktree', 'Running hook: worktree-post-create');
+      LogService.instance.notice(
+        'Worktree',
+        'Running hook: worktree-post-create',
+      );
       final exitCode = await _runHook(
         hookName: 'worktree-post-create',
         command: postCreateHook,
@@ -376,7 +397,9 @@ class WorktreeService {
     // 7. Determine the base for this worktree.
     String? effectiveBase;
     final defaultBase = config.defaultBase;
-    if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
+    if (defaultBase != null &&
+        defaultBase.isNotEmpty &&
+        defaultBase != 'auto') {
       effectiveBase = defaultBase;
     }
 
@@ -397,7 +420,10 @@ class WorktreeService {
     await _persistWorktree(project, worktreeState, base: effectiveBase);
 
     // 10. Return WorktreeState
-    LogService.instance.info('Worktree', 'Workspace recovered: branch=$branch path=$worktreePath');
+    LogService.instance.info(
+      'Worktree',
+      'Workspace recovered: branch=$branch path=$worktreePath',
+    );
     return worktreeState;
   }
 
@@ -419,7 +445,10 @@ class WorktreeService {
   }) async {
     final repoRoot = project.data.repoRoot;
 
-    LogService.instance.notice('Worktree', 'Restoring existing workspace: branch=$branch path=$worktreePath');
+    LogService.instance.notice(
+      'Worktree',
+      'Restoring existing workspace: branch=$branch path=$worktreePath',
+    );
 
     // 1. Get git status for the worktree
     final status = await _gitService.getStatus(worktreePath);
@@ -428,7 +457,9 @@ class WorktreeService {
     final config = await _configService.loadConfig(repoRoot);
     String? effectiveBase;
     final defaultBase = config.defaultBase;
-    if (defaultBase != null && defaultBase.isNotEmpty && defaultBase != 'auto') {
+    if (defaultBase != null &&
+        defaultBase.isNotEmpty &&
+        defaultBase != 'auto') {
       effectiveBase = defaultBase;
     }
 
@@ -449,7 +480,10 @@ class WorktreeService {
     await _persistWorktree(project, worktreeState, base: effectiveBase);
 
     // 5. Return WorktreeState
-    LogService.instance.info('Worktree', 'Workspace restored: branch=$branch path=$worktreePath');
+    LogService.instance.info(
+      'Worktree',
+      'Workspace restored: branch=$branch path=$worktreePath',
+    );
     return worktreeState;
   }
 
@@ -551,11 +585,10 @@ class WorktreeService {
       );
     } else {
       // Run directly without UI
-      final result = await Process.run(
-        '/bin/sh',
-        ['-c', command],
-        workingDirectory: workingDirectory,
-      );
+      final result = await Process.run('/bin/sh', [
+        '-c',
+        command,
+      ], workingDirectory: workingDirectory);
       return result.exitCode;
     }
   }
@@ -570,35 +603,33 @@ class WorktreeService {
     WorktreeState worktree, {
     String? base,
   }) async {
-    final index = await _persistenceService.loadProjectsIndex();
-    final projectInfo = index.projects[project.data.repoRoot];
+    await _persistenceService.withProjectsIndexLock(() async {
+      final index = await _persistenceService.loadProjectsIndex();
+      final projectInfo = index.projects[project.data.repoRoot];
 
-    if (projectInfo == null) {
-      throw WorktreeCreationException(
-        'Project not found in persistence. This is unexpected.',
+      if (projectInfo == null) {
+        throw WorktreeCreationException(
+          'Project not found in persistence. This is unexpected.',
+        );
+      }
+
+      final updatedWorktrees = Map<String, persistence.WorktreeInfo>.from(
+        projectInfo.worktrees,
       );
-    }
+      updatedWorktrees[worktree.data.worktreeRoot] = persistence
+          .WorktreeInfo.linked(name: worktree.data.branch, base: base);
 
-    // Add the new worktree to the project
-    final updatedWorktrees = Map<String, persistence.WorktreeInfo>.from(
-      projectInfo.worktrees,
-    );
-    updatedWorktrees[worktree.data.worktreeRoot] = persistence.WorktreeInfo
-        .linked(
-      name: worktree.data.branch,
-      base: base,
-    );
+      final updatedProjectInfo = projectInfo.copyWith(
+        worktrees: updatedWorktrees,
+      );
+      final updatedProjects = Map<String, persistence.ProjectInfo>.from(
+        index.projects,
+      );
+      updatedProjects[project.data.repoRoot] = updatedProjectInfo;
 
-    final updatedProjectInfo = projectInfo.copyWith(
-      worktrees: updatedWorktrees,
-    );
-    final updatedProjects = Map<String, persistence.ProjectInfo>.from(
-      index.projects,
-    );
-    updatedProjects[project.data.repoRoot] = updatedProjectInfo;
-
-    await _persistenceService.saveProjectsIndex(
-      index.copyWith(projects: updatedProjects),
-    );
+      await _persistenceService.saveProjectsIndex(
+        index.copyWith(projects: updatedProjects),
+      );
+    });
   }
 }
