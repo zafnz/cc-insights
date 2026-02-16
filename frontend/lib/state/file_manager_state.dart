@@ -143,8 +143,8 @@ class FileManagerState extends ChangeNotifier {
 
   /// Selects a worktree and builds its file tree.
   ///
-  /// This delegates to [SelectionState.selectWorktree], which will trigger
-  /// [_onSelectionChanged] to update our internal state and build the file
+  /// This delegates to [SelectionState.selectWorktree], then calls
+  /// [syncWithSelectionState] to update our internal state and build the file
   /// tree. This ensures the main screen and file manager stay in sync.
   void selectWorktree(WorktreeState worktree) {
     if (_selectionState.selectedWorktree == worktree) {
