@@ -724,7 +724,7 @@ class RealGitService implements GitService {
       return upstream.isEmpty ? null : upstream;
     } on GitException catch (e) {
       // Expected when no upstream is configured
-      LogService.instance.debug(
+      LogService.instance.trace(
         'Git',
         'getUpstream: no upstream configured',
         meta: {'path': path, 'error': '$e'},

@@ -434,7 +434,22 @@ class WorktreeWatcherService extends ChangeNotifier {
       _gitDirWatcherSubscription = dir
           .watch(recursive: true)
           .listen(
-            (_) => _onGitDirChanged(),
+            (event) {
+              // Ignore changes to the index file. `git status` refreshes
+              // the stat-cache in .git/index even on a pure read, so our
+              // own polling writes to the index, which this watcher picks
+              // up, which triggers another poll — creating a feedback loop
+              // that fires forceRefreshAll every 5 seconds.
+              //
+              // This is safe to ignore because index changes (git add/rm/
+              // reset) always also produce worktree filesystem events that
+              // the per-worktree watcher already handles.
+              final path = event.path;
+              if (path.endsWith('/index') || path.endsWith('/index.lock')) {
+                return;
+              }
+              _onGitDirChanged();
+            },
             onError: (_) {},
           );
     } catch (_) {}
