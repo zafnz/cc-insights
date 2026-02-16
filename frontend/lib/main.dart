@@ -773,16 +773,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       navigatorObservers: [_dialogObserver],
       routes: {'/replay': (context) => const ReplayDemoScreen()},
       home: _buildScreen(shouldUseMock),
-      // Wrap the Navigator with providers when a project is loaded.
-      // This places the MultiProvider above the Navigator's Overlay so
-      // that Overlay entries (e.g. Draggable feedback from panel drag)
-      // can access providers like SelectionState.
-      builder: (context, navigator) {
-        if (_project != null) {
-          return _wrapWithProviders(_project!, navigator!);
-        }
-        return navigator!;
-      },
     );
   }
 
@@ -1080,17 +1070,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   /// Builds the main app content with the given project.
   Widget _buildAppContent(ProjectState project) {
-    return _NotificationNavigationListener(
-      child: const MainScreen(),
-    );
-  }
-
-  /// Wraps [child] with the project-scoped MultiProvider.
-  ///
-  /// Used by MaterialApp.builder to inject providers above the Navigator's
-  /// Overlay so that Overlay entries (e.g. Draggable feedback from panel
-  /// drag-and-drop) can access providers like SelectionState.
-  Widget _wrapWithProviders(ProjectState project, Widget child) {
     return MultiProvider(
       providers: [
         // Central logging service (singleton, rate-limited notifications)
@@ -1214,7 +1193,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           },
         ),
       ],
-      child: child,
+      child: _NotificationNavigationListener(
+        child: const MainScreen(),
+      ),
     );
   }
 
