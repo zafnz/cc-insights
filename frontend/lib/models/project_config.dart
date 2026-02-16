@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'user_action.dart';
+
 /// Configuration for project-specific actions stored in .ccinsights/config.json.
 ///
 /// This configuration lives at the project root (not per-worktree) and contains:
@@ -19,11 +21,10 @@ class ProjectConfig {
 
   /// User-defined action buttons shown in the ActionsPanel.
   ///
-  /// Keys are button labels, values are shell commands.
-  /// - If null: show default buttons (Test, Run)
-  /// - If empty map {}: show no buttons
-  /// - If populated: show only these buttons
-  final Map<String, String>? userActions;
+  /// - If null: show default actions (Test, Run)
+  /// - If empty list: show no actions
+  /// - If populated: show only these actions, in list order
+  final List<UserAction>? userActions;
 
   /// Default base branch/ref for merge and diff operations.
   ///
@@ -32,10 +33,10 @@ class ProjectConfig {
   final String? defaultBase;
 
   /// Default user actions shown when no config exists or userActions is null.
-  static const Map<String, String> defaultUserActions = {
-    'Test': './test.sh',
-    'Run': './run.sh',
-  };
+  static const List<UserAction> defaultUserActions = [
+    CommandAction(name: 'Test', command: './test.sh'),
+    CommandAction(name: 'Run', command: './run.sh'),
+  ];
 
   const ProjectConfig({
     this.actions = const {},
@@ -45,15 +46,15 @@ class ProjectConfig {
 
   /// Creates an empty config (used as default when no file exists).
   const ProjectConfig.empty()
-      : actions = const {},
-        userActions = null,
-        defaultBase = null;
+    : actions = const {},
+      userActions = null,
+      defaultBase = null;
 
   /// Returns the effective user actions to display.
   ///
   /// - Returns [defaultUserActions] if [userActions] is null
-  /// - Returns the actual [userActions] map otherwise (may be empty)
-  Map<String, String> get effectiveUserActions =>
+  /// - Returns the actual [userActions] list otherwise (may be empty)
+  List<UserAction> get effectiveUserActions =>
       userActions ?? defaultUserActions;
 
   /// Whether this config has any lifecycle hooks defined.
@@ -65,7 +66,7 @@ class ProjectConfig {
   /// Creates a copy with updated fields.
   ProjectConfig copyWith({
     Map<String, String>? actions,
-    Map<String, String>? userActions,
+    List<UserAction>? userActions,
     bool clearUserActions = false,
     String? defaultBase,
     bool clearDefaultBase = false,
@@ -73,8 +74,7 @@ class ProjectConfig {
     return ProjectConfig(
       actions: actions ?? this.actions,
       userActions: clearUserActions ? null : (userActions ?? this.userActions),
-      defaultBase:
-          clearDefaultBase ? null : (defaultBase ?? this.defaultBase),
+      defaultBase: clearDefaultBase ? null : (defaultBase ?? this.defaultBase),
     );
   }
 
@@ -84,13 +84,19 @@ class ProjectConfig {
     final userActionsJson = json['user-actions'];
     final defaultBaseJson = json['default-base'];
 
+    List<UserAction>? parsedUserActions;
+    if (userActionsJson is Map) {
+      parsedUserActions = userActionsJson.entries
+          .where((entry) => entry.key is String)
+          .map((entry) => UserAction.fromJson(entry.key as String, entry.value))
+          .toList();
+    }
+
     return ProjectConfig(
       actions: actionsJson is Map
           ? Map<String, String>.from(actionsJson)
           : const {},
-      userActions: userActionsJson is Map
-          ? Map<String, String>.from(userActionsJson)
-          : null,
+      userActions: parsedUserActions,
       defaultBase: defaultBaseJson is String ? defaultBaseJson : null,
     );
   }
@@ -99,7 +105,10 @@ class ProjectConfig {
   Map<String, dynamic> toJson() {
     return {
       if (actions.isNotEmpty) 'actions': actions,
-      if (userActions != null) 'user-actions': userActions,
+      if (userActions != null)
+        'user-actions': {
+          for (final action in userActions!) action.name: action.toJsonValue(),
+        },
       if (defaultBase != null) 'default-base': defaultBase,
     };
   }
@@ -109,16 +118,16 @@ class ProjectConfig {
     if (identical(this, other)) return true;
     return other is ProjectConfig &&
         mapEquals(other.actions, actions) &&
-        mapEquals(other.userActions, userActions) &&
+        listEquals(other.userActions, userActions) &&
         other.defaultBase == defaultBase;
   }
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(actions.entries),
-        userActions != null ? Object.hashAll(userActions!.entries) : null,
-        defaultBase,
-      );
+    Object.hashAll(actions.entries),
+    userActions != null ? Object.hashAll(userActions!) : null,
+    defaultBase,
+  );
 
   @override
   String toString() =>

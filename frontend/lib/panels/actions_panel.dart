@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../models/project.dart';
 import '../models/project_config.dart';
+import '../models/user_action.dart';
 import '../services/log_service.dart';
+import '../services/macro_executor.dart';
 import '../services/project_config_service.dart';
 import '../services/script_execution_service.dart';
 import '../state/selection_state.dart';
@@ -30,7 +32,7 @@ class ActionsPanelKeys {
 /// Actions are loaded from `.ccinsights/config.json` in the project root.
 /// - If config doesn't exist or has no `user-actions`: shows defaults (Test, Run)
 /// - If `user-actions` is empty `{}`: shows no buttons
-/// - Otherwise: shows configured buttons
+/// - Otherwise: shows configured commands and macros
 class ActionsPanel extends StatelessWidget {
   const ActionsPanel({super.key});
 
@@ -97,7 +99,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     }
   }
 
-  Future<void> _handleActionClick(String name, String? command) async {
+  Future<void> _handleActionClick(UserAction action) async {
     final selection = context.read<SelectionState>();
     final worktree = selection.selectedWorktree;
 
@@ -105,28 +107,30 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
 
     final workingDirectory = worktree.data.worktreeRoot;
 
-    if (command == null || command.isEmpty) {
-      // Prompt for command first
-      final newCommand = await showEditActionDialog(
-        context,
-        actionName: name,
-        currentCommand: null,
-        workingDirectory: workingDirectory,
-      );
+    switch (action) {
+      case CommandAction(:final name, :final command):
+        if (command.isEmpty) {
+          final newCommand = await showEditActionDialog(
+            context,
+            actionName: name,
+            currentCommand: null,
+            workingDirectory: workingDirectory,
+          );
 
-      if (newCommand != null && newCommand.isNotEmpty && mounted) {
-        // Save to config
-        await _configService!.updateUserAction(
-          _lastProjectRoot!,
-          name,
-          newCommand,
-        );
-
-        // Now run the script
-        _runScript(name, newCommand, workingDirectory);
-      }
-    } else {
-      _runScript(name, command, workingDirectory);
+          if (newCommand != null && newCommand.isNotEmpty && mounted) {
+            await _configService!.updateUserAction(
+              _lastProjectRoot!,
+              CommandAction(name: name, command: newCommand),
+            );
+            _runScript(name, newCommand, workingDirectory);
+          }
+          return;
+        }
+        _runScript(name, command, workingDirectory);
+        return;
+      case StartChatMacro():
+        await MacroExecutor.executeStartChat(context, worktree, action);
+        return;
     }
   }
 
@@ -139,14 +143,11 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     );
   }
 
-  Future<void> _handleRightClick(
-    String name,
-    String? currentCommand,
-    Offset position,
-  ) async {
+  Future<void> _handleRightClick(UserAction action, Offset position) async {
     final selection = context.read<SelectionState>();
     final worktree = selection.selectedWorktree;
     final workingDirectory = worktree?.data.worktreeRoot;
+    final editLabel = action is CommandAction ? 'Edit command' : 'Edit macro';
 
     final result = await showStyledMenu<String>(
       context: context,
@@ -154,33 +155,58 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
       items: [
         styledMenuItem(
           value: 'edit',
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.edit, size: 16),
-              SizedBox(width: 8),
-              Text('Edit command'),
+              const Icon(Icons.edit, size: 16),
+              const SizedBox(width: 8),
+              Text(editLabel),
             ],
           ),
         ),
       ],
     );
 
-    if (result == 'edit' && mounted) {
-      final newCommand = await showEditActionDialog(
-        context,
-        actionName: name,
-        currentCommand: currentCommand,
-        workingDirectory: workingDirectory,
-      );
+    if (result != 'edit' || !mounted) return;
 
-      if (newCommand != null && mounted) {
-        await _configService!.updateUserAction(
-          _lastProjectRoot!,
-          name,
-          newCommand,
+    switch (action) {
+      case CommandAction(:final name, :final command):
+        final newCommand = await showEditActionDialog(
+          context,
+          actionName: name,
+          currentCommand: command,
+          workingDirectory: workingDirectory,
         );
-      }
+
+        if (newCommand != null && mounted) {
+          await _configService!.updateUserAction(
+            _lastProjectRoot!,
+            CommandAction(name: name, command: newCommand),
+          );
+        }
+        return;
+      case StartChatMacro():
+        selection.showProjectSettingsPanel();
+        return;
     }
+  }
+
+  String _tooltipForAction(UserAction action) {
+    return switch (action) {
+      CommandAction(:final command) =>
+        command.isNotEmpty ? command : 'Click to configure',
+      StartChatMacro(:final instruction) => _instructionPreview(instruction),
+    };
+  }
+
+  String _instructionPreview(String instruction) {
+    final compact = instruction.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (compact.isEmpty) {
+      return 'Start chat macro';
+    }
+    if (compact.length <= 100) {
+      return compact;
+    }
+    return '${compact.substring(0, 100)}...';
   }
 
   @override
@@ -192,11 +218,7 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
       return const _NoWorktreePlaceholder();
     }
 
-    return _buildActionButtons(
-      context,
-      _config,
-      worktree.data.worktreeRoot,
-    );
+    return _buildActionButtons(context, _config, worktree.data.worktreeRoot);
   }
 
   Widget _buildActionButtons(
@@ -217,22 +239,21 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: userActions.entries.map((entry) {
-          final isRunning = scriptService.isActionRunning(
-            entry.key,
-            workingDirectory: workingDirectory,
-          );
-          return _ActionButton(
-            key: ActionsPanelKeys.actionButton(entry.key),
-            name: entry.key,
-            command: entry.value,
-            isRunning: isRunning,
-            onPressed: () => _handleActionClick(entry.key, entry.value),
-            onRightClick: (pos) => _handleRightClick(
-              entry.key,
-              entry.value,
-              pos,
+        children: userActions.map((action) {
+          final isRunning = switch (action) {
+            CommandAction(:final name) => scriptService.isActionRunning(
+              name,
+              workingDirectory: workingDirectory,
             ),
+            StartChatMacro() => false,
+          };
+          return _ActionButton(
+            key: ActionsPanelKeys.actionButton(action.name),
+            action: action,
+            tooltip: _tooltipForAction(action),
+            isRunning: isRunning,
+            onPressed: () => _handleActionClick(action),
+            onRightClick: (pos) => _handleRightClick(action, pos),
           );
         }).toList(),
       ),
@@ -243,28 +264,36 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     super.key,
-    required this.name,
-    required this.command,
+    required this.action,
+    required this.tooltip,
     required this.isRunning,
     required this.onPressed,
     required this.onRightClick,
   });
 
-  final String name;
-  final String command;
+  final UserAction action;
+  final String tooltip;
   final bool isRunning;
   final VoidCallback onPressed;
   final void Function(Offset) onRightClick;
+
+  bool get _isConfigured => switch (action) {
+    CommandAction(:final command) => command.isNotEmpty,
+    StartChatMacro() => true,
+  };
+
+  IconData get _idleIcon => switch (action) {
+    CommandAction() => _isConfigured ? Icons.play_arrow : Icons.add,
+    StartChatMacro() => action.icon,
+  };
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final isConfigured = command.isNotEmpty;
-
     return Tooltip(
-      message: isConfigured ? command : 'Click to configure',
+      message: tooltip,
       child: Material(
         color: isRunning
             ? colorScheme.primaryContainer.withValues(alpha: 0.3)
@@ -297,14 +326,10 @@ class _ActionButton extends StatelessWidget {
                     ),
                   )
                 else
-                  Icon(
-                    isConfigured ? Icons.play_arrow : Icons.add,
-                    size: 14,
-                    color: colorScheme.onSurface,
-                  ),
+                  Icon(_idleIcon, size: 14, color: colorScheme.onSurface),
                 const SizedBox(width: 6),
                 Text(
-                  name,
+                  action.name,
                   style: textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w500,
                   ),

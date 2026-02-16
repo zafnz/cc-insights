@@ -1,5 +1,6 @@
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/project_config.dart';
+import 'package:cc_insights_v2/models/user_action.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/project_settings_panel.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
@@ -33,15 +34,14 @@ void main() {
         ),
       );
 
-      projectState = resources.track(ProjectState(
-        const ProjectData(
-          name: 'Test Project',
-          repoRoot: '/test/project',
+      projectState = resources.track(
+        ProjectState(
+          const ProjectData(name: 'Test Project', repoRoot: '/test/project'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
         ),
-        worktree,
-        autoValidate: false,
-        watchFilesystem: false,
-      ));
+      );
 
       selectionState = resources.track(SelectionState(projectState));
     });
@@ -109,10 +109,11 @@ void main() {
 
         // Git is already selected by default, so content should be visible
         // Git header and description should be visible
-        expect(find.text('Default branch and worktree settings'),
-            findsOneWidget);
-        expect(find.text('Default base for new worktrees'),
-            findsOneWidget);
+        expect(
+          find.text('Default branch and worktree settings'),
+          findsOneWidget,
+        );
+        expect(find.text('Default base for new worktrees'), findsOneWidget);
 
         // Hooks content should not be visible
         expect(find.text('Pre-Create'), findsNothing);
@@ -120,8 +121,9 @@ void main() {
     });
 
     group('git settings content', () {
-      testWidgets('shows base selector dropdown with auto default',
-          (tester) async {
+      testWidgets('shows base selector dropdown with auto default', (
+        tester,
+      ) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         // Git is selected by default, so content should be visible
@@ -145,8 +147,7 @@ void main() {
         );
       });
 
-      testWidgets('does not show custom text field by default',
-          (tester) async {
+      testWidgets('does not show custom text field by default', (tester) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         // Git is selected by default
@@ -178,8 +179,9 @@ void main() {
         );
       });
 
-      testWidgets('selecting main does not show custom text field',
-          (tester) async {
+      testWidgets('selecting main does not show custom text field', (
+        tester,
+      ) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         // Git is selected by default
@@ -207,9 +209,7 @@ void main() {
       testWidgets('loads defaultBase as main from config', (tester) async {
         await pumpAndLoad(
           tester,
-          buildTestWidget(
-            config: const ProjectConfig(defaultBase: 'main'),
-          ),
+          buildTestWidget(config: const ProjectConfig(defaultBase: 'main')),
         );
 
         // Git is selected by default
@@ -223,8 +223,9 @@ void main() {
         expect(dropdown.value, 'main');
       });
 
-      testWidgets('loads defaultBase as origin/main from config',
-          (tester) async {
+      testWidgets('loads defaultBase as origin/main from config', (
+        tester,
+      ) async {
         await pumpAndLoad(
           tester,
           buildTestWidget(
@@ -245,9 +246,7 @@ void main() {
       testWidgets('loads custom defaultBase from config', (tester) async {
         await pumpAndLoad(
           tester,
-          buildTestWidget(
-            config: const ProjectConfig(defaultBase: 'develop'),
-          ),
+          buildTestWidget(config: const ProjectConfig(defaultBase: 'develop')),
         );
 
         // Git is selected by default
@@ -278,9 +277,7 @@ void main() {
       testWidgets('loads null defaultBase as auto', (tester) async {
         await pumpAndLoad(
           tester,
-          buildTestWidget(
-            config: const ProjectConfig.empty(),
-          ),
+          buildTestWidget(config: const ProjectConfig.empty()),
         );
 
         // Git is selected by default
@@ -295,8 +292,9 @@ void main() {
     });
 
     group('auto-save config', () {
-      testWidgets('auto-saves main selection on dropdown change',
-          (tester) async {
+      testWidgets('auto-saves main selection on dropdown change', (
+        tester,
+      ) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         // Git is selected by default
@@ -319,8 +317,9 @@ void main() {
         expect(savedConfig!.defaultBase, 'main');
       });
 
-      testWidgets('auto-saves origin/main selection on dropdown change',
-          (tester) async {
+      testWidgets('auto-saves origin/main selection on dropdown change', (
+        tester,
+      ) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         // Git is selected by default
@@ -343,8 +342,9 @@ void main() {
         expect(savedConfig!.defaultBase, 'origin/main');
       });
 
-      testWidgets('auto-saves custom on dropdown change then blur',
-          (tester) async {
+      testWidgets('auto-saves custom on dropdown change then blur', (
+        tester,
+      ) async {
         await pumpAndLoad(tester, buildTestWidget());
 
         // Git is selected by default
@@ -391,14 +391,13 @@ void main() {
         expect(savedConfig!.defaultBase, 'develop');
       });
 
-      testWidgets('auto-saves auto selection (null defaultBase)',
-          (tester) async {
+      testWidgets('auto-saves auto selection (null defaultBase)', (
+        tester,
+      ) async {
         // Start with a config that has a non-null defaultBase
         await pumpAndLoad(
           tester,
-          buildTestWidget(
-            config: const ProjectConfig(defaultBase: 'main'),
-          ),
+          buildTestWidget(config: const ProjectConfig(defaultBase: 'main')),
         );
 
         // Git is selected by default
@@ -419,6 +418,65 @@ void main() {
         final savedConfig = fakeConfigService.configs['/test/project'];
         expect(savedConfig, isNotNull);
         expect(savedConfig!.defaultBase, isNull);
+      });
+    });
+
+    group('actions category', () {
+      Future<void> selectActionsCategory(WidgetTester tester) async {
+        await tester.tap(find.text('User Actions').first);
+        await tester.pump();
+      }
+
+      testWidgets('shows action type selector and add-action menu', (
+        tester,
+      ) async {
+        await pumpAndLoad(tester, buildTestWidget());
+        await selectActionsCategory(tester);
+
+        expect(find.text('Action Type'), findsWidgets);
+        expect(
+          find.byKey(ProjectSettingsPanelKeys.addActionButton),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('loads start-chat macro fields from config', (tester) async {
+        await pumpAndLoad(
+          tester,
+          buildTestWidget(
+            config: const ProjectConfig(
+              userActions: [
+                StartChatMacro(
+                  name: 'Codex Review',
+                  agentId: 'codex-default',
+                  model: 'o3-mini',
+                  instruction: 'Review this branch',
+                ),
+              ],
+            ),
+          ),
+        );
+        await selectActionsCategory(tester);
+
+        expect(find.text('Start Chat'), findsWidgets);
+        expect(find.text('Agent'), findsOneWidget);
+        expect(find.text('Model (optional)'), findsOneWidget);
+        expect(find.text('Instruction'), findsOneWidget);
+      });
+
+      testWidgets('add-action menu includes start-chat macro option', (
+        tester,
+      ) async {
+        await pumpAndLoad(tester, buildTestWidget());
+        await selectActionsCategory(tester);
+
+        await tester.tap(find.byKey(ProjectSettingsPanelKeys.addActionButton));
+        await tester.pump();
+
+        expect(
+          find.byKey(ProjectSettingsPanelKeys.addStartChatMacroItem),
+          findsOneWidget,
+        );
       });
     });
   });

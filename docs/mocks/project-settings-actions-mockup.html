@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Settings — User Actions with Macros — CC-Insights</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    /* Material 3 deep purple seed - dark mode derived palette */
+    --surface: #141218;
+    --surface-container: #211f26;
+    --surface-container-highest: #36343b;
+    --surface-container-high: #2b2930;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary-container: #eaddff;
+    --secondary-container: #4a4458;
+    --tertiary: #efb8c8;
+    --error: #f2b8b5;
+    --error-container: #8c1d18;
+
+    /* Semantic colors */
+    --green: #4caf50;
+    --orange: #ff9800;
+    --blue: #2196f3;
+    --red: #f44336;
+    --yellow: #ffeb3b;
+
+    /* Font */
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: #0e0c11;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 48px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  /* ===== Section Labels ===== */
+  .section-title {
+    width: 100%;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--on-surface);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary);
+    margin-bottom: -16px;
+  }
+
+  .section-subtitle {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    margin-top: -12px;
+    line-height: 1.5;
+  }
+
+  /* ===== Settings Screen Shell ===== */
+  .settings-shell {
+    width: 1000px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    display: flex;
+    min-height: 700px;
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 200px;
+    border-right: 1px solid rgba(73, 69, 79, 0.3);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 16px 16px 4px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--on-surface);
+  }
+
+  .sidebar-project {
+    padding: 0 16px 12px 16px;
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    font-family: var(--font-mono);
+  }
+
+  .sidebar-divider {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.3);
+  }
+
+  .sidebar-spacer {
+    height: 8px;
+  }
+
+  .sidebar-item {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+
+  .sidebar-item:hover {
+    background: rgba(208, 188, 255, 0.05);
+  }
+
+  .sidebar-item.selected {
+    background: rgba(208, 188, 255, 0.1);
+    color: var(--primary);
+    border-left-color: var(--primary);
+  }
+
+  .sidebar-item .material-icons {
+    font-size: 16px;
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid rgba(73, 69, 79, 0.3);
+  }
+
+  .sidebar-footer-btn {
+    width: 100%;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--outline-variant);
+    background: transparent;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+    font-family: var(--font-system);
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .sidebar-footer-btn:hover {
+    background: rgba(208, 188, 255, 0.05);
+  }
+
+  /* ===== Content Area ===== */
+  .content {
+    flex: 1;
+    padding: 24px 32px;
+    overflow-y: auto;
+  }
+
+  .content-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--on-surface);
+    margin-bottom: 4px;
+  }
+
+  .content-subtitle {
+    font-size: 14px;
+    color: var(--on-surface-variant);
+    margin-bottom: 24px;
+  }
+
+  .content-divider {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.3);
+    margin: 24px 0;
+  }
+
+  /* ===== Action Cards ===== */
+  .action-card {
+    max-width: 700px;
+    padding: 16px 20px;
+    background: var(--surface-container);
+    border: 1px solid rgba(73, 69, 79, 0.4);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .action-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .action-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .action-type-badge.command {
+    background: rgba(73, 69, 79, 0.3);
+    color: var(--on-surface-variant);
+    border: 1px solid rgba(73, 69, 79, 0.5);
+  }
+
+  .action-type-badge.command .material-icons {
+    font-size: 13px;
+    color: var(--on-surface-variant);
+  }
+
+  .action-type-badge.macro {
+    background: rgba(208, 188, 255, 0.1);
+    color: var(--primary);
+    border: 1px solid rgba(208, 188, 255, 0.2);
+  }
+
+  .action-type-badge.macro .material-icons {
+    font-size: 13px;
+    color: var(--primary);
+  }
+
+  .remove-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--error);
+    cursor: pointer;
+    opacity: 0.7;
+  }
+
+  .remove-btn:hover {
+    background: rgba(244, 67, 54, 0.1);
+    opacity: 1;
+  }
+
+  .remove-btn .material-icons {
+    font-size: 18px;
+  }
+
+  /* ===== Form Fields ===== */
+  .field-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .field-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .field-group {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .field-group.narrow {
+    flex: 0 0 160px;
+  }
+
+  .field-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--on-surface-variant);
+    margin-bottom: 6px;
+  }
+
+  .text-input {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    background: var(--surface-container-highest);
+    color: var(--on-surface);
+    font-family: var(--font-system);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .text-input:focus {
+    border-color: var(--primary);
+  }
+
+  .text-input::placeholder {
+    color: rgba(202, 196, 208, 0.5);
+  }
+
+  .text-input.mono {
+    font-family: var(--font-mono);
+  }
+
+  .text-area {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    background: var(--surface-container-highest);
+    color: var(--on-surface);
+    font-family: var(--font-system);
+    font-size: 13px;
+    outline: none;
+    resize: vertical;
+    min-height: 64px;
+    line-height: 1.5;
+  }
+
+  .text-area:focus {
+    border-color: var(--primary);
+  }
+
+  .text-area::placeholder {
+    color: rgba(202, 196, 208, 0.5);
+  }
+
+  .select-input {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(73, 69, 79, 0.5);
+    background: var(--surface-container-highest);
+    color: var(--on-surface);
+    font-size: 13px;
+    font-family: var(--font-system);
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%23cac4d0' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 28px;
+  }
+
+  .select-input:focus {
+    border-color: var(--primary);
+  }
+
+  .field-hint {
+    font-size: 11px;
+    color: rgba(202, 196, 208, 0.5);
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* ===== Add Action Button ===== */
+  .add-action-container {
+    position: relative;
+    display: inline-block;
+    max-width: 700px;
+  }
+
+  .add-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid var(--outline-variant);
+    border-radius: 8px;
+    color: var(--on-surface-variant);
+    font-size: 13px;
+    font-family: var(--font-system);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .add-action-btn:hover {
+    background: rgba(208, 188, 255, 0.05);
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .add-action-btn .material-icons {
+    font-size: 16px;
+  }
+
+  /* Dropdown menu */
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: var(--surface-container-high);
+    border: 1px solid var(--outline-variant);
+    border-radius: 8px;
+    min-width: 220px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+    padding: 4px 0;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--on-surface);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(208, 188, 255, 0.08);
+  }
+
+  .dropdown-item .material-icons {
+    font-size: 18px;
+    color: var(--on-surface-variant);
+  }
+
+  .dropdown-item-desc {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    margin-top: 1px;
+  }
+
+  .dropdown-divider {
+    height: 1px;
+    background: rgba(73, 69, 79, 0.3);
+    margin: 4px 0;
+  }
+
+  /* ===== Help Text ===== */
+  .help-text {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    font-style: italic;
+    margin-top: 16px;
+    max-width: 700px;
+    line-height: 1.5;
+  }
+
+  /* ===== Actions Panel Preview ===== */
+  .actions-panel-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 500px;
+  }
+
+  .panel-preview-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--outline-variant);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .panel-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--surface-container);
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--on-surface-variant);
+  }
+
+  .panel-preview-header .material-icons {
+    font-size: 14px;
+  }
+
+  .panel-preview-content {
+    padding: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--outline-variant);
+    background: transparent;
+    color: var(--on-surface);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: var(--font-system);
+    cursor: pointer;
+  }
+
+  .preview-btn:hover {
+    background: rgba(208, 188, 255, 0.05);
+  }
+
+  .preview-btn .material-icons {
+    font-size: 14px;
+  }
+
+  .preview-btn.macro-btn {
+    border-color: rgba(208, 188, 255, 0.3);
+  }
+
+  .preview-btn.macro-btn .material-icons {
+    color: var(--primary);
+  }
+
+  /* ===== Callout ===== */
+  .callout {
+    font-size: 11px;
+    color: rgba(208, 188, 255, 0.6);
+    font-style: italic;
+    padding: 4px 0;
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73, 69, 79, 0.3);
+  }
+</style>
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- SECTION 1: Project Settings — User Actions with Commands + Macros   -->
+<!-- ================================================================== -->
+
+<div class="section-title">1. Project Settings — User Actions (Commands + Macros)</div>
+<p class="section-subtitle">
+  The "User Actions" category now supports two action types: <strong>Command</strong> (run a shell script) and <strong>Start Chat</strong> (create a new chat with a specific agent, model, and instruction).
+  Each action appears as a card with a type badge. The "Add Action" button opens a dropdown to choose the type.
+</p>
+
+<div class="settings-shell">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">Project Settings</div>
+    <div class="sidebar-project">cc-insights</div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-item">
+      <span class="material-icons">call_split</span>
+      Git
+    </div>
+    <div class="sidebar-item">
+      <span class="material-icons">sync_alt</span>
+      Lifecycle Hooks
+    </div>
+    <div class="sidebar-item selected">
+      <span class="material-icons">play_circle_outline</span>
+      User Actions
+    </div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn">Close</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-title">User Actions</div>
+    <div class="content-subtitle">Custom buttons shown in the Actions panel. Run shell commands or start chats with preconfigured agents.</div>
+
+    <!-- Command Action: Test -->
+    <div class="action-card">
+      <div class="action-card-header">
+        <div class="action-type-badge command">
+          <span class="material-icons">terminal</span>
+          Command
+        </div>
+        <button class="remove-btn" title="Remove action">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="field-row">
+        <div class="field-group narrow">
+          <div class="field-label">Action Name</div>
+          <input class="text-input" type="text" value="Test">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Command</div>
+          <input class="text-input mono" type="text" value="./test.sh">
+        </div>
+      </div>
+    </div>
+
+    <!-- Command Action: Run -->
+    <div class="action-card">
+      <div class="action-card-header">
+        <div class="action-type-badge command">
+          <span class="material-icons">terminal</span>
+          Command
+        </div>
+        <button class="remove-btn" title="Remove action">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="field-row">
+        <div class="field-group narrow">
+          <div class="field-label">Action Name</div>
+          <input class="text-input" type="text" value="Run">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Command</div>
+          <input class="text-input mono" type="text" value="./run.sh">
+        </div>
+      </div>
+    </div>
+
+    <!-- Macro Action: Codex Review -->
+    <div class="action-card">
+      <div class="action-card-header">
+        <div class="action-type-badge macro">
+          <span class="material-icons">chat</span>
+          Start Chat
+        </div>
+        <button class="remove-btn" title="Remove action">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <div class="field-label">Action Name</div>
+          <input class="text-input" type="text" value="Codex Review">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <div class="field-label">Agent</div>
+          <select class="select-input">
+            <option>Claude</option>
+            <option selected>Codex</option>
+            <option>Gemini</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Model <span style="opacity: 0.5;">(optional)</span></div>
+          <select class="select-input">
+            <option>Default (agent)</option>
+            <option>o4-mini</option>
+            <option selected>o3</option>
+            <option>codex-1</option>
+          </select>
+          <div class="field-hint">Leave as "Default" to use the agent's configured model</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <div class="field-label">Instruction</div>
+          <textarea class="text-area" rows="3">Perform a code review of all changes in this branch since it was created. Focus on correctness, security issues, and potential bugs.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Macro Action: Claude Refactor -->
+    <div class="action-card">
+      <div class="action-card-header">
+        <div class="action-type-badge macro">
+          <span class="material-icons">chat</span>
+          Start Chat
+        </div>
+        <button class="remove-btn" title="Remove action">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <div class="field-label">Action Name</div>
+          <input class="text-input" type="text" value="Suggest Refactors">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <div class="field-label">Agent</div>
+          <select class="select-input">
+            <option selected>Claude</option>
+            <option>Codex</option>
+            <option>Gemini</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Model <span style="opacity: 0.5;">(optional)</span></div>
+          <select class="select-input">
+            <option>Default (agent)</option>
+            <option>Haiku 4.5</option>
+            <option>Sonnet 4.5</option>
+            <option selected>Opus 4.6</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <div class="field-label">Instruction</div>
+          <textarea class="text-area" rows="2">Review the codebase and suggest refactoring opportunities. Don't make changes, just describe what you'd improve and why.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Action Button (with dropdown shown) -->
+    <div class="add-action-container">
+      <button class="add-action-btn">
+        <span class="material-icons">add</span>
+        Add Action
+        <span class="material-icons" style="font-size: 14px; margin-left: 2px;">arrow_drop_down</span>
+      </button>
+      <div class="dropdown-menu">
+        <div class="dropdown-item">
+          <span class="material-icons">terminal</span>
+          <div>
+            <div>Command</div>
+            <div class="dropdown-item-desc">Run a shell script or command</div>
+          </div>
+        </div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item">
+          <span class="material-icons">chat</span>
+          <div>
+            <div>Start Chat</div>
+            <div class="dropdown-item-desc">Launch a new chat with an agent</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="help-text">
+      Actions appear as buttons in the Actions panel.
+      Command actions run shell scripts in the worktree directory.
+      Start Chat macros create a new chat with the specified agent and send the instruction automatically.
+    </p>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 2: Actions Panel Preview — How Buttons Look                 -->
+<!-- ================================================================== -->
+
+<div class="section-title">2. Actions Panel — Button Rendering</div>
+<p class="section-subtitle">
+  Command actions show a play icon. Start Chat macros show a chat bubble icon with a subtle purple accent border.
+  Tooltips show the command or instruction preview on hover.
+</p>
+
+<div class="panel-preview-wrapper" style="width: 500px;">
+  <div class="panel-preview-header">
+    <span class="material-icons">play_circle_outline</span>
+    Actions
+  </div>
+  <div class="panel-preview-content">
+    <button class="preview-btn" title="./test.sh">
+      <span class="material-icons">play_arrow</span>
+      Test
+    </button>
+    <button class="preview-btn" title="./run.sh">
+      <span class="material-icons">play_arrow</span>
+      Run
+    </button>
+    <button class="preview-btn macro-btn" title="Perform a code review of all changes in this branch...">
+      <span class="material-icons">chat</span>
+      Codex Review
+    </button>
+    <button class="preview-btn macro-btn" title="Review the codebase and suggest refactoring opportunities...">
+      <span class="material-icons">chat</span>
+      Suggest Refactors
+    </button>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 3: JSON Config Format                                       -->
+<!-- ================================================================== -->
+
+<div class="section-title">3. JSON Config Format</div>
+<p class="section-subtitle">
+  The <code style="color: var(--primary); font-family: var(--font-mono); font-size: 12px;">.ccinsights/config.json</code> format.
+  String values are backward-compatible command actions. Object values with a <code style="color: var(--primary); font-family: var(--font-mono); font-size: 12px;">type</code> field define macros.
+</p>
+
+<div style="max-width: 700px; background: var(--surface-container); border: 1px solid rgba(73, 69, 79, 0.4); border-radius: 8px; padding: 20px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--on-surface);">
+<pre style="margin: 0; white-space: pre-wrap;"><span style="color: var(--outline);">// .ccinsights/config.json</span>
+{
+  <span style="color: var(--primary);">"user-actions"</span>: {
+    <span style="color: var(--green);">"Test"</span>: <span style="color: var(--orange);">"./test.sh"</span>,            <span style="color: var(--outline);">// string = command (backward compat)</span>
+    <span style="color: var(--green);">"Run"</span>: <span style="color: var(--orange);">"./run.sh"</span>,
+    <span style="color: var(--green);">"Codex Review"</span>: {             <span style="color: var(--outline);">// object = macro</span>
+      <span style="color: var(--primary);">"type"</span>: <span style="color: var(--orange);">"start-chat"</span>,
+      <span style="color: var(--primary);">"agent-id"</span>: <span style="color: var(--orange);">"codex-default"</span>,
+      <span style="color: var(--primary);">"model"</span>: <span style="color: var(--orange);">"o3"</span>,
+      <span style="color: var(--primary);">"instruction"</span>: <span style="color: var(--orange);">"Perform a code review..."</span>
+    },
+    <span style="color: var(--green);">"Suggest Refactors"</span>: {
+      <span style="color: var(--primary);">"type"</span>: <span style="color: var(--orange);">"start-chat"</span>,
+      <span style="color: var(--primary);">"agent-id"</span>: <span style="color: var(--orange);">"claude-default"</span>,
+      <span style="color: var(--primary);">"model"</span>: <span style="color: var(--orange);">"opus"</span>,
+      <span style="color: var(--primary);">"instruction"</span>: <span style="color: var(--orange);">"Review the codebase..."</span>
+    }
+  }
+}</pre>
+</div>
+
+<!-- ================================================================== -->
+<!-- SECTION 4: Empty State / New Macro                                  -->
+<!-- ================================================================== -->
+
+<div class="section-title">4. Empty Macro — Just Added</div>
+<p class="section-subtitle">
+  When a user clicks "Add Action > Start Chat", a new empty macro card appears with the agent dropdown defaulting to the first available agent and the instruction field focused.
+</p>
+
+<div style="max-width: 700px;">
+  <div class="action-card" style="border-style: dashed; border-color: rgba(208, 188, 255, 0.3);">
+    <div class="action-card-header">
+      <div class="action-type-badge macro">
+        <span class="material-icons">chat</span>
+        Start Chat
+      </div>
+      <button class="remove-btn" title="Remove action">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <div class="field-label">Action Name</div>
+        <input class="text-input" type="text" value="" placeholder="e.g., Code Review, Write Tests" style="border-color: var(--primary);">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <div class="field-label">Agent</div>
+        <select class="select-input">
+          <option selected>Claude</option>
+          <option>Codex</option>
+          <option>Gemini</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Model <span style="opacity: 0.5;">(optional)</span></div>
+        <select class="select-input">
+          <option selected>Default (agent)</option>
+          <option>Haiku 4.5</option>
+          <option>Sonnet 4.5</option>
+          <option>Opus 4.6</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <div class="field-label">Instruction</div>
+        <textarea class="text-area" rows="3" placeholder="What should the agent do? e.g., Perform a code review of all changes in this branch since it was created."></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/project_config.dart';
+import '../models/user_action.dart';
 
 /// Service for reading and writing project configuration files.
 ///
@@ -83,10 +84,7 @@ class ProjectConfigService extends ChangeNotifier {
       final content = encoder.convert(config.toJson());
       await File(filePath).writeAsString(content);
 
-      developer.log(
-        'Saved config to $filePath',
-        name: 'ProjectConfigService',
-      );
+      developer.log('Saved config to $filePath', name: 'ProjectConfigService');
 
       notifyListeners();
     } catch (e) {
@@ -102,18 +100,20 @@ class ProjectConfigService extends ChangeNotifier {
   /// Updates a single user action in the config.
   ///
   /// Loads the existing config, updates the action, and saves.
-  Future<void> updateUserAction(
-    String projectRoot,
-    String actionName,
-    String command,
-  ) async {
+  Future<void> updateUserAction(String projectRoot, UserAction action) async {
     final config = await loadConfig(projectRoot);
 
-    // Create new user actions map, preserving existing ones
-    final newUserActions = Map<String, String>.from(
-      config.userActions ?? {},
+    final newUserActions = List<UserAction>.from(
+      config.userActions ?? const [],
     );
-    newUserActions[actionName] = command;
+    final existingIndex = newUserActions.indexWhere(
+      (existing) => existing.name == action.name,
+    );
+    if (existingIndex >= 0) {
+      newUserActions[existingIndex] = action;
+    } else {
+      newUserActions.add(action);
+    }
 
     final updatedConfig = config.copyWith(userActions: newUserActions);
     await saveConfig(projectRoot, updatedConfig);
@@ -137,16 +137,14 @@ class ProjectConfigService extends ChangeNotifier {
   }
 
   /// Removes a user action from the config.
-  Future<void> removeUserAction(
-    String projectRoot,
-    String actionName,
-  ) async {
+  Future<void> removeUserAction(String projectRoot, String actionName) async {
     final config = await loadConfig(projectRoot);
 
     if (config.userActions == null) return;
 
-    final newUserActions = Map<String, String>.from(config.userActions!);
-    newUserActions.remove(actionName);
+    final newUserActions = config.userActions!
+        .where((action) => action.name != actionName)
+        .toList();
 
     final updatedConfig = config.copyWith(userActions: newUserActions);
     await saveConfig(projectRoot, updatedConfig);
@@ -156,10 +154,7 @@ class ProjectConfigService extends ChangeNotifier {
   ///
   /// Pass null to clear the default base (revert to auto-detect).
   /// Loads the existing config, updates the field, and saves.
-  Future<void> updateDefaultBase(
-    String projectRoot,
-    String? value,
-  ) async {
+  Future<void> updateDefaultBase(String projectRoot, String? value) async {
     final config = await loadConfig(projectRoot);
     final updatedConfig = config.copyWith(
       defaultBase: value,

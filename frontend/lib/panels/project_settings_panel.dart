@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/agent_config.dart';
+import '../models/chat_model.dart';
 import '../models/project.dart';
 import '../models/project_config.dart';
+import '../models/user_action.dart';
 import '../services/log_service.dart';
 import '../services/persistence_service.dart';
 import '../services/project_config_service.dart';
+import '../services/runtime_config.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/insights_widgets.dart';
@@ -28,16 +32,26 @@ class ProjectSettingsPanelKeys {
   static const userActionPrefix = 'project_settings_user_action_';
   static Key userActionField(String name) => Key('$userActionPrefix$name');
   static const addActionButton = Key('project_settings_add_action_button');
+  static const addCommandActionItem = Key(
+    'project_settings_add_command_action_item',
+  );
+  static const addStartChatMacroItem = Key(
+    'project_settings_add_start_chat_macro_item',
+  );
 
   // Git settings fields
-  static const defaultBaseSelector =
-      Key('project_settings_default_base_selector');
+  static const defaultBaseSelector = Key(
+    'project_settings_default_base_selector',
+  );
   static const customBaseField = Key('project_settings_custom_base_field');
 
   // Worktree settings fields
-  static const defaultWorktreeRootField =
-      Key('project_settings_default_worktree_root_field');
+  static const defaultWorktreeRootField = Key(
+    'project_settings_default_worktree_root_field',
+  );
 }
+
+enum _EditableActionType { command, startChat }
 
 /// Category definition for project settings sidebar.
 class _SettingsCategory {
@@ -214,24 +228,17 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       action.dispose();
     }
 
-    // Populate user actions
-    final userActions = config.userActions;
-    if (userActions != null) {
-      _userActions = userActions.entries.map((entry) {
-        return _UserActionEntry(
-          nameController: TextEditingController(text: entry.key),
-          commandController: TextEditingController(text: entry.value),
-        );
-      }).toList();
-    } else {
-      // Show defaults as editable entries
-      _userActions = ProjectConfig.defaultUserActions.entries.map((entry) {
-        return _UserActionEntry(
-          nameController: TextEditingController(text: entry.key),
-          commandController: TextEditingController(text: entry.value),
-        );
-      }).toList();
-    }
+    final fallbackAgentId = _resolveFallbackAgentId();
+
+    final userActions = config.userActions ?? ProjectConfig.defaultUserActions;
+    _userActions = userActions
+        .map(
+          (action) => _UserActionEntry.fromAction(
+            action,
+            fallbackAgentId: fallbackAgentId,
+          ),
+        )
+        .toList();
   }
 
   Future<void> _saveConfig() async {
@@ -258,14 +265,30 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
         actions['worktree-post-remove'] = _postRemoveController.text.trim();
       }
 
-      // Build user actions map
-      final userActions = <String, String>{};
+      final userActions = <UserAction>[];
       for (final action in _userActions) {
         final name = action.nameController.text.trim();
-        final command = action.commandController.text.trim();
-        if (name.isNotEmpty) {
-          userActions[name] = command;
+        if (name.isEmpty) continue;
+
+        if (action.type == _EditableActionType.command) {
+          userActions.add(
+            CommandAction(
+              name: name,
+              command: action.commandController.text.trim(),
+            ),
+          );
+          continue;
         }
+
+        final model = action.selectedModel?.trim();
+        userActions.add(
+          StartChatMacro(
+            name: name,
+            agentId: action.selectedAgentId,
+            model: model != null && model.isNotEmpty ? model : null,
+            instruction: action.instructionController.text.trim(),
+          ),
+        );
       }
 
       // Resolve default base value
@@ -320,13 +343,72 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     }
   }
 
-  void _addUserAction() {
+  List<AgentConfig> _availableAgents() {
+    final configured = RuntimeConfig.instance.agents;
+    return configured.isNotEmpty ? configured : AgentConfig.defaults;
+  }
+
+  String _resolveFallbackAgentId() {
+    final agents = _availableAgents();
+    final defaultId = RuntimeConfig.instance.defaultAgentId;
+    final hasDefault = agents.any((agent) => agent.id == defaultId);
+    return hasDefault ? defaultId : agents.first.id;
+  }
+
+  void _addUserAction(_EditableActionType type) {
+    final fallbackAgentId = _resolveFallbackAgentId();
     setState(() {
-      _userActions.add(_UserActionEntry(
-        nameController: TextEditingController(),
-        commandController: TextEditingController(),
-      ));
+      _userActions.add(
+        _UserActionEntry(
+          type: type,
+          nameController: TextEditingController(),
+          commandController: TextEditingController(),
+          instructionController: TextEditingController(),
+          selectedAgentId: fallbackAgentId,
+        ),
+      );
     });
+  }
+
+  void _setUserActionType(int index, _EditableActionType type) {
+    final fallbackAgentId = _resolveFallbackAgentId();
+    setState(() {
+      final entry = _userActions[index];
+      entry.type = type;
+      if (entry.selectedAgentId.isEmpty) {
+        entry.selectedAgentId = fallbackAgentId;
+      }
+    });
+    _saveConfig();
+  }
+
+  void _setUserActionAgent(int index, String agentId) {
+    setState(() {
+      final entry = _userActions[index];
+      entry.selectedAgentId = agentId;
+      final agent = _availableAgents().firstWhere(
+        (candidate) => candidate.id == agentId,
+        orElse: () => _availableAgents().first,
+      );
+      final modelOptions = ChatModelCatalog.forBackend(agent.backendType);
+      final selectedModel = entry.selectedModel;
+      final hasSelected =
+          selectedModel != null &&
+          modelOptions.any((model) => model.id == selectedModel);
+      if (!hasSelected) {
+        entry.selectedModel = null;
+      }
+    });
+    _saveConfig();
+  }
+
+  void _setUserActionModel(int index, String? modelId) {
+    setState(() {
+      _userActions[index].selectedModel = modelId != null && modelId.isNotEmpty
+          ? modelId
+          : null;
+    });
+    _saveConfig();
   }
 
   void _removeUserAction(int index) {
@@ -334,6 +416,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
       _userActions[index].dispose();
       _userActions.removeAt(index);
     });
+    _saveConfig();
   }
 
   void _handleClose() {
@@ -379,7 +462,14 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
                 preRemoveController: _preRemoveController,
                 postRemoveController: _postRemoveController,
                 userActions: _userActions,
-                onAddUserAction: _addUserAction,
+                availableAgents: _availableAgents(),
+                onAddCommandAction: () =>
+                    _addUserAction(_EditableActionType.command),
+                onAddStartChatAction: () =>
+                    _addUserAction(_EditableActionType.startChat),
+                onActionTypeChanged: _setUserActionType,
+                onActionAgentChanged: _setUserActionAgent,
+                onActionModelChanged: _setUserActionModel,
                 onRemoveUserAction: _removeUserAction,
                 defaultBaseSelection: _defaultBaseSelection,
                 onDefaultBaseChanged: (value) {
@@ -561,7 +651,12 @@ class _SettingsContent extends StatelessWidget {
     required this.preRemoveController,
     required this.postRemoveController,
     required this.userActions,
-    required this.onAddUserAction,
+    required this.availableAgents,
+    required this.onAddCommandAction,
+    required this.onAddStartChatAction,
+    required this.onActionTypeChanged,
+    required this.onActionAgentChanged,
+    required this.onActionModelChanged,
     required this.onRemoveUserAction,
     required this.defaultBaseSelection,
     required this.onDefaultBaseChanged,
@@ -578,7 +673,12 @@ class _SettingsContent extends StatelessWidget {
   final TextEditingController preRemoveController;
   final TextEditingController postRemoveController;
   final List<_UserActionEntry> userActions;
-  final VoidCallback onAddUserAction;
+  final List<AgentConfig> availableAgents;
+  final VoidCallback onAddCommandAction;
+  final VoidCallback onAddStartChatAction;
+  final void Function(int, _EditableActionType) onActionTypeChanged;
+  final void Function(int, String) onActionAgentChanged;
+  final void Function(int, String?) onActionModelChanged;
   final void Function(int) onRemoveUserAction;
   final String defaultBaseSelection;
   final ValueChanged<String> onDefaultBaseChanged;
@@ -599,9 +699,7 @@ class _SettingsContent extends StatelessWidget {
         // Category header
         Text(
           category.label,
-          style: textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 4),
         Text(
@@ -700,8 +798,11 @@ class _SettingsContent extends StatelessWidget {
                   ? userActions[i].nameController.text
                   : 'new_$i',
             ),
-            nameController: userActions[i].nameController,
-            commandController: userActions[i].commandController,
+            entry: userActions[i],
+            availableAgents: availableAgents,
+            onTypeChanged: (type) => onActionTypeChanged(i, type),
+            onAgentChanged: (agentId) => onActionAgentChanged(i, agentId),
+            onModelChanged: (modelId) => onActionModelChanged(i, modelId),
             onRemove: () => onRemoveUserAction(i),
             onSave: onSave,
           ),
@@ -712,18 +813,68 @@ class _SettingsContent extends StatelessWidget {
             ),
         ],
         if (userActions.isNotEmpty) const SizedBox(height: 24),
-        // Add action button
-        OutlinedButton.icon(
+        PopupMenuButton<_EditableActionType>(
           key: ProjectSettingsPanelKeys.addActionButton,
-          onPressed: onAddUserAction,
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add Action'),
+          onSelected: (value) {
+            if (value == _EditableActionType.command) {
+              onAddCommandAction();
+            } else {
+              onAddStartChatAction();
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem<_EditableActionType>(
+              key: ProjectSettingsPanelKeys.addCommandActionItem,
+              value: _EditableActionType.command,
+              child: const Row(
+                children: [
+                  Icon(Icons.play_arrow, size: 16),
+                  SizedBox(width: 8),
+                  Text('Add Command'),
+                ],
+              ),
+            ),
+            PopupMenuItem<_EditableActionType>(
+              key: ProjectSettingsPanelKeys.addStartChatMacroItem,
+              value: _EditableActionType.startChat,
+              child: const Row(
+                children: [
+                  Icon(Icons.chat_bubble_outline, size: 16),
+                  SizedBox(width: 8),
+                  Text('Add Start Chat Macro'),
+                ],
+              ),
+            ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add, size: 18),
+                const SizedBox(width: 8),
+                const Text('Add Action'),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_drop_down,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
         ),
         // Help text
         const SizedBox(height: 16),
         Text(
           'Actions appear as buttons in the Actions panel. '
-          'Leave the command empty to prompt on first click.',
+          'Start-chat macros create a new chat and send their instruction automatically.',
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
             fontStyle: FontStyle.italic,
@@ -816,18 +967,12 @@ class _SettingsContent extends StatelessWidget {
                     value: 'auto',
                     child: Text('Auto (detect upstream)'),
                   ),
-                  DropdownMenuItem(
-                    value: 'main',
-                    child: Text('main'),
-                  ),
+                  DropdownMenuItem(value: 'main', child: Text('main')),
                   DropdownMenuItem(
                     value: 'origin/main',
                     child: Text('origin/main'),
                   ),
-                  DropdownMenuItem(
-                    value: 'custom',
-                    child: Text('Custom...'),
-                  ),
+                  DropdownMenuItem(value: 'custom', child: Text('Custom...')),
                 ],
               ),
             ],
@@ -866,24 +1011,16 @@ class _SettingsContent extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.errorContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: colorScheme.error.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: colorScheme.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 16,
-            color: colorScheme.error,
-          ),
+          Icon(Icons.error_outline, size: 16, color: colorScheme.error),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.error,
-              ),
+              style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
             ),
           ),
         ],
@@ -951,113 +1088,277 @@ class _HookRow extends StatelessWidget {
 class _UserActionRow extends StatelessWidget {
   const _UserActionRow({
     super.key,
-    required this.nameController,
-    required this.commandController,
+    required this.entry,
+    required this.availableAgents,
+    required this.onTypeChanged,
+    required this.onAgentChanged,
+    required this.onModelChanged,
     required this.onRemove,
     required this.onSave,
   });
 
-  final TextEditingController nameController;
-  final TextEditingController commandController;
+  final _UserActionEntry entry;
+  final List<AgentConfig> availableAgents;
+  final ValueChanged<_EditableActionType> onTypeChanged;
+  final ValueChanged<String> onAgentChanged;
+  final ValueChanged<String?> onModelChanged;
   final VoidCallback onRemove;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 700),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left side: name + description
-          Expanded(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
                 Text(
-                  'Action Name',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Button label shown in the Actions panel',
-                  style: TextStyle(
-                    fontSize: 13,
+                  'Action Type',
+                  style: textTheme.labelMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 12),
-                _AutoSaveTextField(
-                  controller: nameController,
-                  hintText: 'e.g., Test',
-                  onSave: onSave,
+                const SizedBox(width: 12),
+                _ActionTypeDropdown(
+                  value: entry.type,
+                  onChanged: (value) {
+                    if (value != null) {
+                      onTypeChanged(value);
+                    }
+                  },
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 24),
-          // Right side: command
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Command',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.close,
-                        size: 18,
-                        color: colorScheme.error,
-                      ),
-                      onPressed: onRemove,
-                      tooltip: 'Remove action',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 28,
-                        minHeight: 28,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Shell command to run (empty = prompt)',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurfaceVariant,
+                const Spacer(),
+                IconButton(
+                  icon: Icon(Icons.close, size: 18, color: colorScheme.error),
+                  onPressed: onRemove,
+                  tooltip: 'Remove action',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
                   ),
                 ),
-                const SizedBox(height: 12),
-                _AutoSaveTextField(
-                  controller: commandController,
-                  hintText: 'e.g., ./test.sh',
-                  monospace: true,
-                  onSave: onSave,
-                ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            Text(
+              'Action Name',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Button label shown in the Actions panel',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _AutoSaveTextField(
+              controller: entry.nameController,
+              hintText: 'e.g., Test',
+              onSave: onSave,
+            ),
+            const SizedBox(height: 16),
+            if (entry.type == _EditableActionType.command) ...[
+              Text(
+                'Command',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Shell command to run (empty = prompt)',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _AutoSaveTextField(
+                controller: entry.commandController,
+                hintText: 'e.g., ./test.sh',
+                monospace: true,
+                onSave: onSave,
+              ),
+            ] else ...[
+              _StartChatMacroFields(
+                entry: entry,
+                availableAgents: availableAgents,
+                onAgentChanged: onAgentChanged,
+                onModelChanged: onModelChanged,
+                onSave: onSave,
+              ),
+            ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _ActionTypeDropdown extends StatelessWidget {
+  const _ActionTypeDropdown({required this.value, required this.onChanged});
+
+  final _EditableActionType value;
+  final ValueChanged<_EditableActionType?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InsightsDropdown<_EditableActionType>(
+      value: value,
+      onChanged: onChanged,
+      items: const [
+        DropdownMenuItem(
+          value: _EditableActionType.command,
+          child: Text('Command'),
+        ),
+        DropdownMenuItem(
+          value: _EditableActionType.startChat,
+          child: Text('Start Chat'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StartChatMacroFields extends StatelessWidget {
+  const _StartChatMacroFields({
+    required this.entry,
+    required this.availableAgents,
+    required this.onAgentChanged,
+    required this.onModelChanged,
+    required this.onSave,
+  });
+
+  final _UserActionEntry entry;
+  final List<AgentConfig> availableAgents;
+  final ValueChanged<String> onAgentChanged;
+  final ValueChanged<String?> onModelChanged;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final selectedAgent = availableAgents.firstWhere(
+      (agent) => agent.id == entry.selectedAgentId,
+      orElse: () => availableAgents.first,
+    );
+    final models = ChatModelCatalog.forBackend(
+      selectedAgent.backendType,
+    ).where((model) => model.id.isNotEmpty).toList();
+    final hasModelSelection =
+        entry.selectedModel != null &&
+        models.any((model) => model.id == entry.selectedModel);
+    final modelValue = hasModelSelection ? entry.selectedModel! : '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Agent',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Agent configuration used to start the chat',
+          style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        InsightsDropdown<String>(
+          value: selectedAgent.id,
+          onChanged: (value) {
+            if (value != null) {
+              onAgentChanged(value);
+            }
+          },
+          items: availableAgents
+              .map(
+                (agent) => DropdownMenuItem<String>(
+                  value: agent.id,
+                  child: Text(agent.name),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Model (optional)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Override the agent default model for this macro',
+          style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        InsightsDropdown<String>(
+          value: modelValue,
+          onChanged: onModelChanged,
+          items: [
+            const DropdownMenuItem(value: '', child: Text('Agent default')),
+            ...models.map(
+              (model) => DropdownMenuItem<String>(
+                value: model.id,
+                child: Text(model.label),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Instruction',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'First message sent automatically when the chat is created',
+          style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        _AutoSaveTextField(
+          controller: entry.instructionController,
+          hintText:
+              'e.g., Perform a code review of all changes in this branch.',
+          onSave: onSave,
+          maxLines: 5,
+        ),
+      ],
     );
   }
 }
@@ -1065,16 +1366,54 @@ class _UserActionRow extends StatelessWidget {
 /// Helper class to hold controllers for a user action entry.
 class _UserActionEntry {
   _UserActionEntry({
+    required this.type,
     required this.nameController,
     required this.commandController,
+    required this.instructionController,
+    required this.selectedAgentId,
+    this.selectedModel,
   });
 
+  factory _UserActionEntry.fromAction(
+    UserAction action, {
+    required String fallbackAgentId,
+  }) {
+    return switch (action) {
+      CommandAction(:final name, :final command) => _UserActionEntry(
+        type: _EditableActionType.command,
+        nameController: TextEditingController(text: name),
+        commandController: TextEditingController(text: command),
+        instructionController: TextEditingController(),
+        selectedAgentId: fallbackAgentId,
+      ),
+      StartChatMacro(
+        :final name,
+        :final agentId,
+        :final model,
+        :final instruction,
+      ) =>
+        _UserActionEntry(
+          type: _EditableActionType.startChat,
+          nameController: TextEditingController(text: name),
+          commandController: TextEditingController(),
+          instructionController: TextEditingController(text: instruction),
+          selectedAgentId: agentId.isNotEmpty ? agentId : fallbackAgentId,
+          selectedModel: model,
+        ),
+    };
+  }
+
+  _EditableActionType type;
   final TextEditingController nameController;
   final TextEditingController commandController;
+  final TextEditingController instructionController;
+  String selectedAgentId;
+  String? selectedModel;
 
   void dispose() {
     nameController.dispose();
     commandController.dispose();
+    instructionController.dispose();
   }
 }
 
@@ -1090,12 +1429,14 @@ class _AutoSaveTextField extends StatefulWidget {
     required this.onSave,
     this.hintText,
     this.monospace = false,
+    this.maxLines = 1,
   });
 
   final TextEditingController controller;
   final VoidCallback onSave;
   final String? hintText;
   final bool monospace;
+  final int maxLines;
 
   @override
   State<_AutoSaveTextField> createState() => _AutoSaveTextFieldState();
@@ -1145,14 +1486,30 @@ class _AutoSaveTextFieldState extends State<_AutoSaveTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final isMultiline = widget.maxLines > 1;
     return Focus(
       onKeyEvent: _handleKeyEvent,
-      child: InsightsTextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        hintText: widget.hintText,
-        monospace: widget.monospace,
-      ),
+      child: isMultiline
+          ? TextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              maxLines: widget.maxLines,
+              style: insightsInputTextStyle(
+                context,
+                monospace: widget.monospace,
+              ),
+              decoration: insightsInputDecoration(
+                context,
+                hintText: widget.hintText,
+                monospace: widget.monospace,
+              ),
+            )
+          : InsightsTextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              hintText: widget.hintText,
+              monospace: widget.monospace,
+            ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:cc_insights_v2/models/project_config.dart';
+import 'package:cc_insights_v2/models/user_action.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,17 +20,17 @@ void main() {
         // Arrange & Act
         const config = ProjectConfig(
           actions: {'worktree-post-create': 'npm install'},
-          userActions: {'Test': './test.sh'},
+          userActions: [CommandAction(name: 'Test', command: './test.sh')],
           defaultBase: 'origin/main',
         );
 
         // Assert
-        check(config.actions).deepEquals(
-          {'worktree-post-create': 'npm install'},
-        );
-        check(config.userActions).isNotNull().deepEquals(
-          {'Test': './test.sh'},
-        );
+        check(
+          config.actions,
+        ).deepEquals({'worktree-post-create': 'npm install'});
+        check(config.userActions).isNotNull().deepEquals([
+          const CommandAction(name: 'Test', command: './test.sh'),
+        ]);
         check(config.defaultBase).isNotNull().equals('origin/main');
       });
     });
@@ -51,7 +52,7 @@ void main() {
         // Arrange
         const original = ProjectConfig(
           actions: {'worktree-post-create': 'npm install'},
-          userActions: {'Test': './test.sh'},
+          userActions: [CommandAction(name: 'Test', command: './test.sh')],
         );
 
         // Act
@@ -60,9 +61,9 @@ void main() {
         // Assert
         check(modified.defaultBase).isNotNull().equals('main');
         check(modified.actions).deepEquals(original.actions);
-        check(modified.userActions).isNotNull().deepEquals(
-          original.userActions!,
-        );
+        check(
+          modified.userActions,
+        ).isNotNull().deepEquals(original.userActions!);
       });
 
       test('preserves defaultBase when not specified', () {
@@ -70,9 +71,7 @@ void main() {
         const original = ProjectConfig(defaultBase: 'origin/main');
 
         // Act
-        final modified = original.copyWith(
-          actions: {'hook': 'cmd'},
-        );
+        final modified = original.copyWith(actions: {'hook': 'cmd'});
 
         // Assert
         check(modified.defaultBase).isNotNull().equals('origin/main');
@@ -108,7 +107,7 @@ void main() {
         // Arrange
         const original = ProjectConfig(
           actions: {'hook': 'cmd'},
-          userActions: {'Test': './test.sh'},
+          userActions: [CommandAction(name: 'Test', command: './test.sh')],
           defaultBase: 'auto',
         );
 
@@ -147,7 +146,7 @@ void main() {
         // Arrange
         const config = ProjectConfig(
           actions: {'worktree-post-create': 'npm install'},
-          userActions: {'Test': './test.sh'},
+          userActions: [CommandAction(name: 'Test', command: './test.sh')],
           defaultBase: 'main',
         );
 
@@ -155,13 +154,47 @@ void main() {
         final json = config.toJson();
 
         // Assert
-        check(json['actions'] as Map).deepEquals(
-          {'worktree-post-create': 'npm install'},
-        );
-        check(json['user-actions'] as Map).deepEquals(
-          {'Test': './test.sh'},
-        );
+        check(
+          json['actions'] as Map,
+        ).deepEquals({'worktree-post-create': 'npm install'});
+        check(json['user-actions'] as Map).deepEquals({'Test': './test.sh'});
         check(json['default-base']).equals('main');
+      });
+
+      test('serializes start-chat macros as typed objects', () {
+        const config = ProjectConfig(
+          userActions: [
+            StartChatMacro(
+              name: 'Codex Review',
+              agentId: 'codex-default',
+              model: 'o3-mini',
+              instruction: 'Review this branch',
+            ),
+          ],
+        );
+
+        final json = config.toJson();
+
+        check(json['user-actions'] as Map).deepEquals({
+          'Codex Review': {
+            'type': 'start-chat',
+            'agent-id': 'codex-default',
+            'model': 'o3-mini',
+            'instruction': 'Review this branch',
+          },
+        });
+      });
+
+      test('serializes empty command using typed command object', () {
+        const config = ProjectConfig(
+          userActions: [CommandAction(name: 'Empty', command: '')],
+        );
+
+        final json = config.toJson();
+
+        check(json['user-actions'] as Map).deepEquals({
+          'Empty': {'type': 'command', 'command': ''},
+        });
       });
 
       test('empty config produces empty JSON', () {
@@ -179,9 +212,7 @@ void main() {
     group('fromJson()', () {
       test('parses defaultBase from JSON', () {
         // Arrange
-        final json = <String, dynamic>{
-          'default-base': 'origin/main',
-        };
+        final json = <String, dynamic>{'default-base': 'origin/main'};
 
         // Act
         final config = ProjectConfig.fromJson(json);
@@ -205,9 +236,7 @@ void main() {
 
       test('handles non-string defaultBase as null', () {
         // Arrange
-        final json = <String, dynamic>{
-          'default-base': 42,
-        };
+        final json = <String, dynamic>{'default-base': 42};
 
         // Act
         final config = ProjectConfig.fromJson(json);
@@ -228,13 +257,37 @@ void main() {
         final config = ProjectConfig.fromJson(json);
 
         // Assert
-        check(config.actions).deepEquals(
-          {'worktree-post-create': 'npm install'},
-        );
-        check(config.userActions).isNotNull().deepEquals(
-          {'Test': './test.sh'},
-        );
+        check(
+          config.actions,
+        ).deepEquals({'worktree-post-create': 'npm install'});
+        check(config.userActions).isNotNull().deepEquals([
+          const CommandAction(name: 'Test', command: './test.sh'),
+        ]);
         check(config.defaultBase).isNotNull().equals('auto');
+      });
+
+      test('parses start-chat macro objects from JSON', () {
+        final json = <String, dynamic>{
+          'user-actions': {
+            'Codex Review': {
+              'type': 'start-chat',
+              'agent-id': 'codex-default',
+              'model': 'o3-mini',
+              'instruction': 'Review this branch',
+            },
+          },
+        };
+
+        final config = ProjectConfig.fromJson(json);
+
+        check(config.userActions).isNotNull().deepEquals(const [
+          StartChatMacro(
+            name: 'Codex Review',
+            agentId: 'codex-default',
+            model: 'o3-mini',
+            instruction: 'Review this branch',
+          ),
+        ]);
       });
 
       test('parses empty JSON as empty config', () {
@@ -256,7 +309,7 @@ void main() {
         // Arrange
         const original = ProjectConfig(
           actions: {'worktree-post-create': 'npm install'},
-          userActions: {'Build': 'make build'},
+          userActions: [CommandAction(name: 'Build', command: 'make build')],
           defaultBase: 'origin/main',
         );
 
@@ -272,7 +325,7 @@ void main() {
         // Arrange
         const original = ProjectConfig(
           actions: {'hook': 'cmd'},
-          userActions: {'Test': './test.sh'},
+          userActions: [CommandAction(name: 'Test', command: './test.sh')],
         );
 
         // Act
@@ -377,9 +430,7 @@ void main() {
   group('copyWith patterns used by updateDefaultBase', () {
     test('sets defaultBase via copyWith', () async {
       // Arrange: start with a config that has no defaultBase
-      const initial = ProjectConfig(
-        actions: {'hook': 'cmd'},
-      );
+      const initial = ProjectConfig(actions: {'hook': 'cmd'});
 
       // Act: simulate what updateDefaultBase does
       final updated = initial.copyWith(defaultBase: 'origin/main');
