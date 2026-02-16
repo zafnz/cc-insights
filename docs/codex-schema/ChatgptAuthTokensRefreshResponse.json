@@ -4,14 +4,20 @@
   "type": "object",
   "required": [
     "accessToken",
-    "idToken"
+    "chatgptAccountId"
   ],
   "properties": {
     "accessToken": {
       "type": "string"
     },
-    "idToken": {
+    "chatgptAccountId": {
       "type": "string"
+    },
+    "chatgptPlanType": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   }
 }

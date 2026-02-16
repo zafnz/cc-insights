@@ -18,16 +18,8 @@
         }
       ]
     },
-    "collaborationMode": {
-      "description": "EXPERIMENTAL - set a pre-set collaboration mode. Takes precedence over model, reasoning_effort, and developer instructions if set.",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/CollaborationMode"
-        },
-        {
-          "type": "null"
-        }
-      ]
+    "threadId": {
+      "type": "string"
     },
     "cwd": {
       "description": "Override the working directory for this turn and subsequent turns.",
@@ -95,9 +87,6 @@
           "type": "null"
         }
       ]
-    },
-    "threadId": {
-      "type": "string"
     }
   },
   "definitions": {
@@ -154,10 +143,7 @@
       "type": "string",
       "enum": [
         "plan",
-        "code",
-        "pair_programming",
-        "execute",
-        "custom"
+        "default"
       ]
     },
     "NetworkAccess": {
@@ -170,8 +156,56 @@
     "Personality": {
       "type": "string",
       "enum": [
+        "none",
         "friendly",
         "pragmatic"
+      ]
+    },
+    "ReadOnlyAccess": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "includePlatformDefaults": {
+              "default": true,
+              "type": "boolean"
+            },
+            "readableRoots": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/AbsolutePathBuf"
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "restricted"
+              ],
+              "title": "RestrictedReadOnlyAccessType"
+            }
+          },
+          "title": "RestrictedReadOnlyAccess"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "fullAccess"
+              ],
+              "title": "FullAccessReadOnlyAccessType"
+            }
+          },
+          "title": "FullAccessReadOnlyAccess"
+        }
       ]
     },
     "ReasoningEffort": {
@@ -230,6 +264,16 @@
             "type"
           ],
           "properties": {
+            "access": {
+              "default": {
+                "type": "fullAccess"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess"
+                }
+              ]
+            },
             "type": {
               "type": "string",
               "enum": [
@@ -281,6 +325,16 @@
             "networkAccess": {
               "default": false,
               "type": "boolean"
+            },
+            "readOnlyAccess": {
+              "default": {
+                "type": "fullAccess"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess"
+                }
+              ]
             },
             "type": {
               "type": "string",

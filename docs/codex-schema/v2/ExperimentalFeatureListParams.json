@@ -1,7 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AppsListParams",
-  "description": "EXPERIMENTAL - list available apps/connectors.",
+  "title": "ExperimentalFeatureListParams",
   "type": "object",
   "properties": {
     "cursor": {
@@ -11,10 +10,6 @@
         "null"
       ]
     },
-    "forceRefetch": {
-      "description": "When true, bypass app caches and fetch the latest data from sources.",
-      "type": "boolean"
-    },
     "limit": {
       "description": "Optional page size; defaults to a reasonable server-side value.",
       "type": [
@@ -23,13 +18,6 @@
       ],
       "format": "uint32",
       "minimum": 0.0
-    },
-    "threadId": {
-      "description": "Optional thread id used to evaluate app feature gating from that thread's config.",
-      "type": [
-        "string",
-        "null"
-      ]
     }
   }
 }

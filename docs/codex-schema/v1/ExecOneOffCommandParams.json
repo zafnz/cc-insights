@@ -50,6 +50,57 @@
         "enabled"
       ]
     },
+    "ReadOnlyAccess": {
+      "description": "Determines how read-only file access is granted inside a restricted sandbox.",
+      "oneOf": [
+        {
+          "description": "Restrict reads to an explicit set of roots.\n\nWhen `include_platform_defaults` is `true`, platform defaults required for basic execution are included in addition to `readable_roots`.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "include_platform_defaults": {
+              "description": "Include built-in platform read roots required for basic process execution.",
+              "default": true,
+              "type": "boolean"
+            },
+            "readable_roots": {
+              "description": "Additional absolute roots that should be readable.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/AbsolutePathBuf"
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "restricted"
+              ],
+              "title": "RestrictedReadOnlyAccessType"
+            }
+          },
+          "title": "RestrictedReadOnlyAccess"
+        },
+        {
+          "description": "Allow unrestricted file reads.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "full-access"
+              ],
+              "title": "FullAccessReadOnlyAccessType"
+            }
+          },
+          "title": "FullAccessReadOnlyAccess"
+        }
+      ]
+    },
     "SandboxPolicy": {
       "description": "Determines execution restrictions for model shell commands.",
       "oneOf": [
@@ -71,12 +122,20 @@
           "title": "DangerFullAccessSandboxPolicy"
         },
         {
-          "description": "Read-only access to the entire file-system.",
+          "description": "Read-only access configuration.",
           "type": "object",
           "required": [
             "type"
           ],
           "properties": {
+            "access": {
+              "description": "Read access granted while running under this policy.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess"
+                }
+              ]
+            },
             "type": {
               "type": "string",
               "enum": [
@@ -134,6 +193,14 @@
               "description": "When set to `true`, outbound network access is allowed. `false` by default.",
               "default": false,
               "type": "boolean"
+            },
+            "read_only_access": {
+              "description": "Read access granted while running under this policy.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess"
+                }
+              ]
             },
             "type": {
               "type": "string",

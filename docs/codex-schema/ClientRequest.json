@@ -186,6 +186,30 @@
         "method": {
           "type": "string",
           "enum": [
+            "thread/compact/start"
+          ],
+          "title": "Thread/compact/startRequestMethod"
+        },
+        "params": {
+          "$ref": "#/definitions/ThreadCompactStartParams"
+        }
+      },
+      "title": "Thread/compact/startRequest"
+    },
+    {
+      "type": "object",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
             "thread/rollback"
           ],
           "title": "Thread/rollbackRequestMethod"
@@ -306,6 +330,54 @@
         "method": {
           "type": "string",
           "enum": [
+            "skills/remote/read"
+          ],
+          "title": "Skills/remote/readRequestMethod"
+        },
+        "params": {
+          "$ref": "#/definitions/SkillsRemoteReadParams"
+        }
+      },
+      "title": "Skills/remote/readRequest"
+    },
+    {
+      "type": "object",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "skills/remote/write"
+          ],
+          "title": "Skills/remote/writeRequestMethod"
+        },
+        "params": {
+          "$ref": "#/definitions/SkillsRemoteWriteParams"
+        }
+      },
+      "title": "Skills/remote/writeRequest"
+    },
+    {
+      "type": "object",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
             "app/list"
           ],
           "title": "App/listRequestMethod"
@@ -363,6 +435,30 @@
         }
       },
       "title": "Turn/startRequest"
+    },
+    {
+      "type": "object",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "turn/steer"
+          ],
+          "title": "Turn/steerRequestMethod"
+        },
+        "params": {
+          "$ref": "#/definitions/TurnSteerParams"
+        }
+      },
+      "title": "Turn/steerRequest"
     },
     {
       "type": "object",
@@ -437,7 +533,6 @@
       "title": "Model/listRequest"
     },
     {
-      "description": "EXPERIMENTAL - list collaboration mode presets.",
       "type": "object",
       "required": [
         "id",
@@ -451,15 +546,15 @@
         "method": {
           "type": "string",
           "enum": [
-            "collaborationMode/list"
+            "experimentalFeature/list"
           ],
-          "title": "CollaborationMode/listRequestMethod"
+          "title": "ExperimentalFeature/listRequestMethod"
         },
         "params": {
-          "$ref": "#/definitions/CollaborationModeListParams"
+          "$ref": "#/definitions/ExperimentalFeatureListParams"
         }
       },
-      "title": "CollaborationMode/listRequest"
+      "title": "ExperimentalFeature/listRequest"
     },
     {
       "type": "object",
@@ -1369,6 +1464,7 @@
       }
     },
     "AppsListParams": {
+      "description": "EXPERIMENTAL - list available apps/connectors.",
       "type": "object",
       "properties": {
         "cursor": {
@@ -1378,6 +1474,10 @@
             "null"
           ]
         },
+        "forceRefetch": {
+          "description": "When true, bypass app caches and fetch the latest data from sources.",
+          "type": "boolean"
+        },
         "limit": {
           "description": "Optional page size; defaults to a reasonable server-side value.",
           "type": [
@@ -1386,6 +1486,13 @@
           ],
           "format": "uint32",
           "minimum": 0.0
+        },
+        "threadId": {
+          "description": "Optional thread id used to evaluate app feature gating from that thread's config.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -1524,9 +1631,106 @@
         }
       }
     },
-    "CollaborationModeListParams": {
-      "description": "EXPERIMENTAL - list collaboration mode presets.",
-      "type": "object"
+    "WebSearchAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "queries": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "query": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "search"
+              ],
+              "title": "SearchWebSearchActionType"
+            }
+          },
+          "title": "SearchWebSearchAction"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "open_page"
+              ],
+              "title": "OpenPageWebSearchActionType"
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "title": "OpenPageWebSearchAction"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "pattern": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "find_in_page"
+              ],
+              "title": "FindInPageWebSearchActionType"
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "title": "FindInPageWebSearchAction"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "other"
+              ],
+              "title": "OtherWebSearchActionType"
+            }
+          },
+          "title": "OtherWebSearchAction"
+        }
+      ]
     },
     "CommandExecParams": {
       "type": "object",
@@ -1774,6 +1978,27 @@
         }
       }
     },
+    "ExperimentalFeatureListParams": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "description": "Opaque pagination cursor returned by a previous call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Optional page size; defaults to a reasonable server-side value.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
     "FeedbackUploadParams": {
       "type": "object",
       "required": [
@@ -1832,6 +2057,19 @@
         }
       }
     },
+    "FunctionCallOutputBody": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FunctionCallOutputContentItem"
+          }
+        }
+      ]
+    },
     "FunctionCallOutputContentItem": {
       "description": "Responses API compatible content items that can be returned by a tool call. This is a subset of ContentItem with the types we support as function call outputs.",
       "oneOf": [
@@ -1878,23 +2116,14 @@
       ]
     },
     "FunctionCallOutputPayload": {
-      "description": "The payload we send back to OpenAI when reporting a tool call result.\n\n`content` preserves the historical plain-string payload so downstream integrations (tests, logging, etc.) can keep treating tool output as `String`. When an MCP server returns richer data we additionally populate `content_items` with the structured form that the Responses/Chat Completions APIs understand.",
+      "description": "The payload we send back to OpenAI when reporting a tool call result.\n\n`body` serializes directly as the wire value for `function_call_output.output`. `success` remains internal metadata for downstream handling.",
       "type": "object",
       "required": [
-        "content"
+        "body"
       ],
       "properties": {
-        "content": {
-          "type": "string"
-        },
-        "content_items": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/FunctionCallOutputContentItem"
-          }
+        "body": {
+          "$ref": "#/definitions/FunctionCallOutputBody"
         },
         "success": {
           "type": [
@@ -2026,12 +2255,43 @@
         }
       }
     },
+    "InitializeCapabilities": {
+      "description": "Client-declared capabilities negotiated during initialize.",
+      "type": "object",
+      "properties": {
+        "experimentalApi": {
+          "description": "Opt into receiving experimental API methods and fields.",
+          "default": false,
+          "type": "boolean"
+        },
+        "optOutNotificationMethods": {
+          "description": "Exact notification method names that should be suppressed for this connection (for example `codex/event/session_configured`).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "InitializeParams": {
       "type": "object",
       "required": [
         "clientInfo"
       ],
       "properties": {
+        "capabilities": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InitializeCapabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "clientInfo": {
           "$ref": "#/definitions/ClientInfo"
         }
@@ -2300,17 +2560,24 @@
           "type": "object",
           "required": [
             "accessToken",
-            "idToken",
+            "chatgptAccountId",
             "type"
           ],
           "properties": {
             "accessToken": {
-              "description": "Access token (JWT) supplied by the client. This token is used for backend API requests.",
+              "description": "Access token (JWT) supplied by the client. This token is used for backend API requests and email extraction.",
               "type": "string"
             },
-            "idToken": {
-              "description": "ID token (JWT) supplied by the client.\n\nThis token is used for identity and account metadata (email, plan type, workspace id).",
+            "chatgptAccountId": {
+              "description": "Workspace/account identifier supplied by the client.",
               "type": "string"
+            },
+            "chatgptPlanType": {
+              "description": "Optional plan type supplied by the client.\n\nWhen `null`, Codex attempts to derive the plan type from access-token claims. If unavailable, the plan defaults to `unknown`.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "type": "string",
@@ -2369,15 +2636,54 @@
         "upsert"
       ]
     },
+    "MessagePhase": {
+      "description": "Classifies an assistant message as interim commentary or final answer text.\n\nProviders do not emit this consistently, so callers must treat `None` as \"phase unknown\" and keep compatibility behavior for legacy models.",
+      "oneOf": [
+        {
+          "description": "Mid-turn assistant text (for example preamble/progress narration).\n\nAdditional tool calls or assistant output may follow before turn completion.",
+          "type": "string",
+          "enum": [
+            "commentary"
+          ]
+        },
+        {
+          "description": "The assistant's terminal answer text for the current turn.",
+          "type": "string",
+          "enum": [
+            "final_answer"
+          ]
+        }
+      ]
+    },
+    "V1TextElement": {
+      "type": "object",
+      "required": [
+        "byteRange"
+      ],
+      "properties": {
+        "byteRange": {
+          "description": "Byte range in the parent `text` buffer that this element occupies.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/V1ByteRange"
+            }
+          ]
+        },
+        "placeholder": {
+          "description": "Optional human-readable placeholder for the element, displayed in the UI.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "ModeKind": {
       "description": "Initial collaboration mode to use when the TUI starts.",
       "type": "string",
       "enum": [
         "plan",
-        "code",
-        "pair_programming",
-        "execute",
-        "custom"
+        "default"
       ]
     },
     "ModelListParams": {
@@ -2499,8 +2805,107 @@
     "Personality": {
       "type": "string",
       "enum": [
+        "none",
         "friendly",
         "pragmatic"
+      ]
+    },
+    "ReadOnlyAccess": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "includePlatformDefaults": {
+              "default": true,
+              "type": "boolean"
+            },
+            "readableRoots": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/AbsolutePathBuf"
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "restricted"
+              ],
+              "title": "RestrictedReadOnlyAccessType"
+            }
+          },
+          "title": "RestrictedReadOnlyAccess"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "fullAccess"
+              ],
+              "title": "FullAccessReadOnlyAccessType"
+            }
+          },
+          "title": "FullAccessReadOnlyAccess"
+        }
+      ]
+    },
+    "ReadOnlyAccess2": {
+      "description": "Determines how read-only file access is granted inside a restricted sandbox.",
+      "oneOf": [
+        {
+          "description": "Restrict reads to an explicit set of roots.\n\nWhen `include_platform_defaults` is `true`, platform defaults required for basic execution are included in addition to `readable_roots`.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "include_platform_defaults": {
+              "description": "Include built-in platform read roots required for basic process execution.",
+              "default": true,
+              "type": "boolean"
+            },
+            "readable_roots": {
+              "description": "Additional absolute roots that should be readable.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/AbsolutePathBuf"
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "restricted"
+              ],
+              "title": "RestrictedReadOnlyAccess2Type"
+            }
+          },
+          "title": "RestrictedReadOnlyAccess2"
+        },
+        {
+          "description": "Allow unrestricted file reads.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "full-access"
+              ],
+              "title": "FullAccessReadOnlyAccess2Type"
+            }
+          },
+          "title": "FullAccessReadOnlyAccess2"
+        }
       ]
     },
     "ReasoningEffort": {
@@ -2654,6 +3059,16 @@
                 "null"
               ]
             },
+            "phase": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/MessagePhase"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "role": {
               "type": "string"
             },
@@ -2730,7 +3145,7 @@
               ]
             },
             "id": {
-              "description": "Set when using the chat completions API.",
+              "description": "Legacy id field retained for compatibility with older payloads.",
               "writeOnly": true,
               "type": [
                 "string",
@@ -3176,6 +3591,16 @@
             "type"
           ],
           "properties": {
+            "access": {
+              "default": {
+                "type": "fullAccess"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess"
+                }
+              ]
+            },
             "type": {
               "type": "string",
               "enum": [
@@ -3228,6 +3653,16 @@
               "default": false,
               "type": "boolean"
             },
+            "readOnlyAccess": {
+              "default": {
+                "type": "fullAccess"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess"
+                }
+              ]
+            },
             "type": {
               "type": "string",
               "enum": [
@@ -3268,12 +3703,20 @@
           "title": "DangerFullAccessSandboxPolicy2"
         },
         {
-          "description": "Read-only access to the entire file-system.",
+          "description": "Read-only access configuration.",
           "type": "object",
           "required": [
             "type"
           ],
           "properties": {
+            "access": {
+              "description": "Read access granted while running under this policy.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess2"
+                }
+              ]
+            },
             "type": {
               "type": "string",
               "enum": [
@@ -3331,6 +3774,14 @@
               "description": "When set to `true`, outbound network access is allowed. `false` by default.",
               "default": false,
               "type": "boolean"
+            },
+            "read_only_access": {
+              "description": "Read access granted while running under this policy.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ReadOnlyAccess2"
+                }
+              ]
             },
             "type": {
               "type": "string",
@@ -3484,6 +3935,24 @@
         }
       }
     },
+    "SkillsListExtraRootsForCwd": {
+      "type": "object",
+      "required": [
+        "cwd",
+        "extraUserRoots"
+      ],
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "extraUserRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "SkillsListParams": {
       "type": "object",
       "properties": {
@@ -3496,6 +3965,35 @@
         },
         "forceReload": {
           "description": "When true, bypass the skills cache and re-scan skills from disk.",
+          "type": "boolean"
+        },
+        "perCwdExtraUserRoots": {
+          "description": "Optional per-cwd extra roots to scan as user-scoped skills.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/SkillsListExtraRootsForCwd"
+          }
+        }
+      }
+    },
+    "SkillsRemoteReadParams": {
+      "type": "object"
+    },
+    "SkillsRemoteWriteParams": {
+      "type": "object",
+      "required": [
+        "hazelnutId",
+        "isPreload"
+      ],
+      "properties": {
+        "hazelnutId": {
+          "type": "string"
+        },
+        "isPreload": {
           "type": "boolean"
         }
       }
@@ -3524,6 +4022,38 @@
       }
     },
     "ThreadArchiveParams": {
+      "type": "object",
+      "required": [
+        "threadId"
+      ],
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      }
+    },
+    "V1ByteRange": {
+      "type": "object",
+      "required": [
+        "end",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "description": "End byte offset (exclusive) within the UTF-8 text buffer.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "start": {
+          "description": "Start byte offset (inclusive) within the UTF-8 text buffer.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        }
+      }
+    },
+    "ThreadCompactStartParams": {
       "type": "object",
       "required": [
         "threadId"
@@ -3589,12 +4119,8 @@
             "null"
           ]
         },
-        "path": {
-          "description": "[UNSTABLE] Specify the rollout path to fork from. If specified, the thread_id param will be ignored.",
-          "type": [
-            "string",
-            "null"
-          ]
+        "threadId": {
+          "type": "string"
         },
         "sandbox": {
           "anyOf": [
@@ -3605,9 +4131,6 @@
               "type": "null"
             }
           ]
-        },
-        "threadId": {
-          "type": "string"
         }
       }
     },
@@ -3752,15 +4275,8 @@
             "null"
           ]
         },
-        "history": {
-          "description": "[UNSTABLE] FOR CODEX CLOUD - DO NOT USE. If specified, the thread will be resumed with the provided history instead of loaded from disk.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/ResponseItem"
-          }
+        "threadId": {
+          "type": "string"
         },
         "model": {
           "description": "Configuration overrides for the resumed thread, if any.",
@@ -3775,11 +4291,14 @@
             "null"
           ]
         },
-        "path": {
-          "description": "[UNSTABLE] Specify the rollout path to resume from. If specified, the thread_id param will be ignored.",
-          "type": [
-            "string",
-            "null"
+        "sandbox": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SandboxMode"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "personality": {
@@ -3791,19 +4310,6 @@
               "type": "null"
             }
           ]
-        },
-        "sandbox": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SandboxMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "threadId": {
-          "type": "string"
         }
       }
     },
@@ -3900,29 +4406,19 @@
             "null"
           ]
         },
-        "dynamicTools": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/DynamicToolSpec"
-          }
+        "sandbox": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SandboxMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "ephemeral": {
           "type": [
             "boolean",
-            "null"
-          ]
-        },
-        "experimentalRawEvents": {
-          "description": "If true, opt into emitting raw response items on the event stream.\n\nThis is for internal use only (e.g. Codex Cloud). (TODO): Figure out a better way to categorize internal / experimental events & protocols.",
-          "default": false,
-          "type": "boolean"
-        },
-        "model": {
-          "type": [
-            "string",
             "null"
           ]
         },
@@ -3942,14 +4438,10 @@
             }
           ]
         },
-        "sandbox": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SandboxMode"
-            },
-            {
-              "type": "null"
-            }
+        "model": {
+          "type": [
+            "string",
+            "null"
           ]
         }
       }
@@ -3998,16 +4490,8 @@
             }
           ]
         },
-        "collaborationMode": {
-          "description": "EXPERIMENTAL - set a pre-set collaboration mode. Takes precedence over model, reasoning_effort, and developer instructions if set.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/CollaborationMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "threadId": {
+          "type": "string"
         },
         "cwd": {
           "description": "Override the working directory for this turn and subsequent turns.",
@@ -4075,6 +4559,26 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "TurnSteerParams": {
+      "type": "object",
+      "required": [
+        "expectedTurnId",
+        "input",
+        "threadId"
+      ],
+      "properties": {
+        "expectedTurnId": {
+          "description": "Required active turn id precondition. The request fails when it does not match the currently active turn.",
+          "type": "string"
+        },
+        "input": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UserInput"
+          }
         },
         "threadId": {
           "type": "string"
@@ -4198,151 +4702,6 @@
             }
           },
           "title": "MentionUserInput"
-        }
-      ]
-    },
-    "V1ByteRange": {
-      "type": "object",
-      "required": [
-        "end",
-        "start"
-      ],
-      "properties": {
-        "end": {
-          "description": "End byte offset (exclusive) within the UTF-8 text buffer.",
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0.0
-        },
-        "start": {
-          "description": "Start byte offset (inclusive) within the UTF-8 text buffer.",
-          "type": "integer",
-          "format": "uint",
-          "minimum": 0.0
-        }
-      }
-    },
-    "V1TextElement": {
-      "type": "object",
-      "required": [
-        "byteRange"
-      ],
-      "properties": {
-        "byteRange": {
-          "description": "Byte range in the parent `text` buffer that this element occupies.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/V1ByteRange"
-            }
-          ]
-        },
-        "placeholder": {
-          "description": "Optional human-readable placeholder for the element, displayed in the UI.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
-    "WebSearchAction": {
-      "oneOf": [
-        {
-          "type": "object",
-          "required": [
-            "type"
-          ],
-          "properties": {
-            "queries": {
-              "type": [
-                "array",
-                "null"
-              ],
-              "items": {
-                "type": "string"
-              }
-            },
-            "query": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "type": {
-              "type": "string",
-              "enum": [
-                "search"
-              ],
-              "title": "SearchWebSearchActionType"
-            }
-          },
-          "title": "SearchWebSearchAction"
-        },
-        {
-          "type": "object",
-          "required": [
-            "type"
-          ],
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "open_page"
-              ],
-              "title": "OpenPageWebSearchActionType"
-            },
-            "url": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "title": "OpenPageWebSearchAction"
-        },
-        {
-          "type": "object",
-          "required": [
-            "type"
-          ],
-          "properties": {
-            "pattern": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "type": {
-              "type": "string",
-              "enum": [
-                "find_in_page"
-              ],
-              "title": "FindInPageWebSearchActionType"
-            },
-            "url": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "title": "FindInPageWebSearchAction"
-        },
-        {
-          "type": "object",
-          "required": [
-            "type"
-          ],
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "other"
-              ],
-              "title": "OtherWebSearchActionType"
-            }
-          },
-          "title": "OtherWebSearchAction"
         }
       ]
     }

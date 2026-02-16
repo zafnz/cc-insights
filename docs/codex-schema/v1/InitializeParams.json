@@ -6,6 +6,16 @@
     "clientInfo"
   ],
   "properties": {
+    "capabilities": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/InitializeCapabilities"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "clientInfo": {
       "$ref": "#/definitions/ClientInfo"
     }
@@ -29,6 +39,27 @@
         },
         "version": {
           "type": "string"
+        }
+      }
+    },
+    "InitializeCapabilities": {
+      "description": "Client-declared capabilities negotiated during initialize.",
+      "type": "object",
+      "properties": {
+        "experimentalApi": {
+          "description": "Opt into receiving experimental API methods and fields.",
+          "default": false,
+          "type": "boolean"
+        },
+        "optOutNotificationMethods": {
+          "description": "Exact notification method names that should be suppressed for this connection (for example `codex/event/session_configured`).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

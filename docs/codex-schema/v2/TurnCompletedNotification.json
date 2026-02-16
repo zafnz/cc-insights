@@ -15,85 +15,6 @@
     }
   },
   "definitions": {
-    "Annotations": {
-      "description": "Optional annotations for the client. The client can use annotations to inform how objects are used or displayed",
-      "type": "object",
-      "properties": {
-        "audience": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Role"
-          }
-        },
-        "lastModified": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "priority": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        }
-      }
-    },
-    "AudioContent": {
-      "description": "Audio provided to or from an LLM.",
-      "type": "object",
-      "required": [
-        "data",
-        "mimeType",
-        "type"
-      ],
-      "properties": {
-        "annotations": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Annotations"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "type": "string"
-        },
-        "mimeType": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        }
-      }
-    },
-    "BlobResourceContents": {
-      "type": "object",
-      "required": [
-        "blob",
-        "uri"
-      ],
-      "properties": {
-        "blob": {
-          "type": "string"
-        },
-        "mimeType": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "uri": {
-          "type": "string"
-        }
-      }
-    },
     "ByteRange": {
       "type": "object",
       "required": [
@@ -121,6 +42,7 @@
           "enum": [
             "contextWindowExceeded",
             "usageLimitExceeded",
+            "serverOverloaded",
             "internalServerError",
             "unauthorized",
             "badRequest",
@@ -128,35 +50,6 @@
             "sandboxError",
             "other"
           ]
-        },
-        {
-          "type": "object",
-          "required": [
-            "modelCap"
-          ],
-          "properties": {
-            "modelCap": {
-              "type": "object",
-              "required": [
-                "model"
-              ],
-              "properties": {
-                "model": {
-                  "type": "string"
-                },
-                "reset_after_seconds": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "uint64",
-                  "minimum": 0.0
-                }
-              }
-            }
-          },
-          "additionalProperties": false,
-          "title": "ModelCapCodexErrorInfo"
         },
         {
           "type": "object",
@@ -288,6 +181,7 @@
       "enum": [
         "spawnAgent",
         "sendInput",
+        "resumeAgent",
         "wait",
         "closeAgent"
       ]
@@ -419,61 +313,6 @@
         "declined"
       ]
     },
-    "ContentBlock": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/TextContent"
-        },
-        {
-          "$ref": "#/definitions/ImageContent"
-        },
-        {
-          "$ref": "#/definitions/AudioContent"
-        },
-        {
-          "$ref": "#/definitions/ResourceLink"
-        },
-        {
-          "$ref": "#/definitions/EmbeddedResource"
-        }
-      ]
-    },
-    "EmbeddedResource": {
-      "description": "The contents of a resource, embedded into a prompt or tool call result.\n\nIt is up to the client how best to render embedded resources for the benefit of the LLM and/or the user.",
-      "type": "object",
-      "required": [
-        "resource",
-        "type"
-      ],
-      "properties": {
-        "annotations": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Annotations"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "resource": {
-          "$ref": "#/definitions/EmbeddedResourceResource"
-        },
-        "type": {
-          "type": "string"
-        }
-      }
-    },
-    "EmbeddedResourceResource": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/TextResourceContents"
-        },
-        {
-          "$ref": "#/definitions/BlobResourceContents"
-        }
-      ]
-    },
     "FileUpdateChange": {
       "type": "object",
       "required": [
@@ -489,36 +328,6 @@
           "$ref": "#/definitions/PatchChangeKind"
         },
         "path": {
-          "type": "string"
-        }
-      }
-    },
-    "ImageContent": {
-      "description": "An image provided to or from an LLM.",
-      "type": "object",
-      "required": [
-        "data",
-        "mimeType",
-        "type"
-      ],
-      "properties": {
-        "annotations": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Annotations"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "type": "string"
-        },
-        "mimeType": {
-          "type": "string"
-        },
-        "type": {
           "type": "string"
         }
       }
@@ -542,9 +351,7 @@
       "properties": {
         "content": {
           "type": "array",
-          "items": {
-            "$ref": "#/definitions/ContentBlock"
-          }
+          "items": true
         },
         "structuredContent": true
       }
@@ -624,95 +431,6 @@
         }
       ]
     },
-    "ResourceLink": {
-      "description": "A resource that the server is capable of reading, included in a prompt or tool call result.\n\nNote: resource links returned by tools are not guaranteed to appear in the results of `resources/list` requests.",
-      "type": "object",
-      "required": [
-        "name",
-        "type",
-        "uri"
-      ],
-      "properties": {
-        "annotations": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Annotations"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "mimeType": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "type": "string"
-        },
-        "size": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "title": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "type": {
-          "type": "string"
-        },
-        "uri": {
-          "type": "string"
-        }
-      }
-    },
-    "Role": {
-      "description": "The sender or recipient of messages and data in a conversation.",
-      "type": "string",
-      "enum": [
-        "assistant",
-        "user"
-      ]
-    },
-    "TextContent": {
-      "description": "Text provided to or from an LLM.",
-      "type": "object",
-      "required": [
-        "text",
-        "type"
-      ],
-      "properties": {
-        "annotations": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Annotations"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "text": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        }
-      }
-    },
     "TextElement": {
       "type": "object",
       "required": [
@@ -733,27 +451,6 @@
             "string",
             "null"
           ]
-        }
-      }
-    },
-    "TextResourceContents": {
-      "type": "object",
-      "required": [
-        "text",
-        "uri"
-      ],
-      "properties": {
-        "mimeType": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "text": {
-          "type": "string"
-        },
-        "uri": {
-          "type": "string"
         }
       }
     },

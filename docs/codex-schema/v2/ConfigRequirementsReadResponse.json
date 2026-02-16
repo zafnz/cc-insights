@@ -46,6 +46,15 @@
             "$ref": "#/definitions/SandboxMode"
           }
         },
+        "allowedWebSearchModes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/WebSearchMode"
+          }
+        },
         "enforceResidency": {
           "anyOf": [
             {
@@ -55,6 +64,84 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "NetworkRequirements": {
+      "type": "object",
+      "properties": {
+        "allowLocalBinding": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allowUnixSockets": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowUpstreamProxy": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allowedDomains": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "dangerouslyAllowNonLoopbackAdmin": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "dangerouslyAllowNonLoopbackProxy": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "deniedDomains": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "httpPort": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "socksPort": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0.0
         }
       }
     },
@@ -70,6 +157,14 @@
         "read-only",
         "workspace-write",
         "danger-full-access"
+      ]
+    },
+    "WebSearchMode": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "cached",
+        "live"
       ]
     }
   }

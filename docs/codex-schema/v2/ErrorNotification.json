@@ -31,6 +31,7 @@
           "enum": [
             "contextWindowExceeded",
             "usageLimitExceeded",
+            "serverOverloaded",
             "internalServerError",
             "unauthorized",
             "badRequest",
@@ -38,35 +39,6 @@
             "sandboxError",
             "other"
           ]
-        },
-        {
-          "type": "object",
-          "required": [
-            "modelCap"
-          ],
-          "properties": {
-            "modelCap": {
-              "type": "object",
-              "required": [
-                "model"
-              ],
-              "properties": {
-                "model": {
-                  "type": "string"
-                },
-                "reset_after_seconds": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "uint64",
-                  "minimum": 0.0
-                }
-              }
-            }
-          },
-          "additionalProperties": false,
-          "title": "ModelCapCodexErrorInfo"
         },
         {
           "type": "object",

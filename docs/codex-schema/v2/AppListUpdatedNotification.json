@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AppsListResponse",
-  "description": "EXPERIMENTAL - app list response.",
+  "title": "AppListUpdatedNotification",
+  "description": "EXPERIMENTAL - notification emitted when the app list changes.",
   "type": "object",
   "required": [
     "data"
@@ -12,13 +12,6 @@
       "items": {
         "$ref": "#/definitions/AppInfo"
       }
-    },
-    "nextCursor": {
-      "description": "Opaque cursor to pass to the next call to continue after the last item. If None, there are no more items to return.",
-      "type": [
-        "string",
-        "null"
-      ]
     }
   },
   "definitions": {

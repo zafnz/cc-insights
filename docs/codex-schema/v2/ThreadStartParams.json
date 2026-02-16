@@ -38,29 +38,19 @@
         "null"
       ]
     },
-    "dynamicTools": {
-      "type": [
-        "array",
-        "null"
-      ],
-      "items": {
-        "$ref": "#/definitions/DynamicToolSpec"
-      }
+    "sandbox": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SandboxMode"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "ephemeral": {
       "type": [
         "boolean",
-        "null"
-      ]
-    },
-    "experimentalRawEvents": {
-      "description": "If true, opt into emitting raw response items on the event stream.\n\nThis is for internal use only (e.g. Codex Cloud). (TODO): Figure out a better way to categorize internal / experimental events & protocols.",
-      "default": false,
-      "type": "boolean"
-    },
-    "model": {
-      "type": [
-        "string",
         "null"
       ]
     },
@@ -80,14 +70,10 @@
         }
       ]
     },
-    "sandbox": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/SandboxMode"
-        },
-        {
-          "type": "null"
-        }
+    "model": {
+      "type": [
+        "string",
+        "null"
       ]
     }
   },
@@ -121,6 +107,7 @@
     "Personality": {
       "type": "string",
       "enum": [
+        "none",
         "friendly",
         "pragmatic"
       ]

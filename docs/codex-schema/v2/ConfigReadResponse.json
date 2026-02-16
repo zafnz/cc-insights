@@ -43,6 +43,35 @@
       },
       "additionalProperties": true
     },
+    "AppConfig": {
+      "type": "object",
+      "properties": {
+        "disabled_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AppDisabledReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        }
+      }
+    },
+    "AppDisabledReason": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "user"
+      ]
+    },
+    "AppsConfig": {
+      "type": "object"
+    },
     "AskForApproval": {
       "type": "string",
       "enum": [
@@ -69,6 +98,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AskForApproval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "web_search": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WebSearchMode"
             },
             {
               "type": "null"
@@ -208,16 +247,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/ToolsV2"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "web_search": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/WebSearchMode"
             },
             {
               "type": "null"
