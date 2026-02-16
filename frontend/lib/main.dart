@@ -1134,6 +1134,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ),
         // Project restore service for persistence operations
         Provider<ProjectRestoreService>.value(value: _restoreService!),
+        // Git service for git operations (stateless)
+        Provider<GitService>.value(value: const RealGitService()),
         // Git operations service for push/pull/conflict operations
         Provider<GitOperationsService>(
           create: (context) => GitOperationsService(
@@ -1142,8 +1144,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             restoreService: context.read<ProjectRestoreService>(),
           ),
         ),
-        // Git service for git operations (stateless)
-        Provider<GitService>.value(value: const RealGitService()),
         // File system service for file tree and content (stateless)
         Provider<FileSystemService>.value(value: const RealFileSystemService()),
         // AskAI service for one-shot AI queries
