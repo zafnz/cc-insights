@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../models/project.dart';
 import '../panels/panels.dart';
 import '../services/backend_service.dart';
+import '../services/chat_session_service.dart';
 import '../services/git_service.dart';
 import '../services/menu_action_service.dart';
 import '../services/persistence_service.dart';
@@ -286,7 +287,7 @@ class _MainScreenState extends State<MainScreen> {
     final selection = context.read<SelectionState>();
     final chat = selection.selectedChat;
     if (chat != null && chat.session.isWorking) {
-      chat.session.interrupt();
+      context.read<ChatSessionService>().interrupt(chat);
     }
   }
 

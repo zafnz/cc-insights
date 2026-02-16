@@ -48,6 +48,7 @@ class _ConversationPanelState extends State<ConversationPanel>
   Chat? _listeningToChat;
   ChatConversationState? _listeningToConversations;
   ChatPermissionState? _listeningToPermissions;
+  ChatSessionState? _listeningToSession;
 
   /// Track which conversation we're viewing to detect conversation changes.
   String? _previousConversationId;
@@ -290,6 +291,7 @@ class _ConversationPanelState extends State<ConversationPanel>
     _listController.dispose();
     _listeningToConversations?.removeListener(_onChatChanged);
     _listeningToPermissions?.removeListener(_onChatChanged);
+    _listeningToSession?.removeListener(_onChatChanged);
     super.dispose();
   }
 
@@ -379,15 +381,18 @@ class _ConversationPanelState extends State<ConversationPanel>
     final selection = context.watch<SelectionState>();
     final chat = selection.selectedChat;
 
-    // Listen to conversation + permission state changes for UI updates.
+    // Listen to conversation, permission, and session state changes for UI updates.
     if (chat != _listeningToChat) {
       _listeningToConversations?.removeListener(_onChatChanged);
       _listeningToPermissions?.removeListener(_onChatChanged);
+      _listeningToSession?.removeListener(_onChatChanged);
       _listeningToChat = chat;
       _listeningToConversations = chat?.conversations;
       _listeningToPermissions = chat?.permissions;
+      _listeningToSession = chat?.session;
       _listeningToConversations?.addListener(_onChatChanged);
       _listeningToPermissions?.addListener(_onChatChanged);
+      _listeningToSession?.addListener(_onChatChanged);
     }
 
     final conversation = chat?.conversations.selectedConversation;

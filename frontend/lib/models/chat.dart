@@ -1593,15 +1593,8 @@ class _ChatCore extends ChangeNotifier {
 
     developer.log('Interrupting session', name: 'Chat');
 
-    // Interrupt via transport if available, fall back to direct session
-    if (_transport != null) {
-      final sessionId = _transport!.sessionId ?? '';
-      await _transport!.send(sdk.InterruptCommand(sessionId: sessionId));
-    } else if (_session != null) {
-      await _session!.interrupt();
-    }
-
-    // Clear the working/compacting state - Claude will stop generating
+    // Update UI state immediately so the button reflects the interrupt,
+    // regardless of whether the transport command succeeds.
     _isWorking = false;
     _isCompacting = false;
     _workingStopwatch?.stop();
@@ -1621,6 +1614,14 @@ class _ChatCore extends ChangeNotifier {
 
     session.notifyListeners();
     agents.notifyListeners();
+
+    // Send the interrupt command to the backend
+    if (_transport != null) {
+      final sessionId = _transport!.sessionId ?? '';
+      await _transport!.send(sdk.InterruptCommand(sessionId: sessionId));
+    } else if (_session != null) {
+      await _session!.interrupt();
+    }
   }
 
   /// Adds a permission request to the queue.

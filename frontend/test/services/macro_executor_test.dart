@@ -11,6 +11,7 @@ import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
 import 'package:cc_insights_v2/services/log_service.dart';
+import 'package:cc_insights_v2/services/chat_title_service.dart';
 import 'package:cc_insights_v2/services/macro_executor.dart';
 import 'package:cc_insights_v2/services/project_restore_service.dart';
 import 'package:cc_insights_v2/services/runtime_config.dart';
@@ -96,6 +97,7 @@ void main() {
               value: internalTools,
             ),
             Provider<ProjectRestoreService>.value(value: restoreService),
+            Provider<ChatTitleService>.value(value: ChatTitleService()),
           ],
           child: MaterialApp(
             home: Scaffold(
@@ -130,11 +132,11 @@ void main() {
       expect(worktree.chats.length, 1);
       final chat = worktree.chats.first;
       expect(selection.selectedChat, same(chat));
-      expect(chat.agentId, 'codex-default');
-      expect(chat.model.id, 'o3-mini');
+      expect(chat.agents.agentId, 'codex-default');
+      expect(chat.settings.model.id, 'o3-mini');
       expect(backend.startedAgents, contains('codex-default'));
       expect(restoreService.addedChats.length, 1);
-      expect(chat.hasActiveSession, isTrue);
+      expect(chat.session.hasActiveSession, isTrue);
 
       final entries = chat.data.primaryConversation.entries;
       expect(entries.length, 1);
@@ -249,7 +251,7 @@ class _FakeProjectRestoreService extends ProjectRestoreService {
   Future<void> addChatToWorktree(
     String projectRoot,
     String worktreePath,
-    ChatState chat,
+    Chat chat,
   ) async {
     addedChats.add(worktreePath);
   }

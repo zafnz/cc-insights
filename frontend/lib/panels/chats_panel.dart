@@ -164,6 +164,14 @@ class _ChatsListContentState extends State<_ChatsListContent> {
 
       chat.permissions.addListener(listener);
       _chatListeners.add(() => chat.permissions.removeListener(listener));
+
+      // Listen to session state so the working spinner updates
+      void sessionListener() {
+        if (mounted) setState(() {});
+      }
+
+      chat.session.addListener(sessionListener);
+      _chatListeners.add(() => chat.session.removeListener(sessionListener));
     }
   }
 
