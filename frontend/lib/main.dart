@@ -281,9 +281,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// platform menu bar (which sits above the navigator).
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
-  /// Future for project restoration.
-  Future<ProjectState>? _projectFuture;
-
   /// Cached project for mock mode (synchronous path).
   ProjectState? _mockProject;
 
@@ -640,8 +637,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       setState(() {
         _needsValidation = false;
         _projectSelected = true;
-        _projectFuture = _restoreProject();
       });
+      _startProjectRestore();
     } else {
       // Need to show validation dialog
       setState(() {
@@ -773,6 +770,17 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       navigatorObservers: [_dialogObserver],
       routes: {'/replay': (context) => const ReplayDemoScreen()},
       home: _buildScreen(shouldUseMock),
+      // Wrap the Navigator with providers when a project is loaded.
+      // This places the MultiProvider above the Navigator's Overlay so
+      // that Overlay entries (e.g. Draggable feedback from panel drag)
+      // can access providers like SelectionState.
+      builder: (context, navigator) {
+        if (navigator == null) return const SizedBox.shrink();
+        if (_project != null) {
+          return _wrapWithProviders(_project!, navigator);
+        }
+        return navigator;
+      },
     );
   }
 
@@ -783,7 +791,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     if (shouldUseMock) {
       // Synchronous path for mock data
       _project = _mockProject!;
-      return _buildAppContent(_project!);
+      return _buildAppContent();
     }
 
     // After CLI check completes, show the required screen if claude is missing
@@ -803,25 +811,31 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       return _buildWelcomeContent();
     }
 
-    // Async path for restoring from persistence
-    return FutureBuilder<ProjectState>(
-      future: _projectFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingContent();
-        }
+    // Project is loaded (set by _startProjectRestore)
+    if (_project != null) {
+      return _buildAppContent();
+    }
 
-        if (snapshot.hasError) {
-          debugPrint('Error restoring project: ${snapshot.error}');
-          // Fall back to creating a new project synchronously
-          _project = _createFallbackProject();
-          return _buildAppContent(_project!);
-        }
+    // Waiting for async project restore
+    return _buildLoadingContent();
+  }
 
-        _project = snapshot.data ?? _createFallbackProject();
-        return _buildAppContent(_project!);
-      },
-    );
+  /// Kicks off async project restore and calls [setState] when done.
+  ///
+  /// This ensures that [MaterialApp.builder] re-runs with [_project] set,
+  /// so the [MultiProvider] wraps the Navigator on the same frame that
+  /// [MainScreen] appears.
+  void _startProjectRestore() {
+    _restoreProject().then((project) {
+      if (mounted) {
+        setState(() => _project = project);
+      }
+    }).catchError((Object error) {
+      debugPrint('Error restoring project: $error');
+      if (mounted) {
+        setState(() => _project = _createFallbackProject());
+      }
+    });
   }
 
   /// Restores the project from persistence.
@@ -848,8 +862,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     // Start loading the project
     setState(() {
       _projectSelected = true;
-      _projectFuture = _restoreProject();
     });
+    _startProjectRestore();
   }
 
   /// Builds the welcome screen content (before a project is selected).
@@ -897,8 +911,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
             _needsValidation = false;
             _pendingValidationInfo = null;
             _projectSelected = true;
-            _projectFuture = _restoreProject();
           });
+          _startProjectRestore();
         }
         break;
 
@@ -917,8 +931,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           _needsValidation = false;
           _pendingValidationInfo = null;
           _projectSelected = true;
-          _projectFuture = _restoreProject();
         });
+        _startProjectRestore();
         break;
 
       case DirectoryValidationResult.cancelled:
@@ -971,7 +985,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     setState(() {
       _project = null;
       _projectSelected = false;
-      _projectFuture = null;
     });
   }
 
@@ -1068,8 +1081,22 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     );
   }
 
-  /// Builds the main app content with the given project.
-  Widget _buildAppContent(ProjectState project) {
+  /// Builds the main app screen (without providers).
+  ///
+  /// Providers are injected separately via [_wrapWithProviders] in
+  /// [MaterialApp.builder] so they sit above the Navigator's Overlay.
+  Widget _buildAppContent() {
+    return _NotificationNavigationListener(
+      child: const MainScreen(),
+    );
+  }
+
+  /// Wraps [child] with the project-scoped MultiProvider.
+  ///
+  /// Used by [MaterialApp.builder] to inject providers above the Navigator's
+  /// Overlay so that Overlay entries (e.g. Draggable feedback from panel
+  /// drag-and-drop) can access providers like SelectionState.
+  Widget _wrapWithProviders(ProjectState project, Widget child) {
     return MultiProvider(
       providers: [
         // Central logging service (singleton, rate-limited notifications)
@@ -1193,9 +1220,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           },
         ),
       ],
-      child: _NotificationNavigationListener(
-        child: const MainScreen(),
-      ),
+      child: child,
     );
   }
 
