@@ -612,13 +612,16 @@ class ChatStatusIndicator extends StatelessWidget {
     }
 
     if (chat.isWorking) {
-      // Spinner for working
-      return SizedBox(
-        width: size,
-        height: size,
-        child: CircularProgressIndicator(
-          strokeWidth: 1.5,
-          color: Theme.of(context).colorScheme.primary,
+      // RepaintBoundary isolates the spinner's 60 FPS animation
+      // repaints so they don't propagate up to the chats panel.
+      return RepaintBoundary(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
       );
     }

@@ -111,13 +111,17 @@ class _WorkingIndicatorState extends State<WorkingIndicator> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            key: WorkingIndicatorKeys.spinner,
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary,
+          // RepaintBoundary isolates the spinner's 60 FPS animation
+          // repaints so they don't propagate up to the conversation list.
+          RepaintBoundary(
+            child: SizedBox(
+              key: WorkingIndicatorKeys.spinner,
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
             ),
           ),
           const SizedBox(width: 12),

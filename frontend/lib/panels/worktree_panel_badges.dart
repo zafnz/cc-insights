@@ -304,12 +304,16 @@ class _WorktreeActivitySpinner extends StatelessWidget {
         ),
       );
     }
-    return SizedBox(
-      width: _size,
-      height: _size,
-      child: CircularProgressIndicator(
-        strokeWidth: 2,
-        color: color,
+    // RepaintBoundary isolates the spinner's 60 FPS animation
+    // repaints so they don't propagate up to the worktree panel.
+    return RepaintBoundary(
+      child: SizedBox(
+        width: _size,
+        height: _size,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: color,
+        ),
       ),
     );
   }
