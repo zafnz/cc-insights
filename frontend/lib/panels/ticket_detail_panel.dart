@@ -10,6 +10,7 @@ import '../services/ticket_dispatch_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 import '../state/ticket_board_state.dart';
+import '../state/ticket_view_state.dart';
 import '../widgets/markdown_renderer.dart';
 import '../widgets/ticket_visuals.dart';
 
@@ -42,8 +43,8 @@ class TicketDetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ticketBoard = context.watch<TicketBoardState>();
-    final ticket = ticketBoard.selectedTicket;
+    final viewState = context.watch<TicketViewState>();
+    final ticket = viewState.selectedTicket;
 
     if (ticket == null) {
       return const _EmptyState();
@@ -165,7 +166,7 @@ class _HeaderSection extends StatelessWidget {
           key: TicketDetailPanelKeys.editButton,
           icon: const Icon(Icons.edit),
           onPressed: () {
-            context.read<TicketBoardState>().setDetailMode(TicketDetailMode.edit);
+            context.read<TicketViewState>().setDetailMode(TicketDetailMode.edit);
           },
           tooltip: 'Edit',
         ),
@@ -336,7 +337,7 @@ class _DependenciesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ticketBoard = context.read<TicketBoardState>();
+    final ticketBoard = context.read<TicketRepository>();
     final blockedByIds = ticketBoard.getBlockedBy(ticket.id);
 
     final hasDependsOn = ticket.dependsOn.isNotEmpty;
@@ -461,13 +462,14 @@ class _DependencyChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.read<TicketBoardState>();
+    final ticketBoard = context.read<TicketRepository>();
     final depTicket = ticketBoard.getTicket(ticketId);
+    final viewState = context.read<TicketViewState>();
 
     final displayId = 'TKT-${ticketId.toString().padLeft(3, '0')}';
 
     return InkWell(
-      onTap: () => ticketBoard.selectTicket(ticketId),
+      onTap: () => viewState.selectTicket(ticketId),
       borderRadius: BorderRadius.circular(6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -600,7 +602,7 @@ class _ActionsSectionState extends State<_ActionsSection> {
   /// Creates a [TicketDispatchService] from available providers.
   TicketDispatchService _createDispatchService() {
     return TicketDispatchService(
-      ticketBoard: context.read<TicketBoardState>(),
+      ticketBoard: context.read<TicketRepository>(),
       project: context.read<ProjectState>(),
       selection: context.read<SelectionState>(),
       worktreeService: WorktreeService(
@@ -691,7 +693,7 @@ class _ActionsSectionState extends State<_ActionsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final ticketBoard = context.read<TicketBoardState>();
+    final ticketBoard = context.read<TicketRepository>();
     final hasLinkedChats = widget.ticket.linkedChats.isNotEmpty;
 
     return Wrap(
@@ -755,7 +757,7 @@ class _ActionsSectionState extends State<_ActionsSection> {
 
   Future<void> _handleSplit(
     BuildContext context,
-    TicketBoardState ticketBoard,
+    TicketRepository ticketBoard,
   ) async {
     final result = await showDialog<List<({String title, TicketKind kind})>>(
       context: context,

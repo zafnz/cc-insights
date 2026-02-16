@@ -17,9 +17,9 @@ void main() {
     await cleanupConfig();
   });
 
-  group('TicketBoardState - splitTicket', () {
+  group('TicketRepository - splitTicket', () {
     test('creates children with correct titles and kinds', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -45,7 +45,7 @@ void main() {
     });
 
     test('parent becomes split status and split kind', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -62,7 +62,7 @@ void main() {
     });
 
     test('children depend on parent', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('children inherit category from parent', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -99,7 +99,7 @@ void main() {
     });
 
     test('children inherit priority and effort from parent', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -117,7 +117,7 @@ void main() {
     });
 
     test('empty subtasks throws ArgumentError', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -131,7 +131,7 @@ void main() {
     });
 
     test('non-existent parent throws ArgumentError', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       expect(
         () => state.splitTicket(999, [
@@ -142,7 +142,7 @@ void main() {
     });
 
     test('children have status ready', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -160,7 +160,7 @@ void main() {
     });
 
     test('split ticket is terminal', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -176,7 +176,7 @@ void main() {
     });
 
     test('notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -195,7 +195,7 @@ void main() {
     });
 
     test('children get sequential IDs', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',
@@ -213,7 +213,7 @@ void main() {
     });
 
     test('parent without category creates children without category', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final parent = state.createTicket(
         title: 'Big feature',

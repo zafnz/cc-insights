@@ -1,4 +1,5 @@
 import 'package:cc_insights_v2/models/ticket.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,9 +18,10 @@ void main() {
     await cleanupConfig();
   });
 
-  group('TicketBoardState - Bulk Proposals', () {
+  group('BulkProposalState - Bulk Proposals', () {
     test('proposeBulk creates draft tickets', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       final proposals = [
         const TicketProposal(
@@ -52,11 +54,12 @@ void main() {
       expect(created[1].title, 'Ticket B');
       expect(created[2].title, 'Ticket C');
       expect(created[2].category, 'Infrastructure');
-      expect(state.tickets.length, 3);
+      expect(repo.tickets.length, 3);
     });
 
     test('proposeBulk converts dependency indices to ticket IDs', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       final proposals = [
         const TicketProposal(
@@ -87,7 +90,8 @@ void main() {
     });
 
     test('proposeBulk silently drops invalid dependency indices', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       final proposals = [
         const TicketProposal(
@@ -111,8 +115,9 @@ void main() {
       expect(created[1].dependsOn, [created[0].id]);
     });
 
-    test('proposeBulk sets detailMode to bulkReview', () {
-      final state = resources.track(TicketBoardState('test-project'));
+    test('proposeBulk sets hasActiveProposal', () {
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       state.proposeBulk(
         [const TicketProposal(title: 'Test', kind: TicketKind.feature)],
@@ -120,11 +125,12 @@ void main() {
         sourceChatName: 'Agent Chat',
       );
 
-      expect(state.detailMode, TicketDetailMode.bulkReview);
+      expect(state.hasActiveProposal, isTrue);
     });
 
     test('toggleProposalChecked flips checked state', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       final created = state.proposeBulk(
         [
@@ -148,7 +154,8 @@ void main() {
     });
 
     test('setProposalAllChecked(true) checks all proposed tickets', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       final created = state.proposeBulk(
         [
@@ -173,7 +180,8 @@ void main() {
     });
 
     test('setProposalAllChecked(false) unchecks all proposed tickets', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       state.proposeBulk(
         [
@@ -192,7 +200,8 @@ void main() {
     });
 
     test('approveBulk promotes checked tickets to ready and deletes unchecked', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       final created = state.proposeBulk(
         [
@@ -210,23 +219,24 @@ void main() {
       state.approveBulk();
 
       // Two tickets should remain
-      expect(state.tickets.length, 2);
+      expect(repo.tickets.length, 2);
 
       // Checked tickets should be ready
-      final kept1 = state.getTicket(created[0].id);
+      final kept1 = repo.getTicket(created[0].id);
       expect(kept1, isNotNull);
       expect(kept1!.status, TicketStatus.ready);
 
-      final kept2 = state.getTicket(created[2].id);
+      final kept2 = repo.getTicket(created[2].id);
       expect(kept2, isNotNull);
       expect(kept2!.status, TicketStatus.ready);
 
       // Deleted ticket should be gone
-      expect(state.getTicket(created[1].id), isNull);
+      expect(repo.getTicket(created[1].id), isNull);
     });
 
-    test('approveBulk returns to detail mode', () {
-      final state = resources.track(TicketBoardState('test-project'));
+    test('approveBulk clears active proposal', () {
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       state.proposeBulk(
         [const TicketProposal(title: 'Test', kind: TicketKind.feature)],
@@ -234,18 +244,19 @@ void main() {
         sourceChatName: 'Agent Chat',
       );
 
-      expect(state.detailMode, TicketDetailMode.bulkReview);
+      expect(state.hasActiveProposal, isTrue);
 
       state.approveBulk();
 
-      expect(state.detailMode, TicketDetailMode.detail);
+      expect(state.hasActiveProposal, isFalse);
     });
 
     test('rejectAll deletes all draft tickets from proposal', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       // Create a pre-existing ticket
-      final preExisting = state.createTicket(
+      final preExisting = repo.createTicket(
         title: 'Pre-existing',
         kind: TicketKind.feature,
       );
@@ -259,20 +270,21 @@ void main() {
         sourceChatName: 'Agent Chat',
       );
 
-      expect(state.tickets.length, 3); // 1 pre-existing + 2 proposals
+      expect(repo.tickets.length, 3); // 1 pre-existing + 2 proposals
 
       state.rejectAll();
 
       // Only the pre-existing ticket should remain
-      expect(state.tickets.length, 1);
-      expect(state.tickets.first.id, preExisting.id);
-      expect(state.getTicket(created[0].id), isNull);
-      expect(state.getTicket(created[1].id), isNull);
-      expect(state.detailMode, TicketDetailMode.detail);
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.id, preExisting.id);
+      expect(repo.getTicket(created[0].id), isNull);
+      expect(repo.getTicket(created[1].id), isNull);
+      expect(state.hasActiveProposal, isFalse);
     });
 
     test('proposalSourceChatName returns the correct chat name', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final state = resources.track(BulkProposalState(repo));
 
       // Before any proposal, should return empty string
       expect(state.proposalSourceChatName, '');

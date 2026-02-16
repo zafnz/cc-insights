@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_create_form.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -11,12 +12,14 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoardState;
+  late TicketRepository repo;
+  late TicketViewState viewState;
   late Future<void> Function() cleanupConfig;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
-    ticketBoardState = resources.track(TicketBoardState('test-create-form'));
+    repo = resources.track(TicketRepository('test-create-form'));
+    viewState = resources.track(TicketViewState(repo));
   });
 
   tearDown(() async {
@@ -27,8 +30,11 @@ void main() {
   Widget createTestApp() {
     return MaterialApp(
       home: Scaffold(
-        body: ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoardState,
+        body: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TicketRepository>.value(value: repo),
+            ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ],
           child: const TicketCreateForm(),
         ),
       ),
@@ -95,7 +101,7 @@ void main() {
       expect(find.text('Title is required.'), findsOneWidget);
 
       // No ticket should have been created
-      expect(ticketBoardState.tickets, isEmpty);
+      expect(repo.tickets, isEmpty);
     });
 
     testWidgets('kind dropdown shows all values', (tester) async {
@@ -150,8 +156,8 @@ void main() {
       await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
       await tester.pump();
 
-      expect(ticketBoardState.tickets.length, 1);
-      expect(ticketBoardState.tickets.first.effort, TicketEffort.large);
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.effort, TicketEffort.large);
     });
 
     testWidgets('cancel calls showDetail', (tester) async {
@@ -164,15 +170,15 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Set mode to create first so we can verify it changes
-      ticketBoardState.showCreateForm();
-      expect(ticketBoardState.detailMode, TicketDetailMode.create);
+      viewState.showCreateForm();
+      expect(viewState.detailMode, TicketDetailMode.create);
 
       // Tap Cancel
       await tester.tap(find.byKey(TicketCreateFormKeys.cancelButton));
       await tester.pump();
 
       // Should switch to detail mode
-      expect(ticketBoardState.detailMode, TicketDetailMode.detail);
+      expect(viewState.detailMode, TicketDetailMode.detail);
     });
 
     testWidgets('create ticket with title', (tester) async {
@@ -192,11 +198,11 @@ void main() {
       await tester.pump();
 
       // Ticket should be created
-      expect(ticketBoardState.tickets.length, 1);
-      expect(ticketBoardState.tickets.first.title, 'My new ticket');
-      expect(ticketBoardState.tickets.first.kind, TicketKind.feature);
-      expect(ticketBoardState.tickets.first.priority, TicketPriority.medium);
-      expect(ticketBoardState.tickets.first.effort, TicketEffort.medium);
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.title, 'My new ticket');
+      expect(repo.tickets.first.kind, TicketKind.feature);
+      expect(repo.tickets.first.priority, TicketPriority.medium);
+      expect(repo.tickets.first.effort, TicketEffort.medium);
     });
 
     testWidgets('created ticket is selected', (tester) async {
@@ -216,9 +222,9 @@ void main() {
       await tester.pump();
 
       // The new ticket should be selected
-      expect(ticketBoardState.selectedTicket, isNotNull);
-      expect(ticketBoardState.selectedTicket!.title, 'Selected ticket');
-      expect(ticketBoardState.detailMode, TicketDetailMode.detail);
+      expect(viewState.selectedTicket, isNotNull);
+      expect(viewState.selectedTicket!.title, 'Selected ticket');
+      expect(viewState.detailMode, TicketDetailMode.detail);
     });
   });
 }

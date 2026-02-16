@@ -1,6 +1,7 @@
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_detail_panel.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -9,12 +10,14 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoard;
+  late TicketRepository repo;
+  late TicketViewState viewState;
   late Future<void> Function() cleanupConfig;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
-    ticketBoard = resources.track(TicketBoardState('test-project'));
+    repo = resources.track(TicketRepository('test-project'));
+    viewState = resources.track(TicketViewState(repo));
   });
 
   tearDown(() async {
@@ -25,8 +28,11 @@ void main() {
   Widget createTestApp() {
     return MaterialApp(
       home: Scaffold(
-        body: ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoard,
+        body: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TicketRepository>.value(value: repo),
+            ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ],
           child: const TicketDetailPanel(),
         ),
       ),
@@ -42,12 +48,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Active ticket',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -67,12 +73,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Completed ticket',
         kind: TicketKind.feature,
         status: TicketStatus.completed,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -91,12 +97,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -132,12 +138,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -178,12 +184,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -223,12 +229,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -251,12 +257,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -279,14 +285,14 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
         priority: TicketPriority.high,
         category: 'Frontend',
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -320,14 +326,14 @@ void main() {
       expect(find.byKey(TicketSplitDialogKeys.dialog), findsNothing);
 
       // Parent should be split
-      final parent = ticketBoard.getTicket(1)!;
+      final parent = repo.getTicket(1)!;
       expect(parent.status, TicketStatus.split);
       expect(parent.kind, TicketKind.split);
 
       // Children should exist
-      expect(ticketBoard.tickets.length, 3); // parent + 2 children
-      final child1 = ticketBoard.getTicket(2)!;
-      final child2 = ticketBoard.getTicket(3)!;
+      expect(repo.tickets.length, 3); // parent + 2 children
+      final child1 = repo.getTicket(2)!;
+      final child2 = repo.getTicket(3)!;
 
       expect(child1.title, 'Subtask Alpha');
       expect(child1.dependsOn, [1]);
@@ -346,12 +352,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -373,8 +379,8 @@ void main() {
 
       // Dialog dismissed, no tickets created
       expect(find.byKey(TicketSplitDialogKeys.dialog), findsNothing);
-      expect(ticketBoard.tickets.length, 1); // Only the original ticket
-      expect(ticketBoard.getTicket(1)!.status, TicketStatus.ready);
+      expect(repo.tickets.length, 1); // Only the original ticket
+      expect(repo.getTicket(1)!.status, TicketStatus.ready);
     });
 
     testWidgets('empty title rows are skipped when splitting', (tester) async {
@@ -385,12 +391,12 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Feature to split',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -415,8 +421,8 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Only one child should be created (empty row skipped)
-      expect(ticketBoard.tickets.length, 2); // parent + 1 child
-      final child = ticketBoard.getTicket(2)!;
+      expect(repo.tickets.length, 2); // parent + 1 child
+      final child = repo.getTicket(2)!;
       expect(child.title, 'Only this subtask');
     });
   });

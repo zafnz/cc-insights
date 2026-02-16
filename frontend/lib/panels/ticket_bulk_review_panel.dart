@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../config/fonts.dart';
 import '../models/ticket.dart';
+import '../state/bulk_proposal_state.dart';
 import '../state/ticket_board_state.dart';
 import '../widgets/ticket_visuals.dart';
 
@@ -26,8 +27,8 @@ class TicketBulkReviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ticketBoard = context.watch<TicketBoardState>();
-    final proposals = ticketBoard.proposedTickets;
+    final bulkProposal = context.watch<BulkProposalState>();
+    final proposals = bulkProposal.proposedTickets;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -36,23 +37,23 @@ class TicketBulkReviewPanel extends StatelessWidget {
         children: [
           _ReviewHeader(
             ticketCount: proposals.length,
-            chatName: ticketBoard.proposalSourceChatName,
+            chatName: bulkProposal.proposalSourceChatName,
           ),
           const SizedBox(height: 24),
           _ProposalTable(
             proposals: proposals,
-            checkedIds: ticketBoard.proposalCheckedIds,
-            editingId: ticketBoard.proposalEditingId,
+            checkedIds: bulkProposal.proposalCheckedIds,
+            editingId: bulkProposal.proposalEditingId,
           ),
-          if (ticketBoard.proposalEditingId != null) ...[
+          if (bulkProposal.proposalEditingId != null) ...[
             const SizedBox(height: 16),
             _InlineEditCard(
-              ticketId: ticketBoard.proposalEditingId!,
+              ticketId: bulkProposal.proposalEditingId!,
             ),
           ],
           const SizedBox(height: 24),
           _ActionBar(
-            checkedCount: ticketBoard.proposalCheckedIds.length,
+            checkedCount: bulkProposal.proposalCheckedIds.length,
           ),
         ],
       ),
@@ -228,7 +229,7 @@ class _TableRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.read<TicketBoardState>();
+    final bulkProposal = context.read<BulkProposalState>();
 
     final backgroundColor = isSelected
         ? colorScheme.primaryContainer.withValues(alpha: 0.2)
@@ -237,7 +238,7 @@ class _TableRow extends StatelessWidget {
             : null;
 
     return GestureDetector(
-      onTap: () => ticketBoard.setProposalEditing(ticket.id),
+      onTap: () => bulkProposal.setProposalEditing(ticket.id),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -256,7 +257,7 @@ class _TableRow extends StatelessWidget {
                 width: 32,
                 child: Checkbox(
                   value: isChecked,
-                  onChanged: (_) => ticketBoard.toggleProposalChecked(ticket.id),
+                  onChanged: (_) => bulkProposal.toggleProposalChecked(ticket.id),
                 ),
               ),
               SizedBox(
@@ -355,7 +356,7 @@ class _InlineEditCardState extends State<_InlineEditCard> {
   @override
   void initState() {
     super.initState();
-    final ticketBoard = context.read<TicketBoardState>();
+    final ticketBoard = context.read<TicketRepository>();
     final ticket = ticketBoard.getTicket(widget.ticketId);
     _titleController = TextEditingController(text: ticket?.title ?? '');
     _categoryController = TextEditingController(text: ticket?.category ?? '');
@@ -366,7 +367,7 @@ class _InlineEditCardState extends State<_InlineEditCard> {
   void didUpdateWidget(covariant _InlineEditCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.ticketId != widget.ticketId) {
-      final ticketBoard = context.read<TicketBoardState>();
+      final ticketBoard = context.read<TicketRepository>();
       final ticket = ticketBoard.getTicket(widget.ticketId);
       _titleController.text = ticket?.title ?? '';
       _categoryController.text = ticket?.category ?? '';
@@ -383,14 +384,14 @@ class _InlineEditCardState extends State<_InlineEditCard> {
   }
 
   void _updateTitle(String value) {
-    context.read<TicketBoardState>().updateTicket(
+    context.read<TicketRepository>().updateTicket(
       widget.ticketId,
       (t) => t.copyWith(title: value),
     );
   }
 
   void _updateCategory(String value) {
-    context.read<TicketBoardState>().updateTicket(
+    context.read<TicketRepository>().updateTicket(
       widget.ticketId,
       (t) => t.copyWith(
         category: value.isNotEmpty ? value : null,
@@ -400,21 +401,21 @@ class _InlineEditCardState extends State<_InlineEditCard> {
   }
 
   void _updateDescription(String value) {
-    context.read<TicketBoardState>().updateTicket(
+    context.read<TicketRepository>().updateTicket(
       widget.ticketId,
       (t) => t.copyWith(description: value),
     );
   }
 
   void _updateKind(TicketKind kind) {
-    context.read<TicketBoardState>().updateTicket(
+    context.read<TicketRepository>().updateTicket(
       widget.ticketId,
       (t) => t.copyWith(kind: kind),
     );
   }
 
   void _removeDependency(int depId) {
-    final ticketBoard = context.read<TicketBoardState>();
+    final ticketBoard = context.read<TicketRepository>();
     final ticket = ticketBoard.getTicket(widget.ticketId);
     if (ticket == null) return;
     ticketBoard.updateTicket(
@@ -429,7 +430,7 @@ class _InlineEditCardState extends State<_InlineEditCard> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final ticketBoard = context.watch<TicketBoardState>();
+    final ticketBoard = context.watch<TicketRepository>();
     final ticket = ticketBoard.getTicket(widget.ticketId);
 
     if (ticket == null) return const SizedBox.shrink();
@@ -463,7 +464,7 @@ class _InlineEditCardState extends State<_InlineEditCard> {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.close, size: 16),
-                onPressed: () => ticketBoard.setProposalEditing(null),
+                onPressed: () => context.read<BulkProposalState>().setProposalEditing(null),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 splashRadius: 14,
@@ -724,13 +725,13 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.read<TicketBoardState>();
+    final bulkProposal = context.read<BulkProposalState>();
 
     return Row(
       children: [
         TextButton(
           key: TicketBulkReviewKeys.selectAllButton,
-          onPressed: () => ticketBoard.setProposalAllChecked(true),
+          onPressed: () => bulkProposal.setProposalAllChecked(true),
           child: Text(
             'Select All',
             style: TextStyle(color: colorScheme.primary),
@@ -738,7 +739,7 @@ class _ActionBar extends StatelessWidget {
         ),
         TextButton(
           key: TicketBulkReviewKeys.deselectAllButton,
-          onPressed: () => ticketBoard.setProposalAllChecked(false),
+          onPressed: () => bulkProposal.setProposalAllChecked(false),
           child: Text(
             'Deselect All',
             style: TextStyle(color: colorScheme.onSurfaceVariant),
@@ -747,7 +748,7 @@ class _ActionBar extends StatelessWidget {
         const Spacer(),
         OutlinedButton.icon(
           key: TicketBulkReviewKeys.rejectAllButton,
-          onPressed: () => ticketBoard.rejectAll(),
+          onPressed: () => bulkProposal.rejectAll(),
           icon: Icon(Icons.close, size: 16, color: colorScheme.error),
           label: Text(
             'Reject All',
@@ -764,7 +765,7 @@ class _ActionBar extends StatelessWidget {
         const SizedBox(width: 8),
         FilledButton.icon(
           key: TicketBulkReviewKeys.approveButton,
-          onPressed: () => ticketBoard.approveBulk(),
+          onPressed: () => bulkProposal.approveBulk(),
           icon: const Icon(Icons.check, size: 16),
           label: Text('Approve $checkedCount'),
           style: FilledButton.styleFrom(

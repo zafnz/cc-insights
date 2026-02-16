@@ -15,8 +15,10 @@ import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/project_restore_service.dart';
 import 'package:cc_insights_v2/services/ticket_dispatch_service.dart';
 import 'package:cc_insights_v2/services/worktree_service.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:checks/checks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,13 +67,13 @@ PermissionRequestEvent makePermissionRequestEvent() {
 void main() {
   final resources = TestResources();
   late Future<void> Function() cleanupConfig;
-  late TicketBoardState ticketBoard;
+  late TicketRepository ticketBoard;
   late FakeGitService fakeGit;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
     ticketBoard = resources.track(
-      TicketBoardState('test-dispatch-integration'),
+      TicketRepository('test-dispatch-integration'),
     );
     fakeGit = FakeGitService();
     _idCounter = 0;
@@ -508,6 +510,8 @@ void main() {
   group('Dispatch flow - linked chat widget verification', () {
     late ProjectState project;
     late SelectionState selection;
+    late TicketViewState viewState;
+    late BulkProposalState bulkState;
 
     setUp(() {
       final primaryWorktree = WorktreeState(
@@ -524,6 +528,8 @@ void main() {
         watchFilesystem: false,
       ));
       selection = resources.track(SelectionState(project));
+      viewState = resources.track(TicketViewState(ticketBoard));
+      bulkState = resources.track(BulkProposalState(ticketBoard));
     });
 
     Widget createTestApp() {
@@ -531,8 +537,14 @@ void main() {
         home: Scaffold(
           body: MultiProvider(
             providers: [
-              ChangeNotifierProvider<TicketBoardState>.value(
+              ChangeNotifierProvider<TicketRepository>.value(
                 value: ticketBoard,
+              ),
+              ChangeNotifierProvider<TicketViewState>.value(
+                value: viewState,
+              ),
+              ChangeNotifierProvider<BulkProposalState>.value(
+                value: bulkState,
               ),
               ChangeNotifierProvider<ProjectState>.value(value: project),
               ChangeNotifierProvider<SelectionState>.value(value: selection),
@@ -552,7 +564,7 @@ void main() {
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.selectTicket(ticket.id);
+      viewState.selectTicket(ticket.id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -600,7 +612,7 @@ void main() {
         'TKT-001',
         '/test/worktree/path',
       );
-      ticketBoard.selectTicket(ticket.id);
+      viewState.selectTicket(ticket.id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -622,7 +634,7 @@ void main() {
         status: TicketStatus.active,
       );
       ticketBoard.linkChat(ticket.id, 'chat-1', 'TKT-001', '/test/repo');
-      ticketBoard.selectTicket(ticket.id);
+      viewState.selectTicket(ticket.id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -654,7 +666,7 @@ void main() {
         status: TicketStatus.completed,
       );
       ticketBoard.linkChat(ticket.id, 'chat-1', 'TKT-001', '/test/repo');
-      ticketBoard.selectTicket(ticket.id);
+      viewState.selectTicket(ticket.id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -761,19 +773,19 @@ void main() {
 
       // 3. Load in a fresh state
       final ticketBoard2 = resources.track(
-        TicketBoardState('test-dispatch-integration'),
+        TicketRepository('test-dispatch-integration'),
       );
       await ticketBoard2.load();
 
       // 4. Verify links survived
       final reloaded = ticketBoard2.getTicket(ticket.id)!;
       check(reloaded.status).equals(TicketStatus.active);
-      check(reloaded.linkedWorktrees).length.equals(1);
+      check(reloaded.linkedWorktrees.length).equals(1);
       check(reloaded.linkedWorktrees.first.worktreeRoot)
           .equals('/path/to/worktree');
       check(reloaded.linkedWorktrees.first.branch)
           .equals('tkt-1-persistent-linking-test');
-      check(reloaded.linkedChats).length.equals(1);
+      check(reloaded.linkedChats.length).equals(1);
       check(reloaded.linkedChats.first.chatId).equals('chat-persist-123');
       check(reloaded.linkedChats.first.chatName).equals('TKT-001');
     });
@@ -797,7 +809,7 @@ void main() {
 
       // 3. Load in a fresh state
       final ticketBoard2 = resources.track(
-        TicketBoardState('test-dispatch-integration'),
+        TicketRepository('test-dispatch-integration'),
       );
       await ticketBoard2.load();
 

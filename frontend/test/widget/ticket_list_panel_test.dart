@@ -7,6 +7,7 @@ import 'package:cc_insights_v2/services/ticket_dispatch_service.dart';
 import 'package:cc_insights_v2/services/worktree_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +18,8 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoard;
+  late TicketRepository repo;
+  late TicketViewState viewState;
   late ProjectState project;
   late SelectionState selection;
   late FakeGitService fakeGit;
@@ -26,7 +28,8 @@ void main() {
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
-    ticketBoard = resources.track(TicketBoardState('test-project'));
+    repo = resources.track(TicketRepository('test-project'));
+    viewState = resources.track(TicketViewState(repo));
     fakeGit = FakeGitService();
 
     final primaryWorktree = WorktreeState(
@@ -52,7 +55,7 @@ void main() {
     );
 
     dispatch = TicketDispatchService(
-      ticketBoard: ticketBoard,
+      ticketBoard: repo,
       project: project,
       selection: selection,
       worktreeService: worktreeService,
@@ -65,12 +68,11 @@ void main() {
     await cleanupConfig();
   });
 
-  Widget createTestApp({TicketBoardState? state}) {
+  Widget createTestApp() {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<TicketBoardState>.value(
-          value: state ?? ticketBoard,
-        ),
+        ChangeNotifierProvider<TicketRepository>.value(value: repo),
+        ChangeNotifierProvider<TicketViewState>.value(value: viewState),
         Provider<TicketDispatchService>.value(value: dispatch),
       ],
       child: MaterialApp(
@@ -100,12 +102,12 @@ void main() {
   // 2. Renders tickets
   // ---------------------------------------------------------------------------
   testWidgets('renders tickets when they exist', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Design auth model',
       kind: TicketKind.feature,
       category: 'Auth',
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Implement login',
       kind: TicketKind.feature,
       category: 'Auth',
@@ -124,12 +126,12 @@ void main() {
   // 3. Search filters tickets
   // ---------------------------------------------------------------------------
   testWidgets('search filters the visible ticket list', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Build auth flow',
       kind: TicketKind.feature,
       category: 'Auth',
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Database schema',
       kind: TicketKind.feature,
       category: 'Data',
@@ -158,18 +160,18 @@ void main() {
   // 4. Group headers show with correct counts
   // ---------------------------------------------------------------------------
   testWidgets('group headers show with correct counts', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Task A',
       kind: TicketKind.feature,
       category: 'Auth',
       status: TicketStatus.completed,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Task B',
       kind: TicketKind.feature,
       category: 'Auth',
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Task C',
       kind: TicketKind.feature,
       category: 'Data',
@@ -191,7 +193,7 @@ void main() {
   // 5. Selecting a ticket calls selectTicket
   // ---------------------------------------------------------------------------
   testWidgets('tapping a ticket item selects it', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Clickable ticket',
       kind: TicketKind.feature,
       category: 'Test',
@@ -200,25 +202,25 @@ void main() {
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.selectedTicket, isNull);
+    expect(viewState.selectedTicket, isNull);
 
     await tester.tap(find.text('Clickable ticket'));
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.selectedTicket, isNotNull);
-    expect(ticketBoard.selectedTicket!.title, equals('Clickable ticket'));
+    expect(viewState.selectedTicket, isNotNull);
+    expect(viewState.selectedTicket!.title, equals('Clickable ticket'));
   });
 
   // ---------------------------------------------------------------------------
   // 6. Selected ticket highlighting
   // ---------------------------------------------------------------------------
   testWidgets('selected ticket has highlighted background', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Highlighted ticket',
       kind: TicketKind.feature,
       category: 'Test',
     );
-    ticketBoard.selectTicket(1);
+    viewState.selectTicket(1);
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
@@ -246,12 +248,12 @@ void main() {
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.detailMode, equals(TicketDetailMode.detail));
+    expect(viewState.detailMode, equals(TicketDetailMode.detail));
 
     await tester.tap(find.byKey(TicketListPanelKeys.addButton));
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.detailMode, equals(TicketDetailMode.create));
+    expect(viewState.detailMode, equals(TicketDetailMode.create));
   });
 
   // ---------------------------------------------------------------------------
@@ -261,25 +263,25 @@ void main() {
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.viewMode, equals(TicketViewMode.list));
+    expect(viewState.viewMode, equals(TicketViewMode.list));
 
     await tester.tap(find.byKey(TicketListPanelKeys.graphViewToggle));
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.viewMode, equals(TicketViewMode.graph));
+    expect(viewState.viewMode, equals(TicketViewMode.graph));
   });
 
   // ---------------------------------------------------------------------------
   // 9. Completed tickets are dimmed
   // ---------------------------------------------------------------------------
   testWidgets('completed tickets render with reduced opacity', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Done task',
       kind: TicketKind.feature,
       category: 'Test',
       status: TicketStatus.completed,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Active task',
       kind: TicketKind.feature,
       category: 'Test',
@@ -311,19 +313,19 @@ void main() {
   // 10. Status icons correct
   // ---------------------------------------------------------------------------
   testWidgets('each status shows the correct icon', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Ready ticket',
       kind: TicketKind.feature,
       category: 'Test',
       status: TicketStatus.ready,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Active ticket',
       kind: TicketKind.feature,
       category: 'Test',
       status: TicketStatus.active,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Completed ticket',
       kind: TicketKind.feature,
       category: 'Test',
@@ -358,12 +360,12 @@ void main() {
   // Start Next Button Tests
   // ---------------------------------------------------------------------------
   testWidgets('start next button is disabled when no ready tickets exist', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Active ticket',
       kind: TicketKind.feature,
       status: TicketStatus.active,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Completed ticket',
       kind: TicketKind.feature,
       status: TicketStatus.completed,
@@ -380,7 +382,7 @@ void main() {
   });
 
   testWidgets('start next button is enabled when ready tickets exist', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Ready ticket',
       kind: TicketKind.feature,
       status: TicketStatus.ready,
@@ -408,13 +410,13 @@ void main() {
   });
 
   testWidgets('start next button shows next ticket ID in tooltip', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Low priority',
       kind: TicketKind.feature,
       status: TicketStatus.ready,
       priority: TicketPriority.low,
     );
-    final critical = ticketBoard.createTicket(
+    final critical = repo.createTicket(
       title: 'Critical priority',
       kind: TicketKind.feature,
       status: TicketStatus.ready,
@@ -432,19 +434,19 @@ void main() {
   });
 
   testWidgets('start next button picks highest priority ticket', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Low priority',
       kind: TicketKind.feature,
       status: TicketStatus.ready,
       priority: TicketPriority.low,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Medium priority',
       kind: TicketKind.feature,
       status: TicketStatus.ready,
       priority: TicketPriority.medium,
     );
-    final critical = ticketBoard.createTicket(
+    final critical = repo.createTicket(
       title: 'Critical priority',
       kind: TicketKind.feature,
       status: TicketStatus.ready,

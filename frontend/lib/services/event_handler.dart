@@ -33,7 +33,6 @@ import '../models/chat.dart';
 import '../models/chat_model.dart';
 import '../models/codex_pricing.dart';
 import '../models/output_entry.dart';
-import '../models/ticket.dart';
 import '../state/rate_limit_state.dart';
 import '../state/ticket_board_state.dart';
 import 'log_service.dart';
@@ -75,7 +74,7 @@ class _EventHandlerBase {
 
   _EventHandlerBase({
     this.rateLimitState,
-    TicketBoardState? ticketBoard,
+    TicketRepository? ticketBoard,
   }) : _ticketBridge = TicketEventBridge(ticketBoard: ticketBoard) {
     _streaming = StreamingProcessor(
       toolCallIndex: _toolCallIndex,
@@ -89,9 +88,9 @@ class _EventHandlerBase {
   final Map<String, List<OutputEntry>> _activeStreamingEntries = {};
 
   /// The current ticket board state, if any.
-  TicketBoardState? get ticketBoard => _ticketBridge.ticketBoard;
+  TicketRepository? get ticketBoard => _ticketBridge.ticketBoard;
 
-  set ticketBoard(TicketBoardState? value) =>
+  set ticketBoard(TicketRepository? value) =>
       _ticketBridge.ticketBoard = value;
 
   /// The ticket event bridge for external callers (e.g. ChatState).

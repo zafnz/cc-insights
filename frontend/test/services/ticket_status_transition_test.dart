@@ -8,7 +8,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
 import 'package:cc_insights_v2/models/chat.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
-import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_board_state.dart' show TicketRepository;
 import 'package:checks/checks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -63,13 +63,13 @@ void main() {
 
   late ChatState chat;
   late EventHandler handler;
-  late TicketBoardState ticketBoard;
+  late TicketRepository ticketBoard;
 
   setUp(() {
     chat = resources.track(
       ChatState.create(name: 'Test Chat', worktreeRoot: '/tmp/test'),
     );
-    ticketBoard = resources.track(TicketBoardState('test-project'));
+    ticketBoard = resources.track(TicketRepository('test-project'));
     handler = EventHandler(ticketBoard: ticketBoard);
     _idCounter = 0;
   });
@@ -370,7 +370,7 @@ void main() {
     });
   });
 
-  group('TicketBoardState - dependency auto-unblock', () {
+  group('TicketRepository - dependency auto-unblock', () {
     test('completing a dependency unblocks blocked ticket', () {
       // Create two tickets: dep and dependent
       final dep = ticketBoard.createTicket(
@@ -469,7 +469,7 @@ void main() {
     });
   });
 
-  group('TicketBoardState - accumulateCostStats', () {
+  group('TicketRepository - accumulateCostStats', () {
     test('creates cost stats from null', () {
       final ticket = ticketBoard.createTicket(
         title: 'Fresh ticket',

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/ticket.dart';
 import '../state/ticket_board_state.dart';
+import '../state/ticket_view_state.dart';
 import '../widgets/ticket_visuals.dart';
 
 /// Keys for testing [TicketCreateForm] widgets.
@@ -86,7 +87,7 @@ class _TicketCreateFormState extends State<TicketCreateForm> {
   }
 
   void _handleCancel() {
-    context.read<TicketBoardState>().showDetail();
+    context.read<TicketViewState>().showDetail();
   }
 
   Future<void> _handleSubmit() async {
@@ -105,7 +106,8 @@ class _TicketCreateFormState extends State<TicketCreateForm> {
     });
 
     try {
-      final ticketBoard = context.read<TicketBoardState>();
+      final ticketBoard = context.read<TicketRepository>();
+      final viewState = context.read<TicketViewState>();
       final category = _categoryController.text.trim();
       final description = _descriptionController.text.trim();
 
@@ -125,7 +127,7 @@ class _TicketCreateFormState extends State<TicketCreateForm> {
             tags: _tags,
           );
         });
-        ticketBoard.selectTicket(editingId);
+        viewState.selectTicket(editingId);
       } else {
         final ticket = ticketBoard.createTicket(
           title: title,
@@ -137,7 +139,7 @@ class _TicketCreateFormState extends State<TicketCreateForm> {
           dependsOn: _selectedDependencies,
           tags: _tags,
         );
-        ticketBoard.selectTicket(ticket.id);
+        viewState.selectTicket(ticket.id);
       }
     } catch (e) {
       if (mounted) {
@@ -491,8 +493,8 @@ class _CategoryAutocompleteField extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final ticketBoard = context.watch<TicketBoardState>();
-    final categories = ticketBoard.allCategories;
+    final viewState = context.watch<TicketViewState>();
+    final categories = viewState.allCategories;
 
     return Autocomplete<String>(
       optionsBuilder: (textEditingValue) {
@@ -669,7 +671,7 @@ class _DependenciesInputState extends State<_DependenciesInput> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final ticketBoard = context.watch<TicketBoardState>();
+    final ticketBoard = context.watch<TicketRepository>();
 
     return Container(
       decoration: BoxDecoration(

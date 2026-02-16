@@ -46,16 +46,16 @@ void main() {
     testWidgets('shows project stats when showTicketStats is false',
         (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -85,17 +85,17 @@ void main() {
     testWidgets('shows total ticket count when showTicketStats is true',
         (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       // Create some tickets
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 1',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 2',
         kind: TicketKind.bugfix,
         status: TicketStatus.active,
@@ -105,8 +105,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -134,12 +134,12 @@ void main() {
 
     testWidgets('uses singular "ticket" when count is 1', (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       // Create one ticket
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 1',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
@@ -149,8 +149,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -168,16 +168,16 @@ void main() {
 
     testWidgets('shows zero tickets when no tickets exist', (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -201,12 +201,12 @@ void main() {
     testWidgets('updates reactively when ticket status changes',
         (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       // Create a ticket in ready state
-      final ticket = ticketBoard.createTicket(
+      final ticket = repo.createTicket(
         title: 'Ticket 1',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
@@ -216,8 +216,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -235,7 +235,7 @@ void main() {
       expect(find.textContaining('active'), findsNothing);
 
       // Change status to active
-      ticketBoard.setStatus(ticket.id, TicketStatus.active);
+      repo.setStatus(ticket.id, TicketStatus.active);
       await tester.pump();
 
       // Should update to show 1 active, 0 ready
@@ -246,27 +246,27 @@ void main() {
 
     testWidgets('shows only non-zero status counts', (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       // Create tickets with various statuses
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 1',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 2',
         kind: TicketKind.bugfix,
         status: TicketStatus.active,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 3',
         kind: TicketKind.chore,
         status: TicketStatus.blocked,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 4',
         kind: TicketKind.feature,
         status: TicketStatus.completed,
@@ -276,8 +276,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -302,16 +302,16 @@ void main() {
 
     testWidgets('updates when tickets are created', (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -327,7 +327,7 @@ void main() {
       expect(find.text('0 tickets'), findsOneWidget);
 
       // Create a new ticket
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'New Ticket',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
@@ -341,17 +341,17 @@ void main() {
 
     testWidgets('updates when tickets are deleted', (tester) async {
       final project = createTestProject();
-      final ticketBoard = resources.track(
-        TicketBoardState('test-project'),
+      final repo = resources.track(
+        TicketRepository('test-project'),
       );
 
       // Create tickets
-      final ticket1 = ticketBoard.createTicket(
+      final ticket1 = repo.createTicket(
         title: 'Ticket 1',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ticket 2',
         kind: TicketKind.bugfix,
         status: TicketStatus.active,
@@ -361,8 +361,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ProjectState>.value(value: project),
-            ChangeNotifierProvider<TicketBoardState>.value(
-              value: ticketBoard,
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: repo,
             ),
           ],
           child: const MaterialApp(
@@ -380,7 +380,7 @@ void main() {
       expect(find.text('1 ready'), findsOneWidget);
 
       // Delete a ticket
-      ticketBoard.deleteTicket(ticket1.id);
+      repo.deleteTicket(ticket1.id);
       await tester.pump();
 
       // Should update to show 1 ticket

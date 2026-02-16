@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../config/fonts.dart';
 import '../models/ticket.dart';
-import '../state/ticket_board_state.dart';
+import '../state/ticket_view_state.dart';
 import '../widgets/ticket_graph_layout.dart';
 import '../widgets/ticket_visuals.dart';
 
@@ -104,8 +104,8 @@ class _TicketGraphViewState extends State<TicketGraphView> {
 
   @override
   Widget build(BuildContext context) {
-    final ticketBoard = context.watch<TicketBoardState>();
-    final tickets = ticketBoard.filteredTickets;
+    final viewState = context.watch<TicketViewState>();
+    final tickets = viewState.filteredTickets;
     final layout = TicketGraphLayout.compute(tickets);
 
     return Column(
@@ -172,7 +172,7 @@ class _GraphToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.read<TicketBoardState>();
+    final viewState = context.read<TicketViewState>();
 
     return Container(
       height: 40,
@@ -188,8 +188,8 @@ class _GraphToolbar extends StatelessWidget {
         children: [
           // View toggle: List / Graph
           _ViewToggleButtons(
-            currentMode: context.watch<TicketBoardState>().viewMode,
-            onChanged: ticketBoard.setViewMode,
+            currentMode: context.watch<TicketViewState>().viewMode,
+            onChanged: viewState.setViewMode,
           ),
           const SizedBox(width: 12),
           // Ticket count
@@ -359,8 +359,8 @@ class _GraphArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.watch<TicketBoardState>();
-    final selectedId = ticketBoard.selectedTicket?.id;
+    final viewState = context.watch<TicketViewState>();
+    final selectedId = viewState.selectedTicket?.id;
 
     // Build a map for quick ticket lookup
     final ticketMap = {for (final t in tickets) t.id: t};
@@ -406,7 +406,7 @@ class _GraphArea extends StatelessWidget {
                       key: TicketGraphViewKeys.nodeKey(ticket.id),
                       ticket: ticket,
                       isSelected: ticket.id == selectedId,
-                      onTap: () => ticketBoard.selectTicket(ticket.id),
+                      onTap: () => viewState.selectTicket(ticket.id),
                     ),
                   );
                 }),

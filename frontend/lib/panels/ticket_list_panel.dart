@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../config/fonts.dart';
 import '../models/ticket.dart';
 import '../services/ticket_dispatch_service.dart';
-import '../state/ticket_board_state.dart';
+import '../state/ticket_view_state.dart';
 import '../widgets/ticket_visuals.dart';
 import 'panel_wrapper.dart';
 
@@ -62,7 +62,7 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.read<TicketBoardState>();
+    final viewState = context.read<TicketViewState>();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -75,7 +75,7 @@ class _SearchBar extends StatelessWidget {
       ),
       child: TextField(
         key: TicketListPanelKeys.searchField,
-        onChanged: ticketBoard.setSearchQuery,
+        onChanged: viewState.setSearchQuery,
         style: AppFonts.monoTextStyle(
           fontSize: 11,
           color: colorScheme.onSurface,
@@ -133,12 +133,12 @@ class _Toolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.watch<TicketBoardState>();
-    final hasActiveFilters = ticketBoard.statusFilter != null ||
-        ticketBoard.kindFilter != null ||
-        ticketBoard.priorityFilter != null;
+    final viewState = context.watch<TicketViewState>();
+    final hasActiveFilters = viewState.statusFilter != null ||
+        viewState.kindFilter != null ||
+        viewState.priorityFilter != null;
 
-    final nextTicket = ticketBoard.nextReadyTicket;
+    final nextTicket = viewState.nextReadyTicket;
     final hasNext = nextTicket != null;
 
     return Container(
@@ -180,7 +180,7 @@ class _Toolbar extends StatelessWidget {
           // Add button
           IconButton(
             key: TicketListPanelKeys.addButton,
-            onPressed: () => ticketBoard.showCreateForm(),
+            onPressed: () => viewState.showCreateForm(),
             icon: Icon(
               Icons.add,
               size: 16,
@@ -214,13 +214,13 @@ class _FilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.read<TicketBoardState>();
+    final viewState = context.read<TicketViewState>();
 
     return PopupMenuButton<String>(
       tooltip: 'Filter tickets',
       offset: const Offset(0, 28),
-      onSelected: (value) => _handleFilterSelection(value, ticketBoard),
-      itemBuilder: (context) => _buildFilterItems(context, ticketBoard),
+      onSelected: (value) => _handleFilterSelection(value, viewState),
+      itemBuilder: (context) => _buildFilterItems(context, viewState),
       child: Container(
         height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -271,7 +271,7 @@ class _FilterButton extends StatelessWidget {
 
   List<PopupMenuEntry<String>> _buildFilterItems(
     BuildContext context,
-    TicketBoardState ticketBoard,
+    TicketViewState viewState,
   ) {
     final items = <PopupMenuEntry<String>>[];
 
@@ -282,7 +282,7 @@ class _FilterButton extends StatelessWidget {
       child: Text('Status', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
     ));
     for (final status in TicketStatus.values) {
-      final isSelected = ticketBoard.statusFilter == status;
+      final isSelected = viewState.statusFilter == status;
       items.add(PopupMenuItem<String>(
         value: 'status:${status.name}',
         height: 32,
@@ -308,7 +308,7 @@ class _FilterButton extends StatelessWidget {
       child: Text('Kind', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
     ));
     for (final kind in TicketKind.values) {
-      final isSelected = ticketBoard.kindFilter == kind;
+      final isSelected = viewState.kindFilter == kind;
       items.add(PopupMenuItem<String>(
         value: 'kind:${kind.name}',
         height: 32,
@@ -334,7 +334,7 @@ class _FilterButton extends StatelessWidget {
       child: Text('Priority', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
     ));
     for (final priority in TicketPriority.values) {
-      final isSelected = ticketBoard.priorityFilter == priority;
+      final isSelected = viewState.priorityFilter == priority;
       items.add(PopupMenuItem<String>(
         value: 'priority:${priority.name}',
         height: 32,
@@ -363,11 +363,11 @@ class _FilterButton extends StatelessWidget {
     return items;
   }
 
-  void _handleFilterSelection(String value, TicketBoardState ticketBoard) {
+  void _handleFilterSelection(String value, TicketViewState viewState) {
     if (value == 'clear') {
-      ticketBoard.setStatusFilter(null);
-      ticketBoard.setKindFilter(null);
-      ticketBoard.setPriorityFilter(null);
+      viewState.setStatusFilter(null);
+      viewState.setKindFilter(null);
+      viewState.setPriorityFilter(null);
       return;
     }
 
@@ -378,18 +378,18 @@ class _FilterButton extends StatelessWidget {
       case 'status':
         final status = TicketStatus.values.firstWhere((s) => s.name == parts[1]);
         // Toggle: if already selected, clear it
-        ticketBoard.setStatusFilter(
-          ticketBoard.statusFilter == status ? null : status,
+        viewState.setStatusFilter(
+          viewState.statusFilter == status ? null : status,
         );
       case 'kind':
         final kind = TicketKind.values.firstWhere((k) => k.name == parts[1]);
-        ticketBoard.setKindFilter(
-          ticketBoard.kindFilter == kind ? null : kind,
+        viewState.setKindFilter(
+          viewState.kindFilter == kind ? null : kind,
         );
       case 'priority':
         final priority = TicketPriority.values.firstWhere((p) => p.name == parts[1]);
-        ticketBoard.setPriorityFilter(
-          ticketBoard.priorityFilter == priority ? null : priority,
+        viewState.setPriorityFilter(
+          viewState.priorityFilter == priority ? null : priority,
         );
     }
   }
@@ -402,7 +402,7 @@ class _SubToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.watch<TicketBoardState>();
+    final viewState = context.watch<TicketViewState>();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -417,15 +417,15 @@ class _SubToolbar extends StatelessWidget {
         children: [
           // View toggle: list / graph
           _ViewToggle(
-            currentMode: ticketBoard.viewMode,
-            onChanged: ticketBoard.setViewMode,
+            currentMode: viewState.viewMode,
+            onChanged: viewState.setViewMode,
           ),
           const Spacer(),
           // Group-by dropdown
           _GroupByDropdown(
             key: TicketListPanelKeys.groupByDropdown,
-            currentGroupBy: ticketBoard.groupBy,
-            onChanged: ticketBoard.setGroupBy,
+            currentGroupBy: viewState.groupBy,
+            onChanged: viewState.setGroupBy,
           ),
         ],
       ),
@@ -580,9 +580,9 @@ class _TicketList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ticketBoard = context.watch<TicketBoardState>();
-    final grouped = ticketBoard.groupedTickets;
-    final categoryProgress = ticketBoard.categoryProgress;
+    final viewState = context.watch<TicketViewState>();
+    final grouped = viewState.groupedTickets;
+    final categoryProgress = viewState.categoryProgress;
 
     // Empty state
     if (grouped.isEmpty) {
@@ -616,11 +616,11 @@ class _TicketList extends StatelessWidget {
           );
         }
         final ticket = item.ticketData!;
-        final isSelected = ticketBoard.selectedTicket?.id == ticket.id;
+        final isSelected = viewState.selectedTicket?.id == ticket.id;
         return _TicketListItem(
           ticket: ticket,
           isSelected: isSelected,
-          onTap: () => ticketBoard.selectTicket(ticket.id),
+          onTap: () => viewState.selectTicket(ticket.id),
         );
       },
     );

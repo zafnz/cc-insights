@@ -1,6 +1,7 @@
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_graph_view.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,24 +11,29 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoard;
+  late TicketRepository repo;
+  late TicketViewState viewState;
 
   setUp(() {
-    ticketBoard = resources.track(TicketBoardState('test-graph-view'));
+    repo = resources.track(TicketRepository('test-graph-view'));
+    viewState = resources.track(TicketViewState(repo));
   });
 
   tearDown(() async {
     await resources.disposeAll();
   });
 
-  Widget createTestApp({TicketBoardState? state}) {
+  Widget createTestApp() {
     return MaterialApp(
       home: Scaffold(
         body: SizedBox(
           width: 1000,
           height: 800,
-          child: ChangeNotifierProvider<TicketBoardState>.value(
-            value: state ?? ticketBoard,
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<TicketRepository>.value(value: repo),
+              ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+            ],
             child: const TicketGraphView(),
           ),
         ),
@@ -44,11 +50,11 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
     addTearDown(() => tester.view.resetDevicePixelRatio());
 
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Setup database',
       kind: TicketKind.feature,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Build API layer',
       kind: TicketKind.feature,
     );
@@ -94,7 +100,7 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
     addTearDown(() => tester.view.resetDevicePixelRatio());
 
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Implement authentication',
       kind: TicketKind.feature,
     );
@@ -119,11 +125,11 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
     addTearDown(() => tester.view.resetDevicePixelRatio());
 
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'First ticket',
       kind: TicketKind.feature,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Second ticket',
       kind: TicketKind.bugfix,
     );
@@ -132,14 +138,14 @@ void main() {
     await safePumpAndSettle(tester);
 
     // Initially no ticket is selected
-    expect(ticketBoard.selectedTicket, isNull);
+    expect(viewState.selectedTicket, isNull);
 
     // Tap the first node
     await tester.tap(find.byKey(TicketGraphViewKeys.nodeKey(1)));
     await tester.pump();
 
-    expect(ticketBoard.selectedTicket?.id, equals(1));
-    expect(ticketBoard.selectedTicket?.title, equals('First ticket'));
+    expect(viewState.selectedTicket?.id, equals(1));
+    expect(viewState.selectedTicket?.title, equals('First ticket'));
   });
 
   // ---------------------------------------------------------------------------
@@ -151,7 +157,7 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
     addTearDown(() => tester.view.resetDevicePixelRatio());
 
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'My ticket',
       kind: TicketKind.feature,
     );
@@ -186,7 +192,7 @@ void main() {
     expect(borderBefore.top.width, equals(1.0));
 
     // Select the ticket
-    ticketBoard.selectTicket(1);
+    viewState.selectTicket(1);
     await tester.pump();
 
     // After selection: border width 2.0
@@ -205,7 +211,7 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
     addTearDown(() => tester.view.resetDevicePixelRatio());
 
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Some ticket',
       kind: TicketKind.feature,
     );
@@ -240,33 +246,33 @@ void main() {
   // ---------------------------------------------------------------------------
   testWidgets('tapping List toggle calls setViewMode(list)', (tester) async {
     // Start in graph mode
-    ticketBoard.setViewMode(TicketViewMode.graph);
+    viewState.setViewMode(TicketViewMode.graph);
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(ticketBoard.viewMode, equals(TicketViewMode.graph));
+    expect(viewState.viewMode, equals(TicketViewMode.graph));
 
     // Tap the List toggle
     await tester.tap(find.byKey(TicketGraphViewKeys.listToggle));
     await tester.pump();
 
-    expect(ticketBoard.viewMode, equals(TicketViewMode.list));
+    expect(viewState.viewMode, equals(TicketViewMode.list));
   });
 
   // ---------------------------------------------------------------------------
   // 8. Ticket count label shows correct count
   // ---------------------------------------------------------------------------
   testWidgets('ticket count label shows correct count', (tester) async {
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Ticket A',
       kind: TicketKind.feature,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Ticket B',
       kind: TicketKind.bugfix,
     );
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Ticket C',
       kind: TicketKind.chore,
     );
@@ -286,7 +292,7 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
     addTearDown(() => tester.view.resetDevicePixelRatio());
 
-    ticketBoard.createTicket(
+    repo.createTicket(
       title: 'Some ticket',
       kind: TicketKind.feature,
     );

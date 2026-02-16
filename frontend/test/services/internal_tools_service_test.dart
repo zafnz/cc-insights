@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,9 +32,10 @@ void main() {
 
     test('registerTicketTools adds create_ticket to registry', () {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
 
-      service.registerTicketTools(board);
+      service.registerTicketTools(bulkProposal);
 
       expect(service.registry.isNotEmpty, isTrue);
       expect(service.registry['create_ticket'], isNotNull);
@@ -50,9 +52,10 @@ void main() {
 
     test('unregisterTicketTools removes create_ticket from registry', () {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
 
-      service.registerTicketTools(board);
+      service.registerTicketTools(bulkProposal);
       expect(service.registry['create_ticket'], isNotNull);
 
       service.unregisterTicketTools();
@@ -64,8 +67,9 @@ void main() {
   group('InternalToolsService - create_ticket handler', () {
     test('returns error for missing tickets field', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({});
@@ -76,8 +80,9 @@ void main() {
 
     test('returns error for non-array tickets field', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({'tickets': 'not-an-array'});
@@ -88,8 +93,9 @@ void main() {
 
     test('returns error for empty tickets array', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({'tickets': []});
@@ -100,8 +106,9 @@ void main() {
 
     test('returns error for too many proposals', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tooMany = List.generate(
         InternalToolsService.maxProposalCount + 1,
@@ -122,8 +129,9 @@ void main() {
 
     test('returns error for ticket missing title', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
@@ -139,8 +147,9 @@ void main() {
 
     test('returns error for ticket missing description', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
@@ -156,8 +165,9 @@ void main() {
 
     test('returns error for ticket missing kind', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
@@ -173,8 +183,9 @@ void main() {
 
     test('returns error for non-object ticket entry', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
@@ -188,8 +199,9 @@ void main() {
 
     test('stages valid proposals in board and waits for review', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
 
@@ -205,11 +217,11 @@ void main() {
         ],
       });
 
-      // The board should have the staged proposals
-      expect(board.tickets.length, 1);
-      expect(board.tickets.first.title, 'Add dark mode');
-      expect(board.tickets.first.status, TicketStatus.draft);
-      expect(board.detailMode, TicketDetailMode.bulkReview);
+      // The repo should have the staged proposals
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.title, 'Add dark mode');
+      expect(repo.tickets.first.status, TicketStatus.draft);
+      expect(bulkProposal.hasActiveProposal, isTrue);
 
       // The future should not have completed yet
       var completed = false;
@@ -218,7 +230,7 @@ void main() {
       expect(completed, isFalse);
 
       // Simulate the user approving all tickets
-      board.approveBulk();
+      bulkProposal.approveBulk();
 
       // Now the future should complete
       final result = await resultFuture;
@@ -228,8 +240,9 @@ void main() {
 
     test('returns appropriate text when all approved', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
 
@@ -249,7 +262,7 @@ void main() {
       });
 
       // All tickets are auto-checked, so approveBulk approves all
-      board.approveBulk();
+      bulkProposal.approveBulk();
 
       final result = await resultFuture;
       expect(result.isError, isFalse);
@@ -259,8 +272,9 @@ void main() {
 
     test('returns appropriate text when all rejected', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
 
@@ -280,7 +294,7 @@ void main() {
       });
 
       // Reject all tickets
-      board.rejectAll();
+      bulkProposal.rejectAll();
 
       final result = await resultFuture;
       expect(result.isError, isFalse);
@@ -290,8 +304,9 @@ void main() {
 
     test('returns appropriate text for mixed approval', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
 
@@ -316,11 +331,11 @@ void main() {
       });
 
       // Uncheck one ticket before approving
-      final proposedTickets = board.proposedTickets;
+      final proposedTickets = bulkProposal.proposedTickets;
       expect(proposedTickets.length, 3);
 
-      board.toggleProposalChecked(proposedTickets[1].id);
-      board.approveBulk();
+      bulkProposal.toggleProposalChecked(proposedTickets[1].id);
+      bulkProposal.approveBulk();
 
       final result = await resultFuture;
       expect(result.isError, isFalse);
@@ -331,8 +346,9 @@ void main() {
 
     test('stream-based review supports sequential tool calls', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
 
@@ -347,7 +363,7 @@ void main() {
         ],
       });
 
-      board.approveBulk();
+      bulkProposal.approveBulk();
       final result1 = await resultFuture1;
       expect(result1.isError, isFalse);
 
@@ -362,15 +378,16 @@ void main() {
         ],
       });
 
-      board.approveBulk();
+      bulkProposal.approveBulk();
       final result2 = await resultFuture2;
       expect(result2.isError, isFalse);
     });
 
     test('parses optional fields correctly', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
 
@@ -388,7 +405,7 @@ void main() {
         ],
       });
 
-      final ticket = board.tickets.first;
+      final ticket = repo.tickets.first;
       expect(ticket.title, 'Complex ticket');
       expect(ticket.description, 'Detailed work description');
       expect(ticket.kind, TicketKind.feature);
@@ -398,14 +415,15 @@ void main() {
       expect(ticket.tags, containsAll(['api', 'database']));
 
       // Clean up by completing the review
-      board.approveBulk();
+      bulkProposal.approveBulk();
       await resultFuture;
     });
 
     test('returns error for ticket with empty title', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
@@ -421,8 +439,9 @@ void main() {
 
     test('returns error for ticket with empty kind', () async {
       final service = resources.track(InternalToolsService());
-      final board = resources.track(TicketBoardState('test-project'));
-      service.registerTicketTools(board);
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({

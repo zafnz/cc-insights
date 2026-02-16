@@ -5,6 +5,7 @@ import 'package:cc_insights_v2/panels/ticket_detail_panel.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,10 +15,12 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoard;
+  late TicketRepository repo;
+  late TicketViewState viewState;
 
   setUp(() {
-    ticketBoard = resources.track(TicketBoardState('test-project'));
+    repo = resources.track(TicketRepository('test-project'));
+    viewState = resources.track(TicketViewState(repo));
   });
 
   tearDown(() async {
@@ -27,8 +30,11 @@ void main() {
   Widget createTestApp() {
     return MaterialApp(
       home: Scaffold(
-        body: ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoard,
+        body: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TicketRepository>.value(value: repo),
+            ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ],
           child: const TicketDetailPanel(),
         ),
       ),
@@ -45,12 +51,12 @@ void main() {
 
     testWidgets('renders header with display ID, title, and status icon',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Implement token refresh',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -62,13 +68,13 @@ void main() {
 
     testWidgets('renders metadata pills for status, kind, and priority',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         status: TicketStatus.active,
         priority: TicketPriority.medium,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -83,12 +89,12 @@ void main() {
     });
 
     testWidgets('renders category pill when category is set', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         category: 'Auth & Permissions',
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -100,11 +106,11 @@ void main() {
 
     testWidgets('does not render category pill when category is null',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -114,12 +120,12 @@ void main() {
     });
 
     testWidgets('renders tags when tags exist', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         tags: {'auth', 'security'},
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -130,12 +136,12 @@ void main() {
     });
 
     testWidgets('renders description text in card', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         description: 'This is a detailed description of the ticket.',
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -150,12 +156,12 @@ void main() {
 
     testWidgets('shows "No description" when description is empty',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         description: '',
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -166,23 +172,23 @@ void main() {
     testWidgets('renders "Depends on" chips for each dependency',
         (tester) async {
       // Create dependency tickets first
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Dependency A',
         kind: TicketKind.feature,
         status: TicketStatus.completed,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Dependency B',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
       // Create the ticket that depends on the others
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Main ticket',
         kind: TicketKind.feature,
         dependsOn: [1, 2],
       );
-      ticketBoard.selectTicket(3);
+      viewState.selectTicket(3);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -193,16 +199,16 @@ void main() {
     });
 
     testWidgets('clicking dependency chip selects that ticket', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Dependency ticket',
         kind: TicketKind.feature,
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Main ticket',
         kind: TicketKind.feature,
         dependsOn: [1],
       );
-      ticketBoard.selectTicket(2);
+      viewState.selectTicket(2);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -212,30 +218,30 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Should have selected ticket 1
-      expect(ticketBoard.selectedTicket?.id, equals(1));
+      expect(viewState.selectedTicket?.id, equals(1));
     });
 
     testWidgets('renders "Blocks" section with reverse dependencies',
         (tester) async {
       // Create a ticket
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Blocker ticket',
         kind: TicketKind.feature,
       );
       // Create tickets that depend on it (blocked by it)
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Blocked ticket A',
         kind: TicketKind.feature,
         dependsOn: [1],
       );
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Blocked ticket B',
         kind: TicketKind.feature,
         dependsOn: [1],
       );
 
       // Select the blocker
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -246,12 +252,12 @@ void main() {
     });
 
     testWidgets('Mark Complete button calls markCompleted', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -259,16 +265,16 @@ void main() {
       await tester.tap(find.text('Mark Complete'));
       await safePumpAndSettle(tester);
 
-      expect(ticketBoard.getTicket(1)?.status, equals(TicketStatus.completed));
+      expect(repo.getTicket(1)?.status, equals(TicketStatus.completed));
     });
 
     testWidgets('Cancel button calls markCancelled', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -276,18 +282,18 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await safePumpAndSettle(tester);
 
-      expect(ticketBoard.getTicket(1)?.status, equals(TicketStatus.cancelled));
+      expect(repo.getTicket(1)?.status, equals(TicketStatus.cancelled));
     });
 
     testWidgets('cost stats render when costStats is present', (tester) async {
       final now = DateTime.now();
       // We need to create a ticket with costStats, which requires using
       // updateTicket since createTicket doesn't accept costStats
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Test ticket',
         kind: TicketKind.feature,
       );
-      ticketBoard.updateTicket(1, (t) => t.copyWith(
+      repo.updateTicket(1, (t) => t.copyWith(
         costStats: const TicketCostStats(
           totalTokens: 45200,
           totalCost: 0.42,
@@ -295,7 +301,7 @@ void main() {
           waitingTimeMs: 65000, // 1m 05s
         ),
       ));
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -348,7 +354,8 @@ void main() {
         home: Scaffold(
           body: MultiProvider(
             providers: [
-              ChangeNotifierProvider<TicketBoardState>.value(value: ticketBoard),
+              ChangeNotifierProvider<TicketRepository>.value(value: repo),
+              ChangeNotifierProvider<TicketViewState>.value(value: viewState),
               ChangeNotifierProvider<ProjectState>.value(value: project),
               ChangeNotifierProvider<SelectionState>.value(value: selection),
               Provider<GitService>.value(value: const RealGitService()),
@@ -360,12 +367,12 @@ void main() {
     }
 
     testWidgets('Begin buttons enabled when ticket is ready', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ready ticket',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -383,12 +390,12 @@ void main() {
     });
 
     testWidgets('Begin buttons enabled when ticket needs input', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Needs input ticket',
         kind: TicketKind.feature,
         status: TicketStatus.needsInput,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -405,12 +412,12 @@ void main() {
     });
 
     testWidgets('Begin buttons disabled when ticket is active', (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Active ticket',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -428,13 +435,13 @@ void main() {
 
     testWidgets('Open linked chat button shown when linked chats exist',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Linked ticket',
         kind: TicketKind.feature,
         status: TicketStatus.active,
       );
-      ticketBoard.linkChat(1, 'chat-1', 'TKT-001', '/test/repo');
-      ticketBoard.selectTicket(1);
+      repo.linkChat(1, 'chat-1', 'TKT-001', '/test/repo');
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -448,12 +455,12 @@ void main() {
 
     testWidgets('Open linked chat button hidden when no linked chats',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'No links ticket',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -466,12 +473,12 @@ void main() {
 
     testWidgets('Mark Complete and Cancel hidden when ticket is completed',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Completed ticket',
         kind: TicketKind.feature,
         status: TicketStatus.completed,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -488,12 +495,12 @@ void main() {
 
     testWidgets('Mark Complete and Cancel hidden when ticket is cancelled',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Cancelled ticket',
         kind: TicketKind.feature,
         status: TicketStatus.cancelled,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);
@@ -510,12 +517,12 @@ void main() {
 
     testWidgets('Begin in worktree... opens dialog with worktree options',
         (tester) async {
-      ticketBoard.createTicket(
+      repo.createTicket(
         title: 'Ready ticket',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
       );
-      ticketBoard.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestAppWithProviders());
       await safePumpAndSettle(tester);

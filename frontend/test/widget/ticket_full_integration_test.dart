@@ -15,8 +15,10 @@ import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/ticket_storage_service.dart';
 import 'package:cc_insights_v2/services/ticket_dispatch_service.dart';
 import 'package:cc_insights_v2/services/worktree_service.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:cc_insights_v2/widgets/ticket_graph_layout.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,7 +84,7 @@ void main() {
         'create tickets manually -> dispatch (link chat) -> simulate turn '
         'complete -> mark done -> verify status transitions', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-full-lifecycle'),
+        TicketRepository('test-full-lifecycle'),
       );
 
       // 1. Create a ticket
@@ -153,8 +155,9 @@ void main() {
         'proposeBulk -> user reviews -> approves subset -> verify tickets '
         'are ready and unchecked are deleted', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-proposal-lifecycle'),
+        TicketRepository('test-proposal-lifecycle'),
       );
+      final bulkState = resources.track(BulkProposalState(ticketBoard));
 
       // 1. Create proposals
       final proposals = [
@@ -181,15 +184,15 @@ void main() {
       ];
 
       // 2. Propose bulk
-      final created = ticketBoard.proposeBulk(
+      final created = bulkState.proposeBulk(
         proposals,
         sourceChatId: 'chat-agent-1',
         sourceChatName: 'Planning Agent',
       );
 
       expect(created.length, 3);
-      expect(ticketBoard.detailMode, TicketDetailMode.bulkReview);
-      expect(ticketBoard.proposedTickets.length, 3);
+      expect(bulkState.hasActiveProposal, isTrue);
+      expect(bulkState.proposedTickets.length, 3);
 
       // All should be draft
       for (final t in created) {
@@ -197,7 +200,7 @@ void main() {
       }
 
       // All should be checked by default
-      expect(ticketBoard.proposalCheckedIds.length, 3);
+      expect(bulkState.proposalCheckedIds.length, 3);
 
       // Verify dependencies resolved correctly
       final ciTicketId = created[0].id;
@@ -206,25 +209,25 @@ void main() {
       expect(created[2].dependsOn, [ciTicketId, testTicketId]);
 
       // 3. Uncheck the third ticket (deploy to staging)
-      ticketBoard.toggleProposalChecked(created[2].id);
-      expect(ticketBoard.proposalCheckedIds.length, 2);
+      bulkState.toggleProposalChecked(created[2].id);
+      expect(bulkState.proposalCheckedIds.length, 2);
 
       // 4. Track review events via stream
       int? callbackApproved;
       int? callbackRejected;
-      final reviewSub = ticketBoard.onBulkReviewComplete.listen((result) {
+      final reviewSub = bulkState.onBulkReviewComplete.listen((result) {
         callbackApproved = result.approvedCount;
         callbackRejected = result.rejectedCount;
       });
       addTearDown(reviewSub.cancel);
 
       // 5. Approve
-      ticketBoard.approveBulk();
+      bulkState.approveBulk();
 
       // 6. Verify results
       expect(callbackApproved, 2);
       expect(callbackRejected, 1);
-      expect(ticketBoard.detailMode, TicketDetailMode.detail);
+      expect(bulkState.hasActiveProposal, isFalse);
 
       // Approved tickets should be ready
       expect(ticketBoard.getTicket(created[0].id)!.status, TicketStatus.ready);
@@ -239,13 +242,14 @@ void main() {
       expect(ticketBoard.getTicket(created[1].id)!.dependsOn, [ciTicketId]);
 
       // Proposal state should be cleared
-      expect(ticketBoard.proposedTickets, isEmpty);
+      expect(bulkState.proposedTickets, isEmpty);
     });
 
     test('rejectAll deletes all proposed tickets', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-reject-all'),
+        TicketRepository('test-reject-all'),
       );
+      final bulkState = resources.track(BulkProposalState(ticketBoard));
 
       final proposals = [
         const TicketProposal(
@@ -258,19 +262,19 @@ void main() {
         ),
       ];
 
-      final created = ticketBoard.proposeBulk(
+      final created = bulkState.proposeBulk(
         proposals,
         sourceChatId: 'chat-1',
         sourceChatName: 'Agent',
       );
 
       int? callbackRejected;
-      final rejectSub = ticketBoard.onBulkReviewComplete.listen((result) {
+      final rejectSub = bulkState.onBulkReviewComplete.listen((result) {
         callbackRejected = result.rejectedCount;
       });
       addTearDown(rejectSub.cancel);
 
-      ticketBoard.rejectAll();
+      bulkState.rejectAll();
 
       expect(callbackRejected, 2);
       expect(ticketBoard.tickets, isEmpty);
@@ -287,7 +291,7 @@ void main() {
         'A depends on B, B depends on C -> complete C -> B auto-unblocks -> '
         'complete B -> A auto-unblocks', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dep-chain'),
+        TicketRepository('test-dep-chain'),
       );
 
       // Create tickets: C is foundational, B depends on C, A depends on B
@@ -339,7 +343,7 @@ void main() {
 
     test('completing one dep of two does not unblock dependent', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-partial-deps'),
+        TicketRepository('test-partial-deps'),
       );
 
       final dep1 = ticketBoard.createTicket(
@@ -383,7 +387,7 @@ void main() {
         'create ticket -> split into subtasks -> complete subtasks -> '
         'parent stays split', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-split-complete'),
+        TicketRepository('test-split-complete'),
       );
 
       // Create parent ticket
@@ -433,7 +437,7 @@ void main() {
 
     test('split with empty subtasks throws ArgumentError', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-split-empty'),
+        TicketRepository('test-split-empty'),
       );
 
       final parent = ticketBoard.createTicket(
@@ -449,7 +453,7 @@ void main() {
 
     test('split nonexistent ticket throws ArgumentError', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-split-nonexistent'),
+        TicketRepository('test-split-nonexistent'),
       );
 
       expect(
@@ -469,8 +473,9 @@ void main() {
         'set search query and filters -> verify filtering -> clear -> '
         'all visible', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-search-filter'),
+        TicketRepository('test-search-filter'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       // Create varied tickets
       ticketBoard.createTicket(
@@ -503,53 +508,54 @@ void main() {
       );
 
       // All 4 visible initially
-      expect(ticketBoard.filteredTickets.length, 4);
+      expect(viewState.filteredTickets.length, 4);
 
       // Search for 'login'
-      ticketBoard.setSearchQuery('login');
-      expect(ticketBoard.filteredTickets.length, 2);
+      viewState.setSearchQuery('login');
+      expect(viewState.filteredTickets.length, 2);
       expect(
-        ticketBoard.filteredTickets.map((t) => t.title),
+        viewState.filteredTickets.map((t) => t.title),
         containsAll(['Build login page', 'Login tests']),
       );
 
       // Add status filter for ready
-      ticketBoard.setStatusFilter(TicketStatus.ready);
-      expect(ticketBoard.filteredTickets.length, 2);
+      viewState.setStatusFilter(TicketStatus.ready);
+      expect(viewState.filteredTickets.length, 2);
 
       // Add kind filter for feature -- now only 'Build login page' matches
-      ticketBoard.setKindFilter(TicketKind.feature);
-      expect(ticketBoard.filteredTickets.length, 1);
-      expect(ticketBoard.filteredTickets.first.title, 'Build login page');
+      viewState.setKindFilter(TicketKind.feature);
+      expect(viewState.filteredTickets.length, 1);
+      expect(viewState.filteredTickets.first.title, 'Build login page');
 
       // Clear all filters
-      ticketBoard.setSearchQuery('');
-      ticketBoard.setStatusFilter(null);
-      ticketBoard.setKindFilter(null);
-      expect(ticketBoard.filteredTickets.length, 4);
+      viewState.setSearchQuery('');
+      viewState.setStatusFilter(null);
+      viewState.setKindFilter(null);
+      expect(viewState.filteredTickets.length, 4);
 
       // Test priority filter
-      ticketBoard.setPriorityFilter(TicketPriority.critical);
-      expect(ticketBoard.filteredTickets.length, 1);
-      expect(ticketBoard.filteredTickets.first.title, 'Fix memory leak');
-      ticketBoard.setPriorityFilter(null);
+      viewState.setPriorityFilter(TicketPriority.critical);
+      expect(viewState.filteredTickets.length, 1);
+      expect(viewState.filteredTickets.first.title, 'Fix memory leak');
+      viewState.setPriorityFilter(null);
 
       // Test category filter
-      ticketBoard.setCategoryFilter('Auth');
-      expect(ticketBoard.filteredTickets.length, 2);
-      ticketBoard.setCategoryFilter(null);
+      viewState.setCategoryFilter('Auth');
+      expect(viewState.filteredTickets.length, 2);
+      viewState.setCategoryFilter(null);
 
       // Test displayId search
-      ticketBoard.setSearchQuery('TKT-002');
-      expect(ticketBoard.filteredTickets.length, 1);
-      expect(ticketBoard.filteredTickets.first.title, 'Fix memory leak');
-      ticketBoard.setSearchQuery('');
+      viewState.setSearchQuery('TKT-002');
+      expect(viewState.filteredTickets.length, 1);
+      expect(viewState.filteredTickets.first.title, 'Fix memory leak');
+      viewState.setSearchQuery('');
     });
 
     test('grouped tickets reflect filters and group-by', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-grouped'),
+        TicketRepository('test-grouped'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
         title: 'Auth feature',
@@ -571,24 +577,24 @@ void main() {
       );
 
       // Default group-by is category
-      final byCategory = ticketBoard.groupedTickets;
+      final byCategory = viewState.groupedTickets;
       expect(byCategory.keys, containsAll(['Auth', 'Data']));
       expect(byCategory['Auth']!.length, 2);
       expect(byCategory['Data']!.length, 1);
 
       // Switch to group-by status
-      ticketBoard.setGroupBy(TicketGroupBy.status);
-      final byStatus = ticketBoard.groupedTickets;
+      viewState.setGroupBy(TicketGroupBy.status);
+      final byStatus = viewState.groupedTickets;
       expect(byStatus.keys, containsAll(['Active', 'Ready']));
 
       // Switch to group-by kind
-      ticketBoard.setGroupBy(TicketGroupBy.kind);
-      final byKind = ticketBoard.groupedTickets;
+      viewState.setGroupBy(TicketGroupBy.kind);
+      final byKind = viewState.groupedTickets;
       expect(byKind.keys, containsAll(['Feature', 'Bug Fix', 'Chore']));
 
       // Apply filter and verify grouping reflects it
-      ticketBoard.setStatusFilter(TicketStatus.ready);
-      final filteredGrouped = ticketBoard.groupedTickets;
+      viewState.setStatusFilter(TicketStatus.ready);
+      final filteredGrouped = viewState.groupedTickets;
       expect(filteredGrouped.containsKey('Feature'), isFalse);
       expect(filteredGrouped.keys, containsAll(['Bug Fix', 'Chore']));
     });
@@ -601,7 +607,7 @@ void main() {
     test('graph layout produces correct nodes and edges for dependency chain',
         () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-graph-layout'),
+        TicketRepository('test-graph-layout'),
       );
 
       // Create A -> B -> C chain
@@ -651,7 +657,7 @@ void main() {
 
     test('disconnected components are placed side by side', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-graph-disconnected'),
+        TicketRepository('test-graph-disconnected'),
       );
 
       // Component 1: A -> B
@@ -689,7 +695,7 @@ void main() {
 
     test('single ticket with no deps produces single node and no edges', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-graph-single'),
+        TicketRepository('test-graph-single'),
       );
 
       ticketBoard.createTicket(
@@ -715,7 +721,7 @@ void main() {
       final storage = TicketStorageService();
 
       final ticketBoard = resources.track(
-        TicketBoardState(projectId, storage: storage),
+        TicketRepository(projectId, storage: storage),
       );
 
       // Create tickets in various states
@@ -776,7 +782,7 @@ void main() {
 
       // Recreate and load
       final ticketBoard2 = resources.track(
-        TicketBoardState(projectId, storage: storage),
+        TicketRepository(projectId, storage: storage),
       );
       await ticketBoard2.load();
 
@@ -835,7 +841,7 @@ void main() {
   group('Edge cases', () {
     test('cancel all tickets', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-cancel-all'),
+        TicketRepository('test-cancel-all'),
       );
 
       final tickets = <TicketData>[];
@@ -861,7 +867,7 @@ void main() {
 
     test('delete ticket with dependents cascades dependency removal', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-delete-cascade'),
+        TicketRepository('test-delete-cascade'),
       );
 
       final a = ticketBoard.createTicket(
@@ -896,24 +902,25 @@ void main() {
 
     test('delete selected ticket clears selection', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-delete-selection'),
+        TicketRepository('test-delete-selection'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       final t = ticketBoard.createTicket(
         title: 'Selected ticket',
         kind: TicketKind.feature,
       );
 
-      ticketBoard.selectTicket(t.id);
-      expect(ticketBoard.selectedTicket, isNotNull);
+      viewState.selectTicket(t.id);
+      expect(viewState.selectedTicket, isNotNull);
 
       ticketBoard.deleteTicket(t.id);
-      expect(ticketBoard.selectedTicket, isNull);
+      expect(viewState.selectedTicket, isNull);
     });
 
     test('very long title is handled correctly', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-long-title'),
+        TicketRepository('test-long-title'),
       );
 
       final longTitle = 'A' * 500;
@@ -932,7 +939,7 @@ void main() {
 
     test('empty description is allowed', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-empty-desc'),
+        TicketRepository('test-empty-desc'),
       );
 
       final t = ticketBoard.createTicket(
@@ -946,8 +953,9 @@ void main() {
 
     test('duplicate category names work correctly with grouping', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dup-categories'),
+        TicketRepository('test-dup-categories'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
         title: 'Task 1',
@@ -966,32 +974,33 @@ void main() {
       );
 
       // Verify grouping puts both into Frontend
-      final grouped = ticketBoard.groupedTickets;
+      final grouped = viewState.groupedTickets;
       expect(grouped['Frontend']!.length, 2);
       expect(grouped['Backend']!.length, 1);
 
       // Verify allCategories
-      expect(ticketBoard.allCategories, ['Backend', 'Frontend']);
+      expect(viewState.allCategories, ['Backend', 'Frontend']);
     });
 
     test('ticket without category goes to Uncategorized group', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-uncategorized'),
+        TicketRepository('test-uncategorized'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
         title: 'No category',
         kind: TicketKind.feature,
       );
 
-      final grouped = ticketBoard.groupedTickets;
+      final grouped = viewState.groupedTickets;
       expect(grouped.containsKey('Uncategorized'), isTrue);
       expect(grouped['Uncategorized']!.length, 1);
     });
 
     test('addDependency to nonexistent ticket throws ArgumentError', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dep-nonexistent'),
+        TicketRepository('test-dep-nonexistent'),
       );
 
       final t = ticketBoard.createTicket(
@@ -1007,7 +1016,7 @@ void main() {
 
     test('self-dependency throws ArgumentError', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-self-dep'),
+        TicketRepository('test-self-dep'),
       );
 
       final t = ticketBoard.createTicket(
@@ -1023,7 +1032,7 @@ void main() {
 
     test('duplicate dependency is idempotent', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dup-dep'),
+        TicketRepository('test-dup-dep'),
       );
 
       final a = ticketBoard.createTicket(
@@ -1044,7 +1053,7 @@ void main() {
 
     test('duplicate worktree link is idempotent', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dup-link'),
+        TicketRepository('test-dup-link'),
       );
 
       final t = ticketBoard.createTicket(
@@ -1060,7 +1069,7 @@ void main() {
 
     test('duplicate chat link is idempotent', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dup-chat-link'),
+        TicketRepository('test-dup-chat-link'),
       );
 
       final t = ticketBoard.createTicket(
@@ -1076,7 +1085,7 @@ void main() {
 
     test('getTicketsForChat returns matching tickets', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-tickets-for-chat'),
+        TicketRepository('test-tickets-for-chat'),
       );
 
       final t1 = ticketBoard.createTicket(
@@ -1102,8 +1111,9 @@ void main() {
 
     test('nextReadyTicket returns highest-priority ready ticket', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-next-ready'),
+        TicketRepository('test-next-ready'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
         title: 'Low priority',
@@ -1121,14 +1131,15 @@ void main() {
         priority: TicketPriority.critical,
       );
 
-      final next = ticketBoard.nextReadyTicket!;
+      final next = viewState.nextReadyTicket!;
       expect(next.title, 'Critical priority');
     });
 
     test('categoryProgress counts correctly', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-category-progress'),
+        TicketRepository('test-category-progress'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       ticketBoard.createTicket(
         title: 'Done 1',
@@ -1155,7 +1166,7 @@ void main() {
         category: 'Backend',
       );
 
-      final progress = ticketBoard.categoryProgress;
+      final progress = viewState.categoryProgress;
       expect(progress['Frontend']!.completed, 2);
       expect(progress['Frontend']!.total, 3);
       expect(progress['Backend']!.completed, 1);
@@ -1169,7 +1180,7 @@ void main() {
   group('Dispatch service integration', () {
     test('beginInWorktree creates chat, links, sets status, navigates', () async {
       final ticketBoard = resources.track(
-        TicketBoardState('test-dispatch-svc'),
+        TicketRepository('test-dispatch-svc'),
       );
 
       final primaryWorktree = WorktreeState(
@@ -1231,7 +1242,7 @@ void main() {
 
     test('buildTicketPrompt includes dependency context', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-prompt-deps'),
+        TicketRepository('test-prompt-deps'),
       );
 
       final dep = ticketBoard.createTicket(
@@ -1309,7 +1320,7 @@ void main() {
   group('EventHandler status transitions', () {
     test('permission request -> needsInput -> response -> active', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-perm-transitions'),
+        TicketRepository('test-perm-transitions'),
       );
 
       final ticket = ticketBoard.createTicket(
@@ -1344,7 +1355,7 @@ void main() {
 
     test('terminal tickets are not transitioned by events', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-terminal-no-transition'),
+        TicketRepository('test-terminal-no-transition'),
       );
 
       final ticket = ticketBoard.createTicket(
@@ -1379,7 +1390,7 @@ void main() {
 
     test('cost stats accumulate across multiple turns', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-cost-accumulate'),
+        TicketRepository('test-cost-accumulate'),
       );
 
       final ticket = ticketBoard.createTicket(
@@ -1430,50 +1441,53 @@ void main() {
   group('View mode and detail mode', () {
     test('showCreateForm clears selection and sets create mode', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-modes'),
+        TicketRepository('test-modes'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       final t = ticketBoard.createTicket(
         title: 'Ticket',
         kind: TicketKind.feature,
       );
-      ticketBoard.selectTicket(t.id);
-      expect(ticketBoard.selectedTicket, isNotNull);
+      viewState.selectTicket(t.id);
+      expect(viewState.selectedTicket, isNotNull);
 
-      ticketBoard.showCreateForm();
-      expect(ticketBoard.detailMode, TicketDetailMode.create);
-      expect(ticketBoard.selectedTicket, isNull);
+      viewState.showCreateForm();
+      expect(viewState.detailMode, TicketDetailMode.create);
+      expect(viewState.selectedTicket, isNull);
     });
 
     test('selectTicket sets detail mode', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-select-mode'),
+        TicketRepository('test-select-mode'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       final t = ticketBoard.createTicket(
         title: 'Ticket',
         kind: TicketKind.feature,
       );
 
-      ticketBoard.showCreateForm();
-      expect(ticketBoard.detailMode, TicketDetailMode.create);
+      viewState.showCreateForm();
+      expect(viewState.detailMode, TicketDetailMode.create);
 
-      ticketBoard.selectTicket(t.id);
-      expect(ticketBoard.detailMode, TicketDetailMode.detail);
+      viewState.selectTicket(t.id);
+      expect(viewState.detailMode, TicketDetailMode.detail);
     });
 
     test('setViewMode toggles between list and graph', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-view-mode'),
+        TicketRepository('test-view-mode'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
-      expect(ticketBoard.viewMode, TicketViewMode.list);
+      expect(viewState.viewMode, TicketViewMode.list);
 
-      ticketBoard.setViewMode(TicketViewMode.graph);
-      expect(ticketBoard.viewMode, TicketViewMode.graph);
+      viewState.setViewMode(TicketViewMode.graph);
+      expect(viewState.viewMode, TicketViewMode.graph);
 
-      ticketBoard.setViewMode(TicketViewMode.list);
-      expect(ticketBoard.viewMode, TicketViewMode.list);
+      viewState.setViewMode(TicketViewMode.list);
+      expect(viewState.viewMode, TicketViewMode.list);
     });
   });
 
@@ -1600,7 +1614,7 @@ void main() {
   group('Notification behavior', () {
     test('CRUD operations trigger notifyListeners', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-notifications'),
+        TicketRepository('test-notifications'),
       );
 
       var notificationCount = 0;
@@ -1628,35 +1642,36 @@ void main() {
 
     test('filter and search changes trigger notifyListeners', () {
       final ticketBoard = resources.track(
-        TicketBoardState('test-filter-notify'),
+        TicketRepository('test-filter-notify'),
       );
+      final viewState = resources.track(TicketViewState(ticketBoard));
 
       var notified = false;
-      ticketBoard.addListener(() {
+      viewState.addListener(() {
         notified = true;
       });
 
-      ticketBoard.setSearchQuery('test');
+      viewState.setSearchQuery('test');
       expect(notified, isTrue);
 
       notified = false;
-      ticketBoard.setStatusFilter(TicketStatus.active);
+      viewState.setStatusFilter(TicketStatus.active);
       expect(notified, isTrue);
 
       notified = false;
-      ticketBoard.setKindFilter(TicketKind.bugfix);
+      viewState.setKindFilter(TicketKind.bugfix);
       expect(notified, isTrue);
 
       notified = false;
-      ticketBoard.setPriorityFilter(TicketPriority.high);
+      viewState.setPriorityFilter(TicketPriority.high);
       expect(notified, isTrue);
 
       notified = false;
-      ticketBoard.setCategoryFilter('Frontend');
+      viewState.setCategoryFilter('Frontend');
       expect(notified, isTrue);
 
       notified = false;
-      ticketBoard.setGroupBy(TicketGroupBy.status);
+      viewState.setGroupBy(TicketGroupBy.status);
       expect(notified, isTrue);
     });
   });

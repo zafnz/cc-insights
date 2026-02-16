@@ -15,6 +15,8 @@ import 'package:cc_insights_v2/services/worktree_watcher_service.dart';
 import 'package:cc_insights_v2/state/file_manager_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/mock_data.dart';
 import 'package:cc_insights_v2/widgets/dialog_observer.dart';
@@ -42,7 +44,9 @@ void main() {
     late DialogObserver dialogObserver;
     late MenuActionService menuActionService;
     late FakeCliAvailabilityService fakeCliAvailability;
-    late TicketBoardState ticketBoardState;
+    late TicketRepository repo;
+    late TicketViewState viewState;
+    late BulkProposalState bulkState;
 
     final resources = TestResources();
 
@@ -83,8 +87,14 @@ void main() {
           ChangeNotifierProvider<CliAvailabilityService>.value(
             value: fakeCliAvailability,
           ),
-          ChangeNotifierProvider<TicketBoardState>.value(
-            value: ticketBoardState,
+          ChangeNotifierProvider<TicketRepository>.value(
+            value: repo,
+          ),
+          ChangeNotifierProvider<TicketViewState>.value(
+            value: viewState,
+          ),
+          ChangeNotifierProvider<BulkProposalState>.value(
+            value: bulkState,
           ),
         ],
         child: const MaterialApp(
@@ -112,7 +122,9 @@ void main() {
       dialogObserver = DialogObserver();
       menuActionService = MenuActionService();
       fakeCliAvailability = FakeCliAvailabilityService();
-      ticketBoardState = TicketBoardState('test-project');
+      repo = resources.track(TicketRepository('test-project'));
+      viewState = resources.track(TicketViewState(repo));
+      bulkState = resources.track(BulkProposalState(repo));
       await mockBackend.start();
       fakeFileSystem = FakeFileSystemService();
       fileManagerState = resources.track(

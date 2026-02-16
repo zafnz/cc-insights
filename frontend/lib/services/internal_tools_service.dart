@@ -5,7 +5,7 @@ import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/ticket.dart';
-import '../state/ticket_board_state.dart';
+import '../state/bulk_proposal_state.dart';
 
 /// Service that manages internal MCP tools for CC-Insights.
 ///
@@ -20,12 +20,12 @@ class InternalToolsService extends ChangeNotifier {
   /// Maximum number of ticket proposals allowed in a single create_ticket call.
   static const int maxProposalCount = 50;
 
-  /// Register the create_ticket tool with the given ticket board.
+  /// Register the create_ticket tool with the given bulk proposal state.
   ///
   /// The tool handler parses ticket proposals from the input,
-  /// stages them in the board for user review, and waits for
-  /// the review to complete via the board's [TicketBoardState.onBulkReviewComplete] stream.
-  void registerTicketTools(TicketBoardState board) {
+  /// stages them for user review, and waits for
+  /// the review to complete via [BulkProposalState.onBulkReviewComplete] stream.
+  void registerTicketTools(BulkProposalState proposalState) {
     _registry.register(InternalToolDefinition(
       name: 'create_ticket',
       description:
@@ -97,7 +97,7 @@ class InternalToolsService extends ChangeNotifier {
         },
         'required': ['tickets'],
       },
-      handler: (input) => _handleCreateTicket(board, input),
+      handler: (input) => _handleCreateTicket(proposalState, input),
     ));
   }
 
@@ -107,7 +107,7 @@ class InternalToolsService extends ChangeNotifier {
   }
 
   Future<InternalToolResult> _handleCreateTicket(
-    TicketBoardState board,
+    BulkProposalState proposalState,
     Map<String, dynamic> input,
   ) async {
     // Parse tickets array
@@ -170,7 +170,7 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     // Listen for the next bulk review completion event
-    final resultFuture = board.onBulkReviewComplete.first.then((result) {
+    final resultFuture = proposalState.onBulkReviewComplete.first.then((result) {
       final total = result.approvedCount + result.rejectedCount;
       final String resultText;
       if (result.approvedCount == 0) {
@@ -189,7 +189,7 @@ class InternalToolsService extends ChangeNotifier {
     });
 
     // Stage proposals
-    board.proposeBulk(
+    proposalState.proposeBulk(
       proposals,
       sourceChatId: 'mcp-tool',
       sourceChatName: 'Agent',

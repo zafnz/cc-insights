@@ -14,7 +14,7 @@ import 'worktree_service.dart';
 /// Handles creating (or selecting) a worktree, creating a chat, composing the
 /// initial prompt with ticket context, and linking everything together.
 class TicketDispatchService {
-  final TicketBoardState _ticketBoard;
+  final TicketRepository _ticketBoard;
   final ProjectState _project;
   final SelectionState _selection;
   final WorktreeService _worktreeService;
@@ -22,7 +22,7 @@ class TicketDispatchService {
 
   /// Creates a [TicketDispatchService] with required dependencies.
   TicketDispatchService({
-    required TicketBoardState ticketBoard,
+    required TicketRepository ticketBoard,
     required ProjectState project,
     required SelectionState selection,
     required WorktreeService worktreeService,

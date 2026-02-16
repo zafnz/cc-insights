@@ -41,8 +41,8 @@ Returns a direct reference to the internal mutable `Set`. External code can call
 | `panels/information_panel.dart` | 1,735 | Branch info, 6+ git operations, conflict resolution, dialogs | Not yet addressed |
 | ~~`widgets/permission_dialog.dart`~~ | ~~1,578~~ | ~~Tool-specific builders, suggestion handlers, 3 footer variants~~ | FIXED — split into 4 part files |
 | ~~`services/persistence_service.dart`~~ | ~~1,565~~ | ~~7 separate concerns: projects index, chat meta, chat history, cost tracking, tickets, archiving, worktree tags~~ | FIXED — extracted CostTrackingService + TicketStorageService; restructured remainder into base+mixins |
-| `services/event_handler.dart` | ~~1,106~~ | ~~Event routing, streaming state, title generation, tool tracking maps~~ | FIXED — extracted ChatTitleService, StreamingProcessor, TicketEventBridge; split remainder into part files (lifecycle + subagents) |
-| `state/ticket_board_state.dart` | 1,076 | CRUD, selection, filtering, grouping, view modes, DAG validation, bulk proposals, persistence, callbacks | Not yet addressed |
+| ~~`services/event_handler.dart`~~ | ~~1,106~~ | ~~Event routing, streaming state, title generation, tool tracking maps~~ | FIXED — extracted ChatTitleService, StreamingProcessor, TicketEventBridge; split remainder into part files (lifecycle + subagents) |
+| ~~`state/ticket_board_state.dart`~~ | ~~1,076~~ | ~~CRUD, selection, filtering, grouping, view modes, DAG validation, bulk proposals, persistence, callbacks~~ | FIXED — decomposed into TicketRepository (~550 lines), TicketViewState (~350 lines), BulkProposalState (~220 lines) |
 
 ---
 

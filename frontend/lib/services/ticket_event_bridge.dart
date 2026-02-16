@@ -13,15 +13,15 @@ import '../state/ticket_board_state.dart';
 /// check if ticketBoard is non-null, get linked tickets, update status.
 /// This has zero interaction with any other event processing state.
 class TicketEventBridge {
-  TicketBoardState? _ticketBoard;
+  TicketRepository? _ticketBoard;
 
-  TicketEventBridge({TicketBoardState? ticketBoard})
+  TicketEventBridge({TicketRepository? ticketBoard})
       : _ticketBoard = ticketBoard;
 
   /// The current ticket board state, if any.
-  TicketBoardState? get ticketBoard => _ticketBoard;
+  TicketRepository? get ticketBoard => _ticketBoard;
 
-  set ticketBoard(TicketBoardState? value) => _ticketBoard = value;
+  set ticketBoard(TicketRepository? value) => _ticketBoard = value;
 
   /// Updates linked tickets when a main agent turn completes.
   ///

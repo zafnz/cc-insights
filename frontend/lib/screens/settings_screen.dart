@@ -24,7 +24,7 @@ import '../services/cli_availability_service.dart';
 import '../services/internal_tools_service.dart';
 import '../services/runtime_config.dart';
 import '../services/settings_service.dart';
-import '../state/ticket_board_state.dart';
+import '../state/bulk_proposal_state.dart';
 import '../state/theme_state.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/security_config_group.dart';
@@ -267,7 +267,7 @@ class _SettingsContent extends StatelessWidget {
       unawaited(settings.setValue(definition.key, value));
       final tools = context.read<InternalToolsService>();
       if (value == true) {
-        tools.registerTicketTools(context.read<TicketBoardState>());
+        tools.registerTicketTools(context.read<BulkProposalState>());
       } else {
         tools.unregisterTicketTools();
       }

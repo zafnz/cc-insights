@@ -7,7 +7,8 @@ import '../panels/ticket_create_form.dart';
 import '../panels/ticket_detail_panel.dart';
 import '../panels/ticket_graph_view.dart';
 import '../panels/ticket_list_panel.dart';
-import '../state/ticket_board_state.dart';
+import '../state/bulk_proposal_state.dart';
+import '../state/ticket_view_state.dart';
 
 /// Ticket management screen with list and detail panels.
 ///
@@ -22,7 +23,8 @@ class TicketScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoard = context.watch<TicketBoardState>();
+    final viewState = context.watch<TicketViewState>();
+    final bulkProposal = context.watch<BulkProposalState>();
 
     return Row(
       children: [
@@ -40,21 +42,21 @@ class TicketScreen extends StatelessWidget {
           thickness: 1,
           color: colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
-        // Right panel: graph view or detail mode
+        // Right panel: bulk review, graph view, or detail mode
         Expanded(
           child: Material(
             color: colorScheme.surface,
-            child: ticketBoard.viewMode == TicketViewMode.graph
-                ? const TicketGraphView()
-                : switch (ticketBoard.detailMode) {
-                    TicketDetailMode.detail => const TicketDetailPanel(),
-                    TicketDetailMode.edit => TicketCreateForm(
-                        editingTicket: ticketBoard.selectedTicket,
-                      ),
-                    TicketDetailMode.create => const TicketCreateForm(),
-                    TicketDetailMode.bulkReview =>
-                      const TicketBulkReviewPanel(),
-                  },
+            child: bulkProposal.hasActiveProposal
+                ? const TicketBulkReviewPanel()
+                : viewState.viewMode == TicketViewMode.graph
+                    ? const TicketGraphView()
+                    : switch (viewState.detailMode) {
+                        TicketDetailMode.detail => const TicketDetailPanel(),
+                        TicketDetailMode.edit => TicketCreateForm(
+                            editingTicket: viewState.selectedTicket,
+                          ),
+                        TicketDetailMode.create => const TicketCreateForm(),
+                      },
           ),
         ),
       ],

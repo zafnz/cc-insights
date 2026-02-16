@@ -5,7 +5,9 @@ import 'package:cc_insights_v2/panels/ticket_create_form.dart';
 import 'package:cc_insights_v2/panels/ticket_detail_panel.dart';
 import 'package:cc_insights_v2/panels/ticket_list_panel.dart';
 import 'package:cc_insights_v2/screens/ticket_screen.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -14,12 +16,16 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoardState;
+  late TicketRepository repo;
+  late TicketViewState viewState;
+  late BulkProposalState bulkState;
   late Future<void> Function() cleanupConfig;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
-    ticketBoardState = resources.track(TicketBoardState('test-ticket-screen'));
+    repo = resources.track(TicketRepository('test-ticket-screen'));
+    viewState = resources.track(TicketViewState(repo));
+    bulkState = resources.track(BulkProposalState(repo));
   });
 
   tearDown(() async {
@@ -29,8 +35,12 @@ void main() {
 
   Widget createTestApp() {
     return MaterialApp(
-      home: ChangeNotifierProvider<TicketBoardState>.value(
-        value: ticketBoardState,
+      home: MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TicketRepository>.value(value: repo),
+          ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
+        ],
         child: const Scaffold(body: TicketScreen()),
       ),
     );
@@ -78,7 +88,7 @@ void main() {
     await safePumpAndSettle(tester);
 
     // Switch to create mode
-    ticketBoardState.showCreateForm();
+    viewState.showCreateForm();
     await safePumpAndSettle(tester);
 
     // TicketCreateForm should be visible
@@ -102,7 +112,7 @@ void main() {
     await safePumpAndSettle(tester);
 
     // Switch to create mode
-    ticketBoardState.showCreateForm();
+    viewState.showCreateForm();
     await safePumpAndSettle(tester);
 
     // Verify we're in create mode
@@ -113,7 +123,7 @@ void main() {
     await safePumpAndSettle(tester);
 
     // Should be back to detail mode
-    expect(ticketBoardState.detailMode, equals(TicketDetailMode.detail));
+    expect(viewState.detailMode, equals(TicketDetailMode.detail));
     expect(find.byType(TicketDetailPanel), findsOneWidget);
     expect(find.byType(TicketCreateForm), findsNothing);
   });
@@ -152,13 +162,13 @@ void main() {
     await safePumpAndSettle(tester);
 
     // The ticket should have been created
-    expect(ticketBoardState.tickets.length, 1);
-    expect(ticketBoardState.tickets.first.title, 'Implement dark mode');
+    expect(repo.tickets.length, 1);
+    expect(repo.tickets.first.title, 'Implement dark mode');
 
     // After creation, selectTicket is called which sets detail mode
-    expect(ticketBoardState.detailMode, TicketDetailMode.detail);
-    expect(ticketBoardState.selectedTicket, isNotNull);
-    expect(ticketBoardState.selectedTicket!.title, 'Implement dark mode');
+    expect(viewState.detailMode, TicketDetailMode.detail);
+    expect(viewState.selectedTicket, isNotNull);
+    expect(viewState.selectedTicket!.title, 'Implement dark mode');
 
     // The detail panel should now show the ticket
     expect(find.byType(TicketDetailPanel), findsOneWidget);
@@ -175,30 +185,30 @@ void main() {
   // 6. Active ticket count (state-only test)
   // ---------------------------------------------------------------------------
   testWidgets('activeCount tracks active tickets correctly', (tester) async {
-    ticketBoardState.createTicket(
+    repo.createTicket(
       title: 'Active Task 1',
       kind: TicketKind.feature,
       status: TicketStatus.active,
     );
-    ticketBoardState.createTicket(
+    repo.createTicket(
       title: 'Active Task 2',
       kind: TicketKind.feature,
       status: TicketStatus.active,
     );
-    ticketBoardState.createTicket(
+    repo.createTicket(
       title: 'Completed Task',
       kind: TicketKind.feature,
       status: TicketStatus.completed,
     );
 
-    expect(ticketBoardState.activeCount, equals(2));
+    expect(repo.activeCount, equals(2));
   });
 
   // ---------------------------------------------------------------------------
   // 7. Selecting a ticket in list shows it in detail panel
   // ---------------------------------------------------------------------------
   testWidgets('selecting a ticket shows its details in the right panel', (tester) async {
-    ticketBoardState.createTicket(
+    repo.createTicket(
       title: 'Auth token refresh',
       kind: TicketKind.feature,
       category: 'Auth',

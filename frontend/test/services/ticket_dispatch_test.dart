@@ -4,7 +4,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/services/ticket_dispatch_service.dart';
 import 'package:cc_insights_v2/services/worktree_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
-import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_board_state.dart' show TicketRepository;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_helpers.dart';
@@ -75,10 +75,10 @@ void main() {
   });
 
   group('buildTicketPrompt', () {
-    late TicketBoardState ticketBoard;
+    late TicketRepository ticketBoard;
 
     setUp(() {
-      ticketBoard = resources.track(TicketBoardState('test-prompt-project'));
+      ticketBoard = resources.track(TicketRepository('test-prompt-project'));
     });
 
     test('includes ticket ID and title', () {
@@ -213,9 +213,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - linkWorktree', () {
+  group('TicketRepository - linkWorktree', () {
     test('adds linked worktree to ticket', () {
-      final state = resources.track(TicketBoardState('test-link-wt'));
+      final state = resources.track(TicketRepository('test-link-wt'));
       final ticket = state.createTicket(
         title: 'Test linking',
         kind: TicketKind.feature,
@@ -230,7 +230,7 @@ void main() {
     });
 
     test('does not duplicate worktree links', () {
-      final state = resources.track(TicketBoardState('test-link-wt-dup'));
+      final state = resources.track(TicketRepository('test-link-wt-dup'));
       final ticket = state.createTicket(
         title: 'Test dup linking',
         kind: TicketKind.feature,
@@ -244,7 +244,7 @@ void main() {
     });
 
     test('notifies listeners when worktree linked', () {
-      final state = resources.track(TicketBoardState('test-link-wt-notify'));
+      final state = resources.track(TicketRepository('test-link-wt-notify'));
       final ticket = state.createTicket(
         title: 'Test notify',
         kind: TicketKind.feature,
@@ -259,9 +259,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - linkChat', () {
+  group('TicketRepository - linkChat', () {
     test('adds linked chat to ticket', () {
-      final state = resources.track(TicketBoardState('test-link-chat'));
+      final state = resources.track(TicketRepository('test-link-chat'));
       final ticket = state.createTicket(
         title: 'Test chat linking',
         kind: TicketKind.feature,
@@ -277,7 +277,7 @@ void main() {
     });
 
     test('does not duplicate chat links', () {
-      final state = resources.track(TicketBoardState('test-link-chat-dup'));
+      final state = resources.track(TicketRepository('test-link-chat-dup'));
       final ticket = state.createTicket(
         title: 'Test dup chat',
         kind: TicketKind.feature,
@@ -291,7 +291,7 @@ void main() {
     });
 
     test('notifies listeners when chat linked', () {
-      final state = resources.track(TicketBoardState('test-link-chat-notify'));
+      final state = resources.track(TicketRepository('test-link-chat-notify'));
       final ticket = state.createTicket(
         title: 'Test notify',
         kind: TicketKind.feature,
@@ -306,9 +306,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - getTicketsForChat', () {
+  group('TicketRepository - getTicketsForChat', () {
     test('returns tickets linked to a chat', () {
-      final state = resources.track(TicketBoardState('test-chat-lookup'));
+      final state = resources.track(TicketRepository('test-chat-lookup'));
       final ticket1 = state.createTicket(
         title: 'Ticket A',
         kind: TicketKind.feature,
@@ -331,7 +331,7 @@ void main() {
     });
 
     test('returns empty list for unknown chat', () {
-      final state = resources.track(TicketBoardState('test-chat-empty'));
+      final state = resources.track(TicketRepository('test-chat-empty'));
       state.createTicket(
         title: 'Some ticket',
         kind: TicketKind.feature,
@@ -342,9 +342,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - linking persistence', () {
+  group('TicketRepository - linking persistence', () {
     test('linkWorktree triggers auto-save', () async {
-      final state = resources.track(TicketBoardState('test-link-persist'));
+      final state = resources.track(TicketRepository('test-link-persist'));
       final ticket = state.createTicket(
         title: 'Persist test',
         kind: TicketKind.feature,
@@ -356,7 +356,7 @@ void main() {
       await state.save();
 
       // Reload in a fresh state
-      final state2 = resources.track(TicketBoardState('test-link-persist'));
+      final state2 = resources.track(TicketRepository('test-link-persist'));
       await state2.load();
 
       final reloaded = state2.getTicket(ticket.id)!;
@@ -365,7 +365,7 @@ void main() {
     });
 
     test('linkChat triggers auto-save', () async {
-      final state = resources.track(TicketBoardState('test-link-chat-persist'));
+      final state = resources.track(TicketRepository('test-link-chat-persist'));
       final ticket = state.createTicket(
         title: 'Persist chat test',
         kind: TicketKind.feature,
@@ -375,7 +375,7 @@ void main() {
 
       await state.save();
 
-      final state2 = resources.track(TicketBoardState('test-link-chat-persist'));
+      final state2 = resources.track(TicketRepository('test-link-chat-persist'));
       await state2.load();
 
       final reloaded = state2.getTicket(ticket.id)!;
@@ -388,7 +388,7 @@ void main() {
 /// Creates a TicketDispatchService for testing prompt building.
 ///
 /// Uses a minimal setup since only [buildTicketPrompt] is being tested.
-TicketDispatchService _createTestService(TicketBoardState ticketBoard) {
+TicketDispatchService _createTestService(TicketRepository ticketBoard) {
   final project = ProjectState(
     const ProjectData(name: 'test', repoRoot: '/tmp/test-repo'),
     WorktreeState(const WorktreeData(

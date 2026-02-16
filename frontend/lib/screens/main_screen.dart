@@ -18,7 +18,7 @@ import '../services/settings_service.dart';
 import '../services/window_layout_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
-import '../state/ticket_board_state.dart';
+import '../state/bulk_proposal_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/restore_worktree_dialog.dart';
@@ -66,7 +66,7 @@ class _MainScreenState extends State<MainScreen> {
   // Tracked listeners for safe disposal (avoids context.read in dispose)
   BackendService? _backendService;
   MenuActionService? _menuActionService;
-  TicketBoardState? _ticketBoardState;
+  BulkProposalState? _bulkProposalState;
 
   // Debounce timer for saving panel layout after divider drag
   Timer? _layoutSaveDebounce;
@@ -98,7 +98,7 @@ class _MainScreenState extends State<MainScreen> {
       _setupBackendErrorListener();
       _setupMenuActionListener();
       _setupUnhandledErrorListener();
-      _setupTicketBoardListener();
+      _setupBulkProposalListener();
       _syncMergeStateToMenu();
       _showCliWarnings();
     });
@@ -173,18 +173,17 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _setupTicketBoardListener() {
-    final ticketBoard = context.read<TicketBoardState>();
-    _ticketBoardState = ticketBoard;
-    ticketBoard.addListener(_onTicketBoardChanged);
+  void _setupBulkProposalListener() {
+    final bulkProposal = context.read<BulkProposalState>();
+    _bulkProposalState = bulkProposal;
+    bulkProposal.addListener(_onBulkProposalChanged);
   }
 
-  void _onTicketBoardChanged() {
+  void _onBulkProposalChanged() {
     if (!mounted) return;
-    final ticketBoard = context.read<TicketBoardState>();
-    // Auto-navigate to ticket screen when bulk review mode is entered
-    if (ticketBoard.detailMode == TicketDetailMode.bulkReview &&
-        _selectedNavIndex != 4) {
+    final bulkProposal = context.read<BulkProposalState>();
+    // Auto-navigate to ticket screen when bulk proposal is active
+    if (bulkProposal.hasActiveProposal && _selectedNavIndex != 4) {
       _handleNavigationChange(4);
     }
   }
@@ -509,7 +508,7 @@ class _MainScreenState extends State<MainScreen> {
     _controller.removeListener(_onLayoutChanged);
     _backendService?.removeListener(_onBackendChanged);
     _menuActionService?.removeListener(_onMenuAction);
-    _ticketBoardState?.removeListener(_onTicketBoardChanged);
+    _bulkProposalState?.removeListener(_onBulkProposalChanged);
     _controller.dispose();
     super.dispose();
   }

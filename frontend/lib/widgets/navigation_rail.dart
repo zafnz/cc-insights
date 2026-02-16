@@ -18,7 +18,7 @@ class AppNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final ticketBoardState = context.watch<TicketBoardState>();
+    final ticketBoard = context.watch<TicketRepository>();
 
     return Container(
       width: 48,
@@ -51,8 +51,8 @@ class AppNavigationRail extends StatelessWidget {
             tooltip: 'Tickets',
             isSelected: selectedIndex == 4,
             onTap: () => onDestinationSelected(4),
-            badge: ticketBoardState.activeCount > 0
-                ? ticketBoardState.activeCount.toString()
+            badge: ticketBoard.activeCount > 0
+                ? ticketBoard.activeCount.toString()
                 : null,
           ),
           const SizedBox(height: 4),

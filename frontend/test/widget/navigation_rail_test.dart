@@ -8,10 +8,10 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoardState;
+  late TicketRepository repo;
 
   setUp(() {
-    ticketBoardState = TicketBoardState('test-project');
+    repo = TicketRepository('test-project');
   });
 
   tearDown(() async {
@@ -24,8 +24,8 @@ void main() {
   }) {
     return MaterialApp(
       home: Scaffold(
-        body: ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoardState,
+        body: ChangeNotifierProvider<TicketRepository>.value(
+          value: repo,
           child: AppNavigationRail(
             selectedIndex: selectedIndex,
             onDestinationSelected: onDestinationSelected,

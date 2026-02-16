@@ -12,6 +12,7 @@ import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/widgets/security_config_group.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,7 +27,8 @@ void main() {
   late MockBackendService mockBackend;
   late FakeCliAvailabilityService fakeCliAvailability;
   late InternalToolsService internalToolsService;
-  late TicketBoardState ticketBoardState;
+  late TicketRepository repo;
+  late BulkProposalState bulkState;
   late ProjectState projectState;
 
   setUp(() {
@@ -39,7 +41,8 @@ void main() {
     mockBackend = MockBackendService();
     fakeCliAvailability = FakeCliAvailabilityService();
     internalToolsService = InternalToolsService();
-    ticketBoardState = TicketBoardState('test-project');
+    repo = TicketRepository('test-project');
+    bulkState = BulkProposalState(repo);
     projectState = ProjectState(
       const ProjectData(name: 'Test', repoRoot: '/test'),
       WorktreeState(
@@ -63,7 +66,8 @@ void main() {
     settingsService.dispose();
     mockBackend.dispose();
     internalToolsService.dispose();
-    ticketBoardState.dispose();
+    repo.dispose();
+    bulkState.dispose();
     projectState.dispose();
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
@@ -81,8 +85,11 @@ void main() {
         ChangeNotifierProvider<InternalToolsService>.value(
           value: internalToolsService,
         ),
-        ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoardState,
+        ChangeNotifierProvider<TicketRepository>.value(
+          value: repo,
+        ),
+        ChangeNotifierProvider<BulkProposalState>.value(
+          value: bulkState,
         ),
         ChangeNotifierProvider<ProjectState>.value(value: projectState),
       ],
@@ -374,7 +381,7 @@ void main() {
 
       testWidgets('toggling off unregisters ticket tools', (tester) async {
         // Register tools first
-        internalToolsService.registerTicketTools(ticketBoardState);
+        internalToolsService.registerTicketTools(bulkState);
         expect(internalToolsService.registry['create_ticket'], isNotNull);
 
         await tester.pumpWidget(createTestApp());

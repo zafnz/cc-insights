@@ -1,6 +1,7 @@
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_bulk_review_panel.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,10 +11,12 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoard;
+  late TicketRepository repo;
+  late BulkProposalState bulkState;
 
   setUp(() {
-    ticketBoard = resources.track(TicketBoardState('test-bulk-review'));
+    repo = resources.track(TicketRepository('test-bulk-review'));
+    bulkState = resources.track(BulkProposalState(repo));
   });
 
   tearDown(() async {
@@ -22,7 +25,7 @@ void main() {
 
   /// Helper to create a set of proposals and enter bulk review mode.
   List<TicketData> createProposals() {
-    return ticketBoard.proposeBulk(
+    return bulkState.proposeBulk(
       [
         const TicketProposal(
           title: 'Set up auth service',
@@ -52,8 +55,11 @@ void main() {
   Widget createTestApp() {
     return MaterialApp(
       home: Scaffold(
-        body: ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoard,
+        body: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TicketRepository>.value(value: repo),
+            ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
+          ],
           child: const TicketBulkReviewPanel(),
         ),
       ),
@@ -98,7 +104,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // All should be checked initially
-      expect(ticketBoard.proposalCheckedIds.length, 3);
+      expect(bulkState.proposalCheckedIds.length, 3);
 
       // Find the first checkbox and tap it
       final checkboxes = find.byType(Checkbox);
@@ -109,10 +115,10 @@ void main() {
 
       // First ticket should now be unchecked
       expect(
-        ticketBoard.proposalCheckedIds.contains(proposals[0].id),
+        bulkState.proposalCheckedIds.contains(proposals[0].id),
         isFalse,
       );
-      expect(ticketBoard.proposalCheckedIds.length, 2);
+      expect(bulkState.proposalCheckedIds.length, 2);
     });
 
     testWidgets('unchecked rows have reduced opacity', (tester) async {
@@ -120,7 +126,7 @@ void main() {
       final proposals = createProposals();
 
       // Uncheck the first proposal
-      ticketBoard.toggleProposalChecked(proposals[0].id);
+      bulkState.toggleProposalChecked(proposals[0].id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -142,8 +148,8 @@ void main() {
       createProposals();
 
       // Uncheck all first
-      ticketBoard.setProposalAllChecked(false);
-      expect(ticketBoard.proposalCheckedIds.length, 0);
+      bulkState.setProposalAllChecked(false);
+      expect(bulkState.proposalCheckedIds.length, 0);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -152,7 +158,7 @@ void main() {
       await tester.tap(find.byKey(TicketBulkReviewKeys.selectAllButton));
       await safePumpAndSettle(tester);
 
-      expect(ticketBoard.proposalCheckedIds.length, 3);
+      expect(bulkState.proposalCheckedIds.length, 3);
     });
 
     testWidgets('Deselect All unchecks all proposals', (tester) async {
@@ -160,7 +166,7 @@ void main() {
       createProposals();
 
       // All should be checked initially
-      expect(ticketBoard.proposalCheckedIds.length, 3);
+      expect(bulkState.proposalCheckedIds.length, 3);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -169,7 +175,7 @@ void main() {
       await tester.tap(find.byKey(TicketBulkReviewKeys.deselectAllButton));
       await safePumpAndSettle(tester);
 
-      expect(ticketBoard.proposalCheckedIds.length, 0);
+      expect(bulkState.proposalCheckedIds.length, 0);
     });
 
     testWidgets('row tap opens inline edit card', (tester) async {
@@ -195,7 +201,7 @@ void main() {
       final proposals = createProposals();
 
       // Set editing to the second proposal
-      ticketBoard.setProposalEditing(proposals[1].id);
+      bulkState.setProposalEditing(proposals[1].id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -229,7 +235,7 @@ void main() {
       expect(find.text('Approve 3'), findsOneWidget);
 
       // Uncheck one
-      ticketBoard.toggleProposalChecked(proposals[0].id);
+      bulkState.toggleProposalChecked(proposals[0].id);
       await tester.pump();
 
       // Should now show 2
@@ -241,7 +247,7 @@ void main() {
       final proposals = createProposals();
 
       // Uncheck the last one so we can verify the behavior
-      ticketBoard.toggleProposalChecked(proposals[2].id);
+      bulkState.toggleProposalChecked(proposals[2].id);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
@@ -254,10 +260,9 @@ void main() {
       // - Checked tickets (0 and 1) should be promoted to ready
       // - Unchecked ticket (2) should be deleted
       // - Detail mode should return to detail
-      expect(ticketBoard.detailMode, TicketDetailMode.detail);
-      expect(ticketBoard.getTicket(proposals[0].id)?.status, TicketStatus.ready);
-      expect(ticketBoard.getTicket(proposals[1].id)?.status, TicketStatus.ready);
-      expect(ticketBoard.getTicket(proposals[2].id), isNull);
+      expect(repo.getTicket(proposals[0].id)?.status, TicketStatus.ready);
+      expect(repo.getTicket(proposals[1].id)?.status, TicketStatus.ready);
+      expect(repo.getTicket(proposals[2].id), isNull);
     });
 
     testWidgets('tapping Reject All calls rejectAll', (tester) async {
@@ -274,11 +279,10 @@ void main() {
       // After rejection:
       // - All proposal tickets should be deleted
       // - Detail mode should return to detail
-      expect(ticketBoard.detailMode, TicketDetailMode.detail);
-      expect(ticketBoard.getTicket(proposals[0].id), isNull);
-      expect(ticketBoard.getTicket(proposals[1].id), isNull);
-      expect(ticketBoard.getTicket(proposals[2].id), isNull);
-      expect(ticketBoard.tickets, isEmpty);
+      expect(repo.getTicket(proposals[0].id), isNull);
+      expect(repo.getTicket(proposals[1].id), isNull);
+      expect(repo.getTicket(proposals[2].id), isNull);
+      expect(repo.tickets, isEmpty);
     });
   });
 }

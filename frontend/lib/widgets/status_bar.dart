@@ -463,7 +463,7 @@ class _TicketStats extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final ticketBoard = context.watch<TicketBoardState>();
+    final ticketBoard = context.watch<TicketRepository>();
 
     final totalCount = ticketBoard.tickets.length;
     final activeCount = ticketBoard.tickets

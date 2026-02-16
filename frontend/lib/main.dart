@@ -50,7 +50,9 @@ import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'state/theme_state.dart';
 import 'state/rate_limit_state.dart';
+import 'state/bulk_proposal_state.dart';
 import 'state/ticket_board_state.dart';
+import 'state/ticket_view_state.dart';
 import 'testing/mock_backend.dart';
 import 'testing/mock_data.dart';
 import 'widgets/dialog_observer.dart';
@@ -1217,44 +1219,55 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ChangeNotifierProvider<MenuActionService>.value(
           value: _menuActionService,
         ),
-        // Ticket board state for project management
-        ChangeNotifierProxyProvider<ProjectState, TicketBoardState>(
+        // Ticket repository (data + domain logic + persistence)
+        ChangeNotifierProxyProvider<ProjectState, TicketRepository>(
           create: (context) {
             final projectState = context.read<ProjectState>();
-            return _initTicketBoardState(context, projectState);
+            return _initTicketRepository(context, projectState);
           },
           update: (context, project, previous) {
             if (previous != null) return previous;
-            return _initTicketBoardState(context, project);
+            return _initTicketRepository(context, project);
           },
+        ),
+        // Ticket view state (selection, filters, computed data)
+        ChangeNotifierProxyProvider<TicketRepository, TicketViewState>(
+          create: (context) => TicketViewState(context.read<TicketRepository>()),
+          update: (context, repo, previous) => previous ?? TicketViewState(repo),
+        ),
+        // Bulk proposal state (proposal workflow)
+        ChangeNotifierProxyProvider<TicketRepository, BulkProposalState>(
+          create: (context) {
+            final state = BulkProposalState(context.read<TicketRepository>());
+            if (context.read<SettingsService>().getEffectiveValue<bool>(
+              'projectMgmt.agentTicketTools',
+            )) {
+              context.read<InternalToolsService>().registerTicketTools(state);
+            }
+            return state;
+          },
+          update: (context, repo, previous) => previous ?? BulkProposalState(repo),
         ),
       ],
       child: child,
     );
   }
 
-  /// Creates and wires up a [TicketBoardState] for the given project.
-  TicketBoardState _initTicketBoardState(
+  /// Creates and wires up a [TicketRepository] for the given project.
+  TicketRepository _initTicketRepository(
     BuildContext context,
     ProjectState project,
   ) {
     final projectId = PersistenceService.generateProjectId(
       project.data.repoRoot,
     );
-    final ticketBoardState = TicketBoardState(
+    final repo = TicketRepository(
       projectId,
       storage: TicketStorageService(),
     );
-    context.read<EventHandler>().ticketBoard = ticketBoardState;
-    if (context.read<SettingsService>().getEffectiveValue<bool>(
-      'projectMgmt.agentTicketTools',
-    )) {
-      context.read<InternalToolsService>().registerTicketTools(
-        ticketBoardState,
-      );
-    }
-    ticketBoardState.load();
-    return ticketBoardState;
+    context.read<EventHandler>().ticketBoard = repo;
+    repo.load();
+    return repo;
   }
 
   /// Build a compact desktop-appropriate theme.

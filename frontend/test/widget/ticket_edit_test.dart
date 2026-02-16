@@ -4,7 +4,9 @@ import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_create_form.dart';
 import 'package:cc_insights_v2/panels/ticket_detail_panel.dart';
 import 'package:cc_insights_v2/screens/ticket_screen.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
+import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -13,12 +15,16 @@ import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
-  late TicketBoardState ticketBoardState;
+  late TicketRepository repo;
+  late TicketViewState viewState;
+  late BulkProposalState bulkState;
   late Future<void> Function() cleanupConfig;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
-    ticketBoardState = resources.track(TicketBoardState('test-edit'));
+    repo = resources.track(TicketRepository('test-edit'));
+    viewState = resources.track(TicketViewState(repo));
+    bulkState = resources.track(BulkProposalState(repo));
   });
 
   tearDown(() async {
@@ -29,8 +35,12 @@ void main() {
   /// Creates a test app with the full TicketScreen for end-to-end edit flows.
   Widget createScreenTestApp() {
     return MaterialApp(
-      home: ChangeNotifierProvider<TicketBoardState>.value(
-        value: ticketBoardState,
+      home: MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TicketRepository>.value(value: repo),
+          ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
+        ],
         child: const Scaffold(body: TicketScreen()),
       ),
     );
@@ -40,8 +50,11 @@ void main() {
   Widget createEditFormTestApp(TicketData ticket) {
     return MaterialApp(
       home: Scaffold(
-        body: ChangeNotifierProvider<TicketBoardState>.value(
-          value: ticketBoardState,
+        body: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TicketRepository>.value(value: repo),
+            ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ],
           child: TicketCreateForm(editingTicket: ticket),
         ),
       ),
@@ -58,12 +71,12 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      ticketBoardState.createTicket(
+      repo.createTicket(
         title: 'Test ticket for editing',
         kind: TicketKind.feature,
         priority: TicketPriority.high,
       );
-      ticketBoardState.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createScreenTestApp());
       await safePumpAndSettle(tester);
@@ -77,7 +90,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Should switch to edit mode, showing the form
-      expect(ticketBoardState.detailMode, TicketDetailMode.edit);
+      expect(viewState.detailMode, TicketDetailMode.edit);
       expect(find.byType(TicketCreateForm), findsOneWidget);
       expect(find.text('Edit Ticket'), findsOneWidget);
 
@@ -94,7 +107,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      final ticket = ticketBoardState.createTicket(
+      final ticket = repo.createTicket(
         title: 'Pre-populated title',
         kind: TicketKind.bugfix,
         priority: TicketPriority.critical,
@@ -144,7 +157,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      final ticket = ticketBoardState.createTicket(
+      final ticket = repo.createTicket(
         title: 'Original title',
         kind: TicketKind.feature,
         priority: TicketPriority.medium,
@@ -171,14 +184,14 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Verify the ticket was updated
-      final updated = ticketBoardState.getTicket(ticket.id);
+      final updated = repo.getTicket(ticket.id);
       expect(updated, isNotNull);
       expect(updated!.title, 'Updated title');
       expect(updated.description, 'Updated description');
 
       // Should have selected the ticket and returned to detail mode
-      expect(ticketBoardState.selectedTicket?.id, ticket.id);
-      expect(ticketBoardState.detailMode, TicketDetailMode.detail);
+      expect(viewState.selectedTicket?.id, ticket.id);
+      expect(viewState.detailMode, TicketDetailMode.detail);
     });
 
     // -------------------------------------------------------------------------
@@ -190,15 +203,15 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      final ticket = ticketBoardState.createTicket(
+      final ticket = repo.createTicket(
         title: 'Unchanged title',
         kind: TicketKind.feature,
         priority: TicketPriority.medium,
       );
 
       // Switch to edit mode so we can verify the cancel reverts
-      ticketBoardState.selectTicket(ticket.id);
-      ticketBoardState.setDetailMode(TicketDetailMode.edit);
+      viewState.selectTicket(ticket.id);
+      viewState.setDetailMode(TicketDetailMode.edit);
 
       await tester.pumpWidget(createEditFormTestApp(ticket));
       await safePumpAndSettle(tester);
@@ -214,10 +227,10 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Detail mode should be restored
-      expect(ticketBoardState.detailMode, TicketDetailMode.detail);
+      expect(viewState.detailMode, TicketDetailMode.detail);
 
       // Ticket should NOT have been updated
-      final unchanged = ticketBoardState.getTicket(ticket.id);
+      final unchanged = repo.getTicket(ticket.id);
       expect(unchanged!.title, 'Unchanged title');
     });
 
@@ -230,7 +243,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      final ticket = ticketBoardState.createTicket(
+      final ticket = repo.createTicket(
         title: 'Status change test',
         kind: TicketKind.feature,
         status: TicketStatus.ready,
@@ -255,7 +268,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Verify the status was updated
-      final updated = ticketBoardState.getTicket(ticket.id);
+      final updated = repo.getTicket(ticket.id);
       expect(updated!.status, TicketStatus.active);
     });
 
@@ -268,12 +281,12 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      ticketBoardState.createTicket(
+      repo.createTicket(
         title: 'E2E edit test',
         kind: TicketKind.feature,
         priority: TicketPriority.low,
       );
-      ticketBoardState.selectTicket(1);
+      viewState.selectTicket(1);
 
       await tester.pumpWidget(createScreenTestApp());
       await safePumpAndSettle(tester);
@@ -307,7 +320,7 @@ void main() {
       expect(find.text('E2E edit updated'), findsWidgets);
 
       // Verify state
-      expect(ticketBoardState.getTicket(1)!.title, 'E2E edit updated');
+      expect(repo.getTicket(1)!.title, 'E2E edit updated');
     });
 
     // -------------------------------------------------------------------------
@@ -321,8 +334,11 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: ChangeNotifierProvider<TicketBoardState>.value(
-            value: ticketBoardState,
+          body: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<TicketRepository>.value(value: repo),
+              ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+            ],
             child: const TicketCreateForm(),
           ),
         ),

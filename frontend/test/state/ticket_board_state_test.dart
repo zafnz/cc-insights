@@ -18,9 +18,9 @@ void main() {
     await cleanupConfig();
   });
 
-  group('TicketBoardState - CRUD', () {
+  group('TicketRepository - CRUD', () {
     test('createTicket assigns IDs sequentially', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(
         title: 'First ticket',
@@ -38,7 +38,7 @@ void main() {
     });
 
     test('createTicket sets timestamps', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final before = DateTime.now();
 
       final ticket = state.createTicket(
@@ -54,7 +54,7 @@ void main() {
     });
 
     test('createTicket defaults status to ready', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'Test ticket',
@@ -65,7 +65,7 @@ void main() {
     });
 
     test('createTicket returns created ticket', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'Test ticket',
@@ -83,7 +83,7 @@ void main() {
     });
 
     test('updateTicket modifies ticket and updates timestamp', () async {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'Original',
@@ -103,7 +103,7 @@ void main() {
     });
 
     test('updateTicket with non-existent ID does nothing', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       state.createTicket(title: 'Test', kind: TicketKind.feature);
 
@@ -115,7 +115,7 @@ void main() {
     });
 
     test('deleteTicket removes ticket', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'To delete',
@@ -130,7 +130,7 @@ void main() {
     });
 
     test('deleteTicket removes from dependsOn lists', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(
         title: 'Dependency',
@@ -150,24 +150,9 @@ void main() {
       expect(state.getTicket(ticket2.id)!.dependsOn, isEmpty);
     });
 
-    test('deleteTicket clears selection if deleted ticket was selected', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      final ticket = state.createTicket(
-        title: 'To delete',
-        kind: TicketKind.feature,
-      );
-
-      state.selectTicket(ticket.id);
-      expect(state.selectedTicket, isNotNull);
-
-      state.deleteTicket(ticket.id);
-
-      expect(state.selectedTicket, isNull);
-    });
 
     test('getTicket returns correct ticket', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'Test',
@@ -181,269 +166,17 @@ void main() {
     });
 
     test('getTicket returns null for non-existent ID', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final found = state.getTicket(999);
       expect(found, isNull);
     });
   });
 
-  group('TicketBoardState - Selection', () {
-    test('selectTicket updates selectedTicket', () {
-      final state = resources.track(TicketBoardState('test-project'));
 
-      final ticket = state.createTicket(
-        title: 'Test',
-        kind: TicketKind.feature,
-      );
-
-      state.selectTicket(ticket.id);
-
-      expect(state.selectedTicket, isNotNull);
-      expect(state.selectedTicket!.id, ticket.id);
-    });
-
-    test('selectTicket(null) clears selection', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      final ticket = state.createTicket(
-        title: 'Test',
-        kind: TicketKind.feature,
-      );
-
-      state.selectTicket(ticket.id);
-      expect(state.selectedTicket, isNotNull);
-
-      state.selectTicket(null);
-      expect(state.selectedTicket, isNull);
-    });
-
-    test('selectTicket sets detail mode to detail', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      final ticket = state.createTicket(
-        title: 'Test',
-        kind: TicketKind.feature,
-      );
-
-      state.showCreateForm();
-      expect(state.detailMode, TicketDetailMode.create);
-
-      state.selectTicket(ticket.id);
-      expect(state.detailMode, TicketDetailMode.detail);
-    });
-
-    test('showCreateForm sets mode and clears selection', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      final ticket = state.createTicket(
-        title: 'Test',
-        kind: TicketKind.feature,
-      );
-
-      state.selectTicket(ticket.id);
-      expect(state.selectedTicket, isNotNull);
-
-      state.showCreateForm();
-
-      expect(state.detailMode, TicketDetailMode.create);
-      expect(state.selectedTicket, isNull);
-    });
-
-    test('showDetail sets mode to detail', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      state.showCreateForm();
-      expect(state.detailMode, TicketDetailMode.create);
-
-      state.showDetail();
-      expect(state.detailMode, TicketDetailMode.detail);
-    });
-  });
-
-  group('TicketBoardState - Filtering', () {
-    late TicketBoardState state;
-
-    setUp(() {
-      state = resources.track(TicketBoardState('test-project'));
-
-      // Create test tickets
-      state.createTicket(
-        title: 'Feature A',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-        priority: TicketPriority.high,
-        category: 'Frontend',
-      );
-
-      state.createTicket(
-        title: 'Bug B',
-        kind: TicketKind.bugfix,
-        status: TicketStatus.completed,
-        priority: TicketPriority.low,
-        category: 'Backend',
-      );
-
-      state.createTicket(
-        title: 'Feature C',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.medium,
-        category: 'Frontend',
-      );
-    });
-
-    test('no filters returns all tickets', () {
-      expect(state.filteredTickets.length, 3);
-    });
-
-    test('search by title', () {
-      state.setSearchQuery('Feature');
-      expect(state.filteredTickets.length, 2);
-      expect(state.filteredTickets.every((t) => t.title.contains('Feature')), isTrue);
-    });
-
-    test('search by displayId', () {
-      state.setSearchQuery('TKT-001');
-      expect(state.filteredTickets.length, 1);
-      expect(state.filteredTickets.first.id, 1);
-    });
-
-    test('search is case-insensitive', () {
-      state.setSearchQuery('feature');
-      expect(state.filteredTickets.length, 2);
-    });
-
-    test('status filter', () {
-      state.setStatusFilter(TicketStatus.active);
-      expect(state.filteredTickets.length, 1);
-      expect(state.filteredTickets.first.status, TicketStatus.active);
-    });
-
-    test('kind filter', () {
-      state.setKindFilter(TicketKind.feature);
-      expect(state.filteredTickets.length, 2);
-      expect(state.filteredTickets.every((t) => t.kind == TicketKind.feature), isTrue);
-    });
-
-    test('priority filter', () {
-      state.setPriorityFilter(TicketPriority.high);
-      expect(state.filteredTickets.length, 1);
-      expect(state.filteredTickets.first.priority, TicketPriority.high);
-    });
-
-    test('category filter', () {
-      state.setCategoryFilter('Frontend');
-      expect(state.filteredTickets.length, 2);
-      expect(state.filteredTickets.every((t) => t.category == 'Frontend'), isTrue);
-    });
-
-    test('multiple filters AND-combined', () {
-      state.setKindFilter(TicketKind.feature);
-      state.setCategoryFilter('Frontend');
-      expect(state.filteredTickets.length, 2);
-
-      state.setStatusFilter(TicketStatus.active);
-      expect(state.filteredTickets.length, 1);
-      expect(state.filteredTickets.first.title, 'Feature A');
-    });
-
-    test('clearing filters', () {
-      state.setStatusFilter(TicketStatus.active);
-      expect(state.filteredTickets.length, 1);
-
-      state.setStatusFilter(null);
-      expect(state.filteredTickets.length, 3);
-    });
-  });
-
-  group('TicketBoardState - Grouping', () {
-    late TicketBoardState state;
-
-    setUp(() {
-      state = resources.track(TicketBoardState('test-project'));
-
-      state.createTicket(
-        title: 'A',
-        kind: TicketKind.feature,
-        priority: TicketPriority.high,
-        category: 'Frontend',
-      );
-
-      state.createTicket(
-        title: 'B',
-        kind: TicketKind.bugfix,
-        priority: TicketPriority.low,
-        category: 'Backend',
-      );
-
-      state.createTicket(
-        title: 'C',
-        kind: TicketKind.feature,
-        priority: TicketPriority.medium,
-        category: 'Frontend',
-      );
-
-      state.createTicket(
-        title: 'D',
-        kind: TicketKind.feature,
-        priority: TicketPriority.critical,
-      ); // No category
-    });
-
-    test('groupBy category', () {
-      state.setGroupBy(TicketGroupBy.category);
-      final groups = state.groupedTickets;
-
-      expect(groups.keys.length, 3);
-      expect(groups.containsKey('Frontend'), isTrue);
-      expect(groups.containsKey('Backend'), isTrue);
-      expect(groups.containsKey('Uncategorized'), isTrue);
-
-      expect(groups['Frontend']!.length, 2);
-      expect(groups['Backend']!.length, 1);
-      expect(groups['Uncategorized']!.length, 1);
-    });
-
-    test('groupBy status', () {
-      state.setGroupBy(TicketGroupBy.status);
-      final groups = state.groupedTickets;
-
-      expect(groups.containsKey('Ready'), isTrue);
-      expect(groups['Ready']!.length, 4);
-    });
-
-    test('tickets within groups sorted by priority then id', () {
-      state.setGroupBy(TicketGroupBy.category);
-      final groups = state.groupedTickets;
-
-      final frontend = groups['Frontend']!;
-      // High priority (ticket 1) should come before medium (ticket 3)
-      expect(frontend[0].priority, TicketPriority.high);
-      expect(frontend[1].priority, TicketPriority.medium);
-      expect(frontend[0].id, 1);
-      expect(frontend[1].id, 3);
-    });
-
-    test('uncategorized group for tickets without category', () {
-      state.setGroupBy(TicketGroupBy.category);
-      final groups = state.groupedTickets;
-
-      expect(groups.containsKey('Uncategorized'), isTrue);
-      expect(groups['Uncategorized']!.length, 1);
-      expect(groups['Uncategorized']!.first.title, 'D');
-    });
-
-    test('allCategories returns unique sorted categories', () {
-      final categories = state.allCategories;
-
-      expect(categories, ['Backend', 'Frontend']);
-    });
-  });
-
-  group('TicketBoardState - Dependencies/DAG', () {
+  group('TicketRepository - Dependencies/DAG', () {
     test('addDependency works', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -455,7 +188,7 @@ void main() {
     });
 
     test('addDependency self-reference throws', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(title: 'A', kind: TicketKind.feature);
 
@@ -466,7 +199,7 @@ void main() {
     });
 
     test('addDependency non-existent target throws', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(title: 'A', kind: TicketKind.feature);
 
@@ -477,7 +210,7 @@ void main() {
     });
 
     test('addDependency direct cycle throws', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -493,7 +226,7 @@ void main() {
     });
 
     test('addDependency indirect cycle throws', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -511,7 +244,7 @@ void main() {
     });
 
     test('wouldCreateCycle detects direct cycle', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -528,7 +261,7 @@ void main() {
     });
 
     test('wouldCreateCycle detects indirect cycle', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -546,7 +279,7 @@ void main() {
     });
 
     test('removeDependency removes dependency', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -559,7 +292,7 @@ void main() {
     });
 
     test('getBlockedBy returns tickets depending on given ticket', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -576,70 +309,13 @@ void main() {
     });
   });
 
-  group('TicketBoardState - Progress', () {
-    test('categoryProgress calculates correctly', () {
-      final state = resources.track(TicketBoardState('test-project'));
 
-      state.createTicket(
-        title: 'A',
-        kind: TicketKind.feature,
-        status: TicketStatus.completed,
-        category: 'Frontend',
-      );
-
-      state.createTicket(
-        title: 'B',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-        category: 'Frontend',
-      );
-
-      state.createTicket(
-        title: 'C',
-        kind: TicketKind.feature,
-        status: TicketStatus.completed,
-        category: 'Backend',
-      );
-
-      final progress = state.categoryProgress;
-
-      expect(progress['Frontend']!.completed, 1);
-      expect(progress['Frontend']!.total, 2);
-      expect(progress['Backend']!.completed, 1);
-      expect(progress['Backend']!.total, 1);
-    });
-
-    test('activeCount returns count of active tickets', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      state.createTicket(
-        title: 'A',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
-
-      state.createTicket(
-        title: 'B',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
-
-      state.createTicket(
-        title: 'C',
-        kind: TicketKind.feature,
-        status: TicketStatus.completed,
-      );
-
-      expect(state.activeCount, 2);
-    });
-  });
-
-  group('TicketBoardState - Persistence', () {
+  group('TicketRepository - Persistence', () {
     test('save and load round-trip', () async {
       // Use unique project ID to avoid collision with other tests
       final testProjectId = 'test-project-roundtrip-${DateTime.now().millisecondsSinceEpoch}';
       final storage = TicketStorageService();
-      final state = resources.track(TicketBoardState(testProjectId, storage: storage));
+      final state = resources.track(TicketRepository(testProjectId, storage: storage));
 
       // Create some tickets
       state.createTicket(
@@ -663,7 +339,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // Create new state and load
-      final state2 = resources.track(TicketBoardState(testProjectId, storage: storage));
+      final state2 = resources.track(TicketRepository(testProjectId, storage: storage));
       await state2.load();
 
       // Verify
@@ -679,7 +355,7 @@ void main() {
     });
 
     test('load with no file does not throw', () async {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       // Should not throw
       await state.load();
@@ -688,7 +364,7 @@ void main() {
     });
 
     test('load with corrupt file does not throw', () async {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       // Write corrupt data
       final storage = TicketStorageService();
@@ -704,7 +380,7 @@ void main() {
       // Use unique project ID to avoid collision with other tests
       final testProjectId = 'test-project-autosave-${DateTime.now().millisecondsSinceEpoch}';
       final storage = TicketStorageService();
-      final state = resources.track(TicketBoardState(testProjectId, storage: storage));
+      final state = resources.track(TicketRepository(testProjectId, storage: storage));
 
       state.createTicket(title: 'Test', kind: TicketKind.feature);
 
@@ -715,7 +391,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // Load in new state
-      final state2 = resources.track(TicketBoardState(testProjectId, storage: storage));
+      final state2 = resources.track(TicketRepository(testProjectId, storage: storage));
       await state2.load();
 
       expect(state2.tickets.length, 1);
@@ -726,7 +402,7 @@ void main() {
       // Use a unique project ID to avoid collision with other tests
       final testProjectId = 'test-project-nextid-${DateTime.now().millisecondsSinceEpoch}';
       final storage = TicketStorageService();
-      final state = resources.track(TicketBoardState(testProjectId, storage: storage));
+      final state = resources.track(TicketRepository(testProjectId, storage: storage));
 
       state.createTicket(title: 'A', kind: TicketKind.feature);
       state.createTicket(title: 'B', kind: TicketKind.feature);
@@ -750,7 +426,7 @@ void main() {
       expect(savedData, isNotNull, reason: 'Saved data should not be null after save');
       expect(savedData!['nextId'], 4, reason: 'nextId should be 4');
 
-      final state2 = resources.track(TicketBoardState(testProjectId, storage: storage));
+      final state2 = resources.track(TicketRepository(testProjectId, storage: storage));
       await state2.load();
 
       // Verify loaded state
@@ -761,9 +437,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - Notifications', () {
+  group('TicketRepository - Notifications', () {
     test('createTicket notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       var notified = false;
       state.addListener(() => notified = true);
 
@@ -773,7 +449,7 @@ void main() {
     });
 
     test('updateTicket notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test', kind: TicketKind.feature);
 
       var notified = false;
@@ -785,7 +461,7 @@ void main() {
     });
 
     test('deleteTicket notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test', kind: TicketKind.feature);
 
       var notified = false;
@@ -796,31 +472,9 @@ void main() {
       expect(notified, isTrue);
     });
 
-    test('selectTicket notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
-      final ticket = state.createTicket(title: 'Test', kind: TicketKind.feature);
-
-      var notified = false;
-      state.addListener(() => notified = true);
-
-      state.selectTicket(ticket.id);
-
-      expect(notified, isTrue);
-    });
-
-    test('setSearchQuery notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      var notified = false;
-      state.addListener(() => notified = true);
-
-      state.setSearchQuery('test');
-
-      expect(notified, isTrue);
-    });
 
     test('addDependency notifies listeners', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final ticket1 = state.createTicket(title: 'A', kind: TicketKind.feature);
       final ticket2 = state.createTicket(title: 'B', kind: TicketKind.feature);
 
@@ -833,9 +487,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - Status methods', () {
+  group('TicketRepository - Status methods', () {
     test('setStatus changes ticket status', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test', kind: TicketKind.feature);
 
       state.setStatus(ticket.id, TicketStatus.active);
@@ -844,7 +498,7 @@ void main() {
     });
 
     test('markCompleted sets status to completed', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test', kind: TicketKind.feature);
 
       state.markCompleted(ticket.id);
@@ -853,7 +507,7 @@ void main() {
     });
 
     test('markCancelled sets status to cancelled', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test', kind: TicketKind.feature);
 
       state.markCancelled(ticket.id);
@@ -862,9 +516,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - Auto-readiness notifications', () {
+  group('TicketRepository - Auto-readiness notifications', () {
     test('onTicketReady fires when blocked ticket becomes ready', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       // Create dependency chain: ticket2 depends on ticket1
       final ticket1 = state.createTicket(title: 'Dependency', kind: TicketKind.feature);
@@ -892,7 +546,7 @@ void main() {
     });
 
     test('onTicketReady does not fire for manual status change', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'Test',
@@ -915,7 +569,7 @@ void main() {
     });
 
     test('onTicketReady fires for multiple tickets becoming ready', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       // Create dependency chain: ticket2 and ticket3 both depend on ticket1
       final ticket1 = state.createTicket(title: 'Shared dependency', kind: TicketKind.feature);
@@ -949,7 +603,7 @@ void main() {
     });
 
     test('onTicketReady does not fire when ticket not blocked', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       // Create dependency where dependent is already ready
       final ticket1 = state.createTicket(title: 'Dependency', kind: TicketKind.feature);
@@ -975,7 +629,7 @@ void main() {
     });
 
     test('onTicketReady does not fire when dependencies not all complete', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       // Create dependency chain: ticket3 depends on ticket1 AND ticket2
       final ticket1 = state.createTicket(title: 'Dependency A', kind: TicketKind.feature);
@@ -1010,9 +664,9 @@ void main() {
     });
   });
 
-  group('TicketBoardState - Badge counts', () {
+  group('TicketRepository - Active count', () {
     test('activeCount includes only active tickets', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       state.createTicket(
         title: 'Ready',
@@ -1038,12 +692,11 @@ void main() {
         status: TicketStatus.completed,
       );
 
-      // Only the two active tickets should be counted
       expect(state.activeCount, 2);
     });
 
     test('activeCount updates when ticket status changes', () {
-      final state = resources.track(TicketBoardState('test-project'));
+      final state = resources.track(TicketRepository('test-project'));
 
       final ticket = state.createTicket(
         title: 'Test',
@@ -1058,146 +711,6 @@ void main() {
 
       state.setStatus(ticket.id, TicketStatus.completed);
       expect(state.activeCount, 0);
-    });
-  });
-
-  group('TicketBoardState - Next Ready Ticket', () {
-    test('nextReadyTicket returns null when no tickets are ready', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      state.createTicket(
-        title: 'Active',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
-      state.createTicket(
-        title: 'Completed',
-        kind: TicketKind.feature,
-        status: TicketStatus.completed,
-      );
-
-      expect(state.nextReadyTicket, isNull);
-    });
-
-    test('nextReadyTicket returns highest priority ready ticket', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      state.createTicket(
-        title: 'Low priority',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.low,
-      );
-      state.createTicket(
-        title: 'Medium priority',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.medium,
-      );
-      final critical = state.createTicket(
-        title: 'Critical priority',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.critical,
-      );
-      state.createTicket(
-        title: 'High priority',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.high,
-      );
-
-      expect(state.nextReadyTicket?.id, critical.id);
-    });
-
-    test('nextReadyTicket breaks ties by ticket ID (lower first)', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      final ticket1 = state.createTicket(
-        title: 'First high',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.high,
-      );
-      state.createTicket(
-        title: 'Second high',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.high,
-      );
-      state.createTicket(
-        title: 'Third high',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.high,
-      );
-
-      expect(state.nextReadyTicket?.id, ticket1.id);
-    });
-
-    test('nextReadyTicket ignores non-ready tickets', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      state.createTicket(
-        title: 'Active critical',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-        priority: TicketPriority.critical,
-      );
-      final readyMedium = state.createTicket(
-        title: 'Ready medium',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.medium,
-      );
-      state.createTicket(
-        title: 'Blocked high',
-        kind: TicketKind.feature,
-        status: TicketStatus.blocked,
-        priority: TicketPriority.high,
-      );
-
-      expect(state.nextReadyTicket?.id, readyMedium.id);
-    });
-
-    test('nextReadyTicket priority order is critical > high > medium > low', () {
-      final state = resources.track(TicketBoardState('test-project'));
-
-      final low = state.createTicket(
-        title: 'Low',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.low,
-      );
-      final medium = state.createTicket(
-        title: 'Medium',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.medium,
-      );
-      final high = state.createTicket(
-        title: 'High',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.high,
-      );
-      final critical = state.createTicket(
-        title: 'Critical',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        priority: TicketPriority.critical,
-      );
-
-      expect(state.nextReadyTicket?.id, critical.id);
-
-      state.setStatus(critical.id, TicketStatus.active);
-      expect(state.nextReadyTicket?.id, high.id);
-
-      state.setStatus(high.id, TicketStatus.completed);
-      expect(state.nextReadyTicket?.id, medium.id);
-
-      state.setStatus(medium.id, TicketStatus.cancelled);
-      expect(state.nextReadyTicket?.id, low.id);
     });
   });
 }
