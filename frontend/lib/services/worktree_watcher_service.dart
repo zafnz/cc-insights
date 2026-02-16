@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -435,17 +436,27 @@ class WorktreeWatcherService extends ChangeNotifier {
           .watch(recursive: true)
           .listen(
             (event) {
-              // Ignore changes to the index file. `git status` refreshes
-              // the stat-cache in .git/index even on a pure read, so our
-              // own polling writes to the index, which this watcher picks
-              // up, which triggers another poll — creating a feedback loop
-              // that fires forceRefreshAll every 5 seconds.
+              // Filter out noise from our own git operations to prevent
+              // a feedback loop where polling triggers filesystem events
+              // that trigger more polling.
               //
-              // This is safe to ignore because index changes (git add/rm/
-              // reset) always also produce worktree filesystem events that
-              // the per-worktree watcher already handles.
+              // Ignored paths:
+              // - *.lock files: Transient lock files created by all git
+              //   operations (index.lock, HEAD.lock, maintenance.lock,
+              //   refs/*/HEAD.lock, etc.). The actual file updates that
+              //   follow lock release produce their own events.
+              // - index files: `git status` refreshes the stat-cache in
+              //   .git/index and .git/worktrees/*/index on every run.
+              // - objects/: Object database writes (loose objects, packs)
+              //   happen during fetch/gc but don't affect working tree
+              //   status. Fetched refs are detected via refs/ changes.
+              // - logs/: Reflog writes happen on every ref update but
+              //   the ref change itself is the meaningful event.
               final path = event.path;
-              if (path.endsWith('/index') || path.endsWith('/index.lock')) {
+              if (path.endsWith('.lock') ||
+                  path.endsWith('/index') ||
+                  path.contains('/objects/') ||
+                  path.contains('/logs/')) {
                 return;
               }
               _onGitDirChanged();
@@ -508,6 +519,11 @@ class WorktreeWatcherService extends ChangeNotifier {
   /// Refreshes all worktrees in response to a common git dir change.
   void _refreshAllFromGitDir() {
     if (_disposed) return;
+    developer.log(
+      'git dir change → refreshing all worktrees',
+      name: 'WorktreeWatcher',
+      level: 500, // FINE/trace
+    );
     _gitDirLastPollTime = DateTime.now();
     forceRefreshAll();
   }
