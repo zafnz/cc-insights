@@ -19,6 +19,18 @@ class InternalToolsService extends ChangeNotifier {
   /// The tool registry to pass to backend sessions.
   InternalToolRegistry get registry => _registry;
 
+  /// Returns system prompt text to append when git tools are registered,
+  /// or null if no git tools are active.
+  String? get systemPromptAppend {
+    if (_gitService == null) return null;
+    return 'You have access to internal git MCP tools '
+        '(git_commit_context, git_commit, git_log, git_diff). '
+        'Prefer these over running git commands via the shell — '
+        'they are faster and safer. '
+        'Fall back to shell git only for operations these tools '
+        'do not cover.';
+  }
+
   /// Maximum number of ticket proposals allowed in a single create_ticket call.
   static const int maxProposalCount = 50;
 

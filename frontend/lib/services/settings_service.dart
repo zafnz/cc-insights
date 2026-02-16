@@ -59,6 +59,7 @@ class SettingsService extends ChangeNotifier {
     _tagsCategory,
     _agentsCategory,
     _sessionCategory,
+    _gitCategory,
     _loggingCategory,
     _developerCategory,
     _projectMgmtCategory,
@@ -384,6 +385,28 @@ class SettingsService extends ChangeNotifier {
     ],
   );
 
+  static const _gitCategory = SettingCategory(
+    id: 'git',
+    label: 'Git',
+    description: 'Configure git integration and agent git tools',
+    icon: Icons.commit_outlined,
+    settings: [
+      SettingDefinition(
+        key: 'git.agentGitTools',
+        title: 'Agent Git Tools',
+        description:
+            'Enable git internal MCP tools for agents. Provides '
+            'streamlined commit, diff, log, and status operations that '
+            'only allow safe actions. Agents can still run git via the '
+            'shell if the MCP does not provide the functionality needed. '
+            'A short system instruction is added to encourage use of '
+            'these tools.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+    ],
+  );
+
   static const _projectMgmtCategory = SettingCategory(
     id: 'projectMgmt',
     label: 'Project Mgmt',
@@ -397,16 +420,6 @@ class SettingsService extends ChangeNotifier {
             'Allow agents to create tickets on the project board via '
             'the create_ticket tool. When disabled, agents cannot '
             'propose or create tickets.',
-        type: SettingType.toggle,
-        defaultValue: true,
-      ),
-      SettingDefinition(
-        key: 'projectMgmt.agentGitTools',
-        title: 'Agent Git Tools',
-        description:
-            'Allow agents to use git tools (commit, diff, log, status) '
-            'via internal MCP. When disabled, agents must use shell '
-            'commands for git operations.',
         type: SettingType.toggle,
         defaultValue: true,
       ),
@@ -814,7 +827,7 @@ class SettingsService extends ChangeNotifier {
         config.loggingMinimumLevel = value as String;
       case 'projectMgmt.agentTicketTools':
         config.agentTicketToolsEnabled = value as bool;
-      case 'projectMgmt.agentGitTools':
+      case 'git.agentGitTools':
         config.agentGitToolsEnabled = value as bool;
     }
   }

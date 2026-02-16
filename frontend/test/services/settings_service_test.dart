@@ -29,7 +29,7 @@ void main() {
     group('categories', () {
       test('has all expected categories', () {
         final ids = SettingsService.categories.map((c) => c.id).toList();
-        expect(ids, ['appearance', 'behavior', 'tags', 'agents', 'session', 'logging', 'developer', 'projectMgmt']);
+        expect(ids, ['appearance', 'behavior', 'tags', 'agents', 'session', 'git', 'logging', 'developer', 'projectMgmt']);
       });
 
       test('each category has at least one setting', () {
@@ -150,6 +150,18 @@ void main() {
       test('syncs to RuntimeConfig for agentTicketTools', () async {
         await service.setValue('projectMgmt.agentTicketTools', false);
         expect(RuntimeConfig.instance.agentTicketToolsEnabled, false);
+      });
+
+      test('returns default true for agentGitTools', () {
+        expect(
+          service.getValue<bool>('git.agentGitTools'),
+          true,
+        );
+      });
+
+      test('syncs to RuntimeConfig for agentGitTools', () async {
+        await service.setValue('git.agentGitTools', false);
+        expect(RuntimeConfig.instance.agentGitToolsEnabled, false);
       });
     });
 

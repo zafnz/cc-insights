@@ -32,6 +32,14 @@ part 'chat_state/chat_view_state.dart';
 /// Diagnostic trace — only prints when [sdk.SdkLogger.debugEnabled] is true.
 void _t(String tag, String msg) => sdk.SdkLogger.instance.trace(tag, msg);
 
+/// Merges two optional system prompt append strings, joining with a newline
+/// if both are present. Returns null if neither is set.
+String? _mergeAppend(String? a, String? b) {
+  if (a == null || a.isEmpty) return b;
+  if (b == null || b.isEmpty) return a;
+  return '$a\n$b';
+}
+
 /// Permission modes for tool execution.
 enum PermissionMode {
   /// Requires permission for most operations.
@@ -1372,8 +1380,14 @@ class _ChatCore extends ChangeNotifier {
         resume: _lastSessionId,
         // Load permission rules and MCP servers from user, project, and local settings files
         settingSources: const ['user', 'project', 'local'],
-        // Use Claude Code's system prompt (includes CLAUDE.md support)
-        systemPrompt: sdk.PresetSystemPrompt(append: systemPromptAppend),
+        // Use Claude Code's system prompt (includes CLAUDE.md support).
+        // Merge any explicit append with the internal tools prompt.
+        systemPrompt: sdk.PresetSystemPrompt(
+          append: _mergeAppend(
+            systemPromptAppend,
+            internalToolsService?.systemPromptAppend,
+          ),
+        ),
         // Stream partial messages if the setting is enabled
         includePartialMessages: RuntimeConfig.instance.streamOfThought,
       );

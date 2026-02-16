@@ -493,9 +493,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _chatTitleService = ChatTitleService(askAiService: _askAiService);
 
     // Register git tools if enabled
-    if (_settingsService!.getEffectiveValue<bool>(
-      'projectMgmt.agentGitTools',
-    )) {
+    if (_settingsService!.getEffectiveValue<bool>('git.agentGitTools')) {
       _internalToolsService!.registerGitTools(const RealGitService());
     }
 

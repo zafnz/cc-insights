@@ -493,6 +493,34 @@ void main() {
         expect(service.registry['git_log'], isNull);
         expect(service.registry['git_diff'], isNull);
       });
+
+      test('systemPromptAppend returns null when git tools not registered', () {
+        final service = resources.track(InternalToolsService());
+        expect(service.systemPromptAppend, isNull);
+      });
+
+      test('systemPromptAppend returns instruction when git tools registered',
+          () {
+        final service = resources.track(InternalToolsService());
+        service.registerGitTools(fakeGit);
+
+        final append = service.systemPromptAppend;
+        expect(append, isNotNull);
+        expect(append, contains('git_commit_context'));
+        expect(append, contains('git_commit'));
+        expect(append, contains('git_log'));
+        expect(append, contains('git_diff'));
+        expect(append, contains('Prefer these over running git commands'));
+      });
+
+      test('systemPromptAppend returns null after unregisterGitTools', () {
+        final service = resources.track(InternalToolsService());
+        service.registerGitTools(fakeGit);
+        expect(service.systemPromptAppend, isNotNull);
+
+        service.unregisterGitTools();
+        expect(service.systemPromptAppend, isNull);
+      });
     });
 
     group('git_commit_context handler', () {

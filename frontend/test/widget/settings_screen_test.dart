@@ -103,6 +103,7 @@ void main() {
         expect(find.text('Appearance'), findsWidgets);
         expect(find.text('Behavior'), findsOneWidget);
         expect(find.text('Session'), findsOneWidget);
+        expect(find.text('Git'), findsOneWidget);
         expect(find.text('Developer'), findsOneWidget);
         expect(find.text('Project Mgmt'), findsOneWidget);
       });
@@ -385,11 +386,9 @@ void main() {
         await tester.tap(find.text('Project Mgmt'));
         await safePumpAndSettle(tester);
 
-        // Toggle off - there are now 2 switches in Project Mgmt category
-        // (Agent Ticket Tools and Agent Git Tools)
-        // We need to find the first switch (the one for ticket tools)
+        // Toggle off - Project Mgmt now has only 1 switch (Agent Ticket Tools)
         final switches = find.byType(Switch);
-        expect(switches, findsNWidgets(2));
+        expect(switches, findsOneWidget);
         await tester.tap(switches.first);
         await safePumpAndSettle(tester);
 
