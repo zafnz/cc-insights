@@ -184,6 +184,25 @@ When `pumpUntil` times out, it automatically calls `debugDumpApp()` and `debugDu
 
 ---
 
+## No Real File I/O in Widget Tests
+
+Widget tests run in a fake async zone where real file I/O (`file.writeAsString`, `file.readAsString`, etc.) may never complete, causing `await` to hang indefinitely.
+
+**Rules:**
+- Services that do file I/O (e.g. `SettingsService`) must provide a way to disable persistence in tests (e.g. `persistToDisk: false`)
+- Widget tests must NEVER trigger real disk reads/writes — use fakes or disable persistence
+- Integration tests (which run on a real device) can use real I/O
+
+```dart
+// WRONG - _save() does real file I/O, will hang in widget tests:
+final settings = SettingsService(configPath: '/tmp/test.json');
+
+// RIGHT - no file I/O:
+final settings = SettingsService(persistToDisk: false);
+```
+
+---
+
 ## Checklist Before Committing
 
 - [ ] All tests pass locally

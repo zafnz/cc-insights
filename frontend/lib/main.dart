@@ -22,7 +22,7 @@ import 'screens/replay_demo_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'widgets/app_menu_bar.dart';
 import 'widgets/directory_validation_dialog.dart';
-import 'screens/cli_required_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/ask_ai_service.dart';
 import 'services/cli_availability_service.dart';
 import 'services/log_service.dart';
@@ -460,6 +460,14 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       // Clean legacy keys from config.json after migration
       await _settingsService!.removeLegacyWindowLayoutKeys();
 
+      // If onboarding is needed, show it immediately — it does its own
+      // scanning. Skip the legacy CLI probe so we don't block the UI.
+      if (_shouldShowOnboarding()) {
+        _restoreWindowSize();
+        if (mounted) setState(() {});
+        return;
+      }
+
       // Check CLI availability after settings load (custom paths may be set)
       if (shouldUseMock || widget.backendService != null) {
         // In mock/test mode, mark all agents as available without checking CLI
@@ -811,16 +819,14 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       return _buildAppContent();
     }
 
-    // After CLI check completes, show the required screen if claude is missing
-    if (_cliAvailability != null &&
-        _cliAvailability!.checked &&
-        !_cliAvailability!.claudeAvailable) {
-      return _buildCliRequiredContent();
-    }
-
     // Show validation dialog if we have pending validation
     if (_needsValidation && _pendingValidationInfo != null) {
       return _buildValidationContent();
+    }
+
+    // Show onboarding if needed (first run or no configured agents).
+    if (_shouldShowOnboarding()) {
+      return _buildOnboardingContent();
     }
 
     // Show welcome screen if not launched from CLI and no project selected
@@ -835,6 +841,18 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
     // Waiting for async project restore
     return _buildLoadingContent();
+  }
+
+  /// Whether the onboarding flow should be shown.
+  ///
+  /// Shows onboarding when settings are loaded AND either onboarding has not
+  /// been completed OR no agents are explicitly configured. Runs regardless
+  /// of how the app was launched (terminal, Finder, with or without a project).
+  bool _shouldShowOnboarding() {
+    if (_settingsService == null || !_settingsService!.loaded) return false;
+
+    return !_settingsService!.hasCompletedOnboarding ||
+        !_settingsService!.hasExplicitlyConfiguredAgents;
   }
 
   /// Kicks off async project restore and calls [setState] when done.
@@ -890,20 +908,24 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     return WelcomeScreen(onProjectSelected: _onProjectSelected);
   }
 
-  /// Builds the CLI required screen (Claude CLI not found).
-  Widget _buildCliRequiredContent() {
-    return CliRequiredScreen(
+  /// Builds the onboarding screen for first-run agent discovery.
+  Widget _buildOnboardingContent() {
+    return OnboardingScreen(
       cliAvailability: _cliAvailability!,
       settingsService: _settingsService!,
-      onCliFound: () {
-        // Start backends for all agents now that CLI is available
-        if (widget.backendService == null) {
-          _backend?.discoverModelsForAllAgents();
-        }
+      onComplete: () {
+        // Discover models for all available agents
+        _backend?.discoverModelsForAllAgents();
+        setState(() {});
+      },
+      onCancel: () {
+        // Cancel returns to welcome screen
+        _settingsService!.setOnboardingCompleted(true);
         setState(() {});
       },
     );
   }
+
 
   /// Builds the validation screen content that shows the directory validation message.
   Widget _buildValidationContent() {

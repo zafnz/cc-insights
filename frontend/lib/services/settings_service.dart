@@ -18,11 +18,15 @@ import 'runtime_config.dart';
 /// `~/.ccinsights/config.json` and synced to [RuntimeConfig] for
 /// live UI updates.
 class SettingsService extends ChangeNotifier {
-  SettingsService({String? configPath})
+  SettingsService({String? configPath, bool persistToDisk = true})
       : _configPath = configPath ??
-            '${PersistenceService.baseDir}/config.json';
+            '${PersistenceService.baseDir}/config.json',
+        _persistToDisk = persistToDisk;
 
   final String _configPath;
+
+  /// When false, [_save] and [load] skip file I/O. Use in widget tests.
+  final bool _persistToDisk;
 
   /// Current setting values. Keys match [SettingDefinition.key].
   final Map<String, dynamic> _values = {};
@@ -648,6 +652,34 @@ class SettingsService extends ChangeNotifier {
     await _save();
   }
 
+  // ---------------------------------------------------------------------------
+  // Onboarding
+  // ---------------------------------------------------------------------------
+
+  /// Key for the onboarding completion flag.
+  static const onboardingCompletedKey = 'onboarding.completed';
+
+  /// Whether the user has completed the first-run onboarding flow.
+  bool get hasCompletedOnboarding =>
+      _values[onboardingCompletedKey] == true;
+
+  /// Whether agents have been explicitly configured (not just defaults).
+  ///
+  /// Returns true if the `agents.available` key exists in the persisted
+  /// config with at least one entry. Returns false if agents are only
+  /// coming from [AgentConfig.defaults] fallback.
+  bool get hasExplicitlyConfiguredAgents {
+    final raw = _values[agentsKey];
+    return raw is List && raw.isNotEmpty;
+  }
+
+  /// Marks onboarding as completed and persists the flag.
+  Future<void> setOnboardingCompleted(bool completed) async {
+    _values[onboardingCompletedKey] = completed;
+    notifyListeners();
+    await _save();
+  }
+
   /// Syncs the agent list to RuntimeConfig.
   void _syncAgentsToRuntimeConfig() {
     RuntimeConfig.instance.agents = availableAgents;
@@ -740,6 +772,8 @@ class SettingsService extends ChangeNotifier {
 
   /// Saves current values to disk.
   Future<void> _save() async {
+    if (!_persistToDisk) return;
+
     _selfWriting = true;
     try {
       final file = File(_configPath);

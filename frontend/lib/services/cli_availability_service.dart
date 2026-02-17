@@ -97,6 +97,21 @@ class CliAvailabilityService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Probes for a CLI executable by name, used during onboarding scanning.
+  ///
+  /// Unlike [_checkExecutable], this is a public method that probes for a
+  /// specific executable name (e.g., "claude", "codex", "gemini") without
+  /// requiring an [AgentConfig]. If [customPath] is provided, it is checked
+  /// first.
+  ///
+  /// Returns a tuple of (found, resolvedPath).
+  Future<(bool, String?)> probeExecutable(
+    String executableName, {
+    String customPath = '',
+  }) async {
+    return _checkExecutable(executableName, customPath);
+  }
+
   /// Checks whether a single CLI executable is available.
   ///
   /// Returns a tuple of (available, resolvedPath). The resolved path is the
