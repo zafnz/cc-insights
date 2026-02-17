@@ -51,6 +51,9 @@ class BackendService extends ChangeNotifier {
 
   BackendType? _backendType;
 
+  /// Whether this service has been disposed.
+  bool _disposed = false;
+
   // -------------------------------------------------------------------------
   // Agent-keyed backend state
   // -------------------------------------------------------------------------
@@ -455,7 +458,7 @@ class BackendService extends ChangeNotifier {
     if (backend is! ModelListingBackend) return;
 
     final didStartLoading = _agentModelListLoading.add(agentId);
-    if (didStartLoading) {
+    if (didStartLoading && !_disposed) {
       notifyListeners();
     }
 
@@ -463,11 +466,15 @@ class BackendService extends ChangeNotifier {
       await _fetchAndUpdateModels(type, backend);
     } catch (e) {
       _t('BackendService', 'Failed to refresh model list for agent $agentId: $e');
-      _agentErrors[agentId] = 'Model refresh failed: $e';
-      _agentErrorIsAgent[agentId] = false;
+      if (!_disposed) {
+        _agentErrors[agentId] = 'Model refresh failed: $e';
+        _agentErrorIsAgent[agentId] = false;
+      }
     } finally {
       _agentModelListLoading.remove(agentId);
-      notifyListeners();
+      if (!_disposed) {
+        notifyListeners();
+      }
     }
   }
 
@@ -677,7 +684,7 @@ class BackendService extends ChangeNotifier {
     if (backend is! ModelListingBackend) return;
 
     final didStartLoading = _modelListLoading.add(type);
-    if (didStartLoading) {
+    if (didStartLoading && !_disposed) {
       notifyListeners();
     }
 
@@ -685,11 +692,15 @@ class BackendService extends ChangeNotifier {
       await _fetchAndUpdateModels(type, backend);
     } catch (e) {
       _t('BackendService', 'Failed to refresh model list for ${type.name}: $e');
-      _errors[type] = 'Model refresh failed: $e';
-      _errorIsAgent[type] = false;
+      if (!_disposed) {
+        _errors[type] = 'Model refresh failed: $e';
+        _errorIsAgent[type] = false;
+      }
     } finally {
       _modelListLoading.remove(type);
-      notifyListeners();
+      if (!_disposed) {
+        notifyListeners();
+      }
     }
   }
 
@@ -823,6 +834,7 @@ class BackendService extends ChangeNotifier {
   /// the backend process is properly terminated.
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_cancelAllSubscriptions());
     _errorSubscriptions.clear();
     // Clean up BackendType-keyed state

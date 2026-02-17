@@ -11,7 +11,10 @@
       "Read(//Users/zaf/projects/cc-insights/.claude/agent-memory/flutter-engineer/**)",
       "Bash(./frontend/run-flutter-test.sh:*)",
       "Bash(./run-flutter-test.sh:*)",
-      "Bash(dart test:*)"
+      "Bash(dart test:*)",
+      "mcp__cci__git_commit_context",
+      "mcp__cci__git_diff",
+      "mcp__cci__git_commit"
     ]
   }
 }

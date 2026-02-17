@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:cc_insights_v2/main.dart';
+import 'package:cc_insights_v2/screens/main_screen.dart';
 import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/services/script_execution_service.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
@@ -59,7 +60,7 @@ void main() {
       expect(find.text('Worktrees'), findsOneWidget);
 
       // Verify ScriptExecutionService is registered
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
       expect(scriptService, isNotNull);
 
@@ -76,7 +77,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService from the widget tree
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run a simple echo command using runAsync to handle real process
@@ -115,7 +116,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run a command that will fail
@@ -148,7 +149,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run a long-running command and kill it
@@ -184,7 +185,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run two scripts concurrently
@@ -233,7 +234,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run a script
@@ -270,7 +271,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run a script that outputs multiple lines
@@ -302,7 +303,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Run a script that outputs to stderr
@@ -334,7 +335,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       late RunningScript script;
@@ -365,7 +366,7 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Get the ScriptExecutionService
-      final context = tester.element(find.byType(MaterialApp));
+      final context = tester.element(find.byType(MainScreen));
       final scriptService = context.read<ScriptExecutionService>();
 
       // Track notification count
