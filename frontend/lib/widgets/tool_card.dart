@@ -6,6 +6,7 @@ import '../config/design_tokens.dart';
 import '../models/output_entry.dart';
 import '../services/runtime_config.dart';
 import 'click_to_scroll_container.dart';
+import 'tool_card_git.dart';
 import 'tool_card_inputs.dart';
 import 'tool_card_results.dart';
 
@@ -20,6 +21,12 @@ import 'tool_card_results.dart';
 final _mcpNamePattern = RegExp(r'^mcp__([^_]+)__(.+)$');
 
 String _formatToolName(String toolName) {
+  // Friendly names for internal CCI git tools
+  final gitName = cciGitToolName(toolName);
+  if (gitName != null) {
+    return cciGitFriendlyName(gitName) ?? toolName;
+  }
+
   final mcpMatch = _mcpNamePattern.firstMatch(toolName);
   if (mcpMatch != null) {
     final mcpName = mcpMatch.group(1)!;
@@ -30,6 +37,10 @@ String _formatToolName(String toolName) {
 }
 
 IconData _getToolIcon(ToolKind toolKind, String toolName) {
+  // Internal CCI git tools get their own icons
+  final gitName = cciGitToolName(toolName);
+  if (gitName != null) return cciGitIcon(gitName);
+
   return switch (toolKind) {
     ToolKind.execute => Icons.terminal,
     ToolKind.read => Icons.description,
@@ -54,7 +65,12 @@ IconData _getToolIcon(ToolKind toolKind, String toolName) {
   };
 }
 
-Color _getToolColor(ToolKind toolKind) {
+Color _getToolColor(ToolKind toolKind, {String? toolName}) {
+  // Internal CCI git tools use teal
+  if (toolName != null && cciGitToolName(toolName) != null) {
+    return Colors.teal;
+  }
+
   return switch (toolKind) {
     ToolKind.execute => Colors.orange,
     ToolKind.read || ToolKind.edit => Colors.blue,
@@ -75,6 +91,12 @@ String _getToolSummary(
   String? projectDir, {
   String? toolName,
 }) {
+  // Internal CCI git tools
+  if (toolName != null) {
+    final gitName = cciGitToolName(toolName);
+    if (gitName != null) return cciGitSummary(gitName, input);
+  }
+
   final config = RuntimeConfig.instance;
 
   // FileChange with multiple files: show count
@@ -229,7 +251,7 @@ class _ToolCardState extends State<ToolCard> {
                   Icon(
                     _getToolIcon(entry.toolKind, entry.toolName),
                     size: 16,
-                    color: _getToolColor(entry.toolKind),
+                    color: _getToolColor(entry.toolKind, toolName: entry.toolName),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -437,9 +459,18 @@ class _ToolInput extends StatelessWidget {
           result: entry.result,
         ),
       ToolKind.memory => const SizedBox.shrink(),
-      ToolKind.mcp || ToolKind.delete || ToolKind.move || ToolKind.other =>
+      ToolKind.mcp => _buildMcpInput(entry),
+      ToolKind.delete || ToolKind.move || ToolKind.other =>
         GenericInputWidget(input: entry.toolInput),
     };
+  }
+
+  static Widget _buildMcpInput(ToolUseOutputEntry entry) {
+    final gitName = cciGitToolName(entry.toolName);
+    if (gitName != null) {
+      return GitToolInputWidget(gitToolName: gitName, input: entry.toolInput);
+    }
+    return GenericInputWidget(input: entry.toolInput);
   }
 }
 
@@ -453,6 +484,15 @@ class _ToolResult extends StatelessWidget {
   Widget build(BuildContext context) {
     final isError = entry.isError;
     final monoFont = RuntimeConfig.instance.monoFontFamily;
+
+    // Special rendering for CCI git tools
+    final gitName = cciGitToolName(entry.toolName);
+    if (gitName != null && !isError) {
+      return GitToolResultWidget(
+        gitToolName: gitName,
+        result: entry.result,
+      );
+    }
 
     // Don't show result text for edit tools - the input view shows everything
     if (entry.toolKind == ToolKind.edit && !isError) {

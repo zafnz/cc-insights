@@ -1058,5 +1058,232 @@ void main() {
         expect(find.byType(Divider), findsOneWidget);
       });
     });
+
+    group('CCI Git tool rendering', () {
+      testWidgets('git_commit_context shows "Git Context" as tool name',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_commit_context',
+          toolInput: {'path': '/repo'},
+          result: '{"branch":"main","status":{"modified":[],"untracked":[],"deleted":[],"staged":[]},"diff_stat":"","recent_commits":[]}',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Git Context'), findsOneWidget);
+        expect(find.textContaining('MCP'), findsNothing);
+      });
+
+      testWidgets('git_commit_context shows fact_check_outlined icon',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_commit_context',
+          toolInput: {'path': '/repo'},
+          result: '{}',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.byIcon(Icons.fact_check_outlined), findsOneWidget);
+      });
+
+      testWidgets('git_commit shows "Git Commit" and file count summary',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_commit',
+          toolInput: {
+            'path': '/repo',
+            'files': ['a.dart', 'b.dart', 'c.dart'],
+            'message': 'Fix important bug in auth flow',
+          },
+          result: '{"success":true,"sha":"abc1234","message":"Fix important bug in auth flow","files_committed":["a.dart","b.dart","c.dart"]}',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Git Commit'), findsOneWidget);
+        expect(find.byIcon(Icons.commit), findsOneWidget);
+        // Summary should contain file count and message
+        expect(find.textContaining('3 files'), findsOneWidget);
+        expect(find.textContaining('Fix important bug'), findsOneWidget);
+      });
+
+      testWidgets('git_commit result shows SHA and committed files when expanded',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_commit',
+          toolInput: {
+            'path': '/repo',
+            'files': ['a.dart', 'b.dart'],
+            'message': 'Fix bug',
+          },
+          result: '{"success":true,"sha":"0ad5067","message":"Fix bug","files_committed":["a.dart","b.dart"]}',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Should show SHA
+        expect(find.text('0ad5067'), findsOneWidget);
+        // Should show "Committed" label
+        expect(find.text('Committed'), findsOneWidget);
+      });
+
+      testWidgets('git_commit_context result shows branch and file status',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_commit_context',
+          toolInput: {'path': '/repo'},
+          result: '{"branch":"feat-dark-mode","status":{"modified":["lib/main.dart"],"untracked":["new_file.dart"],"deleted":[],"staged":["staged.dart"]},"diff_stat":"2 files changed","recent_commits":[{"sha":"abc1234","message":"Initial commit"}]}',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Should show branch name
+        expect(find.text('feat-dark-mode'), findsOneWidget);
+        // Should show status groups
+        expect(find.textContaining('Modified'), findsOneWidget);
+        expect(find.textContaining('Untracked'), findsOneWidget);
+        expect(find.textContaining('Staged'), findsOneWidget);
+        // Should show recent commit
+        expect(find.textContaining('Initial commit'), findsOneWidget);
+      });
+
+      testWidgets('git_log shows "Git Log" with history icon', (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_log',
+          toolInput: {'path': '/repo', 'count': 5},
+          result: 'commit abc1234\nAuthor: User\nDate: 2026-01-01\n\n    Initial commit',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Git Log'), findsOneWidget);
+        expect(find.byIcon(Icons.history), findsOneWidget);
+        // Summary should show commit count
+        expect(find.textContaining('5 commits'), findsOneWidget);
+      });
+
+      testWidgets('git_log result shows mono text in dark container',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_log',
+          toolInput: {'path': '/repo'},
+          result: 'commit abc1234\nAuthor: User\nDate: 2026-01-01\n\n    Initial commit',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Result should show log text
+        expect(find.textContaining('Initial commit'), findsOneWidget);
+        // Should be in dark container
+        final containers = tester.widgetList<Container>(find.byType(Container));
+        final darkContainers = containers.where((c) {
+          final decoration = c.decoration;
+          if (decoration is BoxDecoration) {
+            return decoration.color == Colors.black87;
+          }
+          return false;
+        });
+        check(darkContainers).isNotEmpty();
+      });
+
+      testWidgets('git_diff shows "Git Diff" with difference icon',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_diff',
+          toolInput: {'path': '/repo', 'staged': true},
+          result: '(no changes)',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Git Diff'), findsOneWidget);
+        expect(find.byIcon(Icons.difference), findsOneWidget);
+        // Summary should show "staged"
+        expect(find.textContaining('staged'), findsWidgets);
+      });
+
+      testWidgets('git_diff handles "(no changes)" gracefully',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_diff',
+          toolInput: {'path': '/repo'},
+          result: '(no changes)',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Should show no changes text
+        expect(find.text('(no changes)'), findsOneWidget);
+      });
+
+      testWidgets('git tool errors fall back to standard error rendering',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__cci__git_commit',
+          toolInput: {
+            'path': '/repo',
+            'files': ['a.dart'],
+            'message': 'Commit',
+          },
+          result: 'Git error: not a git repository',
+          isError: true,
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Should show error icon
+        expect(find.byIcon(Icons.error_outline), findsOneWidget);
+
+        // Tap to expand
+        await tester.tap(find.byType(InkWell).first);
+        await safePumpAndSettle(tester);
+
+        // Should show standard error rendering
+        expect(find.text('Error:'), findsOneWidget);
+      });
+
+      testWidgets('non-CCI MCP tools still use generic rendering',
+          (tester) async {
+        final entry = createToolEntry(
+          toolName: 'mcp__other__some_tool',
+          toolInput: {'param': 'value'},
+          result: 'result text',
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        // Should use generic MCP formatting
+        expect(find.text('MCP(other:some_tool)'), findsOneWidget);
+        expect(find.byIcon(Icons.extension), findsOneWidget);
+      });
+    });
   });
 }

@@ -1478,6 +1478,16 @@ class _ChatCore extends ChangeNotifier {
           'Chat',
           'Permission request: tool=${req.toolName} (chat=${_data.id})',
         );
+
+        // Auto-approve internal CCI MCP tools (git tools, create_ticket, etc.)
+        // These are our own tools registered via InternalToolRegistry and don't
+        // need user permission.
+        if (req.toolName.startsWith('mcp__${sdk.InternalToolRegistry.serverName}__')) {
+          _t('Chat', 'Auto-approving internal tool: ${req.toolName}');
+          req.allow();
+          return;
+        }
+
         setPendingPermission(req);
       });
 
