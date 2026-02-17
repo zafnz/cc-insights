@@ -328,11 +328,14 @@ abstract class GitService {
     bool force = false,
   });
 
-  /// Gets commits on [branch] that aren't on [targetBranch] by patch-id.
+  /// Checks whether [branch] has changes not yet on [targetBranch].
   ///
-  /// Uses `git cherry -v targetBranch branch` to find commits whose changes
-  /// are not yet on the target branch. This handles squash merges where
-  /// commit SHAs differ but the changes are the same.
+  /// First tries `git cherry` to detect individual cherry-picked commits.
+  /// If that reports unmerged commits, falls back to a squash-merge check:
+  /// creates a virtual squash commit (via `git commit-tree`) that combines
+  /// all branch commits into one, then uses `git cherry` to see if that
+  /// single diff already exists on [targetBranch]. This detects GitHub-style
+  /// squash merges where N commits become 1 on the target.
   ///
   /// Returns a list of commit messages for commits NOT on target.
   /// Empty list means all commits are on target (or branch has no new commits).
@@ -983,7 +986,8 @@ class RealGitService implements GitService {
     String targetBranch,
   ) async {
     try {
-      // git cherry -v marks commits with '-' if already on target, '+' if not
+      // Step 1: git cherry -v checks individual commits by patch-id.
+      // This catches cherry-picks and regular merges.
       final output = await _runGit(
         ['cherry', '-v', targetBranch, branch],
         workingDirectory: path,
@@ -994,20 +998,51 @@ class RealGitService implements GitService {
         if (line.isEmpty) continue;
         // Format: "+ sha message" or "- sha message"
         if (line.startsWith('+ ')) {
-          // This commit is NOT on target branch
-          // Extract message (skip "+ sha ")
           final parts = line.substring(2).split(' ');
           if (parts.length > 1) {
             unmerged.add(parts.sublist(1).join(' '));
           }
         }
-        // Lines starting with "- " are already on target, skip them
       }
+
+      if (unmerged.isEmpty) return unmerged;
+
+      // Step 2: Individual commits weren't found — check for squash merge.
+      // Create a virtual squash commit that combines all branch changes into
+      // one commit, replicating what GitHub's "Squash and merge" produces.
+      // Then cherry-check that single commit against the target.
+      final mergeBase = (await _runGit(
+        ['merge-base', targetBranch, branch],
+        workingDirectory: path,
+      )).trim();
+
+      final branchTree = (await _runGit(
+        ['rev-parse', '$branch^{tree}'],
+        workingDirectory: path,
+      )).trim();
+
+      // git commit-tree creates an object in the store but moves no refs.
+      final virtualSha = (await _runGit(
+        ['commit-tree', branchTree, '-p', mergeBase, '-m', 'virtual squash'],
+        workingDirectory: path,
+      )).trim();
+
+      final cherryOutput = (await _runGit(
+        ['cherry', targetBranch, virtualSha],
+        workingDirectory: path,
+      )).trim();
+
+      // "- <sha>" means patch-id matched — squash merge detected.
+      if (cherryOutput.startsWith('- ')) {
+        return [];
+      }
+
+      // Squash check didn't match either — genuinely unmerged.
       return unmerged;
     } on GitException catch (e) {
       LogService.instance.warn(
         'Git',
-        'getUnmergedCommits: git cherry failed',
+        'getUnmergedCommits: failed',
         meta: {'path': path, 'branch': branch, 'target': targetBranch, 'error': '$e'},
       );
       return [];
