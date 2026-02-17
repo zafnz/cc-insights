@@ -174,6 +174,8 @@ class CodexSession implements AgentSession {
         _handleConfigWarning(params);
       case 'account/rateLimits/updated':
         _handleRateLimitsUpdated(params);
+      case 'error':
+        _handleErrorNotification(params);
       default:
         break;
     }
@@ -648,14 +650,22 @@ class CodexSession implements AgentSession {
       };
     }
 
+    // Extract error information from turn/completed params
+    final turnObj = params['turn'] as Map<String, dynamic>?;
+    final turnStatus = turnObj?['status'] as String?;
+    final isTurnError = turnStatus == 'failed';
+    final errorObj = turnObj?['error'] as Map<String, dynamic>?;
+    final errorMessage = errorObj?['message'] as String?;
+
     _eventsController.add(TurnCompleteEvent(
       id: _nextEventId(),
       timestamp: DateTime.now(),
       provider: BackendProvider.codex,
       raw: params,
       sessionId: threadId,
-      isError: false,
-      subtype: 'success',
+      isError: isTurnError,
+      subtype: isTurnError ? 'error_api' : 'success',
+      errors: isTurnError && errorMessage != null ? [errorMessage] : null,
       usage: TokenUsage(
         inputTokens: inputTokens,
         outputTokens: outputTokens,
@@ -665,6 +675,32 @@ class CodexSession implements AgentSession {
       extensions: lastStepUsage != null
           ? {'lastStepUsage': lastStepUsage}
           : null,
+    ));
+  }
+
+  void _handleErrorNotification(Map<String, dynamic> params) {
+    final errorObj = params['error'] as Map<String, dynamic>?;
+    final willRetry = params['willRetry'] as bool? ?? false;
+
+    // Only surface non-retryable errors as conversation output.
+    // Retryable errors are transient ("Reconnecting... 1/5") and would
+    // spam the conversation.
+    if (willRetry) return;
+
+    final message =
+        errorObj?['message'] as String? ?? 'An unknown error occurred';
+    final details = errorObj?['additionalDetails'] as String?;
+    final errorText =
+        details != null && details.isNotEmpty ? '$message\n$details' : message;
+
+    _eventsController.add(TextEvent(
+      id: _nextEventId(),
+      timestamp: DateTime.now(),
+      provider: BackendProvider.codex,
+      raw: params,
+      sessionId: threadId,
+      text: errorText,
+      kind: TextKind.error,
     ));
   }
 

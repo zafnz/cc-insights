@@ -184,6 +184,22 @@ mixin _LifecycleMixin on _EventHandlerBase {
 
       chat.session.setWorking(false);
 
+      // Surface turn-level errors that weren't already shown via TextEvent
+      if (event.isError &&
+          event.errors != null &&
+          event.errors!.isNotEmpty &&
+          !pipeline.hasAssistantOutputThisTurn) {
+        final errorText = event.errors!.join('\n');
+        chat.conversations.addEntry(
+          TextOutputEntry(
+            timestamp: DateTime.now(),
+            text: errorText,
+            contentType: 'text',
+            errorType: 'error',
+          ),
+        );
+      }
+
       // Handle no-output result
       final result = event.result;
       if (!pipeline.hasAssistantOutputThisTurn &&
