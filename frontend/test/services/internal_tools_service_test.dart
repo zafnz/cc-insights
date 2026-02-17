@@ -853,7 +853,7 @@ void main() {
         // Verify result JSON
         final json = jsonDecode(result.content) as Map<String, dynamic>;
         expect(json['success'], isFalse);
-        expect(json['error'], 'pre-commit hook failed');
+        expect(json['error'], contains('pre-commit hook failed'));
       });
 
       test('error: stage fails → returns JSON with error (no commit attempted)',
@@ -884,7 +884,7 @@ void main() {
         // Verify result JSON
         final json = jsonDecode(result.content) as Map<String, dynamic>;
         expect(json['success'], isFalse);
-        expect(json['error'], 'pathspec did not match');
+        expect(json['error'], contains('pathspec did not match'));
       });
     });
 

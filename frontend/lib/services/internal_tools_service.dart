@@ -331,7 +331,7 @@ class InternalToolsService extends ChangeNotifier {
 
       return InternalToolResult.text(result);
     } on GitException catch (e) {
-      return InternalToolResult.error('Git error: ${e.message}');
+      return InternalToolResult.error('Git error: $e');
     }
   }
 
@@ -455,7 +455,7 @@ class InternalToolsService extends ChangeNotifier {
 
       return InternalToolResult.text(jsonEncode({
         'success': false,
-        'error': e.message,
+        'error': e.toString(),
       }));
     }
   }
@@ -515,7 +515,7 @@ class InternalToolsService extends ChangeNotifier {
       }
       return InternalToolResult.text(log.trimRight());
     } on GitException catch (e) {
-      return InternalToolResult.error('Git error: ${e.message}');
+      return InternalToolResult.error('Git error: $e');
     }
   }
 
@@ -589,7 +589,7 @@ class InternalToolsService extends ChangeNotifier {
       }
       return InternalToolResult.text(diff.trimRight());
     } on GitException catch (e) {
-      return InternalToolResult.error('Git error: ${e.message}');
+      return InternalToolResult.error('Git error: $e');
     }
   }
 
