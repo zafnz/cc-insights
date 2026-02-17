@@ -74,7 +74,15 @@ void main() {
   setUpAll(() async {
     // Create temp directory for persistence isolation
     persistenceTempDir = await Directory.systemTemp.createTemp('integration_test_');
-    PersistenceService.setBaseDir('${persistenceTempDir.path}/.ccinsights');
+    final baseDir = '${persistenceTempDir.path}/.ccinsights';
+    PersistenceService.setBaseDir(baseDir);
+
+    // Pre-populate settings so onboarding is skipped
+    final configDir = Directory(baseDir);
+    await configDir.create(recursive: true);
+    await File('$baseDir/config.json').writeAsString(
+      '{"onboarding.completed": true, "agents.available": [{"name": "claude", "type": "claude"}]}',
+    );
 
     // Ensure screenshots directory exists
     final screenshotsDir = Directory('screenshots');

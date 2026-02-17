@@ -13,6 +13,7 @@ import 'package:cc_insights_v2/services/persistence_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
 import 'package:cc_insights_v2/testing/test_helpers.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
+import 'package:cc_insights_v2/widgets/tool_card.dart';
 
 /// Integration tests that run on actual devices/emulators with screenshot support.
 ///
@@ -772,21 +773,33 @@ void main() {
       expect(allConversationScrollables, findsWidgets);
       final conversationScrollable = allConversationScrollables.first;
 
-      // Scroll to find the Bash tool (near the end of the conversation)
-      final bashToolFinder = find.text('Bash');
+      // Find the Bash ToolCard by looking for a ToolCard whose entry has
+      // toolName == 'Bash'
+      final bashCardFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is ToolCard && widget.entry.toolName == 'Bash',
+      );
+
+      // Scroll to make the Bash tool card visible
       await tester.scrollUntilVisible(
-        bashToolFinder,
-        200, // Scroll down towards newer items
+        bashCardFinder,
+        -200,
         scrollable: conversationScrollable,
       );
       await safePumpAndSettle(tester);
 
-      // Tap to expand the Bash tool card
-      await tester.tap(bashToolFinder.first);
+      expect(bashCardFinder, findsOneWidget,
+          reason: 'Should find exactly one Bash ToolCard');
+
+      // Ensure the Bash card is fully visible before tapping
+      await tester.ensureVisible(bashCardFinder);
+      await safePumpAndSettle(tester);
+
+      // Tap to expand
+      await tester.tap(bashCardFinder);
       await safePumpAndSettle(tester);
 
       // Verify the command is shown with '$ ls' format
-      // (SelectableText needs textContaining, not text)
       expect(
         find.textContaining('\$ ls'),
         findsOneWidget,

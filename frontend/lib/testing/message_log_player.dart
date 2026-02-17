@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' show ToolKind;
+
 import '../models/output_entry.dart';
 
 /// A log entry from the SDK message log file.
@@ -105,9 +107,11 @@ class MessageTransformer {
           }
 
         case 'tool_use':
+          final name = blockMap['name'] as String? ?? 'unknown';
           final toolUseEntry = ToolUseOutputEntry(
             timestamp: timestamp,
-            toolName: blockMap['name'] as String? ?? 'unknown',
+            toolName: name,
+            toolKind: ToolKind.fromToolName(name),
             toolUseId: blockMap['id'] as String? ?? '',
             toolInput: blockMap['input'] as Map<String, dynamic>? ?? {},
             model: message['model'] as String?,
