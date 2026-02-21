@@ -161,6 +161,8 @@ class EventHandler extends _EventHandlerBase
     if (streamingEntries != null && streamingEntries.isNotEmpty) {
       for (final entry in streamingEntries) {
         if (entry is ToolUseOutputEntry && entry.toolUseId == event.callId) {
+          entry.toolName = event.toolName;
+          entry.toolKind = event.kind;
           entry.toolInput
             ..clear()
             ..addAll(Map<String, dynamic>.from(event.input));

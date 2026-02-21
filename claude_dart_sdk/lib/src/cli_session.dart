@@ -853,8 +853,14 @@ class CliSession {
         kind = StreamDeltaKind.blockStart;
         blockIndex = event['index'] as int?;
         final contentBlock = event['content_block'] as Map<String, dynamic>?;
-        if (contentBlock?['type'] == 'tool_use') {
+        final blockType = contentBlock?['type'] as String?;
+        if (blockType == 'tool_use') {
           callId = contentBlock?['id'] as String?;
+          extensions = {
+            'tool_name': contentBlock?['name'] as String? ?? '',
+          };
+        } else if (blockType == 'thinking') {
+          extensions = {'block_type': 'thinking'};
         }
 
       case 'content_block_delta':

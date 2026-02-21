@@ -471,10 +471,12 @@ class TextOutputEntry extends OutputEntry {
 // ignore: must_be_immutable
 class ToolUseOutputEntry extends OutputEntry {
   /// The name of the tool being used.
-  final String toolName;
+  /// Mutable - may be updated when streaming entry is finalized.
+  String toolName;
 
   /// Semantic category of the tool.
-  final ToolKind toolKind;
+  /// Mutable - may be updated when streaming entry is finalized.
+  ToolKind toolKind;
 
   /// Which backend produced this tool call.
   final BackendProvider? provider;
