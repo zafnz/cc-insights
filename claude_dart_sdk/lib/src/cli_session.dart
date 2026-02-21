@@ -196,7 +196,7 @@ class CliSession {
 
       default:
         // Unknown message type - log and continue
-        SdkLogger.instance.debug('Unknown message type ignored',
+        SdkLogger.instance.debug('Unknown message type ignored: $type',
             sessionId: sessionId, data: {'type': type});
     }
 
