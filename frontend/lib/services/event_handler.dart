@@ -237,23 +237,6 @@ class EventHandler extends _EventHandlerBase
       event.parentCallId,
     );
 
-    // Check for streaming entries to finalize
-    final streamingEntries = pipeline.activeStreamingEntries.remove(
-      conversationId,
-    );
-    if (streamingEntries != null && streamingEntries.isNotEmpty) {
-      for (final entry in streamingEntries) {
-        if (entry is TextOutputEntry) {
-          entry.text = event.text;
-          entry.isStreaming = false;
-          entry.addRawMessage(event.raw ?? {});
-          chat.persistence.persistStreamingEntry(entry);
-          chat.conversations.notifyMutation();
-          return;
-        }
-      }
-    }
-
     final String contentType;
     String? errorType;
 
@@ -266,6 +249,32 @@ class EventHandler extends _EventHandlerBase
       case TextKind.text:
       case TextKind.plan:
         contentType = 'text';
+    }
+
+    // Check for streaming entries to finalize.
+    // Match by content type so thinking and text blocks pair correctly,
+    // and remove only the matched entry (not all entries for the conversation).
+    final streamingEntries = pipeline.activeStreamingEntries[conversationId];
+    if (streamingEntries != null && streamingEntries.isNotEmpty) {
+      final matchIndex = streamingEntries.indexWhere(
+        (e) => e is TextOutputEntry && e.contentType == contentType,
+      );
+      if (matchIndex >= 0) {
+        final entry =
+            streamingEntries.removeAt(matchIndex) as TextOutputEntry;
+        if (streamingEntries.isEmpty) {
+          pipeline.activeStreamingEntries.remove(conversationId);
+        }
+        entry.text = event.text;
+        entry.isStreaming = false;
+        entry.addRawMessage(event.raw ?? {});
+        chat.persistence.persistStreamingEntry(entry);
+        chat.conversations.notifyMutation();
+        if (event.parentCallId == null) {
+          pipeline.hasAssistantOutputThisTurn = true;
+        }
+        return;
+      }
     }
 
     final entry = TextOutputEntry(
