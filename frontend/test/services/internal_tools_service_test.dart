@@ -766,7 +766,7 @@ void main() {
         expect(result.content, contains('Missing or empty "message"'));
       });
 
-      test('success: stages files, commits, returns JSON', () async {
+      test('success: stages files, commits, returns message', () async {
         final service = resources.track(InternalToolsService());
         service.registerGitTools(fakeGit);
 
@@ -791,12 +791,10 @@ void main() {
         expect(fakeGit.commitCalls[0].$1, '/test/repo');
         expect(fakeGit.commitCalls[0].$2, 'Add new features');
 
-        // Verify result JSON
-        final json = jsonDecode(result.content) as Map<String, dynamic>;
-        expect(json['success'], isTrue);
-        expect(json['sha'], '495d5de');
-        expect(json['message'], 'Add new features');
-        expect(json['files_committed'], ['lib/foo.dart', 'lib/bar.dart']);
+        // Verify result is a human-readable success message
+        expect(result.content, contains('495d5de'));
+        expect(result.content, contains('2 files'));
+        expect(result.content, contains('Add new features'));
       });
 
       test('success: co_author appended as trailer', () async {
@@ -824,7 +822,7 @@ void main() {
         );
       });
 
-      test('error: commit fails → resets index, returns JSON with error',
+      test('error: commit fails → resets index, returns error',
           () async {
         final service = resources.track(InternalToolsService());
         service.registerGitTools(fakeGit);
@@ -838,7 +836,7 @@ void main() {
           'message': 'Add feature',
         });
 
-        expect(result.isError, isFalse); // Returns JSON, not error
+        expect(result.isError, isTrue);
 
         // Verify stageFiles was called
         expect(fakeGit.stageFilesCalls.length, 1);
@@ -850,13 +848,11 @@ void main() {
         expect(fakeGit.resetIndexCalls.length, 1);
         expect(fakeGit.resetIndexCalls[0], '/test/repo');
 
-        // Verify result JSON
-        final json = jsonDecode(result.content) as Map<String, dynamic>;
-        expect(json['success'], isFalse);
-        expect(json['error'], contains('pre-commit hook failed'));
+        // Verify error message
+        expect(result.content, contains('pre-commit hook failed'));
       });
 
-      test('error: stage fails → returns JSON with error (no commit attempted)',
+      test('error: stage fails → returns error (no commit attempted)',
           () async {
         final service = resources.track(InternalToolsService());
         service.registerGitTools(fakeGit);
@@ -870,7 +866,7 @@ void main() {
           'message': 'Add feature',
         });
 
-        expect(result.isError, isFalse); // Returns JSON, not error
+        expect(result.isError, isTrue);
 
         // Verify stageFiles was attempted
         expect(fakeGit.stageFilesCalls.length, 1);
@@ -881,10 +877,8 @@ void main() {
         // Verify resetIndex was called (best-effort cleanup)
         expect(fakeGit.resetIndexCalls.length, 1);
 
-        // Verify result JSON
-        final json = jsonDecode(result.content) as Map<String, dynamic>;
-        expect(json['success'], isFalse);
-        expect(json['error'], contains('pathspec did not match'));
+        // Verify error message
+        expect(result.content, contains('pathspec did not match'));
       });
     });
 

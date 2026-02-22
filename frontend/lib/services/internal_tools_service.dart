@@ -441,22 +441,19 @@ class InternalToolsService extends ChangeNotifier {
       // Get the short SHA of the new commit
       final sha = await gitService.getHeadShortSha(path);
 
-      return InternalToolResult.text(jsonEncode({
-        'success': true,
-        'sha': sha,
-        'message': message,
-        'files_committed': files,
-      }));
+      final fileCount = files.length;
+      final filesWord = fileCount == 1 ? 'file' : 'files';
+      return InternalToolResult.text(
+        'Committed $sha ($fileCount $filesWord): '
+        '${message.split('\n').first}',
+      );
     } on GitException catch (e) {
       // Best-effort reset of the index on failure
       try {
         await gitService.resetIndex(path);
       } catch (_) {}
 
-      return InternalToolResult.text(jsonEncode({
-        'success': false,
-        'error': e.toString(),
-      }));
+      return InternalToolResult.error('Commit failed: $e');
     }
   }
 
