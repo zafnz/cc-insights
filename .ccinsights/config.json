@@ -1,6 +1,7 @@
 {
   "actions": {
-    "worktree-post-create": "./init.sh"
+    "worktree-post-create": "./init.sh",
+    "worktree-pre-remove": "./dev-linux/cleanup.sh"
   },
   "user-actions": {
     "Test": "cd frontend && flutter test",
