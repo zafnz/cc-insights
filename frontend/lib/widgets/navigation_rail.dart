@@ -132,9 +132,8 @@ class _NavRailButton extends StatelessWidget {
       );
     }
 
-    return Tooltip(
+    return _SideTooltip(
       message: tooltip,
-      preferBelow: false,
       child: Material(
         color: isSelected
             ? colorScheme.primaryContainer.withValues(alpha: 0.5)
@@ -149,6 +148,87 @@ class _NavRailButton extends StatelessWidget {
             child: iconWidget,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A tooltip that appears to the right of its child, suitable for vertical
+/// navigation rails where standard above/below tooltips overlap other buttons.
+class _SideTooltip extends StatefulWidget {
+  const _SideTooltip({
+    required this.message,
+    required this.child,
+  });
+
+  final String message;
+  final Widget child;
+
+  @override
+  State<_SideTooltip> createState() => _SideTooltipState();
+}
+
+class _SideTooltipState extends State<_SideTooltip> {
+  OverlayEntry? _overlayEntry;
+
+  void _showTooltip() {
+    _removeTooltip();
+    final overlay = Overlay.of(context);
+    final box = context.findRenderObject() as RenderBox;
+    final target = box.localToGlobal(Offset.zero);
+    final size = box.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Positioned(
+          left: target.dx + size.width + 8,
+          top: target.dy + (size.height - 28) / 2,
+          child: IgnorePointer(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.inverseSurface,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  widget.message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onInverseSurface,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _removeTooltip() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  void dispose() {
+    _removeTooltip();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _showTooltip(),
+      onExit: (_) => _removeTooltip(),
+      child: Tooltip(
+        message: widget.message,
+        triggerMode: TooltipTriggerMode.manual,
+        child: widget.child,
       ),
     );
   }
