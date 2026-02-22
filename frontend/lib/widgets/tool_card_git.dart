@@ -245,6 +245,24 @@ class _GitDiffInput extends StatelessWidget {
 // Result widgets
 // =============================================================================
 
+/// Extracts plain text from a tool result that may be a content-block list.
+///
+/// MCP tool results arrive as `[{type: text, text: "..."}]`.  This helper
+/// unwraps such lists into the concatenated text.  If the result is already a
+/// String or Map it is returned as-is.
+dynamic _unwrapContentBlocks(dynamic result) {
+  if (result is List) {
+    final buffer = StringBuffer();
+    for (final block in result) {
+      if (block is Map && block['type'] == 'text') {
+        buffer.write(block['text'] ?? '');
+      }
+    }
+    if (buffer.isNotEmpty) return buffer.toString();
+  }
+  return result;
+}
+
 /// Dispatches to the correct git tool result widget.
 class GitToolResultWidget extends StatelessWidget {
   final String gitToolName;
@@ -258,11 +276,12 @@ class GitToolResultWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final unwrapped = _unwrapContentBlocks(result);
     return switch (gitToolName) {
-      'git_commit_context' => _GitCommitContextResult(result: result),
-      'git_commit' => _GitCommitResult(result: result),
-      'git_log' => _GitLogResult(result: result),
-      'git_diff' => _GitDiffResult(result: result),
+      'git_commit_context' => _GitCommitContextResult(result: unwrapped),
+      'git_commit' => _GitCommitResult(result: unwrapped),
+      'git_log' => _GitLogResult(result: unwrapped),
+      'git_diff' => _GitDiffResult(result: unwrapped),
       _ => const SizedBox.shrink(),
     };
   }
@@ -508,7 +527,10 @@ class _FileStatusGroup extends StatelessWidget {
   }
 }
 
-/// Renders git_commit result with success/failure display.
+/// Renders git_commit result as a success row.
+///
+/// The result is a plain-text string like:
+///   "Committed abc1234 (3 files): Add new feature"
 class _GitCommitResult extends StatelessWidget {
   final dynamic result;
 
@@ -516,109 +538,54 @@ class _GitCommitResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final text = result?.toString() ?? '';
     final monoFont = RuntimeConfig.instance.monoFontFamily;
 
-    // Parse JSON result
-    Map<String, dynamic>? parsed;
-    try {
-      if (result is String) {
-        parsed = jsonDecode(result as String) as Map<String, dynamic>;
-      } else if (result is Map) {
-        parsed = Map<String, dynamic>.from(result as Map);
-      }
-    } catch (_) {
-      // Fall through to raw text display
+    // Try to extract SHA from "Committed <sha> ..." pattern
+    final shaMatch = RegExp(r'Committed\s+(\S+)').firstMatch(text);
+    final sha = shaMatch?.group(1);
+
+    if (sha == null) {
+      return _RawTextFallback(text: text);
     }
 
-    if (parsed == null) {
-      return _RawTextFallback(text: result?.toString() ?? '');
-    }
+    // Everything after "Committed <sha> " is the summary
+    final summary = text.substring(shaMatch!.end).trim();
 
-    final success = parsed['success'] as bool? ?? false;
-
-    if (!success) {
-      final error = parsed['error'] as String? ?? 'Unknown error';
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.1),
-          borderRadius: Radii.smallBorderRadius,
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline, size: IconSizes.sm, color: Colors.red),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SelectableText(
-                error,
-                style: GoogleFonts.getFont(
-                  monoFont,
-                  fontSize: FontSizes.code,
-                  color: Colors.red,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final sha = parsed['sha'] as String? ?? '';
-    final filesCommitted =
-        (parsed['files_committed'] as List<dynamic>?) ?? [];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        // Success row with SHA
-        Row(
-          children: [
-            const Icon(
-              Icons.check_circle,
-              size: IconSizes.sm,
-              color: Colors.green,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Committed',
-              style: TextStyle(
-                fontSize: FontSizes.bodySmall,
-                fontWeight: FontWeight.w500,
-                color: Colors.green,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.teal.withValues(alpha: 0.15),
-                borderRadius: Radii.smallBorderRadius,
-              ),
-              child: Text(
-                sha,
-                style: GoogleFonts.getFont(
-                  monoFont,
-                  fontSize: FontSizes.code,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.teal,
-                ),
-              ),
-            ),
-          ],
+        const Icon(
+          Icons.check_circle,
+          size: IconSizes.sm,
+          color: Colors.green,
         ),
-
-        // Committed files
-        if (filesCommitted.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          SelectableText(
-            filesCommitted.join(', '),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.teal.withValues(alpha: 0.15),
+            borderRadius: Radii.smallBorderRadius,
+          ),
+          child: Text(
+            sha,
             style: GoogleFonts.getFont(
               monoFont,
               fontSize: FontSizes.code,
-              color: colorScheme.onSurface.withValues(alpha: 0.7),
+              fontWeight: FontWeight.bold,
+              color: Colors.teal,
+            ),
+          ),
+        ),
+        if (summary.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              summary,
+              style: TextStyle(
+                fontSize: FontSizes.bodySmall,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

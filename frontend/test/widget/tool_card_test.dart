@@ -1111,7 +1111,7 @@ void main() {
         expect(find.textContaining('Fix important bug'), findsOneWidget);
       });
 
-      testWidgets('git_commit result shows SHA and committed files when expanded',
+      testWidgets('git_commit result shows SHA and summary when expanded',
           (tester) async {
         final entry = createToolEntry(
           toolName: 'mcp__cci__git_commit',
@@ -1120,7 +1120,7 @@ void main() {
             'files': ['a.dart', 'b.dart'],
             'message': 'Fix bug',
           },
-          result: '{"success":true,"sha":"0ad5067","message":"Fix bug","files_committed":["a.dart","b.dart"]}',
+          result: 'Committed 0ad5067 (2 files): Fix bug',
         );
 
         await tester.pumpWidget(createTestApp(entry: entry));
@@ -1130,10 +1130,10 @@ void main() {
         await tester.tap(find.byType(InkWell).first);
         await safePumpAndSettle(tester);
 
-        // Should show SHA
+        // Should show SHA badge
         expect(find.text('0ad5067'), findsOneWidget);
-        // Should show "Committed" label
-        expect(find.text('Committed'), findsOneWidget);
+        // Should show summary
+        expect(find.text('(2 files): Fix bug'), findsOneWidget);
       });
 
       testWidgets('git_commit_context result shows branch and file status',
