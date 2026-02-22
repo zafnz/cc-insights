@@ -1062,6 +1062,215 @@ void main() {
     });
   });
 
+  group('InternalToolsService - check_agents handler', () {
+    late InternalToolsService service;
+    late OrchestratorState orchestratorState;
+    late Chat orchestratorChat;
+
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worktree',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      final repo = resources.track(TicketRepository('test-project'));
+      final fakeGit = FakeGitService();
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+
+      orchestratorChat = Chat.create(
+        name: 'Orchestrator',
+        worktreeRoot: '/test/worktree',
+      );
+      orchestratorState = OrchestratorState(
+        ticketBoard: repo,
+        ticketIds: [],
+        baseWorktreePath: '/test/worktree',
+      );
+      service.attachOrchestratorState(orchestratorChat, orchestratorState);
+    });
+
+    InternalToolDefinition getCheckAgentsTool() {
+      final registry = service.registryForChat(orchestratorChat);
+      return registry['check_agents']!;
+    }
+
+    test('returns error for missing agent_ids', () async {
+      final tool = getCheckAgentsTool();
+      final result = await tool.handler({});
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing or empty "agent_ids"'));
+    });
+
+    test('returns error for empty agent_ids list', () async {
+      final tool = getCheckAgentsTool();
+      final result = await tool.handler({'agent_ids': []});
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing or empty "agent_ids"'));
+    });
+
+    test('returns status for a single agent', () async {
+      final agentChat = Chat.create(
+        name: 'Agent A',
+        worktreeRoot: '/test/worktree',
+      );
+      orchestratorState.registerAgent(
+        agentId: 'agent-A',
+        chat: agentChat,
+      );
+
+      final tool = getCheckAgentsTool();
+      final result = await tool.handler({
+        'agent_ids': ['agent-A'],
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      final agents = json['agents'] as List;
+      final errors = json['errors'] as List;
+
+      expect(agents.length, 1);
+      expect(errors, isEmpty);
+
+      final agent = agents[0] as Map<String, dynamic>;
+      expect(agent['agent_id'], 'agent-A');
+      expect(agent['status'], isA<String>());
+      expect(agent['is_working'], isFalse);
+      expect(agent['turn_count'], isA<int>());
+      expect(agent['has_pending_permission'], isFalse);
+    });
+
+    test('returns status for multiple agents', () async {
+      final agentChatA = Chat.create(
+        name: 'Agent A',
+        worktreeRoot: '/test/worktree',
+      );
+      final agentChatB = Chat.create(
+        name: 'Agent B',
+        worktreeRoot: '/test/worktree',
+      );
+      orchestratorState.registerAgent(
+        agentId: 'agent-A',
+        chat: agentChatA,
+      );
+      orchestratorState.registerAgent(
+        agentId: 'agent-B',
+        chat: agentChatB,
+      );
+
+      final tool = getCheckAgentsTool();
+      final result = await tool.handler({
+        'agent_ids': ['agent-A', 'agent-B'],
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      final agents = json['agents'] as List;
+      final errors = json['errors'] as List;
+
+      expect(agents.length, 2);
+      expect(errors, isEmpty);
+
+      final ids = agents.map((a) => (a as Map<String, dynamic>)['agent_id']);
+      expect(ids, containsAll(['agent-A', 'agent-B']));
+    });
+
+    test('returns mix of valid agents and errors for unknown IDs', () async {
+      final agentChat = Chat.create(
+        name: 'Agent A',
+        worktreeRoot: '/test/worktree',
+      );
+      orchestratorState.registerAgent(
+        agentId: 'agent-A',
+        chat: agentChat,
+      );
+
+      final tool = getCheckAgentsTool();
+      final result = await tool.handler({
+        'agent_ids': ['agent-A', 'unknown-1', 'unknown-2'],
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      final agents = json['agents'] as List;
+      final errors = json['errors'] as List;
+
+      expect(agents.length, 1);
+      expect(
+        (agents[0] as Map<String, dynamic>)['agent_id'],
+        'agent-A',
+      );
+
+      expect(errors.length, 2);
+      expect(
+        (errors[0] as Map<String, dynamic>)['agent_id'],
+        'unknown-1',
+      );
+      expect(
+        (errors[0] as Map<String, dynamic>)['error'],
+        'agent_not_found',
+      );
+      expect(
+        (errors[1] as Map<String, dynamic>)['agent_id'],
+        'unknown-2',
+      );
+    });
+
+    test('tool is registered in orchestrator tools', () {
+      final registry = service.registryForChat(orchestratorChat);
+      expect(registry['check_agents'], isNotNull);
+      expect(registry['check_agents']!.name, 'check_agents');
+    });
+
+    test('tool is not available for non-orchestrator chats', () async {
+      // Ensure a distinct chat ID by waiting 1ms.
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      final regularChat = Chat.create(
+        name: 'Regular Chat',
+        worktreeRoot: '/test/worktree',
+      );
+      final registry = service.registryForChat(regularChat);
+      expect(registry['check_agents'], isNull);
+    });
+  });
+
   group('InternalToolsService - set_tags handler', () {
     late InternalToolsService service;
     late WorktreeState worktree;

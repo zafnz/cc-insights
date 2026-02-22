@@ -77,7 +77,7 @@ to wait for multiple agents at once:
   tell_agent(B, "do Y")
   wait_for_agents([A, B]) → whichever finishes first
 
-wait_for_agents() has a timeout. If it times out, call check_agent() for the
+wait_for_agents() has a timeout. If it times out, call check_agents() for the
 relevant agents, then call wait_for_agents() again to continue waiting.
 
 ### Worktree creation

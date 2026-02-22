@@ -169,7 +169,7 @@ class InternalToolsService extends ChangeNotifier {
     'tell_agent',
     'ask_agent',
     'wait_for_agents',
-    'check_agent',
+    'check_agents',
     'list_tickets',
     'get_ticket',
     'update_ticket',
@@ -382,7 +382,7 @@ class InternalToolsService extends ChangeNotifier {
       _tellAgentTool(orchestratorChat),
       _askAgentTool(orchestratorChat),
       _waitForAgentsTool(orchestratorChat),
-      _checkAgentTool(orchestratorChat),
+      _checkAgentsTool(orchestratorChat),
       _listTicketsTool(),
       _getTicketTool(),
       _updateTicketTool(),
@@ -849,38 +849,48 @@ class InternalToolsService extends ChangeNotifier {
     );
   }
 
-  InternalToolDefinition _checkAgentTool(Chat orchestratorChat) {
+  InternalToolDefinition _checkAgentsTool(Chat orchestratorChat) {
     return InternalToolDefinition(
-      name: 'check_agent',
-      description: 'Returns a non-blocking status snapshot for an agent.',
+      name: 'check_agents',
+      description:
+          'Returns a non-blocking status snapshot for one or more agents.',
       inputSchema: {
         'type': 'object',
         'properties': {
-          'agent_id': {'type': 'string'},
+          'agent_ids': {
+            'type': 'array',
+            'items': {'type': 'string'},
+          },
         },
-        'required': ['agent_id'],
+        'required': ['agent_ids'],
       },
-      handler: (input) => _handleCheckAgent(orchestratorChat, input),
+      handler: (input) => _handleCheckAgents(orchestratorChat, input),
     );
   }
 
-  Future<InternalToolResult> _handleCheckAgent(
+  Future<InternalToolResult> _handleCheckAgents(
     Chat orchestratorChat,
     Map<String, dynamic> input,
   ) async {
-    final agentId = input['agent_id'] as String?;
-    if (agentId == null || agentId.isEmpty) {
-      return InternalToolResult.error('Missing "agent_id"');
+    final rawIds = input['agent_ids'];
+    if (rawIds is! List || rawIds.isEmpty) {
+      return InternalToolResult.error('Missing or empty "agent_ids"');
     }
-    final agent = getOrchestratorState(orchestratorChat)?.getAgent(agentId);
-    if (agent == null) {
-      return InternalToolResult.error('agent_not_found: $agentId');
-    }
-    final lastMessage = _extractLastAssistantMessage(agent.chat);
-    final entryCount = agent.chat.data.primaryConversation.entries.length;
-    final status = _reasonForAgent(agent.chat);
-    return InternalToolResult.text(
-      jsonEncode({
+    final agentIds = rawIds.cast<String>();
+    final state = getOrchestratorState(orchestratorChat);
+    final agents = <Map<String, dynamic>>[];
+    final errors = <Map<String, dynamic>>[];
+    for (final agentId in agentIds) {
+      final agent = state?.getAgent(agentId);
+      if (agent == null) {
+        errors.add({'agent_id': agentId, 'error': 'agent_not_found'});
+        continue;
+      }
+      final lastMessage = _extractLastAssistantMessage(agent.chat);
+      final entryCount = agent.chat.data.primaryConversation.entries.length;
+      final status = _reasonForAgent(agent.chat);
+      agents.add({
+        'agent_id': agentId,
         'status': status.wireValue,
         'is_working': agent.chat.session.isWorking,
         if (lastMessage.isNotEmpty)
@@ -891,7 +901,10 @@ class InternalToolsService extends ChangeNotifier {
         'turn_count': (entryCount / 2).floor(),
         'has_pending_permission':
             agent.chat.permissions.pendingPermission != null,
-      }),
+      });
+    }
+    return InternalToolResult.text(
+      jsonEncode({'agents': agents, 'errors': errors}),
     );
   }
 
