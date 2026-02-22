@@ -162,6 +162,7 @@ class InternalToolsService extends ChangeNotifier {
   /// Maximum number of ticket proposals allowed in a single create_ticket call.
   static const int maxProposalCount = 50;
   static const int _defaultWaitTimeoutSeconds = 600;
+  static const int _defaultAskTimeoutSeconds = 60;
   static const int _maxWaitTimeoutSeconds = 3600;
 
   static const Set<String> _orchestratorToolNames = {
@@ -641,7 +642,9 @@ class InternalToolsService extends ChangeNotifier {
   InternalToolDefinition _askAgentTool(Chat orchestratorChat) {
     return InternalToolDefinition(
       name: 'ask_agent',
-      description: 'Send a message and wait for the agent turn to complete.',
+      description:
+          'Send a message and wait for the agent turn to complete. '
+          'Default timeout is ${_defaultAskTimeoutSeconds}s.',
       inputSchema: {
         'type': 'object',
         'properties': {
@@ -651,7 +654,7 @@ class InternalToolsService extends ChangeNotifier {
             'type': 'integer',
             'description':
                 'Optional wait timeout in seconds (default: '
-                '$_defaultWaitTimeoutSeconds)',
+                '$_defaultAskTimeoutSeconds)',
           },
         },
         'required': ['agent_id', 'message'],
@@ -681,18 +684,35 @@ class InternalToolsService extends ChangeNotifier {
       return InternalToolResult.error('agent_busy: $agentId');
     }
 
-    final timeout = _parseWaitTimeout(input);
+    final timeout = _parseAskTimeout(input);
     await agent.chat.session.sendMessage(message);
-    final completed = await _waitUntilAgentIdle(agent.chat, timeout: timeout);
-    final response = _extractLastAssistantMessage(agent.chat);
-    return InternalToolResult.text(
-      jsonEncode({
-        'response': response,
-        'completion_status': AgentCompletionStatus.unknown.wireValue,
-        'wait_timed_out': !completed,
-        if (!completed) 'status': _reasonForAgent(agent.chat).wireValue,
-      }),
+    final completed = await _waitUntilAgentIdle(
+      agent.chat,
+      timeout: timeout,
+      treatPermissionAsReady: false,
     );
+    final response = _extractLastAssistantMessage(agent.chat);
+    final result = <String, dynamic>{
+      'response': response,
+      'completion_status': AgentCompletionStatus.unknown.wireValue,
+      'wait_timed_out': !completed,
+    };
+    if (!completed) {
+      final status = _reasonForAgent(agent.chat);
+      result['status'] = status.wireValue;
+      final seconds = timeout.inSeconds;
+      if (status == AgentReadyReason.permissionNeeded) {
+        result['error'] =
+            'ask_agent timed out after $seconds seconds -- '
+            'the agent is waiting on the user. You should use '
+            'wait_for_agents to wait for the user to respond to that agent.';
+      } else if (agent.chat.session.isWorking) {
+        result['error'] =
+            'ask_agent timed out after $seconds seconds -- '
+            'you can use wait_for_agents to wait until the agent is idle.';
+      }
+    }
+    return InternalToolResult.text(jsonEncode(result));
   }
 
   InternalToolDefinition _waitForAgentsTool(Chat orchestratorChat) {
@@ -1435,11 +1455,16 @@ class InternalToolsService extends ChangeNotifier {
   Future<bool> _waitUntilAgentIdle(
     Chat chat, {
     required Duration timeout,
+    bool treatPermissionAsReady = true,
   }) async {
-    if (_isAgentReady(chat)) return true;
+    bool isReady() => treatPermissionAsReady
+        ? _isAgentReady(chat)
+        : _isAgentIdleIgnoringPermissions(chat);
+
+    if (isReady()) return true;
     final completer = Completer<void>();
     void listener() {
-      if (_isAgentReady(chat) && !completer.isCompleted) {
+      if (isReady() && !completer.isCompleted) {
         completer.complete();
       }
     }
@@ -1453,6 +1478,15 @@ class InternalToolsService extends ChangeNotifier {
     } finally {
       chat.session.removeListener(listener);
     }
+  }
+
+  /// Like [_isAgentReady] but does NOT treat pending permissions as "ready".
+  /// Used by ask_agent so the orchestrator gets a timeout error when the
+  /// agent is waiting on user permission rather than silently completing.
+  bool _isAgentIdleIgnoringPermissions(Chat chat) {
+    if (chat.session.sessionPhase == SessionPhase.errored) return true;
+    if (!chat.session.hasActiveSession) return true;
+    return !chat.session.isWorking;
   }
 
   String _extractLastAssistantMessage(Chat chat) {
@@ -1471,6 +1505,15 @@ class InternalToolsService extends ChangeNotifier {
     final raw = (input['timeout_seconds'] as num?)?.toInt();
     if (raw == null || raw <= 0) {
       return const Duration(seconds: _defaultWaitTimeoutSeconds);
+    }
+    final seconds = raw.clamp(1, _maxWaitTimeoutSeconds);
+    return Duration(seconds: seconds);
+  }
+
+  Duration _parseAskTimeout(Map<String, dynamic> input) {
+    final raw = (input['timeout_seconds'] as num?)?.toInt();
+    if (raw == null || raw <= 0) {
+      return const Duration(seconds: _defaultAskTimeoutSeconds);
     }
     final seconds = raw.clamp(1, _maxWaitTimeoutSeconds);
     return Duration(seconds: seconds);

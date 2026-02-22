@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cc_insights_v2/models/chat.dart';
+import 'package:cc_insights_v2/models/managed_agent.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
@@ -23,6 +24,59 @@ import 'package:flutter_test/flutter_test.dart';
 import '../fakes/fake_git_service.dart';
 import '../fakes/fake_persistence_service.dart';
 import '../test_helpers.dart';
+
+class _FakeTransport implements EventTransport {
+  final List<BackendCommand> sentCommands = [];
+
+  @override
+  String? get sessionId => 'test-session';
+
+  @override
+  String? get resolvedSessionId => sessionId;
+
+  @override
+  BackendCapabilities? get capabilities => null;
+
+  @override
+  Stream<InsightsEvent> get events => const Stream.empty();
+
+  @override
+  Stream<TransportStatus> get status => const Stream.empty();
+
+  @override
+  Stream<PermissionRequest> get permissionRequests => const Stream.empty();
+
+  @override
+  String? get serverModel => null;
+
+  @override
+  String? get serverReasoningEffort => null;
+
+  @override
+  Future<void> send(BackendCommand command) async {
+    sentCommands.add(command);
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+PermissionRequest _createFakePermissionRequest({
+  required String id,
+  String sessionId = 'test-session',
+  String toolName = 'Bash',
+  Map<String, dynamic> toolInput = const {'command': 'ls'},
+}) {
+  final completer = Completer<PermissionResponse>();
+  return PermissionRequest(
+    id: id,
+    sessionId: sessionId,
+    toolName: toolName,
+    toolInput: toolInput,
+    toolUseId: id,
+    completer: completer,
+  );
+}
 
 void main() {
   final resources = TestResources();
@@ -1864,6 +1918,178 @@ void main() {
       // agent-1 matches its last known → skipped, agent-2 has no entry → returned.
       expect(ready.length, 1);
       expect((ready[0] as Map<String, dynamic>)['agent_id'], 'agent-2');
+    });
+  });
+
+  group('InternalToolsService - ask_agent handler', () {
+    late InternalToolsService service;
+    late Chat orchestratorChat;
+    late Chat workerChat;
+    late OrchestratorState orchestratorState;
+
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worktree',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      final repo = resources.track(TicketRepository('test-project'));
+      final fakeGit = FakeGitService();
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+
+      orchestratorChat = Chat.create(
+        name: 'Orchestrator',
+        worktreeRoot: '/test/worktree',
+      );
+
+      orchestratorState = OrchestratorState(
+        ticketBoard: repo,
+        ticketIds: [1],
+        baseWorktreePath: '/test/worktree',
+      );
+      service.attachOrchestratorState(orchestratorChat, orchestratorState);
+
+      workerChat = Chat.create(
+        name: 'Worker',
+        worktreeRoot: '/test/worktree',
+      );
+      workerChat.session.setHasActiveSessionForTesting(true);
+      workerChat.session.setTransport(_FakeTransport());
+
+      orchestratorState.registerAgent(
+        agentId: 'agent-1',
+        chat: workerChat,
+      );
+    });
+
+    InternalToolDefinition getAskAgentTool() {
+      final registry = service.registryForChat(orchestratorChat);
+      return registry['ask_agent']!;
+    }
+
+    test('timeout returns working-agent error message', () async {
+      final tool = getAskAgentTool();
+
+      // The worker is set to "working" by sendMessage, and we never
+      // transition it to idle, so the wait will time out.
+      final result = await tool.handler({
+        'agent_id': 'agent-1',
+        'message': 'Do something',
+        'timeout_seconds': 1,
+      });
+
+      expect(result.isError, isFalse);
+
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['wait_timed_out'], isTrue);
+      expect(json['status'], AgentReadyReason.turnComplete.wireValue);
+      expect(
+        json['error'],
+        contains('ask_agent timed out after 1 seconds'),
+      );
+      expect(json['error'], contains('wait_for_agents'));
+      expect(json['error'], isNot(contains('waiting on the user')));
+    });
+
+    test('timeout returns waiting-on-user error message', () async {
+      final tool = getAskAgentTool();
+
+      // Start the ask_agent call with a very short timeout.
+      final resultFuture = tool.handler({
+        'agent_id': 'agent-1',
+        'message': 'Do something',
+        'timeout_seconds': 1,
+      });
+
+      // Simulate the agent being working AND having a pending permission.
+      // The agent is still isWorking=true (set by sendMessage), and we add
+      // a permission request to simulate the SDK pausing for user approval.
+      // With treatPermissionAsReady=false, the wait ignores the permission
+      // and times out.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      workerChat.permissions.add(
+        _createFakePermissionRequest(id: 'perm-1'),
+      );
+
+      final result = await resultFuture;
+      expect(result.isError, isFalse);
+
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['wait_timed_out'], isTrue);
+      expect(json['status'], AgentReadyReason.permissionNeeded.wireValue);
+      expect(
+        json['error'],
+        contains('ask_agent timed out after 1 seconds'),
+      );
+      expect(
+        json['error'],
+        contains('waiting on the user'),
+      );
+    });
+
+    test('explicit timeout_seconds override works', () async {
+      final tool = getAskAgentTool();
+
+      // Use a 2-second timeout and verify it actually waits longer
+      // than the default 1s test, but still times out since the agent
+      // remains working.
+      final stopwatch = Stopwatch()..start();
+      final result = await tool.handler({
+        'agent_id': 'agent-1',
+        'message': 'Do something',
+        'timeout_seconds': 2,
+      });
+      stopwatch.stop();
+
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['wait_timed_out'], isTrue);
+      expect(
+        json['error'],
+        contains('ask_agent timed out after 2 seconds'),
+      );
+      // Verify it actually waited ~2s (at least 1.5s to avoid flakiness)
+      expect(stopwatch.elapsedMilliseconds, greaterThan(1500));
+    });
+
+    test('tool description documents 60s default', () {
+      final tool = getAskAgentTool();
+      expect(tool.description, contains('60s'));
     });
   });
 }
