@@ -1310,6 +1310,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         ),
         // Side-effect provider: binds orchestration context when deps change.
         // Uses Object output to avoid shadowing the ChangeNotifierProvider above.
+        // Eager (lazy: false) so the binding runs immediately during the first
+        // build, not deferred until something reads the Object value.
         ProxyProvider6<
           BackendService,
           EventHandler,
@@ -1319,6 +1321,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           WorktreeService,
           Object
         >(
+          lazy: false,
           update:
               (
                 context,
