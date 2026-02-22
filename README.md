@@ -3,7 +3,7 @@
 Yet another Claude coordinator desktop GUI application. (Codex is still in very early stages)
 
 ## What's different this time?
-<img align=right width="600" height="404" alt="claude v0 0 15" src="https://github.com/user-attachments/assets/4f604410-a6b5-46c9-8fcb-cb30a17ee3a0" />
+<img align=right width="600" height="500" src="https://github.com/user-attachments/assets/f3b14f67-d1a1-4863-b125-15dda89609f2" />
 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
 - Designed specifically for **Vibe coding** - your almost exclusive focus is on the AI agents and what they are doing.
@@ -14,11 +14,12 @@ Yet another Claude coordinator desktop GUI application. (Codex is still in very 
 
 ## Claude & Codex
 
-This application primarily works with Claude, but has Codex support in early stages right now.
+This application primarily works with Claude, and Codex support is rapidly evolving. Gemini and other ACP clients works but work is still needed.
 
 ## More features
 
 - **Multi-agent visualization** - See main agents and subagents of claude in a tree structure
+- **Cost and Token Statistics** - A breakdown of agent usage and equivalent cost (how much you'd pay if you were paying direct API costs).
 - **Real-time output streaming** - Watch the agents' responses and tool usage as they happen
 - **Tool execution monitoring** - View tool inputs, outputs, and results
 - **Interactive Q&A** - Answer questions from Claude directly in the UI
@@ -100,7 +101,7 @@ This is in serious pre-alpha release. It's only for those who really want to see
 | 📦 Auto containerisation | ❌ | |
 | 📊 Statistics | ✅ | Full stats of usage by backend, worktree, chat, etc |
 | 📋 Task management | ❌ | Basics in place now |
-| 🤖 Z.ai GLM subscription | ❌ | Coming soon |
+| 🤖 Z.ai GLM subscription | ❌ | With remapper this now essentially works, but is manual |
 | 🧠 Codex backend | ✅ | 1st class citizen |
 | 🧠 ACP(Gemini) backend | 🫤 | Works, but not well |
 
