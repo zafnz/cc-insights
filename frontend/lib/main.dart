@@ -20,6 +20,7 @@ import 'screens/main_screen.dart';
 import 'screens/replay_demo_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'widgets/app_menu_bar.dart';
+import 'widgets/cli_launcher_dialog.dart';
 import 'widgets/directory_validation_dialog.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/ask_ai_service.dart';
@@ -916,6 +917,20 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         // Discover models for all available agents
         _backend?.discoverModelsForAllAgents();
         setState(() {});
+
+        // Offer CLI launcher install on first run
+        if (!_settingsService!.hasOfferedCliLauncher) {
+          _settingsService!.setCliLauncherOffered(true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final dialogContext = _navigatorKey.currentContext;
+            if (dialogContext != null && mounted) {
+              showCliLauncherDialog(
+                context: dialogContext,
+                isFirstRun: true,
+              );
+            }
+          });
+        }
       },
       onCancel: () {
         // Cancel returns to welcome screen
@@ -1024,6 +1039,13 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     });
   }
 
+  /// Shows the CLI launcher installation dialog.
+  void _handleInstallCliLauncher() {
+    final dialogContext = _navigatorKey.currentContext;
+    if (dialogContext == null) return;
+    showCliLauncherDialog(context: dialogContext);
+  }
+
   /// Closes the current project and returns to the welcome screen.
   void _handleCloseProject() {
     setState(() {
@@ -1099,6 +1121,9 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       onShowStats: _projectSelected
           ? () => _menuActionService.triggerAction(MenuAction.showStats)
           : null,
+
+      // App menu
+      onInstallCliLauncher: _handleInstallCliLauncher,
 
       // Panels
       onToggleMergeChatsAgents: _projectSelected

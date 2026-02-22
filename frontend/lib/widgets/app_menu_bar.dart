@@ -39,6 +39,9 @@ class MenuCallbacks {
   final VoidCallback? onShowLogs;
   final VoidCallback? onShowStats;
 
+  // App menu
+  final VoidCallback? onInstallCliLauncher;
+
   // Panels
   final VoidCallback? onToggleMergeChatsAgents;
 
@@ -67,6 +70,7 @@ class MenuCallbacks {
     this.onShowSettings,
     this.onShowLogs,
     this.onShowStats,
+    this.onInstallCliLauncher,
     this.onToggleMergeChatsAgents,
     this.agentsMergedIntoChats = false,
   });
@@ -130,6 +134,14 @@ class AppMenuBar extends StatelessWidget {
                     meta: true,
                   ),
                   onSelected: callbacks.onShowSettings,
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Install CLI Launcher...',
+                  onSelected: callbacks.onInstallCliLauncher,
                 ),
               ],
             ),

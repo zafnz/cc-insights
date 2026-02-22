@@ -680,6 +680,23 @@ class SettingsService extends ChangeNotifier {
     await _save();
   }
 
+  // ---------------------------------------------------------------------------
+  // CLI Launcher
+  // ---------------------------------------------------------------------------
+
+  /// Key for tracking whether the CLI launcher install has been offered.
+  static const cliLauncherOfferedKey = 'cli.launcherOffered';
+
+  /// Whether the CLI launcher installation has been offered to the user.
+  bool get hasOfferedCliLauncher =>
+      _values[cliLauncherOfferedKey] == true;
+
+  /// Marks the CLI launcher as having been offered and persists the flag.
+  Future<void> setCliLauncherOffered(bool offered) async {
+    _values[cliLauncherOfferedKey] = offered;
+    await _save();
+  }
+
   /// Syncs the agent list to RuntimeConfig.
   void _syncAgentsToRuntimeConfig() {
     RuntimeConfig.instance.agents = availableAgents;
