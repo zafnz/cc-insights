@@ -256,8 +256,8 @@ void main() {
 
         expect(find.text('Default'), findsWidgets);
         expect(find.text('Accept Edits'), findsWidgets);
-        expect(find.text('Plan'), findsWidgets);
-        expect(find.text('Bypass Permissions'), findsWidgets);
+        expect(find.text('Plan Only'), findsWidgets);
+        expect(find.text('Bypass All'), findsWidgets);
       });
 
       testWidgets('allows changing permission mode', (tester) async {

@@ -1,8 +1,9 @@
-import 'package:agent_sdk_core/agent_sdk_core.dart'
-    show BackendCapabilities, PermissionMode;
+import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendCapabilities;
+import 'package:agent_sdk_core/agent_sdk_core.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/chat.dart' show PermissionMode;
 import '../models/chat_model.dart';
 import '../models/ticket.dart';
 import '../models/project.dart';
@@ -206,7 +207,8 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         initialInstructions:
             '${_instructionsController.text.trim()}\n\nBase worktree: ${created.data.worktreeRoot}\nBase branch: ${created.data.branch}',
         model: selectedModel,
-        permissionMode: _selectedPermissionMode,
+        permissionMode: sdk.PermissionMode.fromString(
+            _selectedPermissionMode.apiName),
       );
 
       if (mounted) {

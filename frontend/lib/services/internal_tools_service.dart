@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../models/chat.dart';
 import '../models/managed_agent.dart';
@@ -409,7 +410,20 @@ class InternalToolsService extends ChangeNotifier {
       baseWorktreePath: basePath,
       startTime: startTime != null ? DateTime.tryParse(startTime) : null,
     );
-    attachOrchestratorState(chat, state);
+    // Attach without notifying synchronously — this is called during build
+    // via getOrchestratorState(). Defer the notification to avoid
+    // "setState() called during build" errors.
+    _orchestratorsByChatId[chat.id] = state;
+    chat.settings.setIsOrchestratorChat(true);
+    chat.settings.setOrchestrationToolsEnabled(true);
+    chat.settings.setOrchestrationData(state.toSnapshot());
+    state.addListener(() {
+      if (_orchestratorsByChatId[chat.id] != state) return;
+      chat.settings.setOrchestrationData(state.toSnapshot());
+    });
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
 
     final agents = snapshot['agents'] as List<dynamic>? ?? [];
     for (final raw in agents) {
