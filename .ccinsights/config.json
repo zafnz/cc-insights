@@ -4,14 +4,14 @@
     "worktree-pre-remove": "./dev-linux/cleanup.sh"
   },
   "user-actions": {
-    "Test": "cd frontend && flutter test",
     "Run": "./run.sh",
     "Pelagia": "./run.sh /Users/zaf/projects/pelagia",
     "Review": {
       "type": "start-chat",
       "agent-id": "claude-default",
       "instruction": "Review the work done on this branch. Look at it for anti patterns, bad design, or code smell."
-    }
+    },
+    "Start Container": "./dev-linux/launch.sh"
   },
   "default-base": "main"
 }
