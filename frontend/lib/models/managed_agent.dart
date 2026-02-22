@@ -3,7 +3,6 @@ import 'chat.dart';
 /// Reason why a managed worker agent became ready.
 enum AgentReadyReason {
   turnComplete('turn_complete'),
-  permissionNeeded('permission_needed'),
   error('error'),
   stopped('stopped');
 

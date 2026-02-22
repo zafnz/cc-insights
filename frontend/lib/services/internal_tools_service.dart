@@ -1346,16 +1346,12 @@ class InternalToolsService extends ChangeNotifier {
   }
 
   bool _isAgentReady(Chat chat) {
-    if (chat.permissions.pendingPermission != null) return true;
     if (chat.session.sessionPhase == SessionPhase.errored) return true;
     if (!chat.session.hasActiveSession) return true;
     return !chat.session.isWorking;
   }
 
   AgentReadyReason _reasonForAgent(Chat chat) {
-    if (chat.permissions.pendingPermission != null) {
-      return AgentReadyReason.permissionNeeded;
-    }
     if (chat.session.sessionPhase == SessionPhase.errored) {
       return AgentReadyReason.error;
     }
@@ -1378,7 +1374,6 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     chat.session.addListener(listener);
-    chat.permissions.addListener(listener);
     try {
       await completer.future.timeout(timeout);
       return true;
@@ -1386,7 +1381,6 @@ class InternalToolsService extends ChangeNotifier {
       return false;
     } finally {
       chat.session.removeListener(listener);
-      chat.permissions.removeListener(listener);
     }
   }
 
