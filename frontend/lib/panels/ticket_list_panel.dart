@@ -164,42 +164,45 @@ class _Toolbar extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final showOrchestrationButtons = constraints.maxWidth > 360;
+          final compact = constraints.maxWidth < 280;
+          final buttonStyle = IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          );
           return Row(
             children: [
               // Filter button with active indicator
               _FilterButton(
                 key: TicketListPanelKeys.filterButton,
                 hasActiveFilters: hasActiveFilters,
+                compact: compact,
               ),
               const Spacer(),
-              if (showOrchestrationButtons) ...[
-                IconButton(
-                  key: TicketListPanelKeys.runButton,
-                  onPressed: canRun ? () => _openRunDialog(context) : null,
-                  icon: Icon(
-                    Icons.hub,
-                    size: 16,
-                    color: canRun
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                  ),
-                  tooltip: canRun
-                      ? 'Run $selectedCount tickets…'
-                      : 'Select tickets to run',
-                  iconSize: 16,
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  padding: EdgeInsets.zero,
+              IconButton(
+                key: TicketListPanelKeys.runButton,
+                onPressed: canRun ? () => _openRunDialog(context) : null,
+                icon: Icon(
+                  Icons.hub,
+                  size: 16,
+                  color: canRun
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
                 ),
-                if (canRun)
-                  _BulkChangeButton(
-                    key: TicketListPanelKeys.bulkChangeButton,
-                    selectedCount: selectedCount,
-                  ),
-              ],
+                tooltip: canRun
+                    ? 'Run $selectedCount tickets…'
+                    : 'Select tickets to run',
+                iconSize: 16,
+                constraints: const BoxConstraints(
+                  minWidth: 28,
+                  minHeight: 28,
+                ),
+                padding: EdgeInsets.zero,
+                style: buttonStyle,
+              ),
+              if (canRun)
+                _BulkChangeButton(
+                  key: TicketListPanelKeys.bulkChangeButton,
+                  selectedCount: selectedCount,
+                ),
               // Start Next button
               IconButton(
                 key: TicketListPanelKeys.startNextButton,
@@ -216,6 +219,7 @@ class _Toolbar extends StatelessWidget {
                 iconSize: 16,
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 padding: EdgeInsets.zero,
+                style: buttonStyle,
                 tooltip: hasNext
                     ? 'Start next: ${nextTicket.displayId}'
                     : 'No ready tickets',
@@ -229,6 +233,7 @@ class _Toolbar extends StatelessWidget {
                 iconSize: 16,
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 padding: EdgeInsets.zero,
+                style: buttonStyle,
                 tooltip: 'New ticket',
               ),
             ],
@@ -580,9 +585,14 @@ class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
 
 /// Filter button that opens a popup menu with filter options.
 class _FilterButton extends StatelessWidget {
-  const _FilterButton({super.key, required this.hasActiveFilters});
+  const _FilterButton({
+    super.key,
+    required this.hasActiveFilters,
+    this.compact = false,
+  });
 
   final bool hasActiveFilters;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -596,7 +606,7 @@ class _FilterButton extends StatelessWidget {
       itemBuilder: (context) => _buildFilterItems(context, viewState),
       child: Container(
         height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(4),
@@ -627,15 +637,17 @@ class _FilterButton extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(width: 4),
-            Text(
-              'Filter',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.onSurfaceVariant,
+            if (!compact) ...[
+              const SizedBox(width: 4),
+              Text(
+                'Filter',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
