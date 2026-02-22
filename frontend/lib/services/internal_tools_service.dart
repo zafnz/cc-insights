@@ -701,14 +701,15 @@ class InternalToolsService extends ChangeNotifier {
       final status = _reasonForAgent(agent.chat);
       result['status'] = status.wireValue;
       final seconds = timeout.inSeconds;
+      final unit = seconds == 1 ? 'second' : 'seconds';
       if (status == AgentReadyReason.permissionNeeded) {
         result['error'] =
-            'ask_agent timed out after $seconds seconds -- '
+            'ask_agent timed out after $seconds $unit -- '
             'the agent is waiting on the user. You should use '
             'wait_for_agents to wait for the user to respond to that agent.';
       } else if (agent.chat.session.isWorking) {
         result['error'] =
-            'ask_agent timed out after $seconds seconds -- '
+            'ask_agent timed out after $seconds $unit -- '
             'you can use wait_for_agents to wait until the agent is idle.';
       }
     }

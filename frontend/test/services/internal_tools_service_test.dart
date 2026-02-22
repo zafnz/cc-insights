@@ -2021,7 +2021,7 @@ void main() {
       expect(json['status'], AgentReadyReason.turnComplete.wireValue);
       expect(
         json['error'],
-        contains('ask_agent timed out after 1 seconds'),
+        contains('ask_agent timed out after 1 second'),
       );
       expect(json['error'], contains('wait_for_agents'));
       expect(json['error'], isNot(contains('waiting on the user')));
@@ -2055,7 +2055,7 @@ void main() {
       expect(json['status'], AgentReadyReason.permissionNeeded.wireValue);
       expect(
         json['error'],
-        contains('ask_agent timed out after 1 seconds'),
+        contains('ask_agent timed out after 1 second'),
       );
       expect(
         json['error'],
@@ -2081,7 +2081,7 @@ void main() {
       expect(json['wait_timed_out'], isTrue);
       expect(
         json['error'],
-        contains('ask_agent timed out after 2 seconds'),
+        contains('ask_agent timed out after 2 second'),
       );
       // Verify it actually waited ~2s (at least 1.5s to avoid flakiness)
       expect(stopwatch.elapsedMilliseconds, greaterThan(1500));
