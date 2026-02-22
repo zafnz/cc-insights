@@ -304,8 +304,8 @@ class SettingsService extends ChangeNotifier {
             'Path to write application logs. Leave empty to disable '
             'file logging. Logs are written in JSONL format.',
         type: SettingType.text,
-        defaultValue: '~/ccinsights.app.jsonl',
-        placeholder: '~/ccinsights.app.jsonl',
+        defaultValue: '~/.ccinsights/logs/app.jsonl',
+        placeholder: '~/.ccinsights/logs/app.jsonl',
       ),
       SettingDefinition(
         key: 'logging.minimumLevel',
@@ -368,8 +368,8 @@ class SettingsService extends ChangeNotifier {
             'Path for SDK trace logs when Debug SDK Logging is '
             'enabled. Logs are written in JSONL format.',
         type: SettingType.text,
-        defaultValue: '~/ccinsights.trace.jsonl',
-        placeholder: '~/ccinsights.trace.jsonl',
+        defaultValue: '~/.ccinsights/logs/trace.jsonl',
+        placeholder: '~/.ccinsights/logs/trace.jsonl',
       ),
       SettingDefinition(
         key: 'developer.markdownBackend',

@@ -21,7 +21,7 @@ graph TB
         LOG["_log: debug/info/warning/error"]
     end
 
-    TRACE["~/ccinsights.trace.jsonl\nraw protocol messages only"]
+    TRACE["~/.ccinsights/logs/trace.jsonl\nraw protocol messages only"]
 
     BRIDGE["main.dart bridge\nSdkLogger.logs listener"]
 
@@ -29,7 +29,7 @@ graph TB
         direction TB
         LS_LOG[log]
         BUFFER["In-memory ring buffer\n10,000 entries"]
-        APP_FILE["~/ccinsights.app.jsonl"]
+        APP_FILE["~/.ccinsights/logs/app.jsonl"]
         UI["Log Viewer UI\nrate-limited notifications"]
     end
 
@@ -58,8 +58,8 @@ graph TB
 
 | File | Default Path | Contents | Format |
 |------|-------------|----------|--------|
-| **Trace log** | `~/ccinsights.trace.jsonl` | Raw JSON messages between backends and their CLI subprocesses | JSONL (one JSON object per line) |
-| **App log** | `~/ccinsights.app.jsonl` | Application-level events: diagnostics, warnings, errors, state changes | JSONL (one JSON object per line) |
+| **Trace log** | `~/.ccinsights/logs/trace.jsonl` | Raw JSON messages between backends and their CLI subprocesses | JSONL (one JSON object per line) |
+| **App log** | `~/.ccinsights/logs/app.jsonl` | Application-level events: diagnostics, warnings, errors, state changes | JSONL (one JSON object per line) |
 
 ### Trace Log
 
@@ -168,7 +168,7 @@ graph TD
 The application-level logging singleton. Manages:
 
 - **In-memory ring buffer** (10,000 entries) for the log viewer UI
-- **File output** to `~/ccinsights.app.jsonl` (with configurable minimum level)
+- **File output** to `~/.ccinsights/logs/app.jsonl` (with configurable minimum level)
 - **Rate-limited notifications** (max 10/sec) to `ChangeNotifier` listeners
 
 Log levels (ordered by severity):
@@ -218,8 +218,8 @@ All logging settings are in **Settings > Developer**:
 |---------|------------------|---------|-------------|
 | Debug SDK Logging | `developer.debugSdkLogging` | `false` | Enables trace file writing and diagnostic messages |
 | Exclude Streaming Deltas | `developer.traceExcludeDeltas` | `true` | Exclude high-frequency delta messages from trace file |
-| Trace Log Path | `developer.traceLogPath` | `~/ccinsights.trace.jsonl` | Path to the trace log file |
-| App Log Path | `logging.filePath` | `~/ccinsights.app.jsonl` | Path to the application log file |
+| Trace Log Path | `developer.traceLogPath` | `~/.ccinsights/logs/trace.jsonl` | Path to the trace log file |
+| App Log Path | `logging.filePath` | `~/.ccinsights/logs/app.jsonl` | Path to the application log file |
 | Minimum Log Level | `logging.minimumLevel` | `debug` | Minimum level for app log file output |
 
 Environment variables (override settings):
@@ -244,31 +244,31 @@ To include deltas in the trace file, set **Exclude Streaming Deltas** to `false`
 ### Watching the trace log live
 
 ```bash
-tail -f ~/ccinsights.trace.jsonl
+tail -f ~/.ccinsights/logs/trace.jsonl
 ```
 
 ### Filtering by direction
 
 ```bash
 # Only outgoing messages (what we send to CLIs)
-grep '"direction":"stdin"' ~/ccinsights.trace.jsonl | jq .
+grep '"direction":"stdin"' ~/.ccinsights/logs/trace.jsonl | jq .
 
 # Only incoming messages (what CLIs send back)
-grep '"direction":"stdout"' ~/ccinsights.trace.jsonl | jq .
+grep '"direction":"stdout"' ~/.ccinsights/logs/trace.jsonl | jq .
 
 # Only stderr
-grep '"direction":"stderr"' ~/ccinsights.trace.jsonl | jq .
+grep '"direction":"stderr"' ~/.ccinsights/logs/trace.jsonl | jq .
 ```
 
 ### Extracting raw protocol content
 
 ```bash
 # Pretty-print the raw JSON content of each message
-jq '.content // .text' ~/ccinsights.trace.jsonl
+jq '.content // .text' ~/.ccinsights/logs/trace.jsonl
 ```
 
 ### Watching app-level events
 
 ```bash
-tail -f ~/ccinsights.app.jsonl | jq .
+tail -f ~/.ccinsights/logs/app.jsonl | jq .
 ```

@@ -147,10 +147,10 @@ class RuntimeConfig extends ChangeNotifier {
   bool _traceExcludeDeltas = true;
 
   /// Path to the SDK trace log file.
-  String _traceLogPath = '~/ccinsights.trace.jsonl';
+  String _traceLogPath = '~/.ccinsights/logs/trace.jsonl';
 
   /// Path to the application log file.
-  String _loggingFilePath = '~/ccinsights.app.jsonl';
+  String _loggingFilePath = '~/.ccinsights/logs/app.jsonl';
 
   /// Minimum log level for file output.
   String _loggingMinimumLevel = 'debug';
@@ -822,8 +822,8 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._streamOfThought = true;
     _instance._debugSdkLogging = false;
     _instance._traceExcludeDeltas = true;
-    _instance._traceLogPath = '~/ccinsights.trace.jsonl';
-    _instance._loggingFilePath = '~/ccinsights.app.jsonl';
+    _instance._traceLogPath = '~/.ccinsights/logs/trace.jsonl';
+    _instance._loggingFilePath = '~/.ccinsights/logs/app.jsonl';
     _instance._loggingMinimumLevel = 'debug';
     _instance._markdownBackend = MarkdownBackend.flutterMarkdownPlus;
     _instance._claudeCliPath = '';
