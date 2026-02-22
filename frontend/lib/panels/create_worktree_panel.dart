@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -623,17 +622,18 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
     return result;
   }
 
+  static const _channel = MethodChannel('com.nickclifford.ccinsights/window');
+
   Future<void> _pickFolder() async {
-    final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select Worktree Base Directory',
-      initialDirectory: _rootController.text.isNotEmpty
-          ? _rootController.text
-          : null,
-    );
-    if (result != null) {
-      setState(() {
-        _rootController.text = result;
-      });
+    try {
+      final result = await _channel.invokeMethod<String>('pickDirectory');
+      if (result != null) {
+        setState(() {
+          _rootController.text = result;
+        });
+      }
+    } catch (e) {
+      debugPrint('Folder picker error: $e');
     }
   }
 

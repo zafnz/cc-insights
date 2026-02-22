@@ -24,12 +24,39 @@ class AppDelegate: FlutterAppDelegate {
       binaryMessenger: controller.engine.binaryMessenger
     )
 
-    channel?.setMethodCallHandler { (call, result) in
-      if call.method == "bringToFront" {
+    channel?.setMethodCallHandler { [weak self] (call, result) in
+      switch call.method {
+      case "bringToFront":
         NSApp.activate(ignoringOtherApps: true)
-        self.mainFlutterWindow?.makeKeyAndOrderFront(nil)
+        self?.mainFlutterWindow?.makeKeyAndOrderFront(nil)
         result(nil)
-      } else {
+
+      case "pickDirectory":
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a project folder"
+
+        // Try sheet modal first, fall back to app-modal
+        if let window = self?.mainFlutterWindow {
+          panel.beginSheetModal(for: window) { response in
+            if response == .OK, let url = panel.url {
+              result(url.path)
+            } else {
+              result(nil)
+            }
+          }
+        } else {
+          let response = panel.runModal()
+          if response == .OK, let url = panel.url {
+            result(url.path)
+          } else {
+            result(nil)
+          }
+        }
+
+      default:
         result(FlutterMethodNotImplemented)
       }
     }

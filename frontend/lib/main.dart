@@ -5,7 +5,6 @@ import 'dart:ui';
 import 'package:acp_sdk/acp_sdk.dart' show AcpBackend;
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:codex_sdk/codex_sdk.dart' show CodexBackend;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -987,14 +986,20 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   // ========== Menu Action Handlers ==========
 
+  static const _windowChannel =
+      MethodChannel('com.nickclifford.ccinsights/window');
+
   /// Opens a folder picker and loads the selected project.
   Future<void> _handleOpenProject() async {
-    final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select Project Folder',
-    );
+    try {
+      final result =
+          await _windowChannel.invokeMethod<String>('pickDirectory');
 
-    if (result != null) {
-      await _validateAndOpenProject(result);
+      if (result != null) {
+        await _validateAndOpenProject(result);
+      }
+    } catch (e) {
+      debugPrint('Folder picker error: $e');
     }
   }
 

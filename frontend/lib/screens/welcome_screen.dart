@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/git_service.dart';
@@ -63,13 +63,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-  Future<void> _selectFolder() async {
-    final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select Project Folder',
-    );
+  static const _channel = MethodChannel('com.nickclifford.ccinsights/window');
 
-    if (result != null) {
-      await _validateAndOpenDirectory(result);
+  Future<void> _selectFolder() async {
+    try {
+      final result = await _channel.invokeMethod<String>('pickDirectory');
+
+      if (result != null && mounted) {
+        await _validateAndOpenDirectory(result);
+      }
+    } catch (e) {
+      debugPrint('Folder picker error: $e');
+      if (mounted) {
+        showErrorSnackBar(context, 'Could not open folder picker: $e');
+      }
     }
   }
 
