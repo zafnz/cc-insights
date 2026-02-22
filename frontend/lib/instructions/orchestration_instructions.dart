@@ -75,22 +75,29 @@ All ticket worktrees should branch from the orchestration base worktree.
 The base worktree path is provided in the initial context. Never create
 worktrees off of main or other branches unless the user explicitly asks.''';
 
+/// Default instruction text shown in the orchestration config dialog and used
+/// as the fallback when no custom instructions are provided.
+const String defaultOrchestrationInstructions =
+    'Respect dependencies, '
+    'use parallel execution where safe, and report progress frequently.';
+
 /// Builds the initial instructions for launching an orchestrator.
 ///
 /// [ticketIds] — the ticket IDs the orchestrator should process.
 /// [worktreePath] — absolute path to the orchestrator's base worktree.
 /// [branch] — the git branch of that worktree.
-/// [instructions] — optional custom instruction text. When null, a default
-///   instruction string is used.
+/// [instructions] — optional custom instruction text. When null or empty,
+///   a default instruction string is used.
 String buildOrchestrationLaunchMessage({
   required List<int> ticketIds,
   required String worktreePath,
   required String branch,
   String? instructions,
 }) {
-  final text = instructions ??
-      'Run tickets ${ticketIds.join(', ')}. Respect dependencies, '
-          'use parallel execution where safe, and report progress frequently.';
+  final hasCustom = instructions != null && instructions.trim().isNotEmpty;
+  final text = hasCustom
+      ? instructions
+      : 'Run tickets ${ticketIds.join(', ')}. $defaultOrchestrationInstructions';
   return '$text'
       '\n\nBase worktree: $worktreePath'
       '\nBase branch: $branch';

@@ -96,6 +96,30 @@ void main() {
       expect(message, isNot(contains('Respect dependencies')));
       expect(message, contains('Base worktree: /tmp/wt'));
     });
+
+    test('falls back to default when instructions is empty string', () {
+      final message = buildOrchestrationLaunchMessage(
+        ticketIds: [1],
+        worktreePath: '/tmp/wt',
+        branch: 'main',
+        instructions: '',
+      );
+
+      expect(message, contains('Respect dependencies'));
+      expect(message, contains('parallel execution'));
+    });
+
+    test('falls back to default when instructions is whitespace only', () {
+      final message = buildOrchestrationLaunchMessage(
+        ticketIds: [1],
+        worktreePath: '/tmp/wt',
+        branch: 'main',
+        instructions: '   ',
+      );
+
+      expect(message, contains('Respect dependencies'));
+      expect(message, contains('parallel execution'));
+    });
   });
 
   group('buildTicketPrompt', () {

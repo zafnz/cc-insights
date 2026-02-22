@@ -54,8 +54,9 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         : 'orchestrate-${widget.ticketIds.first}-${widget.ticketIds.last}';
     _branchController = TextEditingController(text: slug);
     _instructionsController = TextEditingController(
-      text: 'Run tickets ${widget.ticketIds.join(', ')}. Respect dependencies, '
-          'use parallel execution where safe, and report progress frequently.',
+      text:
+          'Run tickets ${widget.ticketIds.join(', ')}. '
+          '$defaultOrchestrationInstructions',
     );
   }
 
