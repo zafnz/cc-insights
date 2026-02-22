@@ -828,6 +828,29 @@ class BackendService extends ChangeNotifier {
     ]);
   }
 
+  /// Performs full async shutdown of all backends.
+  ///
+  /// Unlike [dispose], this method can be awaited to ensure all processes
+  /// are cleanly terminated (with exit codes awaited) and all stream
+  /// subscriptions cancelled. Call from [_handleAppTermination] before
+  /// [dispose].
+  Future<void> shutdownAsync() async {
+    if (_disposed) return;
+    final backendKeys = _backends.keys.toList();
+    final agentKeys = _agentBackends.keys.toList();
+    try {
+      await Future.wait([
+        for (final key in backendKeys) _disposeBackend(key),
+        for (final key in agentKeys) disposeAgent(key),
+      ]).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => [],
+      );
+    } catch (e) {
+      debugPrint('Error during async backend shutdown: $e');
+    }
+  }
+
   /// Disposes of the backend service and terminates the subprocess.
   ///
   /// This should be called when the app is shutting down to ensure
@@ -835,6 +858,15 @@ class BackendService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    // Synchronously send SIGTERM to all processes as a safety net.
+    // The async dispose() calls below may not complete before the Dart
+    // VM exits, but the sync kill signals ensure processes are terminated.
+    for (final backend in _backends.values) {
+      backend.killAllSync();
+    }
+    for (final backend in _agentBackends.values) {
+      backend.killAllSync();
+    }
     unawaited(_cancelAllSubscriptions());
     _errorSubscriptions.clear();
     // Clean up BackendType-keyed state

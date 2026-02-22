@@ -119,6 +119,9 @@ class FakeAgentBackend implements AgentBackend {
     _logsController.add(log);
   }
 
+  @override
+  void killAllSync() {}
+
   /// Reset all state.
   void reset() {
     createdSessions.clear();

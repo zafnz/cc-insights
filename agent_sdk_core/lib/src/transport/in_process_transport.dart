@@ -147,5 +147,8 @@ class InProcessTransport implements EventTransport {
     await _eventsController.close();
     await _statusController.close();
     await _permissionsController.close();
+    // Kill the underlying session to ensure the process is terminated.
+    // Idempotent: session implementations guard against double-kill.
+    await _session.kill();
   }
 }

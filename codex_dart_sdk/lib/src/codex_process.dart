@@ -191,6 +191,15 @@ class CodexProcess {
     });
   }
 
+  /// Sends SIGTERM synchronously without awaiting process exit.
+  ///
+  /// Use as a last-resort fallback in synchronous `dispose()` methods
+  /// where async [dispose] cannot be awaited.
+  void killSync() {
+    if (_disposed) return;
+    _process.kill();
+  }
+
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

@@ -208,6 +208,8 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     String agentId,
     sdk.AgentBackend backend,
   ) {}
+  @override
+  Future<void> shutdownAsync() async {}
 }
 
 class FakeTransport implements sdk.EventTransport {

@@ -337,6 +337,13 @@ class ClaudeCliBackend implements AgentBackend, ModelListingBackend {
   }
 
   @override
+  void killAllSync() {
+    for (final session in _sessions.values) {
+      session._cliSession.process.killSync();
+    }
+  }
+
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

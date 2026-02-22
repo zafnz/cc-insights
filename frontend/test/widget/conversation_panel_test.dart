@@ -274,6 +274,9 @@ class FakeBackendService extends ChangeNotifier implements BackendService {
     sdk.AgentBackend backend,
   ) {}
 
+  @override
+  Future<void> shutdownAsync() async {}
+
   void reset() {
     createSessionCalls.clear();
     sessionToReturn = null;

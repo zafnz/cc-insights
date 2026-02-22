@@ -311,6 +311,16 @@ class CliProcess {
     await _process.exitCode;
   }
 
+  /// Sends SIGTERM synchronously without awaiting process exit.
+  ///
+  /// Use as a last-resort fallback in synchronous `dispose()` methods
+  /// where async [kill] cannot be awaited. The process receives the
+  /// signal immediately; graceful shutdown is best-effort.
+  void killSync() {
+    if (_disposed) return;
+    _process.kill();
+  }
+
   /// Dispose resources.
   Future<void> dispose() async {
     if (_disposed) return;

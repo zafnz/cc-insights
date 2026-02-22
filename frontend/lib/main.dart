@@ -222,6 +222,13 @@ bool _shouldUseMockData() {
   return useMockData || RuntimeConfig.instance.useMockData;
 }
 
+/// Tracks the previous [BackendService] across hot restarts.
+///
+/// During hot restart, Flutter creates a new State without disposing the old
+/// one. This module-level reference lets us kill orphaned backend processes
+/// before creating a new [BackendService].
+BackendService? _hotRestartPreviousBackend;
+
 /// CC-Insights V2 - Desktop application for monitoring Claude Code agents.
 class CCInsightsApp extends StatefulWidget {
   /// Optional BackendService instance for dependency injection in tests.
@@ -379,6 +386,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
   /// This runs in initState so services are created only once,
   /// not on every hot reload.
   void _initializeServices() {
+    // Hot restart safety: kill processes from a previous State instance.
+    _hotRestartPreviousBackend?.dispose();
+    _hotRestartPreviousBackend = null;
+
     final shouldUseMock = _shouldUseMockData();
 
     // Register available backend factories
@@ -430,6 +441,11 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       _backend = mockBackend;
     } else {
       _backend = BackendService();
+    }
+
+    // Track for hot-restart safety (only real BackendService, not injected mocks)
+    if (_backend is BackendService && widget.backendService == null) {
+      _hotRestartPreviousBackend = _backend;
     }
 
     // Create the project restore service for persistence operations
@@ -683,11 +699,14 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     }
   }
 
-  /// Handles app termination by writing session quit markers.
+  /// Handles app termination by killing active sessions and writing quit markers.
   Future<void> _handleAppTermination() async {
     if (_project == null) return;
 
-    debugPrint('App terminating - writing session quit markers');
+    debugPrint('App terminating - killing sessions and writing quit markers');
+
+    // Start async backend shutdown early (runs in parallel with marker writes)
+    final backendShutdown = _backend?.shutdownAsync();
 
     // Collect all quit marker writes
     final writes = <Future<void>>[];
@@ -728,14 +747,21 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       }
     }
 
-    // Wait for all writes to complete before returning
-    if (writes.isNotEmpty) {
-      try {
-        await Future.wait(writes);
-        debugPrint('All quit markers persisted successfully');
-      } catch (e) {
-        debugPrint('Error persisting quit markers: $e');
-      }
+    // Wait for marker writes and backend shutdown (with timeout)
+    try {
+      await Future.wait([
+        if (backendShutdown != null) backendShutdown,
+        if (writes.isNotEmpty) Future.wait(writes),
+      ]).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('App termination cleanup timed out after 5s');
+          return [];
+        },
+      );
+      debugPrint('App termination cleanup completed');
+    } catch (e) {
+      debugPrint('Error during app termination: $e');
     }
   }
 

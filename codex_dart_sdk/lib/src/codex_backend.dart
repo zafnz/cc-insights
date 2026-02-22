@@ -324,6 +324,11 @@ class CodexBackend implements AgentBackend, ModelListingBackend {
   }
 
   @override
+  void killAllSync() {
+    _process.killSync();
+  }
+
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

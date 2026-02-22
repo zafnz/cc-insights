@@ -789,6 +789,9 @@ class _MockableCliBackend implements AgentBackend {
   }
 
   @override
+  void killAllSync() {}
+
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

@@ -387,6 +387,12 @@ class AcpProcess {
     ));
   }
 
+  /// Sends SIGTERM synchronously without awaiting process exit.
+  void killSync() {
+    if (_disposed) return;
+    _process.kill();
+  }
+
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

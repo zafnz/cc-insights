@@ -69,5 +69,8 @@ class FakeCodexBackend implements CodexBackend {
   }
 
   @override
+  void killAllSync() {}
+
+  @override
   Future<void> dispose() async {}
 }

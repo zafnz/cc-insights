@@ -147,6 +147,11 @@ class AcpBackend implements AgentBackend {
   }
 
   @override
+  void killAllSync() {
+    _process.killSync();
+  }
+
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

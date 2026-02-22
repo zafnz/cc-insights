@@ -122,6 +122,13 @@ abstract class AgentBackend {
   /// List of active sessions.
   List<AgentSession> get sessions;
 
+  /// Synchronously sends kill signals to all active session processes.
+  ///
+  /// Default implementation is a no-op. Override for backends that manage
+  /// OS-level subprocesses. Used as a last-resort fallback when the async
+  /// [dispose] cannot be awaited (e.g. in synchronous `ChangeNotifier.dispose`).
+  void killAllSync() {}
+
   /// Dispose the backend and all its sessions.
   Future<void> dispose();
 }
