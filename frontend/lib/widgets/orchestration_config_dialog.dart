@@ -1,4 +1,3 @@
-import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendCapabilities;
 import 'package:agent_sdk_core/agent_sdk_core.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
