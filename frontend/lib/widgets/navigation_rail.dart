@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -169,35 +171,45 @@ class _SideTooltip extends StatefulWidget {
 }
 
 class _SideTooltipState extends State<_SideTooltip> {
+  final _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
+  Timer? _showTimer;
+
+  static const _showDelay = Duration(milliseconds: 500);
+
+  void _scheduleShow() {
+    _showTimer?.cancel();
+    _showTimer = Timer(_showDelay, _showTooltip);
+  }
 
   void _showTooltip() {
     _removeTooltip();
     final overlay = Overlay.of(context);
-    final box = context.findRenderObject() as RenderBox;
-    final target = box.localToGlobal(Offset.zero);
-    final size = box.size;
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final theme = Theme.of(context);
-        return Positioned(
-          left: target.dx + size.width + 8,
-          top: target.dy + (size.height - 28) / 2,
-          child: IgnorePointer(
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.inverseSurface,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  widget.message,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onInverseSurface,
+        return UnconstrainedBox(
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            followerAnchor: Alignment.centerLeft,
+            targetAnchor: Alignment.centerRight,
+            offset: const Offset(8, 0),
+            child: IgnorePointer(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.inverseSurface,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    widget.message,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onInverseSurface,
+                    ),
                   ),
                 ),
               ),
@@ -210,7 +222,9 @@ class _SideTooltipState extends State<_SideTooltip> {
   }
 
   void _removeTooltip() {
+    _showTimer?.cancel();
     _overlayEntry?.remove();
+    _overlayEntry?.dispose();
     _overlayEntry = null;
   }
 
@@ -222,13 +236,16 @@ class _SideTooltipState extends State<_SideTooltip> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => _showTooltip(),
-      onExit: (_) => _removeTooltip(),
-      child: Tooltip(
-        message: widget.message,
-        triggerMode: TooltipTriggerMode.manual,
-        child: widget.child,
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: MouseRegion(
+        onEnter: (_) => _scheduleShow(),
+        onExit: (_) => _removeTooltip(),
+        child: Tooltip(
+          message: widget.message,
+          triggerMode: TooltipTriggerMode.manual,
+          child: widget.child,
+        ),
       ),
     );
   }
