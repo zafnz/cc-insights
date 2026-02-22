@@ -342,8 +342,239 @@ class _BulkChangeButton extends StatelessWidget {
   }
 
   void _handleAction(BuildContext context, BulkChangeAction action) {
-    // Placeholder: individual bulk operations are implemented in tickets 9 & 10.
-    debugPrint('Bulk change action: ${action.name}');
+    switch (action) {
+      case BulkChangeAction.category:
+        _changeCategoryBulk(context);
+      case BulkChangeAction.status:
+        _changeEnumBulk<TicketStatus>(
+          context,
+          fieldName: 'status',
+          values: TicketStatus.values,
+          labelOf: (v) => v.label,
+          apply: (repo, ids, value) {
+            for (final id in ids) {
+              repo.updateTicket(id, (t) => t.copyWith(status: value));
+            }
+          },
+        );
+      case BulkChangeAction.kind:
+        _changeEnumBulk<TicketKind>(
+          context,
+          fieldName: 'kind',
+          values: TicketKind.values,
+          labelOf: (v) => v.label,
+          apply: (repo, ids, value) {
+            for (final id in ids) {
+              repo.updateTicket(id, (t) => t.copyWith(kind: value));
+            }
+          },
+        );
+      case BulkChangeAction.priority:
+        _changeEnumBulk<TicketPriority>(
+          context,
+          fieldName: 'priority',
+          values: TicketPriority.values,
+          labelOf: (v) => v.label,
+          apply: (repo, ids, value) {
+            for (final id in ids) {
+              repo.updateTicket(id, (t) => t.copyWith(priority: value));
+            }
+          },
+        );
+      case BulkChangeAction.delete:
+        _deleteBulk(context);
+    }
+  }
+
+  Future<void> _changeEnumBulk<T>(
+    BuildContext context, {
+    required String fieldName,
+    required List<T> values,
+    required String Function(T) labelOf,
+    required void Function(TicketRepository, Set<int>, T) apply,
+  }) async {
+    final viewState = context.read<TicketViewState>();
+    final repo = context.read<TicketRepository>();
+    final ids = viewState.selectedTicketIds;
+
+    final value = await showDialog<T>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('Change $fieldName'),
+        children: values.map((v) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.of(ctx).pop(v),
+            child: Text(labelOf(v)),
+          );
+        }).toList(),
+      ),
+    );
+    if (value == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm bulk change'),
+        content: Text(
+          'Are you sure you want to change $fieldName to '
+          '${labelOf(value)} for ${ids.length} tickets?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    apply(repo, ids, value);
+  }
+
+  Future<void> _changeCategoryBulk(BuildContext context) async {
+    final viewState = context.read<TicketViewState>();
+    final repo = context.read<TicketRepository>();
+    final ids = viewState.selectedTicketIds;
+    final categories = viewState.allCategories;
+
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _CategoryPickerDialog(categories: categories),
+    );
+    if (value == null || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm bulk change'),
+        content: Text(
+          'Are you sure you want to change category to '
+          '$value for ${ids.length} tickets?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    for (final id in ids) {
+      repo.updateTicket(id, (t) => t.copyWith(category: value));
+    }
+  }
+
+  Future<void> _deleteBulk(BuildContext context) async {
+    final viewState = context.read<TicketViewState>();
+    final repo = context.read<TicketRepository>();
+    final ids = viewState.selectedTicketIds.toSet();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm bulk delete'),
+        content: Text(
+          'Are you sure you want to delete ${ids.length} tickets? '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    for (final id in ids) {
+      repo.deleteTicket(id);
+    }
+    viewState.clearTicketSelection();
+  }
+}
+
+/// Dialog for picking a category from existing ones or entering a new one.
+class _CategoryPickerDialog extends StatefulWidget {
+  const _CategoryPickerDialog({required this.categories});
+
+  final List<String> categories;
+
+  @override
+  State<_CategoryPickerDialog> createState() => _CategoryPickerDialogState();
+}
+
+class _CategoryPickerDialogState extends State<_CategoryPickerDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SimpleDialog(
+      title: const Text('Change category'),
+      children: [
+        ...widget.categories.map((cat) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(cat),
+            child: Text(cat),
+          );
+        }),
+        if (widget.categories.isNotEmpty)
+          const Divider(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: 'New category...',
+                  ),
+                  onSubmitted: (value) {
+                    final trimmed = value.trim();
+                    if (trimmed.isNotEmpty) {
+                      Navigator.of(context).pop(trimmed);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  final trimmed = _controller.text.trim();
+                  if (trimmed.isNotEmpty) {
+                    Navigator.of(context).pop(trimmed);
+                  }
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
