@@ -165,7 +165,7 @@ class InternalToolsService extends ChangeNotifier {
     'update_ticket',
     'create_worktree',
     'rebase_and_merge',
-    'delete_worktree',
+    // 'delete_worktree', // Disabled: finished worktrees should be left as-is
   };
 
   /// Register the create_ticket tool with the given bulk proposal state.
@@ -376,7 +376,7 @@ class InternalToolsService extends ChangeNotifier {
       _updateTicketTool(),
       _createWorktreeTool(orchestratorChat),
       _rebaseAndMergeTool(orchestratorChat),
-      _deleteWorktreeTool(),
+      // _deleteWorktreeTool(), // Disabled: finished worktrees should be left as-is
     ];
   }
 
