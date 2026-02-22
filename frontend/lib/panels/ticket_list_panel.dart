@@ -164,7 +164,7 @@ class _Toolbar extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 280;
+          final compact = constraints.maxWidth < 300;
           final buttonStyle = IconButton.styleFrom(
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           );
