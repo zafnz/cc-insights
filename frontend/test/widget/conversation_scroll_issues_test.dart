@@ -11,6 +11,7 @@ import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
+import 'package:cc_insights_v2/services/internal_tools_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 import 'package:cc_insights_v2/widgets/output_entries/output_entry_widget.dart';
@@ -149,6 +150,9 @@ void main() {
             ChangeNotifierProvider<BackendService>.value(value: backendService),
             ChangeNotifierProvider<CliAvailabilityService>.value(
               value: fakeCliAvailability,
+            ),
+            ChangeNotifierProvider<InternalToolsService>(
+              create: (_) => InternalToolsService(),
             ),
           ],
           child: const Scaffold(

@@ -1308,6 +1308,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           update: (context, repo, previous) =>
               previous ?? BulkProposalState(repo),
         ),
+        // Side-effect provider: binds orchestration context when deps change.
+        // Uses Object output to avoid shadowing the ChangeNotifierProvider above.
         ProxyProvider6<
           BackendService,
           EventHandler,
@@ -1315,7 +1317,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           SelectionState,
           TicketRepository,
           WorktreeService,
-          InternalToolsService
+          Object
         >(
           update:
               (
@@ -1341,7 +1343,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
                   restoreService: restoreService,
                   gitService: gitService,
                 );
-                return tools;
+                return const Object();
               },
         ),
       ],
