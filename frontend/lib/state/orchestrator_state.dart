@@ -13,15 +13,22 @@ class OrchestratorState extends ChangeNotifier {
     required TicketRepository ticketBoard,
     required Iterable<int> ticketIds,
     required String baseWorktreePath,
+    Chat? orchestratorChat,
     DateTime? startTime,
   }) : _ticketBoard = ticketBoard,
        _ticketIds = {...ticketIds},
        _baseWorktreePath = baseWorktreePath,
-       _orchestrationStartTime = startTime ?? DateTime.now();
+       _orchestrationStartTime = startTime ?? DateTime.now() {
+    if (orchestratorChat != null) {
+      setOrchestratorChat(orchestratorChat);
+    }
+  }
 
   final TicketRepository _ticketBoard;
   final Map<String, ManagedAgent> _agents = {};
   final Map<String, List<VoidCallback>> _agentListeners = {};
+  Chat? _orchestratorChat;
+  VoidCallback? _orchestratorMetricsListener;
 
   final Set<int> _ticketIds;
   final String _baseWorktreePath;
@@ -71,6 +78,20 @@ class OrchestratorState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets (or replaces) the orchestrator chat whose cost is included in
+  /// [getTotalCost].
+  void setOrchestratorChat(Chat chat) {
+    if (identical(_orchestratorChat, chat)) return;
+    // Remove previous listener.
+    if (_orchestratorMetricsListener != null) {
+      _orchestratorChat?.metrics.removeListener(_orchestratorMetricsListener!);
+    }
+    _orchestratorChat = chat;
+    void forward() => notifyListeners();
+    chat.metrics.addListener(forward);
+    _orchestratorMetricsListener = forward;
+  }
+
   ManagedAgent? getAgent(String agentId) => _agents[agentId];
 
   Duration getElapsedTime() =>
@@ -91,8 +112,10 @@ class OrchestratorState extends ChangeNotifier {
       _agents.values.where((a) => a.chat.session.isWorking).length;
 
   double getTotalCost() {
+    final orchestratorCost =
+        _orchestratorChat?.metrics.cumulativeUsage.costUsd ?? 0.0;
     return _agents.values.fold<double>(
-      0.0,
+      orchestratorCost,
       (sum, agent) => sum + agent.chat.metrics.cumulativeUsage.costUsd,
     );
   }
@@ -108,6 +131,12 @@ class OrchestratorState extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_orchestratorMetricsListener != null) {
+      _orchestratorChat?.metrics.removeListener(_orchestratorMetricsListener!);
+      _orchestratorMetricsListener = null;
+    }
+    _orchestratorChat = null;
+
     for (final agent in _agents.values) {
       if (agent.chat.session.hasActiveSession) {
         unawaited(agent.chat.session.stop().catchError((_) {}));

@@ -62,6 +62,9 @@ class ChatMetricsState extends ChangeNotifier {
         cacheCreationTokens: totalCacheCreation,
         costUsd: totalCost,
       );
+    } else {
+      // Fallback: use aggregate usage when per-model breakdown is unavailable.
+      _chat._cumulativeUsage = usage;
     }
 
     _chat._inTurnOutputTokens = 0;

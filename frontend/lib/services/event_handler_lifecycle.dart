@@ -215,7 +215,16 @@ mixin _LifecycleMixin on _EventHandlerBase {
       // Ticket status transitions
       _ticketBridge.onTurnComplete(chat, event);
     } else {
-      // Subagent result
+      // Subagent result — still track usage on the parent chat.
+      if (usageInfo != null) {
+        chat.metrics.updateCumulativeUsage(
+          usage: usageInfo,
+          totalCostUsd: totalCostUsd,
+          modelUsage: modelUsageList,
+          contextWindow: contextWindow,
+        );
+      }
+
       final AgentStatus status;
       final subtype = event.subtype;
 

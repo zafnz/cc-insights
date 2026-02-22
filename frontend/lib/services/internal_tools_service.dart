@@ -382,6 +382,7 @@ class InternalToolsService extends ChangeNotifier {
 
   void attachOrchestratorState(Chat chat, OrchestratorState state) {
     _orchestratorsByChatId[chat.id] = state;
+    state.setOrchestratorChat(chat);
     chat.settings.setIsOrchestratorChat(true);
     chat.settings.setOrchestrationToolsEnabled(true);
     chat.settings.setOrchestrationData(state.toSnapshot());
