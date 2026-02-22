@@ -28,6 +28,8 @@ void main() {
     LocationCheck location = saneLocation,
     bool isInstalled = false,
     Future<String?> Function()? installOverride,
+    bool commandInPath = true,
+    Future<String?> Function()? addToPathOverride,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -40,6 +42,8 @@ void main() {
                 locationCheckOverride: () => location,
                 isInstalledOverride: () => isInstalled,
                 installOverride: installOverride ?? () async => null,
+                isCommandInPathOverride: () async => commandInPath,
+                addToPathOverride: addToPathOverride ?? () async => null,
               );
             },
             child: const Text('Open Dialog'),
@@ -131,13 +135,50 @@ void main() {
       await openDialog(tester);
 
       await tester.tap(find.byKey(CliLauncherDialogKeys.installButton));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(
         find.byKey(CliLauncherDialogKeys.successMessage),
         findsOneWidget,
       );
       expect(find.byKey(CliLauncherDialogKeys.closeButton), findsOneWidget);
+      // PATH hint should not show when command is in path
+      expect(find.byKey(CliLauncherDialogKeys.pathHint), findsNothing);
+    });
+
+    testWidgets('shows Add to PATH button when cc-insights not in shell PATH',
+        (tester) async {
+      await tester.pumpWidget(createTestWidget(commandInPath: false));
+      await openDialog(tester);
+
+      await tester.tap(find.byKey(CliLauncherDialogKeys.installButton));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(CliLauncherDialogKeys.pathHint), findsOneWidget);
+      expect(
+        find.byKey(CliLauncherDialogKeys.addToPathButton),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Add to PATH button updates ~/.zshrc and shows confirmation',
+        (tester) async {
+      await tester.pumpWidget(createTestWidget(commandInPath: false));
+      await openDialog(tester);
+
+      await tester.tap(find.byKey(CliLauncherDialogKeys.installButton));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(CliLauncherDialogKeys.addToPathButton));
+      await tester.pumpAndSettle();
+
+      // Button should be gone, confirmation shown
+      expect(
+        find.byKey(CliLauncherDialogKeys.addToPathButton),
+        findsNothing,
+      );
+      expect(find.byKey(CliLauncherDialogKeys.pathAdded), findsOneWidget);
+      expect(find.textContaining('Restart your terminal'), findsOneWidget);
     });
 
     testWidgets('shows error state on install failure', (tester) async {
@@ -149,7 +190,7 @@ void main() {
       await openDialog(tester);
 
       await tester.tap(find.byKey(CliLauncherDialogKeys.installButton));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.byKey(CliLauncherDialogKeys.errorMessage), findsOneWidget);
       expect(find.textContaining('Permission denied'), findsOneWidget);

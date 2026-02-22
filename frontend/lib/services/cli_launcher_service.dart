@@ -134,14 +134,57 @@ class CliLauncherService {
     }
   }
 
-  /// Checks if ~/.local/bin is in the current process's PATH.
+  /// Checks whether `cc-insights` is resolvable from the user's login shell.
   ///
-  /// Note: the GUI app's PATH may differ from the user's shell PATH.
-  /// This is a best-effort check.
-  static bool isLocalBinInPath() {
-    final pathVar = Platform.environment['PATH'] ?? '';
-    final home = Platform.environment['HOME'] ?? '';
-    final localBin = p.join(home, '.local', 'bin');
-    return pathVar.split(':').contains(localBin);
+  /// The GUI app's process PATH is the minimal macOS default and almost never
+  /// includes `~/.local/bin`, so we spawn a login shell and use `command -v`
+  /// to get an accurate answer.
+  static Future<bool> isCommandInPath() async {
+    try {
+      final shell = Platform.environment['SHELL'] ?? '/bin/zsh';
+      final result = await Process.run(
+        shell,
+        ['-l', '-c', 'command -v cc-insights'],
+      );
+      return result.exitCode == 0 &&
+          (result.stdout as String).trim().isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static const _pathExportLine =
+      'export PATH="\$HOME/.local/bin:\$PATH"';
+  static const _pathComment = '# Added by CC Insights';
+
+  /// Appends a PATH export line to ~/.zshrc so that ~/.local/bin is in PATH.
+  ///
+  /// Idempotent — skips if the export line already exists.
+  /// [rcPath] can be overridden for testing.
+  /// Returns null on success, or an error message on failure.
+  static Future<String?> addToPath([String? rcPath]) async {
+    try {
+      final home = Platform.environment['HOME'] ?? '';
+      final file = File(rcPath ?? p.join(home, '.zshrc'));
+
+      // Read existing content (create file if it doesn't exist)
+      final contents = await file.exists() ? await file.readAsString() : '';
+
+      // Check if already present
+      if (contents.contains('.local/bin')) {
+        return null; // already configured
+      }
+
+      // Append with a newline guard
+      final prefix = contents.isEmpty || contents.endsWith('\n') ? '' : '\n';
+      await file.writeAsString(
+        '$prefix\n$_pathComment\n$_pathExportLine\n',
+        mode: FileMode.append,
+      );
+
+      return null; // success
+    } catch (e) {
+      return 'Failed to update ~/.zshrc: $e';
+    }
   }
 }

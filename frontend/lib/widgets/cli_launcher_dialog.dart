@@ -17,6 +17,8 @@ class CliLauncherDialogKeys {
   static const successMessage = Key('cli_launcher_success');
   static const errorMessage = Key('cli_launcher_error');
   static const pathHint = Key('cli_launcher_path_hint');
+  static const addToPathButton = Key('cli_launcher_add_to_path');
+  static const pathAdded = Key('cli_launcher_path_added');
 }
 
 /// Result of the CLI launcher dialog.
@@ -32,6 +34,8 @@ Future<CliLauncherResult> showCliLauncherDialog({
   LocationCheck Function()? locationCheckOverride,
   Future<String?> Function()? installOverride,
   bool Function()? isInstalledOverride,
+  Future<bool> Function()? isCommandInPathOverride,
+  Future<String?> Function()? addToPathOverride,
 }) async {
   final result = await showDialog<CliLauncherResult>(
     context: context,
@@ -41,6 +45,8 @@ Future<CliLauncherResult> showCliLauncherDialog({
       locationCheckOverride: locationCheckOverride,
       installOverride: installOverride,
       isInstalledOverride: isInstalledOverride,
+      isCommandInPathOverride: isCommandInPathOverride,
+      addToPathOverride: addToPathOverride,
     ),
   );
   return result ?? CliLauncherResult.cancelled;
@@ -56,6 +62,8 @@ class CliLauncherDialog extends StatefulWidget {
     this.locationCheckOverride,
     this.installOverride,
     this.isInstalledOverride,
+    this.isCommandInPathOverride,
+    this.addToPathOverride,
   });
 
   final bool isFirstRun;
@@ -69,6 +77,12 @@ class CliLauncherDialog extends StatefulWidget {
   /// For testing: override isInstalled check.
   final bool Function()? isInstalledOverride;
 
+  /// For testing: override isCommandInPath check.
+  final Future<bool> Function()? isCommandInPathOverride;
+
+  /// For testing: override addToPath function.
+  final Future<String?> Function()? addToPathOverride;
+
   @override
   State<CliLauncherDialog> createState() => _CliLauncherDialogState();
 }
@@ -78,6 +92,8 @@ class _CliLauncherDialogState extends State<CliLauncherDialog> {
   late bool _alreadyInstalled;
   _DialogState _state = _DialogState.prompt;
   String? _errorMessage;
+  bool _commandInPath = true; // assume in PATH until checked
+  bool _pathAdded = false;
 
   @override
   void initState() {
@@ -103,7 +119,32 @@ class _CliLauncherDialogState extends State<CliLauncherDialog> {
         _errorMessage = error;
       });
     } else {
-      setState(() => _state = _DialogState.success);
+      // Check if cc-insights is resolvable from the user's shell
+      final inPath = widget.isCommandInPathOverride != null
+          ? await widget.isCommandInPathOverride!()
+          : await CliLauncherService.isCommandInPath();
+      if (!mounted) return;
+      setState(() {
+        _commandInPath = inPath;
+        _state = _DialogState.success;
+      });
+    }
+  }
+
+  Future<void> _doAddToPath() async {
+    final error = widget.addToPathOverride != null
+        ? await widget.addToPathOverride!()
+        : await CliLauncherService.addToPath();
+
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() {
+        _state = _DialogState.error;
+        _errorMessage = error;
+      });
+    } else {
+      setState(() => _pathAdded = true);
     }
   }
 
@@ -276,12 +317,14 @@ class _CliLauncherDialogState extends State<CliLauncherDialog> {
           children: [
             Icon(Icons.check_circle, color: colorScheme.primary, size: 20),
             const SizedBox(width: 8),
-            Text(
-              'CLI launcher installed successfully.',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.onSurface,
+            Flexible(
+              child: Text(
+                'CLI launcher installed successfully.',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onSurface,
+                ),
               ),
             ),
           ],
@@ -316,7 +359,7 @@ class _CliLauncherDialogState extends State<CliLauncherDialog> {
             ],
           ),
         ),
-        if (!CliLauncherService.isLocalBinInPath()) ...[
+        if (!_commandInPath && !_pathAdded) ...[
           const SizedBox(height: 12),
           Container(
             key: CliLauncherDialogKeys.pathHint,
@@ -326,22 +369,53 @@ class _CliLauncherDialogState extends State<CliLauncherDialog> {
               color: colorScheme.tertiaryContainer,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  'You may need to add ~/.local/bin to your PATH:',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onTertiaryContainer,
+                Expanded(
+                  child: Text(
+                    '~/.local/bin is not in your PATH.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onTertiaryContainer,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'export PATH="\$HOME/.local/bin:\$PATH"',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    color: colorScheme.onTertiaryContainer,
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  key: CliLauncherDialogKeys.addToPathButton,
+                  onPressed: _doAddToPath,
+                  child: const Text('Add to ~/.zshrc'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (_pathAdded) ...[
+          const SizedBox(height: 12),
+          Container(
+            key: CliLauncherDialogKeys.pathAdded,
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  size: 16,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Added to ~/.zshrc. Restart your terminal to use '
+                    'cc-insights.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],

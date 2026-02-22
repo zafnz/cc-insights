@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cc_insights_v2/services/cli_launcher_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -96,6 +98,56 @@ void main() {
         expect(
           script,
           contains('"/Applications/My App.app/Contents/MacOS/My App"'),
+        );
+      });
+    });
+
+    group('addToPath', () {
+      late Directory tempDir;
+      late String rcPath;
+
+      setUp(() {
+        tempDir = Directory.systemTemp.createTempSync('cli_launcher_test_');
+        rcPath = '${tempDir.path}/.zshrc';
+      });
+
+      tearDown(() {
+        tempDir.deleteSync(recursive: true);
+      });
+
+      test('creates .zshrc and appends PATH export', () async {
+        final error = await CliLauncherService.addToPath(rcPath);
+        expect(error, isNull);
+
+        final contents = File(rcPath).readAsStringSync();
+        expect(contents, contains('# Added by CC Insights'));
+        expect(contents, contains('.local/bin'));
+      });
+
+      test('appends to existing .zshrc', () async {
+        File(rcPath).writeAsStringSync('# existing config\nexport FOO=bar\n');
+
+        final error = await CliLauncherService.addToPath(rcPath);
+        expect(error, isNull);
+
+        final contents = File(rcPath).readAsStringSync();
+        expect(contents, contains('export FOO=bar'));
+        expect(contents, contains('.local/bin'));
+      });
+
+      test('is idempotent when .local/bin already in file', () async {
+        File(rcPath).writeAsStringSync(
+          'export PATH="\$HOME/.local/bin:\$PATH"\n',
+        );
+
+        final error = await CliLauncherService.addToPath(rcPath);
+        expect(error, isNull);
+
+        final contents = File(rcPath).readAsStringSync();
+        // Should not be duplicated
+        expect(
+          '.local/bin'.allMatches(contents).length,
+          1,
         );
       });
     });
