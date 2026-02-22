@@ -1,5 +1,6 @@
 import 'package:agent_sdk_core/agent_sdk_core.dart'
-    show BackendCapabilities, BackendType, PermissionMode;
+    show BackendCapabilities, BackendType;
+import 'package:cc_insights_v2/models/chat.dart' show PermissionMode;
 import 'package:cc_insights_v2/models/chat_model.dart';
 import 'package:cc_insights_v2/widgets/model_permission_selector.dart';
 import 'package:checks/checks.dart';
@@ -20,7 +21,7 @@ void main() {
     PermissionMode.defaultMode,
     PermissionMode.acceptEdits,
     PermissionMode.plan,
-    PermissionMode.bypassPermissions,
+    PermissionMode.bypass,
   ];
 
   const fullCapabilities = BackendCapabilities(
@@ -215,8 +216,8 @@ void main() {
 
         expect(find.text('Default'), findsWidgets);
         expect(find.text('Accept Edits'), findsWidgets);
-        expect(find.text('Plan'), findsWidgets);
-        expect(find.text('Bypass Permissions'), findsWidgets);
+        expect(find.text('Plan Only'), findsWidgets);
+        expect(find.text('Bypass All'), findsWidgets);
       });
 
       testWidgets('falls back to first mode when selectedMode not in list',
@@ -226,7 +227,7 @@ void main() {
             PermissionMode.defaultMode,
             PermissionMode.acceptEdits,
           ],
-          selectedPermissionMode: PermissionMode.bypassPermissions,
+          selectedPermissionMode: PermissionMode.bypass,
         ));
         await safePumpAndSettle(tester);
 
@@ -330,7 +331,7 @@ void main() {
           find.byKey(ModelPermissionSelectorKeys.permissionDropdown),
         );
         await tester.pump();
-        await tester.tap(find.text('Plan').last);
+        await tester.tap(find.text('Plan Only').last);
         await safePumpAndSettle(tester);
         check(permChanged).equals(PermissionMode.plan);
       });
@@ -381,6 +382,36 @@ void main() {
         await safePumpAndSettle(tester);
 
         expect(find.text('Default'), findsWidgets);
+      });
+
+      testWidgets('handles empty permission modes list without crashing',
+          (tester) async {
+        await tester.pumpWidget(createTestApp(
+          permissionModes: const [],
+          selectedPermissionMode: PermissionMode.defaultMode,
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should render without crashing
+        expect(
+          find.byKey(ModelPermissionSelectorKeys.permissionDropdown),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('handles empty models list without crashing',
+          (tester) async {
+        await tester.pumpWidget(createTestApp(
+          models: const [],
+          selectedModelId: 'sonnet',
+        ));
+        await safePumpAndSettle(tester);
+
+        // Should render without crashing
+        expect(
+          find.byKey(ModelPermissionSelectorKeys.modelDropdown),
+          findsOneWidget,
+        );
       });
     });
   });

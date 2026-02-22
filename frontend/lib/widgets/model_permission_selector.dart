@@ -1,7 +1,7 @@
-import 'package:agent_sdk_core/agent_sdk_core.dart'
-    show BackendCapabilities, PermissionMode;
+import 'package:agent_sdk_core/agent_sdk_core.dart' show BackendCapabilities;
 import 'package:flutter/material.dart';
 
+import '../models/chat.dart' show PermissionMode;
 import '../models/chat_model.dart';
 
 /// Keys for testing [ModelPermissionSelector] widgets.
@@ -192,8 +192,9 @@ class _PermissionDropdown extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     // Resolve selected value - fall back to first mode if no match.
-    final effectiveMode =
-        modes.contains(selectedMode) ? selectedMode : modes.first;
+    final effectiveMode = modes.contains(selectedMode)
+        ? selectedMode
+        : (modes.isNotEmpty ? modes.first : null);
 
     final dropdown = DropdownButtonFormField<PermissionMode>(
       key: ModelPermissionSelectorKeys.permissionDropdown,
@@ -217,7 +218,7 @@ class _PermissionDropdown extends StatelessWidget {
         return DropdownMenuItem<PermissionMode>(
           value: mode,
           child: Text(
-            _formatPermissionMode(mode),
+            mode.label,
             overflow: TextOverflow.ellipsis,
           ),
         );
@@ -233,14 +234,5 @@ class _PermissionDropdown extends StatelessWidget {
     }
 
     return dropdown;
-  }
-
-  static String _formatPermissionMode(PermissionMode mode) {
-    return switch (mode) {
-      PermissionMode.defaultMode => 'Default',
-      PermissionMode.acceptEdits => 'Accept Edits',
-      PermissionMode.bypassPermissions => 'Bypass Permissions',
-      PermissionMode.plan => 'Plan',
-    };
   }
 }
