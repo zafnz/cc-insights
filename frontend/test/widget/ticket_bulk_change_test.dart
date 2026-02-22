@@ -92,7 +92,6 @@ void main() {
       priority: TicketPriority.medium,
       category: 'Frontend',
     );
-    viewState.setMultiSelectEnabled(true);
     viewState.toggleTicketSelected(1);
     viewState.toggleTicketSelected(2);
   }

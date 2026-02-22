@@ -552,7 +552,6 @@ void main() {
   testWidgets('bulk delete shows confirmation dialog', (tester) async {
     repo.createTicket(title: 'Task A', kind: TicketKind.feature);
     repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
-    viewState.setMultiSelectEnabled(true);
     viewState.toggleTicketSelected(1);
     viewState.toggleTicketSelected(2);
 
@@ -568,9 +567,12 @@ void main() {
     await safePumpAndSettle(tester);
 
     // Confirmation dialog should appear
-    expect(find.text('Delete tickets'), findsOneWidget);
+    expect(find.text('Confirm bulk delete'), findsOneWidget);
     expect(
-      find.text('Are you sure you want to delete 2 tickets?'),
+      find.text(
+        'Are you sure you want to delete 2 tickets? '
+        'This cannot be undone.',
+      ),
       findsOneWidget,
     );
     expect(find.text('Cancel'), findsOneWidget);
@@ -582,7 +584,6 @@ void main() {
     repo.createTicket(title: 'Task A', kind: TicketKind.feature);
     repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
     repo.createTicket(title: 'Task C', kind: TicketKind.feature);
-    viewState.setMultiSelectEnabled(true);
     viewState.toggleTicketSelected(1);
     viewState.toggleTicketSelected(2);
 
@@ -612,7 +613,7 @@ void main() {
   testWidgets('bulk delete cancel preserves tickets', (tester) async {
     repo.createTicket(title: 'Task A', kind: TicketKind.feature);
     repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
-    viewState.setMultiSelectEnabled(true);
+
     viewState.toggleTicketSelected(1);
     viewState.toggleTicketSelected(2);
 
@@ -643,7 +644,7 @@ void main() {
       kind: TicketKind.feature,
       dependsOn: [t1.id],
     );
-    viewState.setMultiSelectEnabled(true);
+
     viewState.toggleTicketSelected(t1.id);
 
     await tester.pumpWidget(createTestApp(width: 500));
