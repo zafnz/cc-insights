@@ -1,7 +1,6 @@
 {
   "actions": {
-    "worktree-post-create": "./init.sh",
-    "worktree-pre-remove": "./dev-linux/cleanup.sh"
+    "worktree-post-create": "./init.sh"
   },
   "user-actions": {
     "Run": "./run.sh",
