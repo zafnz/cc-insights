@@ -1171,6 +1171,26 @@ class InternalToolsService extends ChangeNotifier {
     if (merge.error != null) {
       return InternalToolResult.error(merge.error ?? 'Merge failed');
     }
+
+    // Update the worker worktree's base ref to point at the orchestrator's
+    // branch, so the UI accurately reflects the merge target.
+    worker.setBase(baseBranch);
+    final persistence = _persistenceService;
+    if (persistence != null && project != null) {
+      try {
+        await persistence.updateWorktreeBase(
+          projectRoot: project.data.repoRoot,
+          worktreePath: path,
+          base: baseBranch,
+        );
+      } catch (e) {
+        developer.log(
+          'rebase_and_merge: failed to persist base update: $e',
+          name: 'InternalToolsService',
+        );
+      }
+    }
+
     return InternalToolResult.text(
       jsonEncode({'success': true, 'conflicts': false, 'merged_commits': 1}),
     );

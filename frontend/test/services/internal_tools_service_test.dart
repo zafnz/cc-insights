@@ -14,6 +14,7 @@ import 'package:cc_insights_v2/services/project_restore_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/services/worktree_service.dart';
 import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
+import 'package:cc_insights_v2/state/orchestrator_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:claude_sdk/claude_sdk.dart';
@@ -1316,6 +1317,170 @@ void main() {
 
       expect(registry['set_tags'], isNull);
       expect(registry['list_tags'], isNull);
+    });
+  });
+
+  group('InternalToolsService - rebase_and_merge handler', () {
+    late InternalToolsService service;
+    late FakeGitService fakeGit;
+    late WorktreeState baseWorktree;
+    late WorktreeState workerWorktree;
+    late Chat orchestratorChat;
+
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      fakeGit = FakeGitService();
+
+      baseWorktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/base-worktree',
+          isPrimary: false,
+          branch: 'orchestrate-1-11',
+        ),
+      );
+      workerWorktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worker-worktree',
+          isPrimary: false,
+          branch: 'tkt-7-feature',
+        ),
+        base: 'tkt-6-model-permission-widget',
+      );
+
+      final primaryWorktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/repo',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          primaryWorktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      project.addLinkedWorktree(baseWorktree);
+      project.addLinkedWorktree(workerWorktree);
+
+      final repo = resources.track(TicketRepository('test-project'));
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+
+      orchestratorChat = Chat.create(
+        name: 'Orchestrator',
+        worktreeRoot: '/test/base-worktree',
+      );
+      final orchState = OrchestratorState(
+        ticketBoard: repo,
+        ticketIds: [7],
+        baseWorktreePath: '/test/base-worktree',
+      );
+      service.attachOrchestratorState(orchestratorChat, orchState);
+    });
+
+    InternalToolDefinition getRebaseAndMergeTool() {
+      final registry = service.registryForChat(orchestratorChat);
+      return registry['rebase_and_merge']!;
+    }
+
+    test('updates worker base ref after successful merge', () async {
+      // Worker starts with stale base
+      expect(workerWorktree.base, 'tkt-6-model-permission-widget');
+
+      final tool = getRebaseAndMergeTool();
+      final result = await tool.handler({
+        'worktree_path': '/test/worker-worktree',
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['success'], isTrue);
+
+      // Worker base should now point at the orchestrator's branch
+      expect(workerWorktree.base, 'orchestrate-1-11');
+    });
+
+    test('does not update base ref on rebase conflict', () async {
+      fakeGit.rebaseResults['/test/worker-worktree'] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.rebase,
+      );
+
+      final tool = getRebaseAndMergeTool();
+      final result = await tool.handler({
+        'worktree_path': '/test/worker-worktree',
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['success'], isFalse);
+
+      // Base should remain unchanged
+      expect(workerWorktree.base, 'tkt-6-model-permission-widget');
+    });
+
+    test('does not update base ref on merge conflict', () async {
+      fakeGit.mergeResults['/test/base-worktree'] = const MergeResult(
+        hasConflicts: true,
+        operation: MergeOperationType.merge,
+      );
+
+      final tool = getRebaseAndMergeTool();
+      final result = await tool.handler({
+        'worktree_path': '/test/worker-worktree',
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['success'], isFalse);
+
+      // Base should remain unchanged
+      expect(workerWorktree.base, 'tkt-6-model-permission-widget');
+    });
+
+    test('returns error for missing worktree_path', () async {
+      final tool = getRebaseAndMergeTool();
+      final result = await tool.handler({});
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing "worktree_path"'));
+    });
+
+    test('returns error for unknown worktree path', () async {
+      final tool = getRebaseAndMergeTool();
+      final result = await tool.handler({
+        'worktree_path': '/unknown/path',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('worktree_not_found'));
     });
   });
 }
