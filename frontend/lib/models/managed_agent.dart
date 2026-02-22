@@ -4,7 +4,8 @@ import 'chat.dart';
 enum AgentReadyReason {
   turnComplete('turn_complete'),
   error('error'),
-  stopped('stopped');
+  stopped('stopped'),
+  permissionNeeded('permission_needed');
 
   const AgentReadyReason(this.wireValue);
 

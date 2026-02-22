@@ -1466,6 +1466,9 @@ class InternalToolsService extends ChangeNotifier {
     if (!chat.session.hasActiveSession) {
       return AgentReadyReason.stopped;
     }
+    if (chat.permissions.pendingPermission != null) {
+      return AgentReadyReason.permissionNeeded;
+    }
     return AgentReadyReason.turnComplete;
   }
 
