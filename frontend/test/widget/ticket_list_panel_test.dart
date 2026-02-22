@@ -190,7 +190,7 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Tapping a ticket toggles its multi-select checkbox
+  // 5. Tapping a ticket toggles checkbox and selects for detail view
   // ---------------------------------------------------------------------------
   testWidgets('tapping a ticket item toggles its selection', (tester) async {
     repo.createTicket(
@@ -203,11 +203,14 @@ void main() {
     await safePumpAndSettle(tester);
 
     expect(viewState.selectedTicketIds, isEmpty);
+    expect(viewState.selectedTicket, isNull);
 
     await tester.tap(find.text('Clickable ticket'));
     await safePumpAndSettle(tester);
 
     expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
+    expect(viewState.selectedTicket, isNotNull);
+    expect(viewState.selectedTicket!.title, equals('Clickable ticket'));
   });
 
   // ---------------------------------------------------------------------------

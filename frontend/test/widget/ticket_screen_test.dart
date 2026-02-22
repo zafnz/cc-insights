@@ -205,9 +205,9 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 7. Tapping a ticket toggles its multi-select checkbox
+  // 7. Tapping a ticket toggles checkbox and shows detail panel
   // ---------------------------------------------------------------------------
-  testWidgets('tapping a ticket toggles its multi-select checkbox', (tester) async {
+  testWidgets('selecting a ticket shows its details in the right panel', (tester) async {
     repo.createTicket(
       title: 'Auth token refresh',
       kind: TicketKind.feature,
@@ -217,17 +217,16 @@ void main() {
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    // Tap the ticket in the list to toggle its selection
+    // Initially no ticket selected, detail panel shows empty state
+    expect(find.text('Select a ticket to view details'), findsOneWidget);
+
+    // Tap the ticket in the list
     await tester.tap(find.text('Auth token refresh'));
     await safePumpAndSettle(tester);
 
-    // Ticket should be in selectedTicketIds
+    // Ticket should be checked and detail panel should show
     expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
-
-    // Tap again to deselect
-    await tester.tap(find.text('Auth token refresh'));
-    await safePumpAndSettle(tester);
-
-    expect(viewState.selectedTicketIds, isEmpty);
+    expect(find.text('Select a ticket to view details'), findsNothing);
+    expect(find.text('TKT-001'), findsWidgets);
   });
 }

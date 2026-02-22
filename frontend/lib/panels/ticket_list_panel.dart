@@ -792,7 +792,10 @@ class _TicketList extends StatelessWidget {
           isSelected: isSelected,
           isChecked: isChecked,
           isOrchestrated: orchestrated,
-          onTap: () => viewState.toggleTicketSelected(ticket.id),
+          onTap: () {
+            viewState.toggleTicketSelected(ticket.id);
+            viewState.selectTicket(ticket.id);
+          },
         );
       },
     );

@@ -81,9 +81,6 @@ class TicketViewState extends ChangeNotifier {
   /// The current grouping method.
   TicketGroupBy _groupBy = TicketGroupBy.category;
 
-  /// Multi-select mode is always enabled.
-  bool _multiSelectEnabled = true;
-
   /// Selected ticket IDs for orchestration launch.
   final Set<int> _selectedTicketIds = {};
 
@@ -159,7 +156,6 @@ class TicketViewState extends ChangeNotifier {
 
   /// The current grouping method.
   TicketGroupBy get groupBy => _groupBy;
-  bool get multiSelectEnabled => _multiSelectEnabled;
   Set<int> get selectedTicketIds => Set.unmodifiable(_selectedTicketIds);
 
   /// All unique categories from tickets, sorted alphabetically.
