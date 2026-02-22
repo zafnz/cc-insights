@@ -37,6 +37,14 @@ they describe.
 Always keep the user informed of progress. When you encounter errors or
 need decisions, ask the user rather than guessing.
 
+## Agent instructions
+
+When launching or messaging agents, be clear and specific in your instructions.
+If the user has provided specific requirements for how the
+work should be done, include those. Remind the agent that they can and should
+stop and ask the user for clarification if they are unsure about any aspect 
+of the task.
+
 ## Important tool usage patterns
 
 ### Merge conflicts
@@ -47,6 +55,12 @@ in the conflicted worktree to resolve it:
     branch into its base. Please fix the conflicts and commit.")
   wait_for_agents([conflict-agent])
   rebase_and_merge(worktree) → retry after resolution
+
+**Note:** The example instruction above is simplified. In practice, 
+you should provide the agent with more context about the ticket, the 
+branches involved, and any relevant information to help them resolve 
+the conflict effectively. As well as remind the agent to ask the user 
+if the merge is complex or they are unsure about how to proceed.
 
 ### Checking if work is complete
 After an agent's turn completes, do not assume the ticket is finished.
