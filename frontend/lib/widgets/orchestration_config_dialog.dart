@@ -1,13 +1,31 @@
+import 'package:agent_sdk_core/agent_sdk_core.dart'
+    show BackendCapabilities, PermissionMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/chat_model.dart';
+import '../models/ticket.dart';
+import '../models/project.dart';
+import '../services/backend_service.dart';
 import '../services/ticket_dispatch_factory.dart';
 import '../services/worktree_service.dart';
 import '../services/git_service.dart';
-import '../models/ticket.dart';
 import '../state/selection_state.dart';
 import '../state/ticket_board_state.dart';
-import '../models/project.dart';
+import 'model_permission_selector.dart';
+
+/// Test keys for [OrchestrationConfigDialog].
+class OrchestrationConfigDialogKeys {
+  OrchestrationConfigDialogKeys._();
+
+  static const dialog = Key('orchestration_config_dialog');
+  static const branchField = Key('orchestration_config_branch');
+  static const instructionsField = Key('orchestration_config_instructions');
+  static const cancelButton = Key('orchestration_config_cancel');
+  static const launchButton = Key('orchestration_config_launch');
+  static const modelPermissionSelector =
+      Key('orchestration_config_model_permission');
+}
 
 class OrchestrationConfigDialog extends StatefulWidget {
   const OrchestrationConfigDialog({super.key, required this.ticketIds});
@@ -23,6 +41,9 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
   late final TextEditingController _branchController;
   late final TextEditingController _instructionsController;
   bool _launching = false;
+
+  String _selectedModelId = 'default';
+  PermissionMode _selectedPermissionMode = PermissionMode.defaultMode;
 
   @override
   void initState() {
@@ -53,14 +74,25 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         .whereType<TicketData>()
         .toList();
 
+    final backend = context.watch<BackendService>();
+    final backendType = backend.backendType;
+    final capabilities = backendType != null
+        ? backend.capabilitiesFor(backendType)
+        : const BackendCapabilities();
+    final models = backendType != null
+        ? ChatModelCatalog.forBackend(backendType)
+        : ChatModelCatalog.claudeModels;
+
     return AlertDialog(
+      key: OrchestrationConfigDialogKeys.dialog,
       title: const Text('Run orchestration'),
       content: SizedBox(
         width: 560,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Text(
               'Tickets (${tickets.length})',
               style: Theme.of(context).textTheme.titleSmall,
@@ -84,6 +116,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
             ),
             const SizedBox(height: 12),
             TextField(
+              key: OrchestrationConfigDialogKeys.branchField,
               controller: _branchController,
               decoration: const InputDecoration(
                 labelText: 'Feature branch name',
@@ -91,7 +124,20 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
               ),
             ),
             const SizedBox(height: 12),
+            ModelPermissionSelector(
+              key: OrchestrationConfigDialogKeys.modelPermissionSelector,
+              models: models,
+              selectedModelId: _selectedModelId,
+              onModelChanged: (id) => setState(() => _selectedModelId = id),
+              permissionModes: PermissionMode.values.toList(),
+              selectedPermissionMode: _selectedPermissionMode,
+              onPermissionModeChanged: (mode) =>
+                  setState(() => _selectedPermissionMode = mode),
+              capabilities: capabilities,
+            ),
+            const SizedBox(height: 12),
             TextField(
+              key: OrchestrationConfigDialogKeys.instructionsField,
               controller: _instructionsController,
               minLines: 4,
               maxLines: 8,
@@ -101,14 +147,17 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
               ),
             ),
           ],
+          ),
         ),
       ),
       actions: [
         TextButton(
+          key: OrchestrationConfigDialogKeys.cancelButton,
           onPressed: _launching ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
+          key: OrchestrationConfigDialogKeys.launchButton,
           onPressed: _launching ? null : _launch,
           child: _launching
               ? const SizedBox(
@@ -144,11 +193,20 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
 
       final dispatch = createTicketDispatchService(context);
 
+      // Resolve selected model to a ChatModel object.
+      final backend = context.read<BackendService>();
+      final backendType = backend.backendType;
+      final selectedModel = backendType != null
+          ? ChatModelCatalog.defaultForBackend(backendType, _selectedModelId)
+          : null;
+
       await dispatch.createOrchestratorChat(
         worktreeState: created,
         ticketIds: widget.ticketIds,
         initialInstructions:
             '${_instructionsController.text.trim()}\n\nBase worktree: ${created.data.worktreeRoot}\nBase branch: ${created.data.branch}',
+        model: selectedModel,
+        permissionMode: _selectedPermissionMode,
       );
 
       if (mounted) {

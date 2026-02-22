@@ -1,6 +1,10 @@
 import 'dart:developer' as developer;
 
+import 'package:agent_sdk_core/agent_sdk_core.dart' as sdk
+    show PermissionMode;
+
 import '../models/chat.dart';
+import '../models/chat_model.dart';
 import '../models/project.dart';
 import '../models/ticket.dart';
 import '../models/worktree.dart';
@@ -294,10 +298,15 @@ class TicketDispatchService {
   }
 
   /// Creates and launches an orchestrator chat in the given worktree.
+  ///
+  /// Optionally accepts a [model] and [permissionMode] to configure the chat
+  /// before starting the session.
   Future<Chat> createOrchestratorChat({
     required WorktreeState worktreeState,
     required List<int> ticketIds,
     required String initialInstructions,
+    ChatModel? model,
+    sdk.PermissionMode? permissionMode,
   }) async {
     final chat = Chat.create(
       name: 'Orchestrator',
@@ -305,6 +314,14 @@ class TicketDispatchService {
     );
     chat.settings.setIsOrchestratorChat(true);
     chat.settings.setOrchestrationToolsEnabled(true);
+    if (model != null) {
+      chat.settings.setModel(model);
+    }
+    if (permissionMode != null) {
+      chat.settings.setPermissionMode(
+        PermissionMode.fromApiName(permissionMode.value),
+      );
+    }
 
     final internalTools = _internalToolsService;
     if (internalTools != null) {
