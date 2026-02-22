@@ -545,4 +545,123 @@ void main() {
 
     expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
   });
+
+  // ---------------------------------------------------------------------------
+  // Bulk Delete Tests
+  // ---------------------------------------------------------------------------
+  testWidgets('bulk delete shows confirmation dialog', (tester) async {
+    repo.createTicket(title: 'Task A', kind: TicketKind.feature);
+    repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+    viewState.toggleTicketSelected(2);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    // Open the Change menu
+    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
+    await safePumpAndSettle(tester);
+
+    // Tap Delete
+    await tester.tap(find.text('Delete'));
+    await safePumpAndSettle(tester);
+
+    // Confirmation dialog should appear
+    expect(find.text('Delete tickets'), findsOneWidget);
+    expect(
+      find.text('Are you sure you want to delete 2 tickets?'),
+      findsOneWidget,
+    );
+    expect(find.text('Cancel'), findsOneWidget);
+    // 'Delete' appears in the dialog button
+    expect(find.text('Delete'), findsOneWidget);
+  });
+
+  testWidgets('bulk delete confirmation deletes selected tickets', (tester) async {
+    repo.createTicket(title: 'Task A', kind: TicketKind.feature);
+    repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
+    repo.createTicket(title: 'Task C', kind: TicketKind.feature);
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+    viewState.toggleTicketSelected(2);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    expect(repo.tickets.length, 3);
+
+    // Open menu and tap Delete
+    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
+    await safePumpAndSettle(tester);
+    await tester.tap(find.text('Delete'));
+    await safePumpAndSettle(tester);
+
+    // Confirm deletion
+    await tester.tap(find.text('Delete'));
+    await safePumpAndSettle(tester);
+
+    // Only unselected ticket remains
+    expect(repo.tickets.length, 1);
+    expect(repo.tickets.first.title, 'Task C');
+
+    // Selection should be cleared
+    expect(viewState.selectedTicketIds, isEmpty);
+  });
+
+  testWidgets('bulk delete cancel preserves tickets', (tester) async {
+    repo.createTicket(title: 'Task A', kind: TicketKind.feature);
+    repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+    viewState.toggleTicketSelected(2);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    // Open menu and tap Delete
+    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
+    await safePumpAndSettle(tester);
+    await tester.tap(find.text('Delete'));
+    await safePumpAndSettle(tester);
+
+    // Cancel
+    await tester.tap(find.text('Cancel'));
+    await safePumpAndSettle(tester);
+
+    // All tickets still exist
+    expect(repo.tickets.length, 2);
+
+    // Selection still intact
+    expect(viewState.selectedTicketIds, {1, 2});
+  });
+
+  testWidgets('bulk delete clears dependsOn references', (tester) async {
+    final t1 = repo.createTicket(title: 'Dep', kind: TicketKind.feature);
+    repo.createTicket(
+      title: 'Dependent',
+      kind: TicketKind.feature,
+      dependsOn: [t1.id],
+    );
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(t1.id);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    // Open menu and tap Delete
+    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
+    await safePumpAndSettle(tester);
+    await tester.tap(find.text('Delete'));
+    await safePumpAndSettle(tester);
+
+    // Confirm
+    await tester.tap(find.text('Delete'));
+    await safePumpAndSettle(tester);
+
+    // Remaining ticket should have empty dependsOn
+    expect(repo.tickets.length, 1);
+    expect(repo.tickets.first.title, 'Dependent');
+    expect(repo.tickets.first.dependsOn, isEmpty);
+  });
 }
