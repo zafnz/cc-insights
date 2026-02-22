@@ -202,6 +202,7 @@ class _Toolbar extends StatelessWidget {
                 _BulkChangeButton(
                   key: TicketListPanelKeys.bulkChangeButton,
                   selectedCount: selectedCount,
+                  compact: compact,
                 ),
               // Start Next button
               IconButton(
@@ -280,9 +281,11 @@ class _BulkChangeButton extends StatelessWidget {
   const _BulkChangeButton({
     super.key,
     required this.selectedCount,
+    this.compact = false,
   });
 
   final int selectedCount;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -322,7 +325,7 @@ class _BulkChangeButton extends StatelessWidget {
       ],
       child: Container(
         height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(4),
@@ -331,15 +334,17 @@ class _BulkChangeButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.edit, size: 14, color: colorScheme.primary),
-            const SizedBox(width: 4),
-            Text(
-              'Change',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.primary,
+            if (!compact) ...[
+              const SizedBox(width: 4),
+              Text(
+                'Change',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.primary,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
