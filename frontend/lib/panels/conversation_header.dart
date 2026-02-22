@@ -97,8 +97,6 @@ class ConversationHeader extends StatelessWidget {
 
     final isSubagent = !conversation.isPrimary;
     final isAcp = settings.model.backend == sdk.BackendType.acp;
-    final showOrchestrationToggle =
-        settings.isOrchestratorChat || settings.orchestrationToolsEnabled;
     final acpConfigWidgets = isAcp
         ? _buildAcpConfigWidgets(settings)
         : const <Widget>[];
@@ -290,19 +288,21 @@ class ConversationHeader extends StatelessWidget {
                       },
                     ),
                   ],
-                  if (showOrchestrationToggle)
+                  if (isBackendLocked && settings.orchestrationToolsEnabled)
                     Tooltip(
-                      message: 'Enable orchestration tools on this chat',
-                      child: FilterChip(
+                      message: 'Orchestration tools are enabled on this chat',
+                      child: Chip(
                         label: const Text(
-                          'Orch',
+                          'Orchestration',
                           style: TextStyle(fontSize: 11),
                         ),
-                        selected: settings.orchestrationToolsEnabled,
-                        onSelected: (value) {
-                          settings.setOrchestrationToolsEnabled(value);
-                        },
+                        avatar: Icon(
+                          Icons.account_tree_outlined,
+                          size: 14,
+                          color: colorScheme.primary,
+                        ),
                         visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
                   // Reasoning effort dropdown (only for backends that support it)
@@ -336,10 +336,36 @@ class ConversationHeader extends StatelessWidget {
 
   void _showHeaderContextMenu(BuildContext context, Offset position) {
     final chatId = chat.data.id;
+    final settings = chat.settings;
+    final isBackendLocked = chat.session.hasStarted;
+    final orchEnabled = settings.orchestrationToolsEnabled;
     showStyledMenu<String>(
       context: context,
       position: menuPositionFromOffset(position),
       items: [
+        if (!isBackendLocked)
+          styledMenuItem(
+            value: 'toggle_orchestration',
+            child: Row(
+              children: [
+                Icon(
+                  orchEnabled
+                      ? Icons.account_tree
+                      : Icons.account_tree_outlined,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  orchEnabled
+                      ? 'Disable Orchestration'
+                      : 'Enable Orchestration',
+                ),
+              ],
+            ),
+            onTap: () {
+              settings.setOrchestrationToolsEnabled(!orchEnabled);
+            },
+          ),
         styledMenuItem(
           value: 'copy_chat_id',
           child: const Row(
