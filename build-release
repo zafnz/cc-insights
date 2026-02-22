@@ -92,12 +92,20 @@ PUBSPEC="$SCRIPT_DIR/frontend/pubspec.yaml"
 CURRENT_VERSION=$(grep "^version:" "$PUBSPEC" | sed 's/version: //')
 echo -e "\n${YELLOW}Current version: ${CURRENT_VERSION}${NC}"
 
-# Parse version components (assuming semver: major.minor.patch)
-IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-
-# Increment patch version
-NEW_PATCH=$((PATCH + 1))
-NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+if [ -n "$1" ]; then
+    # Manual version specified
+    NEW_VERSION="$1"
+    # Validate semver format
+    if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo -e "${RED}Error: Invalid version format '${NEW_VERSION}'. Expected: major.minor.patch (e.g. 1.2.3)${NC}"
+        exit 1
+    fi
+else
+    # Auto-increment patch version
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+    NEW_PATCH=$((PATCH + 1))
+    NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+fi
 echo -e "${GREEN}New version: ${NEW_VERSION}${NC}"
 
 # 4. Update version in pubspec.yaml
