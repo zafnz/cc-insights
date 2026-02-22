@@ -206,7 +206,7 @@ The orchestration system requires:
 
 ---
 
-### Task 1.6: Implement Agent Lifecycle Tools — `check_agent`
+### Task 1.6: Implement Agent Lifecycle Tools — `check_agents`
 
 **Objective**: Non-blocking status snapshot of an agent.
 

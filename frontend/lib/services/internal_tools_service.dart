@@ -876,7 +876,14 @@ class InternalToolsService extends ChangeNotifier {
     if (rawIds is! List || rawIds.isEmpty) {
       return InternalToolResult.error('Missing or empty "agent_ids"');
     }
-    final agentIds = rawIds.cast<String>();
+    final List<String> agentIds;
+    try {
+      agentIds = List<String>.from(rawIds);
+    } on TypeError {
+      return InternalToolResult.error(
+        'Invalid "agent_ids": all elements must be strings',
+      );
+    }
     final state = getOrchestratorState(orchestratorChat);
     final agents = <Map<String, dynamic>>[];
     final errors = <Map<String, dynamic>>[];

@@ -301,7 +301,7 @@ Example:
   → { ready: [{ agent_id: "agent-A", reason: "turn_complete" }] }
 ```
 
-#### `check_agent`
+#### `check_agents`
 
 Non-blocking status check on an agent.
 
@@ -317,7 +317,7 @@ Output:
   has_pending_permission: bool
 
 Example:
-  check_agent(agent_id: "agent-B")
+  check_agents(agent_id: "agent-B")
   → { status: "working", is_working: true, turn_count: 0, has_pending_permission: false }
 ```
 
@@ -688,7 +688,7 @@ list_tickets(status: ["active", "inReview"])
 
 "I see TKT-009 is still active in worktree wt-009. Let me check the status."
 
-check_agent(agent-for-009) → stopped (previous session ended)
+check_agents(agent-for-009) → stopped (previous session ended)
 
 "Previous agent has stopped. Let me verify the conflict is resolved and merge."
 
@@ -786,13 +786,13 @@ A compact, collapsible widget **docked at the top of the orchestrator's conversa
 
 #### 1b. Agent Lifecycle Tools
 
-Implement `launch_agent`, `tell_agent`, `ask_agent`, `wait_for_agents`, `check_agent` as internal tool handlers.
+Implement `launch_agent`, `tell_agent`, `ask_agent`, `wait_for_agents`, `check_agents` as internal tool handlers.
 
 - `launch_agent`: Uses `TicketDispatchService` patterns (create chat, start session, send message)
 - `tell_agent`: Calls `chat.sendMessage()`, returns immediately. Errors if `chat.isWorking`.
 - `ask_agent`: Calls `chat.sendMessage()`, awaits `isWorking → false`, reads last message. Errors if `chat.isWorking`.
 - `wait_for_agents`: Listens to chat `isWorking` changes via ChangeNotifier, resolves when any becomes idle. Also checks for pending permissions and errors. Returns reasons.
-- `check_agent`: Reads current chat state, returns status snapshot
+- `check_agents`: Reads current chat state, returns status snapshot
 
 Each tool returns a `Future<InternalToolResult>` — long-running tools (ask_agent, wait_for_agents) use Completers that resolve when the condition is met, same pattern as `create_ticket`.
 
@@ -889,7 +889,7 @@ Implement `list_tickets`, `get_ticket`, `update_ticket`, `create_worktree`, `reb
 ### Phase 5: Polish & Edge Cases
 
 - Handle orchestrator chat interrupted/closed (graceful cleanup of managed agents)
-- Handle worker agent crashes (detect via check_agent, report to orchestrator)
+- Handle worker agent crashes (detect via check_agents, report to orchestrator)
 - Resume support (orchestrator chat can be resumed, re-discovers managed agents)
 - Cost aggregation across all managed agents
 - Orchestrator-level permission handling (if a worker needs permission, wait_for_agents reports it)
@@ -915,7 +915,7 @@ See `docs/mocks/` for interactive HTML mockups:
 
 2. **Concurrent orchestrators**: Can the user run multiple orchestrations simultaneously? Probably yes (each is just a chat), but need to handle ticket contention (two orchestrators trying to work on the same ticket).
 
-3. **Cost limits**: Should the orchestrator have a cost budget? Users might want to say "spend no more than $10 on this run." The orchestrator could track cumulative cost via `check_agent` and stop when the budget is hit.
+3. **Cost limits**: Should the orchestrator have a cost budget? Users might want to say "spend no more than $10 on this run." The orchestrator could track cumulative cost via `check_agents` and stop when the budget is hit.
 
 4. **Worker model selection**: Should the orchestrator be able to choose different models for different tickets? E.g., use a cheaper model for small/chore tickets and a more capable model for complex features.
 
