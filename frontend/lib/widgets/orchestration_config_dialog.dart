@@ -79,7 +79,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
     final backendType = backend.backendType;
     final capabilities = backendType != null
         ? backend.capabilitiesFor(backendType)
-        : const BackendCapabilities();
+        : const sdk.BackendCapabilities();
     final models = backendType != null
         ? ChatModelCatalog.forBackend(backendType)
         : ChatModelCatalog.claudeModels;

@@ -474,7 +474,7 @@ void main() {
       title: 'Some ticket',
       kind: TicketKind.feature,
     );
-    viewState.setMultiSelectEnabled(true);
+
 
     await tester.pumpWidget(createTestApp(width: 500));
     await safePumpAndSettle(tester);
@@ -487,7 +487,7 @@ void main() {
       title: 'Task A',
       kind: TicketKind.feature,
     );
-    viewState.setMultiSelectEnabled(true);
+
     viewState.toggleTicketSelected(1);
 
     await tester.pumpWidget(createTestApp(width: 500));
@@ -506,7 +506,7 @@ void main() {
       title: 'Task B',
       kind: TicketKind.bugfix,
     );
-    viewState.setMultiSelectEnabled(true);
+
     viewState.toggleTicketSelected(1);
     viewState.toggleTicketSelected(2);
 
@@ -526,32 +526,12 @@ void main() {
     expect(find.text('Delete'), findsOneWidget);
   });
 
-  testWidgets('bulk change button disappears when multi-select is disabled', (tester) async {
-    repo.createTicket(
-      title: 'Task A',
-      kind: TicketKind.feature,
-    );
-    viewState.setMultiSelectEnabled(true);
-    viewState.toggleTicketSelected(1);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsOneWidget);
-
-    // Disable multi-select (which clears selection)
-    viewState.setMultiSelectEnabled(false);
-    await safePumpAndSettle(tester);
-
-    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
-  });
-
   testWidgets('bulk change button disappears when selection is cleared', (tester) async {
     repo.createTicket(
       title: 'Task A',
       kind: TicketKind.feature,
     );
-    viewState.setMultiSelectEnabled(true);
+
     viewState.toggleTicketSelected(1);
 
     await tester.pumpWidget(createTestApp(width: 500));
