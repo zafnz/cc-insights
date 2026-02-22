@@ -1040,10 +1040,8 @@ class _TicketList extends StatelessWidget {
           isSelected: isSelected,
           isChecked: isChecked,
           isOrchestrated: orchestrated,
-          onTap: () {
-            viewState.toggleTicketSelected(ticket.id);
-            viewState.selectTicket(ticket.id);
-          },
+          onTap: () => viewState.selectTicket(ticket.id),
+          onCheckChanged: () => viewState.toggleTicketSelected(ticket.id),
         );
       },
     );
@@ -1183,6 +1181,7 @@ class _TicketListItem extends StatelessWidget {
     required this.isChecked,
     required this.isOrchestrated,
     required this.onTap,
+    required this.onCheckChanged,
   });
 
   final TicketData ticket;
@@ -1190,6 +1189,7 @@ class _TicketListItem extends StatelessWidget {
   final bool isChecked;
   final bool isOrchestrated;
   final VoidCallback onTap;
+  final VoidCallback onCheckChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1215,7 +1215,7 @@ class _TicketListItem extends StatelessWidget {
               children: [
                 Checkbox(
                   value: isChecked,
-                  onChanged: (_) => onTap(),
+                  onChanged: (_) => onCheckChanged(),
                   visualDensity: VisualDensity.compact,
                 ),
                 const SizedBox(width: 4),

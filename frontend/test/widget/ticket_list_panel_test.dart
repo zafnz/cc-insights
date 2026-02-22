@@ -190,9 +190,9 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Tapping a ticket toggles checkbox and selects for detail view
+  // 5. Tapping a ticket opens detail view; checkbox toggles selection
   // ---------------------------------------------------------------------------
-  testWidgets('tapping a ticket item toggles its selection', (tester) async {
+  testWidgets('tapping a ticket item selects it for detail view', (tester) async {
     repo.createTicket(
       title: 'Clickable ticket',
       kind: TicketKind.feature,
@@ -202,15 +202,39 @@ void main() {
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(viewState.selectedTicketIds, isEmpty);
     expect(viewState.selectedTicket, isNull);
+    expect(viewState.selectedTicketIds, isEmpty);
 
+    // Tapping the ticket text opens detail view but does NOT toggle checkbox
     await tester.tap(find.text('Clickable ticket'));
     await safePumpAndSettle(tester);
 
-    expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
     expect(viewState.selectedTicket, isNotNull);
     expect(viewState.selectedTicket!.title, equals('Clickable ticket'));
+    expect(viewState.selectedTicketIds, isEmpty);
+  });
+
+  testWidgets('tapping checkbox toggles multi-select without changing detail view', (tester) async {
+    repo.createTicket(
+      title: 'Checkbox ticket',
+      kind: TicketKind.feature,
+      category: 'Test',
+    );
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Tap checkbox to toggle selection
+    await tester.tap(find.byType(Checkbox));
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
+
+    // Tap again to deselect
+    await tester.tap(find.byType(Checkbox));
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketIds, isEmpty);
   });
 
   // ---------------------------------------------------------------------------

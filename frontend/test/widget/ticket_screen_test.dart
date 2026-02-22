@@ -205,7 +205,7 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 7. Tapping a ticket toggles checkbox and shows detail panel
+  // 7. Tapping a ticket shows detail panel without toggling checkbox
   // ---------------------------------------------------------------------------
   testWidgets('selecting a ticket shows its details in the right panel', (tester) async {
     repo.createTicket(
@@ -220,13 +220,13 @@ void main() {
     // Initially no ticket selected, detail panel shows empty state
     expect(find.text('Select a ticket to view details'), findsOneWidget);
 
-    // Tap the ticket in the list
+    // Tap the ticket in the list (not the checkbox)
     await tester.tap(find.text('Auth token refresh'));
     await safePumpAndSettle(tester);
 
-    // Ticket should be checked and detail panel should show
-    expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
+    // Detail panel should show but checkbox should NOT be toggled
     expect(find.text('Select a ticket to view details'), findsNothing);
     expect(find.text('TKT-001'), findsWidgets);
+    expect(viewState.selectedTicketIds, isEmpty);
   });
 }
