@@ -2,6 +2,7 @@ import 'package:agent_sdk_core/agent_sdk_core.dart' as sdk;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../instructions/instructions.dart';
 import '../models/chat.dart' show PermissionMode;
 import '../models/chat_model.dart';
 import '../models/ticket.dart';
@@ -53,8 +54,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         : 'orchestrate-${widget.ticketIds.first}-${widget.ticketIds.last}';
     _branchController = TextEditingController(text: slug);
     _instructionsController = TextEditingController(
-      text:
-          'Run tickets ${widget.ticketIds.join(', ')}. Respect dependencies, '
+      text: 'Run tickets ${widget.ticketIds.join(', ')}. Respect dependencies, '
           'use parallel execution where safe, and report progress frequently.',
     );
   }
@@ -200,11 +200,17 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
           ? ChatModelCatalog.defaultForBackend(backendType, _selectedModelId)
           : null;
 
+      final instructions = buildOrchestrationLaunchMessage(
+        ticketIds: widget.ticketIds,
+        worktreePath: created.data.worktreeRoot,
+        branch: created.data.branch,
+        instructions: _instructionsController.text.trim(),
+      );
+
       await dispatch.createOrchestratorChat(
         worktreeState: created,
         ticketIds: widget.ticketIds,
-        initialInstructions:
-            '${_instructionsController.text.trim()}\n\nBase worktree: ${created.data.worktreeRoot}\nBase branch: ${created.data.branch}',
+        initialInstructions: instructions,
         model: selectedModel,
         permissionMode: sdk.PermissionMode.fromString(
             _selectedPermissionMode.apiName),

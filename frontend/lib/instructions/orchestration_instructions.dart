@@ -1,3 +1,5 @@
+import 'git_instructions.dart';
+
 /// System prompt used for orchestrator chats.
 const String orchestratorSystemPrompt = '''
 You are a project orchestrator for CC-Insights. You coordinate ticket
@@ -42,25 +44,13 @@ need decisions, ask the user rather than guessing.
 When launching or messaging agents, be clear and specific in your instructions.
 If the user has provided specific requirements for how the
 work should be done, include those. Remind the agent that they can and should
-stop and ask the user for clarification if they are unsure about any aspect 
+stop and ask the user for clarification if they are unsure about any aspect
 of the task.
 
 ## Important tool usage patterns
 
 ### Merge conflicts
-When calling rebase_and_merge() and a conflict occurs, launch an agent
-in the conflicted worktree to resolve it:
-  rebase_and_merge(worktree) → { success: false, conflicts: true }
-  launch_agent(worktree, "A rebase conflict occurred merging this
-    branch into its base. Please fix the conflicts and commit.")
-  wait_for_agents([conflict-agent])
-  rebase_and_merge(worktree) → retry after resolution
-
-**Note:** The example instruction above is simplified. In practice, 
-you should provide the agent with more context about the ticket, the 
-branches involved, and any relevant information to help them resolve 
-the conflict effectively. As well as remind the agent to ask the user 
-if the merge is complex or they are unsure about how to proceed.
+$mergeConflictGuidance
 
 ### Checking if work is complete
 After an agent's turn completes, do not assume the ticket is finished.
@@ -83,5 +73,25 @@ relevant agents, then call wait_for_agents() again to continue waiting.
 ### Worktree creation
 All ticket worktrees should branch from the orchestration base worktree.
 The base worktree path is provided in the initial context. Never create
-worktrees off of main or other branches unless the user explicitly asks.
-''';
+worktrees off of main or other branches unless the user explicitly asks.''';
+
+/// Builds the initial instructions for launching an orchestrator.
+///
+/// [ticketIds] — the ticket IDs the orchestrator should process.
+/// [worktreePath] — absolute path to the orchestrator's base worktree.
+/// [branch] — the git branch of that worktree.
+/// [instructions] — optional custom instruction text. When null, a default
+///   instruction string is used.
+String buildOrchestrationLaunchMessage({
+  required List<int> ticketIds,
+  required String worktreePath,
+  required String branch,
+  String? instructions,
+}) {
+  final text = instructions ??
+      'Run tickets ${ticketIds.join(', ')}. Respect dependencies, '
+          'use parallel execution where safe, and report progress frequently.';
+  return '$text'
+      '\n\nBase worktree: $worktreePath'
+      '\nBase branch: $branch';
+}

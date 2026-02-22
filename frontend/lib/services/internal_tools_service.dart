@@ -20,7 +20,7 @@ import '../state/ticket_board_state.dart';
 import 'backend_service.dart';
 import 'event_handler.dart';
 import 'git_service.dart';
-import 'orchestration_prompts.dart';
+import '../instructions/instructions.dart';
 import 'persistence_service.dart';
 import 'project_restore_service.dart';
 import 'settings_service.dart';
@@ -61,12 +61,7 @@ class InternalToolsService extends ChangeNotifier {
   /// or null if no git tools are active.
   String? get systemPromptAppend {
     if (_gitService == null) return null;
-    return 'You have access to internal git MCP tools '
-        '(git_commit_context, git_commit, git_log, git_diff). '
-        'Prefer these over running git commands via the shell — '
-        'they are faster and safer. '
-        'Fall back to shell git only for operations these tools '
-        'do not cover.';
+    return gitToolsSystemPrompt;
   }
 
   /// Returns per-chat internal tool system prompt append text.
