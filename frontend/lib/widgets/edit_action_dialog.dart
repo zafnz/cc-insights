@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/user_action.dart';
+
 /// Keys for testing EditActionDialog widgets.
 class EditActionDialogKeys {
   EditActionDialogKeys._();
@@ -10,6 +12,9 @@ class EditActionDialogKeys {
   /// The command text field.
   static const commandField = Key('edit_action_command_field');
 
+  /// The auto-close dropdown.
+  static const autoCloseDropdown = Key('edit_action_auto_close');
+
   /// The cancel button.
   static const cancelButton = Key('edit_action_cancel');
 
@@ -17,20 +22,25 @@ class EditActionDialogKeys {
   static const saveButton = Key('edit_action_save');
 }
 
+/// Result from the edit action dialog.
+typedef EditActionResult = ({String command, AutoCloseBehavior autoClose});
+
 /// Shows a dialog to configure an action command.
 ///
-/// Returns the new command string, or null if cancelled.
-Future<String?> showEditActionDialog(
+/// Returns the command and auto-close setting, or null if cancelled.
+Future<EditActionResult?> showEditActionDialog(
   BuildContext context, {
   required String actionName,
   String? currentCommand,
+  AutoCloseBehavior autoClose = AutoCloseBehavior.onSuccess,
   String? workingDirectory,
 }) {
-  return showDialog<String>(
+  return showDialog<EditActionResult>(
     context: context,
     builder: (context) => EditActionDialog(
       actionName: actionName,
       initialCommand: currentCommand,
+      initialAutoClose: autoClose,
       workingDirectory: workingDirectory,
     ),
   );
@@ -42,6 +52,7 @@ class EditActionDialog extends StatefulWidget {
     super.key,
     required this.actionName,
     this.initialCommand,
+    this.initialAutoClose = AutoCloseBehavior.onSuccess,
     this.workingDirectory,
   });
 
@@ -50,6 +61,9 @@ class EditActionDialog extends StatefulWidget {
 
   /// The current command, or null if not yet configured.
   final String? initialCommand;
+
+  /// The current auto-close behavior.
+  final AutoCloseBehavior initialAutoClose;
 
   /// The working directory where the command will run.
   final String? workingDirectory;
@@ -60,12 +74,14 @@ class EditActionDialog extends StatefulWidget {
 
 class _EditActionDialogState extends State<EditActionDialog> {
   late final TextEditingController _controller;
+  late AutoCloseBehavior _autoClose;
   final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialCommand ?? '');
+    _autoClose = widget.initialAutoClose;
   }
 
   @override
@@ -76,7 +92,9 @@ class _EditActionDialogState extends State<EditActionDialog> {
 
   void _handleSave() {
     if (_formKey.currentState?.validate() ?? false) {
-      Navigator.of(context).pop(_controller.text.trim());
+      Navigator.of(context).pop(
+        (command: _controller.text.trim(), autoClose: _autoClose),
+      );
     }
   }
 
@@ -126,6 +144,35 @@ class _EditActionDialogState extends State<EditActionDialog> {
                   return null;
                 },
                 onFieldSubmitted: (_) => _handleSave(),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Auto close output window',
+                style: textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<AutoCloseBehavior>(
+                key: EditActionDialogKeys.autoCloseDropdown,
+                value: _autoClose,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: AutoCloseBehavior.values
+                    .map(
+                      (behavior) => DropdownMenuItem(
+                        value: behavior,
+                        child: Text(behavior.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _autoClose = value);
+                  }
+                },
               ),
               if (widget.workingDirectory != null) ...[
                 const SizedBox(height: 16),

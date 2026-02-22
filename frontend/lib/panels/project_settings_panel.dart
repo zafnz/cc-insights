@@ -275,6 +275,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
             CommandAction(
               name: name,
               command: action.commandController.text.trim(),
+              autoClose: action.selectedAutoClose,
             ),
           );
           continue;
@@ -411,6 +412,13 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
     _saveConfig();
   }
 
+  void _setUserActionAutoClose(int index, AutoCloseBehavior autoClose) {
+    setState(() {
+      _userActions[index].selectedAutoClose = autoClose;
+    });
+    _saveConfig();
+  }
+
   void _removeUserAction(int index) {
     setState(() {
       _userActions[index].dispose();
@@ -470,6 +478,7 @@ class _ProjectSettingsPanelState extends State<ProjectSettingsPanel> {
                 onActionTypeChanged: _setUserActionType,
                 onActionAgentChanged: _setUserActionAgent,
                 onActionModelChanged: _setUserActionModel,
+                onActionAutoCloseChanged: _setUserActionAutoClose,
                 onRemoveUserAction: _removeUserAction,
                 defaultBaseSelection: _defaultBaseSelection,
                 onDefaultBaseChanged: (value) {
@@ -657,6 +666,7 @@ class _SettingsContent extends StatelessWidget {
     required this.onActionTypeChanged,
     required this.onActionAgentChanged,
     required this.onActionModelChanged,
+    required this.onActionAutoCloseChanged,
     required this.onRemoveUserAction,
     required this.defaultBaseSelection,
     required this.onDefaultBaseChanged,
@@ -679,6 +689,7 @@ class _SettingsContent extends StatelessWidget {
   final void Function(int, _EditableActionType) onActionTypeChanged;
   final void Function(int, String) onActionAgentChanged;
   final void Function(int, String?) onActionModelChanged;
+  final void Function(int, AutoCloseBehavior) onActionAutoCloseChanged;
   final void Function(int) onRemoveUserAction;
   final String defaultBaseSelection;
   final ValueChanged<String> onDefaultBaseChanged;
@@ -803,6 +814,8 @@ class _SettingsContent extends StatelessWidget {
             onTypeChanged: (type) => onActionTypeChanged(i, type),
             onAgentChanged: (agentId) => onActionAgentChanged(i, agentId),
             onModelChanged: (modelId) => onActionModelChanged(i, modelId),
+            onAutoCloseChanged: (autoClose) =>
+                onActionAutoCloseChanged(i, autoClose),
             onRemove: () => onRemoveUserAction(i),
             onSave: onSave,
           ),
@@ -1093,6 +1106,7 @@ class _UserActionRow extends StatelessWidget {
     required this.onTypeChanged,
     required this.onAgentChanged,
     required this.onModelChanged,
+    required this.onAutoCloseChanged,
     required this.onRemove,
     required this.onSave,
   });
@@ -1102,6 +1116,7 @@ class _UserActionRow extends StatelessWidget {
   final ValueChanged<_EditableActionType> onTypeChanged;
   final ValueChanged<String> onAgentChanged;
   final ValueChanged<String?> onModelChanged;
+  final ValueChanged<AutoCloseBehavior> onAutoCloseChanged;
   final VoidCallback onRemove;
   final VoidCallback onSave;
 
@@ -1202,6 +1217,51 @@ class _UserActionRow extends StatelessWidget {
                 hintText: 'e.g., ./test.sh',
                 monospace: true,
                 onSave: onSave,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Auto close output window',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'When to automatically close the terminal tab after execution',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  InsightsDropdown<AutoCloseBehavior>(
+                    value: entry.selectedAutoClose,
+                    onChanged: (value) {
+                      if (value != null) {
+                        onAutoCloseChanged(value);
+                      }
+                    },
+                    items: AutoCloseBehavior.values
+                        .map(
+                          (behavior) => DropdownMenuItem(
+                            value: behavior,
+                            child: Text(behavior.label),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ),
             ] else ...[
               _StartChatMacroFields(
@@ -1372,6 +1432,7 @@ class _UserActionEntry {
     required this.instructionController,
     required this.selectedAgentId,
     this.selectedModel,
+    this.selectedAutoClose = AutoCloseBehavior.onSuccess,
   });
 
   factory _UserActionEntry.fromAction(
@@ -1379,13 +1440,15 @@ class _UserActionEntry {
     required String fallbackAgentId,
   }) {
     return switch (action) {
-      CommandAction(:final name, :final command) => _UserActionEntry(
-        type: _EditableActionType.command,
-        nameController: TextEditingController(text: name),
-        commandController: TextEditingController(text: command),
-        instructionController: TextEditingController(),
-        selectedAgentId: fallbackAgentId,
-      ),
+      CommandAction(:final name, :final command, :final autoClose) =>
+        _UserActionEntry(
+          type: _EditableActionType.command,
+          nameController: TextEditingController(text: name),
+          commandController: TextEditingController(text: command),
+          instructionController: TextEditingController(),
+          selectedAgentId: fallbackAgentId,
+          selectedAutoClose: autoClose,
+        ),
       StartChatMacro(
         :final name,
         :final agentId,
@@ -1409,6 +1472,7 @@ class _UserActionEntry {
   final TextEditingController instructionController;
   String selectedAgentId;
   String? selectedModel;
+  AutoCloseBehavior selectedAutoClose;
 
   void dispose() {
     nameController.dispose();

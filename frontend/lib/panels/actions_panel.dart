@@ -108,25 +108,31 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     final workingDirectory = worktree.data.worktreeRoot;
 
     switch (action) {
-      case CommandAction(:final name, :final command):
+      case CommandAction(:final name, :final command, :final autoClose):
         if (command.isEmpty) {
-          final newCommand = await showEditActionDialog(
+          final result = await showEditActionDialog(
             context,
             actionName: name,
             currentCommand: null,
+            autoClose: autoClose,
             workingDirectory: workingDirectory,
           );
 
-          if (newCommand != null && newCommand.isNotEmpty && mounted) {
+          if (result != null && result.command.isNotEmpty && mounted) {
+            final newAction = CommandAction(
+              name: name,
+              command: result.command,
+              autoClose: result.autoClose,
+            );
             await _configService!.updateUserAction(
               _lastProjectRoot!,
-              CommandAction(name: name, command: newCommand),
+              newAction,
             );
-            _runScript(name, newCommand, workingDirectory);
+            _runScript(name, result.command, workingDirectory, result.autoClose);
           }
           return;
         }
-        _runScript(name, command, workingDirectory);
+        _runScript(name, command, workingDirectory, autoClose);
         return;
       case StartChatMacro():
         await MacroExecutor.executeStartChat(context, worktree, action);
@@ -134,12 +140,18 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     }
   }
 
-  void _runScript(String name, String command, String workingDirectory) {
+  void _runScript(
+    String name,
+    String command,
+    String workingDirectory,
+    AutoCloseBehavior autoClose,
+  ) {
     LogService.instance.notice('Actions', 'Running action: $name');
     context.read<ScriptExecutionService>().runScript(
       name: name,
       command: command,
       workingDirectory: workingDirectory,
+      autoClose: autoClose,
     );
   }
 
@@ -169,18 +181,23 @@ class _ActionsPanelContentState extends State<_ActionsPanelContent> {
     if (result != 'edit' || !mounted) return;
 
     switch (action) {
-      case CommandAction(:final name, :final command):
-        final newCommand = await showEditActionDialog(
+      case CommandAction(:final name, :final command, :final autoClose):
+        final result = await showEditActionDialog(
           context,
           actionName: name,
           currentCommand: command,
+          autoClose: autoClose,
           workingDirectory: workingDirectory,
         );
 
-        if (newCommand != null && mounted) {
+        if (result != null && mounted) {
           await _configService!.updateUserAction(
             _lastProjectRoot!,
-            CommandAction(name: name, command: newCommand),
+            CommandAction(
+              name: name,
+              command: result.command,
+              autoClose: result.autoClose,
+            ),
           );
         }
         return;

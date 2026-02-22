@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 
 import '../models/terminal_tab.dart';
+import '../models/user_action.dart';
 import '../services/script_execution_service.dart';
 import '../state/selection_state.dart';
 import '../widgets/keyboard_focus_manager.dart';
@@ -320,7 +321,7 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
       });
     }
 
-    // Handle auto-close for successful script tabs
+    // Handle auto-close for completed script tabs
     for (final entry in _scriptToTabId.entries) {
       final scriptId = entry.key;
       final tabId = entry.value;
@@ -328,40 +329,49 @@ class _TerminalOutputPanelState extends State<TerminalOutputPanel> {
           .where((s) => s.id == scriptId)
           .firstOrNull;
 
-      if (scriptForTab != null && !scriptForTab.isRunning && scriptForTab.isSuccess) {
-        // Script completed successfully - start auto-close timer if not already started
-        // Skip if user explicitly chose to keep this script open
-        if (!_autoCloseTimers.containsKey(scriptId) && !_keptOpenScripts.contains(scriptId)) {
-          _autoClosingScripts.add(scriptId);
-          _autoCloseCountdown[scriptId] = _autoCloseDelay.inSeconds;
+      if (scriptForTab != null && !scriptForTab.isRunning) {
+        // Determine if we should auto-close based on the script's autoClose setting
+        final shouldAutoClose = switch (scriptForTab.autoClose) {
+          AutoCloseBehavior.always => true,
+          AutoCloseBehavior.onSuccess => scriptForTab.isSuccess,
+          AutoCloseBehavior.never => false,
+        };
 
-          // Create a periodic timer that updates countdown every second
-          var secondsRemaining = _autoCloseDelay.inSeconds;
-          final timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-            if (!mounted || !_autoClosingScripts.contains(scriptId)) {
-              timer.cancel();
-              return;
-            }
+        if (shouldAutoClose) {
+          // Start auto-close timer if not already started
+          // Skip if user explicitly chose to keep this script open
+          if (!_autoCloseTimers.containsKey(scriptId) && !_keptOpenScripts.contains(scriptId)) {
+            _autoClosingScripts.add(scriptId);
+            _autoCloseCountdown[scriptId] = _autoCloseDelay.inSeconds;
 
-            secondsRemaining--;
-            if (mounted) {
-              setState(() {
-                _autoCloseCountdown[scriptId] = secondsRemaining;
-              });
-            }
+            // Create a periodic timer that updates countdown every second
+            var secondsRemaining = _autoCloseDelay.inSeconds;
+            final timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+              if (!mounted || !_autoClosingScripts.contains(scriptId)) {
+                timer.cancel();
+                return;
+              }
 
-            if (secondsRemaining <= 0) {
-              timer.cancel();
-              if (mounted && _autoClosingScripts.contains(scriptId)) {
-                final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
-                if (tabIndex != -1) {
-                  _closeTab(tabIndex);
+              secondsRemaining--;
+              if (mounted) {
+                setState(() {
+                  _autoCloseCountdown[scriptId] = secondsRemaining;
+                });
+              }
+
+              if (secondsRemaining <= 0) {
+                timer.cancel();
+                if (mounted && _autoClosingScripts.contains(scriptId)) {
+                  final tabIndex = _tabs.indexWhere((t) => t.id == tabId);
+                  if (tabIndex != -1) {
+                    _closeTab(tabIndex);
+                  }
                 }
               }
-            }
-          });
+            });
 
-          _autoCloseTimers[scriptId] = timer;
+            _autoCloseTimers[scriptId] = timer;
+          }
         }
       }
     }

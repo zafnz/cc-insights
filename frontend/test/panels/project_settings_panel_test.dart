@@ -470,6 +470,10 @@ void main() {
         await pumpAndLoad(tester, buildTestWidget());
         await selectActionsCategory(tester);
 
+        await tester.ensureVisible(
+          find.byKey(ProjectSettingsPanelKeys.addActionButton),
+        );
+        await tester.pump();
         await tester.tap(find.byKey(ProjectSettingsPanelKeys.addActionButton));
         await tester.pump();
 

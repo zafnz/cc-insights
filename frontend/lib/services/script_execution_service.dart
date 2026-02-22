@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 
+import '../models/user_action.dart';
+
 /// Represents a script that is currently running or has completed.
 class RunningScript {
   /// Unique identifier for this script execution.
@@ -19,6 +21,9 @@ class RunningScript {
 
   /// The working directory for the script.
   final String workingDirectory;
+
+  /// When to auto-close the terminal output window after execution.
+  final AutoCloseBehavior autoClose;
 
   /// The underlying PTY.
   final Pty pty;
@@ -52,6 +57,7 @@ class RunningScript {
     required this.workingDirectory,
     required this.pty,
     required Future<int> exitCodeFuture,
+    this.autoClose = AutoCloseBehavior.onSuccess,
   })  : _exitCodeFuture = exitCodeFuture,
         startTime = DateTime.now();
 
@@ -136,6 +142,7 @@ class ScriptExecutionService extends ChangeNotifier {
     required String name,
     required String command,
     required String workingDirectory,
+    AutoCloseBehavior autoClose = AutoCloseBehavior.onSuccess,
   }) async {
     final id = '${name}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -162,6 +169,7 @@ class ScriptExecutionService extends ChangeNotifier {
       workingDirectory: workingDirectory,
       pty: pty,
       exitCodeFuture: exitCodeFuture,
+      autoClose: autoClose,
     );
 
     _scripts[id] = script;

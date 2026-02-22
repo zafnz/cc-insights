@@ -1,6 +1,40 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+/// Controls when the terminal output window auto-closes after script execution.
+enum AutoCloseBehavior {
+  /// Always auto-close after script completes (regardless of exit code).
+  always,
+
+  /// Auto-close only when the script exits successfully (exit code 0).
+  onSuccess,
+
+  /// Never auto-close; user must manually close the terminal tab.
+  never;
+
+  /// JSON key used for serialization.
+  String toJson() => switch (this) {
+        always => 'always',
+        onSuccess => 'on-success',
+        never => 'never',
+      };
+
+  /// Parses from a JSON string value. Defaults to [onSuccess] for unknown values.
+  static AutoCloseBehavior fromJson(String? value) => switch (value) {
+        'always' => always,
+        'on-success' => onSuccess,
+        'never' => never,
+        _ => onSuccess,
+      };
+
+  /// Human-readable label for UI display.
+  String get label => switch (this) {
+        always => 'Always',
+        onSuccess => 'Only on success',
+        never => 'Never',
+      };
+}
+
 /// Base type for a user-defined action shown in the Actions panel.
 @immutable
 sealed class UserAction {
@@ -45,6 +79,9 @@ sealed class UserAction {
         return CommandAction(
           name: name,
           command: value['command'] as String? ?? '',
+          autoClose: AutoCloseBehavior.fromJson(
+            value['auto-close'] as String?,
+          ),
         );
       }
     }
@@ -56,26 +93,45 @@ sealed class UserAction {
 /// Shell command action.
 @immutable
 class CommandAction extends UserAction {
-  const CommandAction({required super.name, required this.command});
+  const CommandAction({
+    required super.name,
+    required this.command,
+    this.autoClose = AutoCloseBehavior.onSuccess,
+  });
 
   /// Shell command to execute.
   final String command;
+
+  /// When to auto-close the terminal output window after execution.
+  final AutoCloseBehavior autoClose;
 
   @override
   IconData get icon => Icons.play_arrow;
 
   @override
   Object toJsonValue() {
-    if (command.trim().isNotEmpty) {
+    // Use simple string format for backward compat when no extra options are set.
+    if (command.trim().isNotEmpty &&
+        autoClose == AutoCloseBehavior.onSuccess) {
       return command;
     }
-    return {'type': 'command', 'command': command};
+    return {
+      'type': 'command',
+      'command': command,
+      if (autoClose != AutoCloseBehavior.onSuccess)
+        'auto-close': autoClose.toJson(),
+    };
   }
 
-  CommandAction copyWith({String? name, String? command}) {
+  CommandAction copyWith({
+    String? name,
+    String? command,
+    AutoCloseBehavior? autoClose,
+  }) {
     return CommandAction(
       name: name ?? this.name,
       command: command ?? this.command,
+      autoClose: autoClose ?? this.autoClose,
     );
   }
 
@@ -84,11 +140,12 @@ class CommandAction extends UserAction {
     if (identical(this, other)) return true;
     return other is CommandAction &&
         other.name == name &&
-        other.command == command;
+        other.command == command &&
+        other.autoClose == autoClose;
   }
 
   @override
-  int get hashCode => Object.hash(name, command);
+  int get hashCode => Object.hash(name, command, autoClose);
 }
 
 /// Macro action that creates and starts a new chat.
