@@ -324,6 +324,36 @@ void main() {
         expect(find.textContaining('test_value'), findsOneWidget);
       });
 
+      testWidgets('renders SystemInstructionEntry with orchestrator source',
+          (tester) async {
+        final entry = SystemInstructionEntry(
+          timestamp: DateTime.now(),
+          text: 'Implement the login feature',
+          source: InstructionSource.orchestrator,
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('Implement the login feature'), findsOneWidget);
+        expect(find.byIcon(Icons.hub), findsOneWidget);
+      });
+
+      testWidgets('renders SystemInstructionEntry with system source',
+          (tester) async {
+        final entry = SystemInstructionEntry(
+          timestamp: DateTime.now(),
+          text: 'System instruction text',
+          source: InstructionSource.system,
+        );
+
+        await tester.pumpWidget(createTestApp(entry: entry));
+        await safePumpAndSettle(tester);
+
+        expect(find.text('System instruction text'), findsOneWidget);
+        expect(find.byIcon(Icons.smart_toy), findsOneWidget);
+      });
+
       testWidgets('renders SystemNotificationEntry', (tester) async {
         final entry = SystemNotificationEntry(
           timestamp: DateTime.now(),

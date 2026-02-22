@@ -338,6 +338,8 @@ abstract class OutputEntry {
         return UnknownMessageEntry.fromJson(json);
       case 'system_notification':
         return SystemNotificationEntry.fromJson(json);
+      case 'system_instruction':
+        return SystemInstructionEntry.fromJson(json);
       default:
         throw ArgumentError('Unknown OutputEntry type: $type');
     }
@@ -1185,6 +1187,91 @@ class UnknownMessageEntry extends OutputEntry {
       rawMessage: Map<String, dynamic>.from(
         json['raw_message'] as Map? ?? {},
       ),
+    );
+  }
+}
+
+/// Source of a system instruction entry.
+enum InstructionSource {
+  /// Instruction sent by the orchestrator agent.
+  orchestrator,
+
+  /// Instruction from the system.
+  system,
+}
+
+/// A system instruction entry shown when the orchestrator or system sends
+/// instructions to a worker agent.
+@immutable
+class SystemInstructionEntry extends OutputEntry {
+  /// The instruction text.
+  final String text;
+
+  /// Where this instruction originated.
+  final InstructionSource source;
+
+  /// Creates a [SystemInstructionEntry].
+  const SystemInstructionEntry({
+    required super.timestamp,
+    required this.text,
+    required this.source,
+  });
+
+  /// Creates a copy with the given fields replaced.
+  SystemInstructionEntry copyWith({
+    DateTime? timestamp,
+    String? text,
+    InstructionSource? source,
+  }) {
+    return SystemInstructionEntry(
+      timestamp: timestamp ?? this.timestamp,
+      text: text ?? this.text,
+      source: source ?? this.source,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SystemInstructionEntry &&
+        other.timestamp == timestamp &&
+        other.text == text &&
+        other.source == source;
+  }
+
+  @override
+  int get hashCode => Object.hash(timestamp, text, source);
+
+  @override
+  String toString() {
+    return 'SystemInstructionEntry(timestamp: $timestamp, text: $text, '
+        'source: $source)';
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'type': 'system_instruction',
+      'timestamp': timestamp.toIso8601String(),
+      'text': text,
+      'source': source.name,
+    };
+  }
+
+  /// Deserializes a [SystemInstructionEntry] from a JSON map.
+  static SystemInstructionEntry fromJson(Map<String, dynamic> json) {
+    final sourceStr = json['source'] as String?;
+    final source = sourceStr != null
+        ? InstructionSource.values.firstWhere(
+            (e) => e.name == sourceStr,
+            orElse: () => InstructionSource.system,
+          )
+        : InstructionSource.system;
+
+    return SystemInstructionEntry(
+      timestamp: DateTime.parse(json['timestamp'] as String),
+      text: json['text'] as String? ?? '',
+      source: source,
     );
   }
 }

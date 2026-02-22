@@ -7,6 +7,7 @@ library;
 export 'auto_compaction_entry.dart';
 export 'context_entry.dart';
 export 'output_entry_widget.dart';
+export 'system_instruction_entry.dart';
 export 'text_entry.dart';
 export 'tool_use_entry.dart';
 export 'unknown_message_entry.dart';

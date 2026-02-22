@@ -1370,6 +1370,187 @@ void main() {
       });
     });
 
+    group('SystemInstructionEntry', () {
+      test('toJson produces correct structure', () {
+        // Arrange
+        final entry = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: 'Implement the login feature',
+          source: InstructionSource.orchestrator,
+        );
+
+        // Act
+        final json = entry.toJson();
+
+        // Assert
+        check(json['type']).equals('system_instruction');
+        check(json['timestamp']).equals('2025-01-27T10:30:00.000Z');
+        check(json['text']).equals('Implement the login feature');
+        check(json['source']).equals('orchestrator');
+      });
+
+      test('toJson with system source', () {
+        // Arrange
+        final entry = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: 'System message',
+          source: InstructionSource.system,
+        );
+
+        // Act
+        final json = entry.toJson();
+
+        // Assert
+        check(json['source']).equals('system');
+      });
+
+      test('fromJson restores entry correctly', () {
+        // Arrange
+        final json = {
+          'type': 'system_instruction',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Do the thing',
+          'source': 'orchestrator',
+        };
+
+        // Act
+        final entry = SystemInstructionEntry.fromJson(json);
+
+        // Assert
+        check(entry.timestamp).equals(DateTime.utc(2025, 1, 27, 10, 30, 0));
+        check(entry.text).equals('Do the thing');
+        check(entry.source).equals(InstructionSource.orchestrator);
+      });
+
+      test('fromJson defaults source to system for unknown value', () {
+        // Arrange
+        final json = {
+          'type': 'system_instruction',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Hello',
+          'source': 'unknown_source',
+        };
+
+        // Act
+        final entry = SystemInstructionEntry.fromJson(json);
+
+        // Assert
+        check(entry.source).equals(InstructionSource.system);
+      });
+
+      test('fromJson defaults source to system when missing', () {
+        // Arrange
+        final json = {
+          'type': 'system_instruction',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Hello',
+        };
+
+        // Act
+        final entry = SystemInstructionEntry.fromJson(json);
+
+        // Assert
+        check(entry.source).equals(InstructionSource.system);
+      });
+
+      test('fromJson handles missing text with empty string', () {
+        // Arrange
+        final json = {
+          'type': 'system_instruction',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'source': 'orchestrator',
+        };
+
+        // Act
+        final entry = SystemInstructionEntry.fromJson(json);
+
+        // Assert
+        check(entry.text).equals('');
+      });
+
+      test('round-trip preserves data', () {
+        // Arrange
+        final original = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27, 10, 30, 0),
+          text: 'Multi\nline\ninstructions',
+          source: InstructionSource.orchestrator,
+        );
+
+        // Act
+        final json = jsonEncode(original.toJson());
+        final restored = SystemInstructionEntry.fromJson(
+          jsonDecode(json) as Map<String, dynamic>,
+        );
+
+        // Assert
+        check(restored.timestamp).equals(original.timestamp);
+        check(restored.text).equals(original.text);
+        check(restored.source).equals(original.source);
+      });
+
+      test('copyWith updates fields', () {
+        // Arrange
+        final original = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27),
+          text: 'Original',
+          source: InstructionSource.orchestrator,
+        );
+
+        // Act
+        final modified = original.copyWith(
+          text: 'Modified',
+          source: InstructionSource.system,
+        );
+
+        // Assert
+        check(modified.text).equals('Modified');
+        check(modified.source).equals(InstructionSource.system);
+        check(modified.timestamp).equals(original.timestamp);
+      });
+
+      test('equality works correctly', () {
+        // Arrange
+        final entry1 = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27),
+          text: 'Test',
+          source: InstructionSource.orchestrator,
+        );
+        final entry2 = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27),
+          text: 'Test',
+          source: InstructionSource.orchestrator,
+        );
+        final entry3 = SystemInstructionEntry(
+          timestamp: DateTime.utc(2025, 1, 27),
+          text: 'Different',
+          source: InstructionSource.orchestrator,
+        );
+
+        // Assert
+        check(entry1 == entry2).isTrue();
+        check(entry1.hashCode).equals(entry2.hashCode);
+        check(entry1 == entry3).isFalse();
+      });
+    });
+
+    group('OutputEntry.fromJson dispatches system_instruction', () {
+      test('dispatches to SystemInstructionEntry for type "system_instruction"',
+          () {
+        final json = {
+          'type': 'system_instruction',
+          'timestamp': '2025-01-27T10:30:00.000Z',
+          'text': 'Do the work',
+          'source': 'orchestrator',
+        };
+
+        final entry = OutputEntry.fromJson(json);
+
+        check(entry).isA<SystemInstructionEntry>();
+        check((entry as SystemInstructionEntry).text).equals('Do the work');
+        check(entry.source).equals(InstructionSource.orchestrator);
+      });
+    });
+
     group('UsageInfo serialization', () {
       test('toJson produces correct structure', () {
         // Arrange

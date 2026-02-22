@@ -9,6 +9,7 @@ import '../tool_card.dart';
 import 'auto_compaction_entry.dart';
 import 'context_entry.dart';
 import 'session_entry.dart';
+import 'system_instruction_entry.dart';
 import 'system_notification_entry.dart';
 import 'text_entry.dart';
 import 'unknown_message_entry.dart';
@@ -90,6 +91,8 @@ class OutputEntryWidget extends StatelessWidget {
           entry: e,
           projectDir: projectDir,
         );
+      case final SystemInstructionEntry e:
+        child = SystemInstructionEntryWidget(entry: e);
       default:
         return const SizedBox.shrink();
     }

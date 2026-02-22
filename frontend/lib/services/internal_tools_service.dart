@@ -511,6 +511,13 @@ class InternalToolsService extends ChangeNotifier {
         ticketId: ticketId,
         name: name,
       );
+      chat.conversations.addEntry(
+        SystemInstructionEntry(
+          timestamp: DateTime.now(),
+          text: instructions,
+          source: InstructionSource.orchestrator,
+        ),
+      );
       await _startWorkerSession(
         context: context,
         chat: chat,
@@ -635,6 +642,13 @@ class InternalToolsService extends ChangeNotifier {
       return InternalToolResult.error('agent_busy: $agentId');
     }
 
+    agent.chat.conversations.addEntry(
+      SystemInstructionEntry(
+        timestamp: DateTime.now(),
+        text: message,
+        source: InstructionSource.orchestrator,
+      ),
+    );
     await agent.chat.session.sendMessage(message);
     return InternalToolResult.text(jsonEncode({'success': true}));
   }
@@ -685,6 +699,13 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     final timeout = _parseAskTimeout(input);
+    agent.chat.conversations.addEntry(
+      SystemInstructionEntry(
+        timestamp: DateTime.now(),
+        text: message,
+        source: InstructionSource.orchestrator,
+      ),
+    );
     await agent.chat.session.sendMessage(message);
     final completed = await _waitUntilAgentIdle(
       agent.chat,
