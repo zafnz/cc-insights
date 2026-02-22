@@ -68,7 +68,7 @@ void main() {
     await cleanupConfig();
   });
 
-  Widget createTestApp() {
+  Widget createTestApp({double width = 320}) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<TicketRepository>.value(value: repo),
@@ -78,7 +78,7 @@ void main() {
       child: MaterialApp(
         home: Scaffold(
           body: SizedBox(
-            width: 320,
+            width: width,
             height: 600,
             child: const TicketListPanel(),
           ),
@@ -462,5 +462,105 @@ void main() {
 
     // Verify tooltip shows the critical ticket
     expect(button.tooltip, 'Start next: ${critical.displayId}');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bulk Change Button Tests
+  // ---------------------------------------------------------------------------
+  testWidgets('bulk change button is hidden when no tickets are selected', (tester) async {
+    repo.createTicket(
+      title: 'Some ticket',
+      kind: TicketKind.feature,
+    );
+    viewState.setMultiSelectEnabled(true);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
+  });
+
+  testWidgets('bulk change button appears when tickets are selected', (tester) async {
+    repo.createTicket(
+      title: 'Task A',
+      kind: TicketKind.feature,
+    );
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsOneWidget);
+    expect(find.text('Change'), findsOneWidget);
+  });
+
+  testWidgets('bulk change button opens popup with all menu items', (tester) async {
+    repo.createTicket(
+      title: 'Task A',
+      kind: TicketKind.feature,
+    );
+    repo.createTicket(
+      title: 'Task B',
+      kind: TicketKind.bugfix,
+    );
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+    viewState.toggleTicketSelected(2);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    // Tap the Change button to open the popup menu
+    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
+    await safePumpAndSettle(tester);
+
+    // Verify all menu items are shown.
+    // "Category" also appears in the group-by dropdown label, so expect 2.
+    expect(find.text('Category'), findsNWidgets(2));
+    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('Kind'), findsOneWidget);
+    expect(find.text('Priority'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+  });
+
+  testWidgets('bulk change button disappears when multi-select is disabled', (tester) async {
+    repo.createTicket(
+      title: 'Task A',
+      kind: TicketKind.feature,
+    );
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsOneWidget);
+
+    // Disable multi-select (which clears selection)
+    viewState.setMultiSelectEnabled(false);
+    await safePumpAndSettle(tester);
+
+    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
+  });
+
+  testWidgets('bulk change button disappears when selection is cleared', (tester) async {
+    repo.createTicket(
+      title: 'Task A',
+      kind: TicketKind.feature,
+    );
+    viewState.setMultiSelectEnabled(true);
+    viewState.toggleTicketSelected(1);
+
+    await tester.pumpWidget(createTestApp(width: 500));
+    await safePumpAndSettle(tester);
+
+    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsOneWidget);
+
+    // Deselect the ticket
+    viewState.toggleTicketSelected(1);
+    await safePumpAndSettle(tester);
+
+    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
   });
 }

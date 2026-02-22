@@ -21,6 +21,7 @@ class TicketListPanelKeys {
   static const Key filterButton = Key('ticket-list-filter');
   static const Key runButton = Key('ticket-list-run');
   static const Key multiSelectButton = Key('ticket-list-multiselect');
+  static const Key bulkChangeButton = Key('ticket-list-bulk-change');
   static const Key listViewToggle = Key('ticket-list-view-toggle');
   static const Key graphViewToggle = Key('ticket-graph-view-toggle');
   static const Key groupByDropdown = Key('ticket-list-group-by');
@@ -220,6 +221,11 @@ class _Toolbar extends StatelessWidget {
                   ),
                   padding: EdgeInsets.zero,
                 ),
+                if (canRun)
+                  _BulkChangeButton(
+                    key: TicketListPanelKeys.bulkChangeButton,
+                    selectedCount: selectedCount,
+                  ),
               ],
               // Start Next button
               IconButton(
@@ -276,6 +282,95 @@ class _Toolbar extends StatelessWidget {
 
   TicketDispatchService _createDispatchService(BuildContext context) {
     return createTicketDispatchService(context);
+  }
+}
+
+/// The bulk change actions available in the popup menu.
+enum BulkChangeAction {
+  category,
+  status,
+  kind,
+  priority,
+  delete,
+}
+
+/// Popup menu button for bulk-changing selected tickets.
+///
+/// Shows a menu with Category, Status, Kind, Priority, and Delete options.
+/// Only rendered when tickets are selected (controlled by the parent toolbar).
+class _BulkChangeButton extends StatelessWidget {
+  const _BulkChangeButton({
+    super.key,
+    required this.selectedCount,
+  });
+
+  final int selectedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return PopupMenuButton<BulkChangeAction>(
+      tooltip: 'Bulk change $selectedCount tickets',
+      offset: const Offset(0, 28),
+      onSelected: (action) => _handleAction(context, action),
+      itemBuilder: (_) => [
+        const PopupMenuItem<BulkChangeAction>(
+          value: BulkChangeAction.category,
+          height: 32,
+          child: Text('Category', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuItem<BulkChangeAction>(
+          value: BulkChangeAction.status,
+          height: 32,
+          child: Text('Status', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuItem<BulkChangeAction>(
+          value: BulkChangeAction.kind,
+          height: 32,
+          child: Text('Kind', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuItem<BulkChangeAction>(
+          value: BulkChangeAction.priority,
+          height: 32,
+          child: Text('Priority', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuDivider(height: 8),
+        const PopupMenuItem<BulkChangeAction>(
+          value: BulkChangeAction.delete,
+          height: 32,
+          child: Text('Delete', style: TextStyle(fontSize: 12)),
+        ),
+      ],
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.edit, size: 14, color: colorScheme.primary),
+            const SizedBox(width: 4),
+            Text(
+              'Change',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleAction(BuildContext context, BulkChangeAction action) {
+    // Placeholder: individual bulk operations are implemented in tickets 9 & 10.
+    debugPrint('Bulk change action: ${action.name}');
   }
 }
 
