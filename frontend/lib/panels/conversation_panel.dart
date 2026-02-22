@@ -11,10 +11,12 @@ import '../models/conversation.dart';
 import '../models/output_entry.dart';
 import '../services/backend_service.dart';
 import '../services/chat_session_service.dart';
+import '../services/internal_tools_service.dart';
 import '../state/selection_state.dart';
 import '../config/design_tokens.dart';
 import '../widgets/ask_user_question_dialog.dart';
 import '../widgets/message_input.dart';
+import '../widgets/orchestration_progress_widget.dart';
 import '../widgets/output_entries.dart';
 import '../widgets/permission_dialog.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
@@ -453,6 +455,10 @@ class _ConversationPanelState extends State<ConversationPanel>
     // Check if Claude is working (for spinner display)
     final isWorking = chat?.session.isWorking ?? false;
     final isCompacting = chat?.session.isCompacting ?? false;
+    final internalTools = context.read<InternalToolsService>();
+    final orchestrationState = chat != null
+        ? internalTools.getOrchestratorState(chat)
+        : null;
 
     // Find the agent for this subagent conversation (if any)
     final Agent? agent = !isPrimary && chat != null
@@ -479,6 +485,12 @@ class _ConversationPanelState extends State<ConversationPanel>
         // Subagent status header (only for subagent conversations)
         if (!isPrimary)
           SubagentStatusHeader(conversation: conversation, agent: agent),
+        if (isPrimary && orchestrationState != null)
+          ListenableBuilder(
+            listenable: orchestrationState,
+            builder: (context, _) =>
+                OrchestrationProgressWidget(state: orchestrationState),
+          ),
         // Output entries list
         Expanded(
           child: conversation.entries.isEmpty && !isWorking
@@ -626,7 +638,10 @@ class _PermissionSection extends StatelessWidget {
       dialogWidget = AskUserQuestionDialog(
         request: perm,
         onSubmit: (answers) {
-          sessionService.allowPermission(chat, updatedInput: {'answers': answers});
+          sessionService.allowPermission(
+            chat,
+            updatedInput: {'answers': answers},
+          );
         },
         onCancel: () =>
             sessionService.denyPermission(chat, 'User cancelled the question'),
@@ -652,8 +667,8 @@ class _PermissionSection extends StatelessWidget {
                 updatedPermissions: updatedPermissions,
               );
             },
-        onDeny: (message, {bool interrupt = false}) => sessionService
-            .denyPermission(chat, message, interrupt: interrupt),
+        onDeny: (message, {bool interrupt = false}) =>
+            sessionService.denyPermission(chat, message, interrupt: interrupt),
         onClearContextAndAcceptEdits: isExitPlanMode
             ? (planText) => onClearContextPlanApproval(chat, planText)
             : null,

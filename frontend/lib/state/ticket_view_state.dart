@@ -81,6 +81,12 @@ class TicketViewState extends ChangeNotifier {
   /// The current grouping method.
   TicketGroupBy _groupBy = TicketGroupBy.category;
 
+  /// Whether multi-select mode is enabled.
+  bool _multiSelectEnabled = false;
+
+  /// Selected ticket IDs for orchestration launch.
+  final Set<int> _selectedTicketIds = {};
+
   // ===========================================================================
   // Cache fields
   // ===========================================================================
@@ -153,6 +159,8 @@ class TicketViewState extends ChangeNotifier {
 
   /// The current grouping method.
   TicketGroupBy get groupBy => _groupBy;
+  bool get multiSelectEnabled => _multiSelectEnabled;
+  Set<int> get selectedTicketIds => Set.unmodifiable(_selectedTicketIds);
 
   /// All unique categories from tickets, sorted alphabetically.
   List<String> get allCategories {
@@ -174,7 +182,9 @@ class TicketViewState extends ChangeNotifier {
   TicketData? get nextReadyTicket {
     if (_hasComputedNextReady) return _cachedNextReadyTicket;
 
-    final ready = _repo.tickets.where((t) => t.status == TicketStatus.ready).toList();
+    final ready = _repo.tickets
+        .where((t) => t.status == TicketStatus.ready)
+        .toList();
     if (ready.isEmpty) {
       _cachedNextReadyTicket = null;
       _hasComputedNextReady = true;
@@ -372,6 +382,37 @@ class TicketViewState extends ChangeNotifier {
   void setGroupBy(TicketGroupBy groupBy) {
     _groupBy = groupBy;
     _invalidateGrouping();
+    notifyListeners();
+  }
+
+  void setMultiSelectEnabled(bool enabled) {
+    if (_multiSelectEnabled == enabled) return;
+    _multiSelectEnabled = enabled;
+    if (!enabled) {
+      _selectedTicketIds.clear();
+    }
+    notifyListeners();
+  }
+
+  void toggleTicketSelected(int ticketId) {
+    if (_selectedTicketIds.contains(ticketId)) {
+      _selectedTicketIds.remove(ticketId);
+    } else {
+      _selectedTicketIds.add(ticketId);
+    }
+    notifyListeners();
+  }
+
+  void selectAllFilteredTickets() {
+    _selectedTicketIds
+      ..clear()
+      ..addAll(filteredTickets.map((t) => t.id));
+    notifyListeners();
+  }
+
+  void clearTicketSelection() {
+    if (_selectedTicketIds.isEmpty) return;
+    _selectedTicketIds.clear();
     notifyListeners();
   }
 }

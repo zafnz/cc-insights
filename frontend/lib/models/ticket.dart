@@ -280,17 +280,11 @@ class LinkedWorktree {
   final String? branch;
 
   /// Creates a [LinkedWorktree] instance.
-  const LinkedWorktree({
-    required this.worktreeRoot,
-    this.branch,
-  });
+  const LinkedWorktree({required this.worktreeRoot, this.branch});
 
   /// Serializes this [LinkedWorktree] to a JSON map.
   Map<String, dynamic> toJson() {
-    return {
-      'worktreeRoot': worktreeRoot,
-      if (branch != null) 'branch': branch,
-    };
+    return {'worktreeRoot': worktreeRoot, if (branch != null) 'branch': branch};
   }
 
   /// Deserializes a [LinkedWorktree] from a JSON map.
@@ -374,6 +368,55 @@ class LinkedChat {
   }
 }
 
+/// A comment entry attached to a ticket.
+@immutable
+class TicketComment {
+  const TicketComment({
+    required this.text,
+    required this.createdAt,
+    this.author = 'orchestrator',
+    this.type = 'note',
+  });
+
+  final String text;
+  final DateTime createdAt;
+  final String author;
+  final String type;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'text': text,
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'author': author,
+      'type': type,
+    };
+  }
+
+  factory TicketComment.fromJson(Map<String, dynamic> json) {
+    return TicketComment(
+      text: json['text'] as String? ?? '',
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+      author: json['author'] as String? ?? 'orchestrator',
+      type: json['type'] as String? ?? 'note',
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is TicketComment &&
+            other.text == text &&
+            other.createdAt == createdAt &&
+            other.author == author &&
+            other.type == type;
+  }
+
+  @override
+  int get hashCode => Object.hash(text, createdAt, author, type);
+}
+
 /// Cost and performance statistics for a ticket.
 @immutable
 class TicketCostStats {
@@ -428,12 +471,8 @@ class TicketCostStats {
   }
 
   @override
-  int get hashCode => Object.hash(
-        totalTokens,
-        totalCost,
-        agentTimeMs,
-        waitingTimeMs,
-      );
+  int get hashCode =>
+      Object.hash(totalTokens, totalCost, agentTimeMs, waitingTimeMs);
 
   @override
   String toString() {
@@ -487,6 +526,9 @@ class TicketData {
   /// ID of the conversation that created this ticket (if any).
   final String? sourceConversationId;
 
+  /// Comment timeline for this ticket.
+  final List<TicketComment> comments;
+
   /// Accumulated cost and performance statistics (if any).
   final TicketCostStats? costStats;
 
@@ -511,6 +553,7 @@ class TicketData {
     this.linkedWorktrees = const [],
     this.linkedChats = const [],
     this.sourceConversationId,
+    this.comments = const [],
     this.costStats,
     required this.createdAt,
     required this.updatedAt,
@@ -520,7 +563,8 @@ class TicketData {
   String get displayId => 'TKT-${id.toString().padLeft(3, '0')}';
 
   /// Whether this ticket is in a terminal state.
-  bool get isTerminal => status == TicketStatus.completed ||
+  bool get isTerminal =>
+      status == TicketStatus.completed ||
       status == TicketStatus.cancelled ||
       status == TicketStatus.split;
 
@@ -541,6 +585,7 @@ class TicketData {
     List<LinkedChat>? linkedChats,
     String? sourceConversationId,
     bool clearSourceConversationId = false,
+    List<TicketComment>? comments,
     TicketCostStats? costStats,
     bool clearCostStats = false,
     DateTime? createdAt,
@@ -562,6 +607,7 @@ class TicketData {
       sourceConversationId: clearSourceConversationId
           ? null
           : (sourceConversationId ?? this.sourceConversationId),
+      comments: comments ?? this.comments,
       costStats: clearCostStats ? null : (costStats ?? this.costStats),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -587,6 +633,8 @@ class TicketData {
         'linkedChats': linkedChats.map((c) => c.toJson()).toList(),
       if (sourceConversationId != null)
         'sourceConversationId': sourceConversationId,
+      if (comments.isNotEmpty)
+        'comments': comments.map((c) => c.toJson()).toList(),
       if (costStats != null) 'costStats': costStats!.toJson(),
       'createdAt': createdAt.toUtc().toIso8601String(),
       'updatedAt': updatedAt.toUtc().toIso8601String(),
@@ -597,9 +645,9 @@ class TicketData {
   factory TicketData.fromJson(Map<String, dynamic> json) {
     final tagsList = json['tags'] as List<dynamic>? ?? [];
     final dependsOnList = json['dependsOn'] as List<dynamic>? ?? [];
-    final linkedWorktreesList =
-        json['linkedWorktrees'] as List<dynamic>? ?? [];
+    final linkedWorktreesList = json['linkedWorktrees'] as List<dynamic>? ?? [];
     final linkedChatsList = json['linkedChats'] as List<dynamic>? ?? [];
+    final commentsList = json['comments'] as List<dynamic>? ?? [];
     final costStatsJson = json['costStats'] as Map<String, dynamic>?;
 
     final now = DateTime.now();
@@ -610,8 +658,9 @@ class TicketData {
       description: json['description'] as String? ?? '',
       status: TicketStatus.fromJson(json['status'] as String? ?? 'draft'),
       kind: TicketKind.fromJson(json['kind'] as String? ?? 'feature'),
-      priority:
-          TicketPriority.fromJson(json['priority'] as String? ?? 'medium'),
+      priority: TicketPriority.fromJson(
+        json['priority'] as String? ?? 'medium',
+      ),
       effort: TicketEffort.fromJson(json['effort'] as String? ?? 'medium'),
       category: json['category'] as String?,
       tags: Set<String>.from(tagsList.map((e) => e.toString())),
@@ -623,8 +672,12 @@ class TicketData {
           .map((c) => LinkedChat.fromJson(c as Map<String, dynamic>))
           .toList(),
       sourceConversationId: json['sourceConversationId'] as String?,
-      costStats:
-          costStatsJson != null ? TicketCostStats.fromJson(costStatsJson) : null,
+      comments: commentsList
+          .map((c) => TicketComment.fromJson(c as Map<String, dynamic>))
+          .toList(),
+      costStats: costStatsJson != null
+          ? TicketCostStats.fromJson(costStatsJson)
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : now,
@@ -651,6 +704,7 @@ class TicketData {
         listEquals(other.linkedWorktrees, linkedWorktrees) &&
         listEquals(other.linkedChats, linkedChats) &&
         other.sourceConversationId == sourceConversationId &&
+        listEquals(other.comments, comments) &&
         other.costStats == costStats &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt;
@@ -672,6 +726,7 @@ class TicketData {
       Object.hashAll(linkedWorktrees),
       Object.hashAll(linkedChats),
       sourceConversationId,
+      Object.hashAll(comments),
       costStats,
       createdAt,
       updatedAt,
@@ -741,7 +796,9 @@ class TicketProposal {
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       kind: TicketKind.fromJson(json['kind'] as String? ?? 'feature'),
-      priority: TicketPriority.fromJson(json['priority'] as String? ?? 'medium'),
+      priority: TicketPriority.fromJson(
+        json['priority'] as String? ?? 'medium',
+      ),
       effort: TicketEffort.fromJson(json['effort'] as String? ?? 'medium'),
       category: json['category'] as String?,
       tags: Set<String>.from(tagsList.map((e) => e.toString())),
@@ -765,15 +822,15 @@ class TicketProposal {
 
   @override
   int get hashCode => Object.hash(
-        title,
-        description,
-        kind,
-        priority,
-        effort,
-        category,
-        Object.hashAll(tags),
-        Object.hashAll(dependsOnIndices),
-      );
+    title,
+    description,
+    kind,
+    priority,
+    effort,
+    category,
+    Object.hashAll(tags),
+    Object.hashAll(dependsOnIndices),
+  );
 
   @override
   String toString() {

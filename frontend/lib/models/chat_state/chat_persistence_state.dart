@@ -149,6 +149,9 @@ class ChatPersistenceState {
             : null,
         agentId: _chat._agentId,
         backendName: _chat.agentName,
+        orchestrationToolsEnabled: _chat._orchestrationToolsEnabled,
+        isOrchestratorChat: _chat._isOrchestratorChat,
+        orchestrationData: _chat._orchestrationData,
       );
 
       await _enqueue(

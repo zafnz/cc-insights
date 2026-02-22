@@ -3,9 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../config/fonts.dart';
 import '../models/ticket.dart';
+import '../services/internal_tools_service.dart';
+import '../services/ticket_dispatch_factory.dart';
 import '../services/ticket_dispatch_service.dart';
+import '../state/ticket_board_state.dart';
 import '../state/ticket_view_state.dart';
 import '../widgets/ticket_visuals.dart';
+import '../widgets/orchestration_config_dialog.dart';
 import 'panel_wrapper.dart';
 
 /// Test keys for the ticket list panel.
@@ -15,6 +19,8 @@ class TicketListPanelKeys {
   static const Key addButton = Key('ticket-list-add');
   static const Key startNextButton = Key('ticket-list-start-next');
   static const Key filterButton = Key('ticket-list-filter');
+  static const Key runButton = Key('ticket-list-run');
+  static const Key multiSelectButton = Key('ticket-list-multiselect');
   static const Key listViewToggle = Key('ticket-list-view-toggle');
   static const Key graphViewToggle = Key('ticket-graph-view-toggle');
   static const Key groupByDropdown = Key('ticket-list-group-by');
@@ -82,7 +88,10 @@ class _SearchBar extends StatelessWidget {
         ),
         decoration: InputDecoration(
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 6,
+          ),
           hintText: 'Search tickets...',
           hintStyle: TextStyle(
             fontSize: 11,
@@ -134,12 +143,15 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final viewState = context.watch<TicketViewState>();
-    final hasActiveFilters = viewState.statusFilter != null ||
+    final hasActiveFilters =
+        viewState.statusFilter != null ||
         viewState.kindFilter != null ||
         viewState.priorityFilter != null;
 
     final nextTicket = viewState.nextReadyTicket;
     final hasNext = nextTicket != null;
+    final selectedCount = viewState.selectedTicketIds.length;
+    final canRun = selectedCount > 0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -150,64 +162,126 @@ class _Toolbar extends StatelessWidget {
           ),
         ),
       ),
-      child: Row(
-        children: [
-          // Filter button with active indicator
-          _FilterButton(
-            key: TicketListPanelKeys.filterButton,
-            hasActiveFilters: hasActiveFilters,
-          ),
-          const Spacer(),
-          // Start Next button
-          IconButton(
-            key: TicketListPanelKeys.startNextButton,
-            onPressed: hasNext
-                ? () => _startNextTicket(context, nextTicket.id)
-                : null,
-            icon: Icon(
-              Icons.play_arrow,
-              size: 16,
-              color: hasNext ? colorScheme.primary : colorScheme.onSurfaceVariant,
-            ),
-            iconSize: 16,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            padding: EdgeInsets.zero,
-            tooltip: hasNext
-                ? 'Start next: ${nextTicket.displayId}'
-                : 'No ready tickets',
-          ),
-          const SizedBox(width: 4),
-          // Add button
-          IconButton(
-            key: TicketListPanelKeys.addButton,
-            onPressed: () => viewState.showCreateForm(),
-            icon: Icon(
-              Icons.add,
-              size: 16,
-              color: colorScheme.primary,
-            ),
-            iconSize: 16,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            padding: EdgeInsets.zero,
-            tooltip: 'New ticket',
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showOrchestrationButtons = constraints.maxWidth > 360;
+          return Row(
+            children: [
+              // Filter button with active indicator
+              _FilterButton(
+                key: TicketListPanelKeys.filterButton,
+                hasActiveFilters: hasActiveFilters,
+              ),
+              const Spacer(),
+              if (showOrchestrationButtons) ...[
+                IconButton(
+                  key: TicketListPanelKeys.multiSelectButton,
+                  onPressed: () {
+                    viewState.setMultiSelectEnabled(
+                      !viewState.multiSelectEnabled,
+                    );
+                  },
+                  icon: Icon(
+                    viewState.multiSelectEnabled
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                    size: 16,
+                    color: viewState.multiSelectEnabled
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  iconSize: 16,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  padding: EdgeInsets.zero,
+                  tooltip: viewState.multiSelectEnabled
+                      ? 'Disable multi-select'
+                      : 'Enable multi-select',
+                ),
+                IconButton(
+                  key: TicketListPanelKeys.runButton,
+                  onPressed: canRun ? () => _openRunDialog(context) : null,
+                  icon: Icon(
+                    Icons.hub,
+                    size: 16,
+                    color: canRun
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  tooltip: canRun
+                      ? 'Run $selectedCount tickets…'
+                      : 'Select tickets to run',
+                  iconSize: 16,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
+              // Start Next button
+              IconButton(
+                key: TicketListPanelKeys.startNextButton,
+                onPressed: hasNext
+                    ? () => _startNextTicket(context, nextTicket.id)
+                    : null,
+                icon: Icon(
+                  Icons.play_arrow,
+                  size: 16,
+                  color: hasNext
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+                iconSize: 16,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: hasNext
+                    ? 'Start next: ${nextTicket.displayId}'
+                    : 'No ready tickets',
+              ),
+              const SizedBox(width: 4),
+              // Add button
+              IconButton(
+                key: TicketListPanelKeys.addButton,
+                onPressed: () => viewState.showCreateForm(),
+                icon: Icon(Icons.add, size: 16, color: colorScheme.primary),
+                iconSize: 16,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: 'New ticket',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   void _startNextTicket(BuildContext context, int ticketId) {
-    final dispatch = context.read<TicketDispatchService>();
+    final dispatch = _createDispatchService(context);
     dispatch.beginInNewWorktree(ticketId);
+  }
+
+  Future<void> _openRunDialog(BuildContext context) async {
+    final view = context.read<TicketViewState>();
+    await showDialog<bool>(
+      context: context,
+      builder: (_) => OrchestrationConfigDialog(
+        ticketIds: view.selectedTicketIds.toList()..sort(),
+      ),
+    );
+  }
+
+  TicketDispatchService _createDispatchService(BuildContext context) {
+    return createTicketDispatchService(context);
   }
 }
 
 /// Filter button that opens a popup menu with filter options.
 class _FilterButton extends StatelessWidget {
-  const _FilterButton({
-    super.key,
-    required this.hasActiveFilters,
-  });
+  const _FilterButton({super.key, required this.hasActiveFilters});
 
   final bool hasActiveFilters;
 
@@ -276,89 +350,112 @@ class _FilterButton extends StatelessWidget {
     final items = <PopupMenuEntry<String>>[];
 
     // Status filters
-    items.add(const PopupMenuItem<String>(
-      enabled: false,
-      height: 24,
-      child: Text('Status', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-    ));
+    items.add(
+      const PopupMenuItem<String>(
+        enabled: false,
+        height: 24,
+        child: Text(
+          'Status',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
     for (final status in TicketStatus.values) {
       final isSelected = viewState.statusFilter == status;
-      items.add(PopupMenuItem<String>(
-        value: 'status:${status.name}',
-        height: 32,
-        child: Row(
-          children: [
-            if (isSelected)
-              const Icon(Icons.check, size: 12)
-            else
-              const SizedBox(width: 12),
-            const SizedBox(width: 4),
-            Text(status.label, style: const TextStyle(fontSize: 12)),
-          ],
+      items.add(
+        PopupMenuItem<String>(
+          value: 'status:${status.name}',
+          height: 32,
+          child: Row(
+            children: [
+              if (isSelected)
+                const Icon(Icons.check, size: 12)
+              else
+                const SizedBox(width: 12),
+              const SizedBox(width: 4),
+              Text(status.label, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     items.add(const PopupMenuDivider(height: 8));
 
     // Kind filters
-    items.add(const PopupMenuItem<String>(
-      enabled: false,
-      height: 24,
-      child: Text('Kind', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-    ));
+    items.add(
+      const PopupMenuItem<String>(
+        enabled: false,
+        height: 24,
+        child: Text(
+          'Kind',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
     for (final kind in TicketKind.values) {
       final isSelected = viewState.kindFilter == kind;
-      items.add(PopupMenuItem<String>(
-        value: 'kind:${kind.name}',
-        height: 32,
-        child: Row(
-          children: [
-            if (isSelected)
-              const Icon(Icons.check, size: 12)
-            else
-              const SizedBox(width: 12),
-            const SizedBox(width: 4),
-            Text(kind.label, style: const TextStyle(fontSize: 12)),
-          ],
+      items.add(
+        PopupMenuItem<String>(
+          value: 'kind:${kind.name}',
+          height: 32,
+          child: Row(
+            children: [
+              if (isSelected)
+                const Icon(Icons.check, size: 12)
+              else
+                const SizedBox(width: 12),
+              const SizedBox(width: 4),
+              Text(kind.label, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     items.add(const PopupMenuDivider(height: 8));
 
     // Priority filters
-    items.add(const PopupMenuItem<String>(
-      enabled: false,
-      height: 24,
-      child: Text('Priority', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-    ));
+    items.add(
+      const PopupMenuItem<String>(
+        enabled: false,
+        height: 24,
+        child: Text(
+          'Priority',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
     for (final priority in TicketPriority.values) {
       final isSelected = viewState.priorityFilter == priority;
-      items.add(PopupMenuItem<String>(
-        value: 'priority:${priority.name}',
-        height: 32,
-        child: Row(
-          children: [
-            if (isSelected)
-              const Icon(Icons.check, size: 12)
-            else
-              const SizedBox(width: 12),
-            const SizedBox(width: 4),
-            Text(priority.label, style: const TextStyle(fontSize: 12)),
-          ],
+      items.add(
+        PopupMenuItem<String>(
+          value: 'priority:${priority.name}',
+          height: 32,
+          child: Row(
+            children: [
+              if (isSelected)
+                const Icon(Icons.check, size: 12)
+              else
+                const SizedBox(width: 12),
+              const SizedBox(width: 4),
+              Text(priority.label, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     items.add(const PopupMenuDivider(height: 8));
 
     // Clear filters
-    items.add(const PopupMenuItem<String>(
-      value: 'clear',
-      height: 32,
-      child: Text('Clear filters', style: TextStyle(fontSize: 12)),
-    ));
+    items.add(
+      const PopupMenuItem<String>(
+        value: 'clear',
+        height: 32,
+        child: Text('Clear filters', style: TextStyle(fontSize: 12)),
+      ),
+    );
 
     return items;
   }
@@ -376,18 +473,20 @@ class _FilterButton extends StatelessWidget {
 
     switch (parts[0]) {
       case 'status':
-        final status = TicketStatus.values.firstWhere((s) => s.name == parts[1]);
+        final status = TicketStatus.values.firstWhere(
+          (s) => s.name == parts[1],
+        );
         // Toggle: if already selected, clear it
         viewState.setStatusFilter(
           viewState.statusFilter == status ? null : status,
         );
       case 'kind':
         final kind = TicketKind.values.firstWhere((k) => k.name == parts[1]);
-        viewState.setKindFilter(
-          viewState.kindFilter == kind ? null : kind,
-        );
+        viewState.setKindFilter(viewState.kindFilter == kind ? null : kind);
       case 'priority':
-        final priority = TicketPriority.values.firstWhere((p) => p.name == parts[1]);
+        final priority = TicketPriority.values.firstWhere(
+          (p) => p.name == parts[1],
+        );
         viewState.setPriorityFilter(
           viewState.priorityFilter == priority ? null : priority,
         );
@@ -435,10 +534,7 @@ class _SubToolbar extends StatelessWidget {
 
 /// Segmented toggle for list/graph view.
 class _ViewToggle extends StatelessWidget {
-  const _ViewToggle({
-    required this.currentMode,
-    required this.onChanged,
-  });
+  const _ViewToggle({required this.currentMode, required this.onChanged});
 
   final TicketViewMode currentMode;
   final ValueChanged<TicketViewMode> onChanged;
@@ -536,10 +632,7 @@ class _GroupByDropdown extends StatelessWidget {
         return PopupMenuItem<TicketGroupBy>(
           value: groupBy,
           height: 32,
-          child: Text(
-            groupBy.label,
-            style: const TextStyle(fontSize: 12),
-          ),
+          child: Text(groupBy.label, style: const TextStyle(fontSize: 12)),
         );
       }).toList(),
       child: Container(
@@ -593,11 +686,13 @@ class _TicketList extends StatelessWidget {
     final items = <_ListItem>[];
     for (final entry in grouped.entries) {
       final progress = categoryProgress[entry.key];
-      items.add(_ListItem.header(
-        entry.key,
-        completed: progress?.completed ?? 0,
-        total: progress?.total ?? 0,
-      ));
+      items.add(
+        _ListItem.header(
+          entry.key,
+          completed: progress?.completed ?? 0,
+          total: progress?.total ?? 0,
+        ),
+      );
       for (final ticket in entry.value) {
         items.add(_ListItem.ticket(ticket));
       }
@@ -617,10 +712,22 @@ class _TicketList extends StatelessWidget {
         }
         final ticket = item.ticketData!;
         final isSelected = viewState.selectedTicket?.id == ticket.id;
+        final isChecked = viewState.selectedTicketIds.contains(ticket.id);
+        final tools = context.watch<InternalToolsService?>();
+        final orchestrated =
+            tools?.activeOrchestrators.any(
+              (state) => state.ticketIds.contains(ticket.id),
+            ) ??
+            false;
         return _TicketListItem(
           ticket: ticket,
           isSelected: isSelected,
-          onTap: () => viewState.selectTicket(ticket.id),
+          multiSelectEnabled: viewState.multiSelectEnabled,
+          isChecked: isChecked,
+          isOrchestrated: orchestrated,
+          onTap: () => viewState.multiSelectEnabled
+              ? viewState.toggleTicketSelected(ticket.id)
+              : viewState.selectTicket(ticket.id),
         );
       },
     );
@@ -643,8 +750,16 @@ class _ListItem {
     this.ticketData,
   });
 
-  factory _ListItem.header(String name, {required int completed, required int total}) =>
-      _ListItem._(isHeader: true, headerName: name, completed: completed, total: total);
+  factory _ListItem.header(
+    String name, {
+    required int completed,
+    required int total,
+  }) => _ListItem._(
+    isHeader: true,
+    headerName: name,
+    completed: completed,
+    total: total,
+  );
 
   factory _ListItem.ticket(TicketData data) =>
       _ListItem._(isHeader: false, ticketData: data);
@@ -729,8 +844,12 @@ class _GroupHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
               child: LinearProgressIndicator(
                 value: progress,
-                backgroundColor: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                backgroundColor: colorScheme.outlineVariant.withValues(
+                  alpha: 0.3,
+                ),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFF4CAF50),
+                ),
               ),
             ),
           ),
@@ -745,11 +864,17 @@ class _TicketListItem extends StatelessWidget {
   const _TicketListItem({
     required this.ticket,
     required this.isSelected,
+    required this.multiSelectEnabled,
+    required this.isChecked,
+    required this.isOrchestrated,
     required this.onTap,
   });
 
   final TicketData ticket;
   final bool isSelected;
+  final bool multiSelectEnabled;
+  final bool isChecked;
+  final bool isOrchestrated;
   final VoidCallback onTap;
 
   @override
@@ -769,13 +894,19 @@ class _TicketListItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                  color: colorScheme.surfaceContainerHighest,
-                ),
+                bottom: BorderSide(color: colorScheme.surfaceContainerHighest),
               ),
             ),
             child: Row(
               children: [
+                if (multiSelectEnabled) ...[
+                  Checkbox(
+                    value: isChecked,
+                    onChanged: (_) => onTap(),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 4),
+                ],
                 // Status icon
                 TicketStatusIcon(status: ticket.status, size: 14),
                 const SizedBox(width: 6),
@@ -798,13 +929,26 @@ class _TicketListItem extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color: colorScheme.onSurface,
-                      decoration: isTerminal ? TextDecoration.lineThrough : null,
+                      decoration: isTerminal
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
                 ),
                 const SizedBox(width: 6),
+                if (isOrchestrated) ...[
+                  Tooltip(
+                    message: 'Orchestrated ticket',
+                    child: Icon(
+                      Icons.hub,
+                      size: 14,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 // Effort badge
                 EffortBadge(effort: ticket.effort),
               ],

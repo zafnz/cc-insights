@@ -30,9 +30,9 @@ class ContextInfo {
 
   /// Creates a [ContextInfo] with default values.
   const ContextInfo.empty()
-      : currentTokens = 0,
-        maxTokens = 200000,
-        autocompactBufferPercent = null;
+    : currentTokens = 0,
+      maxTokens = 200000,
+      autocompactBufferPercent = null;
 
   /// Creates a copy with the given fields replaced.
   ContextInfo copyWith({
@@ -65,8 +65,8 @@ class ContextInfo {
     return ContextInfo(
       currentTokens: json['currentTokens'] as int? ?? 0,
       maxTokens: json['maxTokens'] as int? ?? 200000,
-      autocompactBufferPercent:
-          (json['autocompactBufferPercent'] as num?)?.toDouble(),
+      autocompactBufferPercent: (json['autocompactBufferPercent'] as num?)
+          ?.toDouble(),
     );
   }
 
@@ -158,6 +158,15 @@ class ChatMeta {
   /// [backendName] and [backendType] (driver).
   final String? backendName;
 
+  /// Whether orchestration tools are manually enabled for this chat.
+  final bool orchestrationToolsEnabled;
+
+  /// Whether this chat is an orchestrator chat.
+  final bool isOrchestratorChat;
+
+  /// Persisted orchestration runtime metadata/snapshot.
+  final Map<String, dynamic>? orchestrationData;
+
   /// Creates a [ChatMeta] instance.
   const ChatMeta({
     required this.model,
@@ -176,6 +185,9 @@ class ChatMeta {
     this.codexWebSearch,
     this.agentId,
     this.backendName,
+    this.orchestrationToolsEnabled = false,
+    this.isOrchestratorChat = false,
+    this.orchestrationData,
   });
 
   /// Creates a [ChatMeta] with default values for a new chat.
@@ -205,6 +217,9 @@ class ChatMeta {
       codexWebSearch: null,
       agentId: agentId,
       backendName: backendName,
+      orchestrationToolsEnabled: false,
+      isOrchestratorChat: false,
+      orchestrationData: null,
     );
   }
 
@@ -226,6 +241,10 @@ class ChatMeta {
     String? codexWebSearch,
     String? agentId,
     String? backendName,
+    bool? orchestrationToolsEnabled,
+    bool? isOrchestratorChat,
+    Map<String, dynamic>? orchestrationData,
+    bool clearOrchestrationData = false,
   }) {
     return ChatMeta(
       model: model ?? this.model,
@@ -240,10 +259,17 @@ class ChatMeta {
       timing: timing ?? this.timing,
       codexSandboxMode: codexSandboxMode ?? this.codexSandboxMode,
       codexApprovalPolicy: codexApprovalPolicy ?? this.codexApprovalPolicy,
-      codexWorkspaceWriteOptions: codexWorkspaceWriteOptions ?? this.codexWorkspaceWriteOptions,
+      codexWorkspaceWriteOptions:
+          codexWorkspaceWriteOptions ?? this.codexWorkspaceWriteOptions,
       codexWebSearch: codexWebSearch ?? this.codexWebSearch,
       agentId: agentId ?? this.agentId,
       backendName: backendName ?? this.backendName,
+      orchestrationToolsEnabled:
+          orchestrationToolsEnabled ?? this.orchestrationToolsEnabled,
+      isOrchestratorChat: isOrchestratorChat ?? this.isOrchestratorChat,
+      orchestrationData: clearOrchestrationData
+          ? null
+          : (orchestrationData ?? this.orchestrationData),
     );
   }
 
@@ -265,23 +291,30 @@ class ChatMeta {
         'costUsd': usage.costUsd,
       },
       'modelUsage': modelUsage
-          .map((m) => {
-                'modelName': m.modelName,
-                'inputTokens': m.inputTokens,
-                'outputTokens': m.outputTokens,
-                'cacheReadTokens': m.cacheReadTokens,
-                'cacheCreationTokens': m.cacheCreationTokens,
-                'costUsd': m.costUsd,
-                'contextWindow': m.contextWindow,
-              })
+          .map(
+            (m) => {
+              'modelName': m.modelName,
+              'inputTokens': m.inputTokens,
+              'outputTokens': m.outputTokens,
+              'cacheReadTokens': m.cacheReadTokens,
+              'cacheCreationTokens': m.cacheCreationTokens,
+              'costUsd': m.costUsd,
+              'contextWindow': m.contextWindow,
+            },
+          )
           .toList(),
       'timing': timing.toJson(),
       if (codexSandboxMode != null) 'codexSandboxMode': codexSandboxMode,
-      if (codexApprovalPolicy != null) 'codexApprovalPolicy': codexApprovalPolicy,
-      if (codexWorkspaceWriteOptions != null) 'codexWorkspaceWriteOptions': codexWorkspaceWriteOptions,
+      if (codexApprovalPolicy != null)
+        'codexApprovalPolicy': codexApprovalPolicy,
+      if (codexWorkspaceWriteOptions != null)
+        'codexWorkspaceWriteOptions': codexWorkspaceWriteOptions,
       if (codexWebSearch != null) 'codexWebSearch': codexWebSearch,
       if (agentId != null) 'agentId': agentId,
       if (backendName != null) 'backendName': backendName,
+      if (orchestrationToolsEnabled) 'orchestrationToolsEnabled': true,
+      if (isOrchestratorChat) 'isOrchestratorChat': true,
+      if (orchestrationData != null) 'orchestrationData': orchestrationData,
     };
   }
 
@@ -312,29 +345,32 @@ class ChatMeta {
         cacheCreationTokens: usageJson['cacheCreationTokens'] as int? ?? 0,
         costUsd: (usageJson['costUsd'] as num?)?.toDouble() ?? 0.0,
       ),
-      modelUsage: modelUsageJson
-          .map((m) {
-            final map = m as Map<String, dynamic>;
-            return ModelUsageInfo(
-              modelName: map['modelName'] as String? ?? '',
-              inputTokens: map['inputTokens'] as int? ?? 0,
-              outputTokens: map['outputTokens'] as int? ?? 0,
-              cacheReadTokens: map['cacheReadTokens'] as int? ?? 0,
-              cacheCreationTokens: map['cacheCreationTokens'] as int? ?? 0,
-              costUsd: (map['costUsd'] as num?)?.toDouble() ?? 0.0,
-              contextWindow: map['contextWindow'] as int? ?? 200000,
-            );
-          })
-          .toList(),
+      modelUsage: modelUsageJson.map((m) {
+        final map = m as Map<String, dynamic>;
+        return ModelUsageInfo(
+          modelName: map['modelName'] as String? ?? '',
+          inputTokens: map['inputTokens'] as int? ?? 0,
+          outputTokens: map['outputTokens'] as int? ?? 0,
+          cacheReadTokens: map['cacheReadTokens'] as int? ?? 0,
+          cacheCreationTokens: map['cacheCreationTokens'] as int? ?? 0,
+          costUsd: (map['costUsd'] as num?)?.toDouble() ?? 0.0,
+          contextWindow: map['contextWindow'] as int? ?? 200000,
+        );
+      }).toList(),
       timing: timingJson != null
           ? TimingStats.fromJson(timingJson)
           : const TimingStats.zero(),
       codexSandboxMode: json['codexSandboxMode'] as String?,
       codexApprovalPolicy: json['codexApprovalPolicy'] as String?,
-      codexWorkspaceWriteOptions: json['codexWorkspaceWriteOptions'] as Map<String, dynamic>?,
+      codexWorkspaceWriteOptions:
+          json['codexWorkspaceWriteOptions'] as Map<String, dynamic>?,
       codexWebSearch: json['codexWebSearch'] as String?,
       agentId: json['agentId'] as String?,
       backendName: json['backendName'] as String?,
+      orchestrationToolsEnabled:
+          json['orchestrationToolsEnabled'] as bool? ?? false,
+      isOrchestratorChat: json['isOrchestratorChat'] as bool? ?? false,
+      orchestrationData: json['orchestrationData'] as Map<String, dynamic>?,
     );
   }
 
@@ -372,7 +408,10 @@ class ChatMeta {
         other.context == context &&
         other.usage == usage &&
         listEquals(other.modelUsage, modelUsage) &&
-        other.timing == timing;
+        other.timing == timing &&
+        other.orchestrationToolsEnabled == orchestrationToolsEnabled &&
+        other.isOrchestratorChat == isOrchestratorChat &&
+        mapEquals(other.orchestrationData, orchestrationData);
   }
 
   @override
@@ -388,6 +427,9 @@ class ChatMeta {
       usage,
       Object.hashAll(modelUsage),
       timing,
+      orchestrationToolsEnabled,
+      isOrchestratorChat,
+      orchestrationData,
     );
   }
 
@@ -436,11 +478,7 @@ class ChatReference {
 
   /// Serializes this [ChatReference] to a JSON map.
   Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'chatId': chatId,
-      'lastSessionId': lastSessionId,
-    };
+    return {'name': name, 'chatId': chatId, 'lastSessionId': lastSessionId};
   }
 
   /// Deserializes a [ChatReference] from a JSON map.
@@ -562,12 +600,12 @@ class ArchivedChatReference {
 
   @override
   int get hashCode => Object.hash(
-        name,
-        chatId,
-        lastSessionId,
-        originalWorktreePath,
-        archivedAt,
-      );
+    name,
+    chatId,
+    lastSessionId,
+    originalWorktreePath,
+    archivedAt,
+  );
 
   @override
   String toString() {
@@ -708,13 +746,13 @@ class WorktreeInfo {
 
   @override
   int get hashCode => Object.hash(
-        type,
-        name,
-        Object.hashAll(chats),
-        Object.hashAll(tags),
-        base,
-        hidden,
-      );
+    type,
+    name,
+    Object.hashAll(chats),
+    Object.hashAll(tags),
+    base,
+    hidden,
+  );
 
   @override
   String toString() {
@@ -800,8 +838,7 @@ class ProjectInfo {
       ),
       defaultWorktreeRoot: json['defaultWorktreeRoot'] as String?,
       archivedChats: archivedJson
-          .map((e) =>
-              ArchivedChatReference.fromJson(e as Map<String, dynamic>))
+          .map((e) => ArchivedChatReference.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -819,12 +856,12 @@ class ProjectInfo {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        name,
-        Object.hashAll(worktrees.entries),
-        defaultWorktreeRoot,
-        Object.hashAll(archivedChats),
-      );
+    id,
+    name,
+    Object.hashAll(worktrees.entries),
+    defaultWorktreeRoot,
+    Object.hashAll(archivedChats),
+  );
 
   @override
   String toString() {
@@ -843,20 +880,14 @@ class ProjectsIndex {
   final Map<String, ProjectInfo> projects;
 
   /// Creates a [ProjectsIndex] instance.
-  const ProjectsIndex({
-    this.projects = const {},
-  });
+  const ProjectsIndex({this.projects = const {}});
 
   /// Creates an empty [ProjectsIndex].
   const ProjectsIndex.empty() : projects = const {};
 
   /// Creates a copy with the given fields replaced.
-  ProjectsIndex copyWith({
-    Map<String, ProjectInfo>? projects,
-  }) {
-    return ProjectsIndex(
-      projects: projects ?? this.projects,
-    );
+  ProjectsIndex copyWith({Map<String, ProjectInfo>? projects}) {
+    return ProjectsIndex(projects: projects ?? this.projects);
   }
 
   /// Serializes this [ProjectsIndex] to a JSON map.

@@ -97,6 +97,8 @@ class ConversationHeader extends StatelessWidget {
 
     final isSubagent = !conversation.isPrimary;
     final isAcp = settings.model.backend == sdk.BackendType.acp;
+    final showOrchestrationToggle =
+        settings.isOrchestratorChat || settings.orchestrationToolsEnabled;
     final acpConfigWidgets = isAcp
         ? _buildAcpConfigWidgets(settings)
         : const <Widget>[];
@@ -162,156 +164,172 @@ class ConversationHeader extends StatelessWidget {
             // Left side: agent, model, and permission dropdowns
             Expanded(
               child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Builder(
-                  builder: (context) {
-                    final cliAvailability = context
-                        .watch<CliAvailabilityService>();
-                    final allAgents = RuntimeConfig.instance.agents;
-                    final availableAgents = allAgents
-                        .where(
-                          (agent) => _isAgentAvailable(agent, cliAvailability),
-                        )
-                        .toList();
-
-                    // Handle empty agent list gracefully
-                    if (availableAgents.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-
-                    // Get current agent name
-                    final currentAgentName = agents.agentName;
-
-                    final isAgentStarting =
-                        agents.agentId != null &&
-                        backendService.isStartingForAgent(agents.agentId!);
-
-                    return CompactDropdown(
-                      value: currentAgentName,
-                      items: availableAgents.map((a) => a.name).toList(),
-                      tooltip: 'Agent',
-                      isLoading: isAgentStarting,
-                      isEnabled:
-                          !isBackendLocked &&
-                          !isAgentStarting &&
-                          availableAgents.length > 1,
-                      onChanged: (agentName) {
-                        // Find agent by name
-                        final selectedAgent = availableAgents.firstWhere(
-                          (a) => a.name == agentName,
-                          orElse: () => availableAgents.first,
-                        );
-                        unawaited(
-                          _handleAgentChange(context, chat, selectedAgent.id),
-                        );
-                      },
-                    );
-                  },
-                ),
-                if (startingAgent != null)
-                  _buildBackendStartingIndicator(context, startingAgent),
-                if (!isAcp)
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
                   Builder(
                     builder: (context) {
-                      final models = ChatModelCatalog.forBackend(
-                        settings.model.backend,
-                      );
-                      final selected = models.firstWhere(
-                        (m) => m.id == settings.model.id,
-                        orElse: () => settings.model,
-                      );
-                      final isModelLoading =
-                          caps.supportsModelListing &&
-                          (agents.agentId != null
-                              ? backendService.isModelListLoadingForAgent(
-                                  agents.agentId!,
-                                )
-                              : backendService.isModelListLoadingFor(
-                                  settings.model.backend,
-                                ));
-                      return CompactDropdown(
-                        value: selected.label,
-                        items: models.map((m) => m.label).toList(),
-                        isLoading: isModelLoading,
-                        tooltip: 'Model',
-                        onChanged: (value) {
-                          final model = models.firstWhere(
-                            (m) => m.label == value,
-                            orElse: () => selected,
-                          );
-                          settings.setModel(model);
-                        },
-                      );
-                    },
-                  )
-                else
-                  ...acpConfigWidgets,
-                // Backend-specific security controls
-                if (settings.model.backend == sdk.BackendType.codex) ...[
-                  Builder(
-                    builder: (context) {
-                      final config = settings.securityConfig;
-                      if (config is! sdk.CodexSecurityConfig) {
+                      final cliAvailability = context
+                          .watch<CliAvailabilityService>();
+                      final allAgents = RuntimeConfig.instance.agents;
+                      final availableAgents = allAgents
+                          .where(
+                            (agent) =>
+                                _isAgentAvailable(agent, cliAvailability),
+                          )
+                          .toList();
+
+                      // Handle empty agent list gracefully
+                      if (availableAgents.isEmpty) {
                         return const SizedBox.shrink();
                       }
-                      final codexCaps = agents.agentId != null
-                          ? backendService.codexSecurityCapabilitiesForAgent(
-                              agents.agentId!,
-                            )
-                          : backendService.codexSecurityCapabilities;
-                      return SecurityConfigGroup(
-                        config: config,
-                        capabilities: codexCaps,
-                        isEnabled: true,
-                        onConfigChanged: (newConfig) {
-                          settings.setSecurityConfig(newConfig);
+
+                      // Get current agent name
+                      final currentAgentName = agents.agentName;
+
+                      final isAgentStarting =
+                          agents.agentId != null &&
+                          backendService.isStartingForAgent(agents.agentId!);
+
+                      return CompactDropdown(
+                        value: currentAgentName,
+                        items: availableAgents.map((a) => a.name).toList(),
+                        tooltip: 'Agent',
+                        isLoading: isAgentStarting,
+                        isEnabled:
+                            !isBackendLocked &&
+                            !isAgentStarting &&
+                            availableAgents.length > 1,
+                        onChanged: (agentName) {
+                          // Find agent by name
+                          final selectedAgent = availableAgents.firstWhere(
+                            (a) => a.name == agentName,
+                            orElse: () => availableAgents.first,
+                          );
+                          unawaited(
+                            _handleAgentChange(context, chat, selectedAgent.id),
+                          );
                         },
                       );
                     },
                   ),
-                ] else if (!isAcp) ...[
-                  // Claude: existing single dropdown (unchanged)
-                  CompactDropdown(
-                    value: settings.permissionMode.label,
-                    items: PermissionMode.values.map((m) => m.label).toList(),
-                    tooltip: 'Permissions',
-                    onChanged: (value) {
-                      final mode = PermissionMode.values.firstWhere(
-                        (m) => m.label == value,
-                        orElse: () => PermissionMode.defaultMode,
-                      );
-                      settings.setPermissionMode(mode);
-                    },
-                  ),
+                  if (startingAgent != null)
+                    _buildBackendStartingIndicator(context, startingAgent),
+                  if (!isAcp)
+                    Builder(
+                      builder: (context) {
+                        final models = ChatModelCatalog.forBackend(
+                          settings.model.backend,
+                        );
+                        final selected = models.firstWhere(
+                          (m) => m.id == settings.model.id,
+                          orElse: () => settings.model,
+                        );
+                        final isModelLoading =
+                            caps.supportsModelListing &&
+                            (agents.agentId != null
+                                ? backendService.isModelListLoadingForAgent(
+                                    agents.agentId!,
+                                  )
+                                : backendService.isModelListLoadingFor(
+                                    settings.model.backend,
+                                  ));
+                        return CompactDropdown(
+                          value: selected.label,
+                          items: models.map((m) => m.label).toList(),
+                          isLoading: isModelLoading,
+                          tooltip: 'Model',
+                          onChanged: (value) {
+                            final model = models.firstWhere(
+                              (m) => m.label == value,
+                              orElse: () => selected,
+                            );
+                            settings.setModel(model);
+                          },
+                        );
+                      },
+                    )
+                  else
+                    ...acpConfigWidgets,
+                  // Backend-specific security controls
+                  if (settings.model.backend == sdk.BackendType.codex) ...[
+                    Builder(
+                      builder: (context) {
+                        final config = settings.securityConfig;
+                        if (config is! sdk.CodexSecurityConfig) {
+                          return const SizedBox.shrink();
+                        }
+                        final codexCaps = agents.agentId != null
+                            ? backendService.codexSecurityCapabilitiesForAgent(
+                                agents.agentId!,
+                              )
+                            : backendService.codexSecurityCapabilities;
+                        return SecurityConfigGroup(
+                          config: config,
+                          capabilities: codexCaps,
+                          isEnabled: true,
+                          onConfigChanged: (newConfig) {
+                            settings.setSecurityConfig(newConfig);
+                          },
+                        );
+                      },
+                    ),
+                  ] else if (!isAcp) ...[
+                    // Claude: existing single dropdown (unchanged)
+                    CompactDropdown(
+                      value: settings.permissionMode.label,
+                      items: PermissionMode.values.map((m) => m.label).toList(),
+                      tooltip: 'Permissions',
+                      onChanged: (value) {
+                        final mode = PermissionMode.values.firstWhere(
+                          (m) => m.label == value,
+                          orElse: () => PermissionMode.defaultMode,
+                        );
+                        settings.setPermissionMode(mode);
+                      },
+                    ),
+                  ],
+                  if (showOrchestrationToggle)
+                    Tooltip(
+                      message: 'Enable orchestration tools on this chat',
+                      child: FilterChip(
+                        label: const Text(
+                          'Orch',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        selected: settings.orchestrationToolsEnabled,
+                        onSelected: (value) {
+                          settings.setOrchestrationToolsEnabled(value);
+                        },
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  // Reasoning effort dropdown (only for backends that support it)
+                  if (caps.supportsReasoningEffort)
+                    CompactDropdown(
+                      value: settings.reasoningEffort?.label ?? 'Default',
+                      items: reasoningEffortItems,
+                      tooltip: 'Reasoning',
+                      onChanged: (value) {
+                        final effort = reasoningEffortFromLabel(value);
+                        settings.setReasoningEffort(effort);
+                      },
+                    ),
                 ],
-                // Reasoning effort dropdown (only for backends that support it)
-                if (caps.supportsReasoningEffort)
-                  CompactDropdown(
-                    value: settings.reasoningEffort?.label ?? 'Default',
-                    items: reasoningEffortItems,
-                    tooltip: 'Reasoning',
-                    onChanged: (value) {
-                      final effort = reasoningEffortFromLabel(value);
-                      settings.setReasoningEffort(effort);
-                    },
-                  ),
-              ],
+              ),
             ),
-          ),
-          if (rightWidgets.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: rightWidgets,
-            ),
+            if (rightWidgets.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: rightWidgets,
+              ),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }

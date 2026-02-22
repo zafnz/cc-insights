@@ -5,9 +5,42 @@ import 'dart:developer' as developer;
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/chat.dart';
+import '../models/managed_agent.dart';
+import '../models/output_entry.dart';
+import '../models/project.dart';
 import '../models/ticket.dart';
+import '../models/worktree.dart';
 import '../state/bulk_proposal_state.dart';
+import '../state/orchestrator_state.dart';
+import '../state/selection_state.dart';
+import '../state/ticket_board_state.dart';
+import 'backend_service.dart';
+import 'event_handler.dart';
 import 'git_service.dart';
+import 'orchestration_prompts.dart';
+import 'project_restore_service.dart';
+import 'worktree_service.dart';
+
+class _OrchestrationContext {
+  const _OrchestrationContext({
+    required this.backend,
+    required this.eventHandler,
+    required this.project,
+    required this.selection,
+    required this.ticketBoard,
+    required this.worktreeService,
+    required this.restoreService,
+  });
+
+  final BackendService backend;
+  final EventHandler eventHandler;
+  final ProjectState project;
+  final SelectionState selection;
+  final TicketRepository ticketBoard;
+  final WorktreeService worktreeService;
+  final ProjectRestoreService restoreService;
+}
 
 /// Service that manages internal MCP tools for CC-Insights.
 ///
@@ -15,6 +48,7 @@ import 'git_service.dart';
 /// that agent backends can invoke via the MCP protocol.
 class InternalToolsService extends ChangeNotifier {
   final InternalToolRegistry _registry = InternalToolRegistry();
+  final Map<String, OrchestratorState> _orchestratorsByChatId = {};
 
   /// The tool registry to pass to backend sessions.
   InternalToolRegistry get registry => _registry;
@@ -31,8 +65,107 @@ class InternalToolsService extends ChangeNotifier {
         'do not cover.';
   }
 
+  /// Returns per-chat internal tool system prompt append text.
+  String? systemPromptAppendForChat(Chat chat) {
+    if (chat.settings.isOrchestratorChat) {
+      return _mergePromptText([systemPromptAppend, orchestratorSystemPrompt]);
+    }
+    return systemPromptAppend;
+  }
+
+  /// Builds a tool registry for a specific chat.
+  ///
+  /// Normal chats only get normal tools. Orchestrator chats and chats with
+  /// orchestration tools enabled get the full orchestration toolset.
+  InternalToolRegistry registryForChat(Chat chat) {
+    final chatRegistry = InternalToolRegistry();
+    final baseTools = _normalTools();
+    for (final tool in baseTools) {
+      chatRegistry.register(tool);
+    }
+    if (shouldEnableOrchestrationTools(chat)) {
+      for (final tool in _orchestratorTools(chat)) {
+        chatRegistry.register(tool);
+      }
+    }
+    return chatRegistry;
+  }
+
+  _OrchestrationContext? _orchestrationContext;
+
+  BackendService? get _backend => _orchestrationContext?.backend;
+  EventHandler? get _eventHandler => _orchestrationContext?.eventHandler;
+  ProjectState? get _project => _orchestrationContext?.project;
+  SelectionState? get _selection => _orchestrationContext?.selection;
+  TicketRepository? get _ticketBoard => _orchestrationContext?.ticketBoard;
+  WorktreeService? get _worktreeService =>
+      _orchestrationContext?.worktreeService;
+  ProjectRestoreService? get _restoreService =>
+      _orchestrationContext?.restoreService;
+
+  /// Binds orchestration dependencies from app providers.
+  void bindOrchestrationContext({
+    required BackendService backend,
+    required EventHandler eventHandler,
+    required ProjectState project,
+    required SelectionState selection,
+    required TicketRepository ticketBoard,
+    required WorktreeService worktreeService,
+    required ProjectRestoreService restoreService,
+    required GitService gitService,
+  }) {
+    _orchestrationContext = _OrchestrationContext(
+      backend: backend,
+      eventHandler: eventHandler,
+      project: project,
+      selection: selection,
+      ticketBoard: ticketBoard,
+      worktreeService: worktreeService,
+      restoreService: restoreService,
+    );
+    _gitService ??= gitService;
+  }
+
+  bool shouldEnableOrchestrationTools(Chat chat) {
+    return isOrchestratorChat(chat) || chat.settings.orchestrationToolsEnabled;
+  }
+
+  bool isOrchestratorChat(Chat chat) {
+    return chat.settings.isOrchestratorChat ||
+        _orchestratorsByChatId.containsKey(chat.id);
+  }
+
+  OrchestratorState? getOrchestratorState(Chat chat) {
+    final state = _orchestratorsByChatId[chat.id];
+    if (state != null) return state;
+    final snapshot = chat.settings.orchestrationData;
+    if (!chat.settings.isOrchestratorChat || snapshot == null) {
+      return null;
+    }
+    return _restoreOrchestratorStateFromSnapshot(chat, snapshot);
+  }
+
+  Iterable<OrchestratorState> get activeOrchestrators =>
+      _orchestratorsByChatId.values;
+
   /// Maximum number of ticket proposals allowed in a single create_ticket call.
   static const int maxProposalCount = 50;
+  static const int _defaultWaitTimeoutSeconds = 600;
+  static const int _maxWaitTimeoutSeconds = 3600;
+
+  static const Set<String> _orchestratorToolNames = {
+    'launch_agent',
+    'tell_agent',
+    'ask_agent',
+    'wait_for_agents',
+    'check_agent',
+    'list_tickets',
+    'get_ticket',
+    'update_ticket',
+    'create_worktree',
+    'rebase_and_merge',
+    'delete_worktree',
+  };
 
   /// Register the create_ticket tool with the given bulk proposal state.
   ///
@@ -40,79 +173,81 @@ class InternalToolsService extends ChangeNotifier {
   /// stages them for user review, and waits for
   /// the review to complete via [BulkProposalState.onBulkReviewComplete] stream.
   void registerTicketTools(BulkProposalState proposalState) {
-    _registry.register(InternalToolDefinition(
-      name: 'create_ticket',
-      description:
-          'Create one or more tickets on the project board. '
-          'Each ticket has a title, description, kind '
-          '(feature/bugfix/research/question/test/docs/chore), '
-          'optional priority, effort, category, tags, '
-          'and dependency indices.',
-      inputSchema: {
-        'type': 'object',
-        'properties': {
-          'tickets': {
-            'type': 'array',
-            'description': 'Array of ticket proposals to create',
-            'items': {
-              'type': 'object',
-              'properties': {
-                'title': {
-                  'type': 'string',
-                  'description': 'Short title describing the ticket',
+    _registry.register(
+      InternalToolDefinition(
+        name: 'create_ticket',
+        description:
+            'Create one or more tickets on the project board. '
+            'Each ticket has a title, description, kind '
+            '(feature/bugfix/research/question/test/docs/chore), '
+            'optional priority, effort, category, tags, '
+            'and dependency indices.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'tickets': {
+              'type': 'array',
+              'description': 'Array of ticket proposals to create',
+              'items': {
+                'type': 'object',
+                'properties': {
+                  'title': {
+                    'type': 'string',
+                    'description': 'Short title describing the ticket',
+                  },
+                  'description': {
+                    'type': 'string',
+                    'description': 'Detailed description of the work',
+                  },
+                  'kind': {
+                    'type': 'string',
+                    'enum': [
+                      'feature',
+                      'bugfix',
+                      'research',
+                      'question',
+                      'test',
+                      'docs',
+                      'chore',
+                    ],
+                    'description': 'Type of work',
+                  },
+                  'priority': {
+                    'type': 'string',
+                    'enum': ['critical', 'high', 'medium', 'low'],
+                    'description': 'Priority level (defaults to medium)',
+                  },
+                  'effort': {
+                    'type': 'string',
+                    'enum': ['small', 'medium', 'large'],
+                    'description': 'Estimated effort (defaults to medium)',
+                  },
+                  'category': {
+                    'type': 'string',
+                    'description': 'Optional category for grouping',
+                  },
+                  'tags': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'description': 'Tags for categorization',
+                  },
+                  'dependsOnIndices': {
+                    'type': 'array',
+                    'items': {'type': 'integer'},
+                    'description':
+                        'Indices of tickets in this array that '
+                        'this ticket depends on',
+                  },
                 },
-                'description': {
-                  'type': 'string',
-                  'description': 'Detailed description of the work',
-                },
-                'kind': {
-                  'type': 'string',
-                  'enum': [
-                    'feature',
-                    'bugfix',
-                    'research',
-                    'question',
-                    'test',
-                    'docs',
-                    'chore',
-                  ],
-                  'description': 'Type of work',
-                },
-                'priority': {
-                  'type': 'string',
-                  'enum': ['critical', 'high', 'medium', 'low'],
-                  'description': 'Priority level (defaults to medium)',
-                },
-                'effort': {
-                  'type': 'string',
-                  'enum': ['small', 'medium', 'large'],
-                  'description': 'Estimated effort (defaults to medium)',
-                },
-                'category': {
-                  'type': 'string',
-                  'description': 'Optional category for grouping',
-                },
-                'tags': {
-                  'type': 'array',
-                  'items': {'type': 'string'},
-                  'description': 'Tags for categorization',
-                },
-                'dependsOnIndices': {
-                  'type': 'array',
-                  'items': {'type': 'integer'},
-                  'description':
-                      'Indices of tickets in this array that '
-                      'this ticket depends on',
-                },
+                'required': ['title', 'description', 'kind'],
               },
-              'required': ['title', 'description', 'kind'],
             },
           },
+          'required': ['tickets'],
         },
-        'required': ['tickets'],
-      },
-      handler: (input) => _handleCreateTicket(proposalState, input),
-    ));
+        handler: (input) => _handleCreateTicket(proposalState, input),
+      ),
+    );
   }
 
   /// Unregister ticket tools (e.g., when board changes).
@@ -184,12 +319,13 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     // Listen for the next bulk review completion event
-    final resultFuture = proposalState.onBulkReviewComplete.first.then((result) {
+    final resultFuture = proposalState.onBulkReviewComplete.first.then((
+      result,
+    ) {
       final total = result.approvedCount + result.rejectedCount;
       final String resultText;
       if (result.approvedCount == 0) {
-        resultText =
-            'All $total ticket proposals were rejected by the user.';
+        resultText = 'All $total ticket proposals were rejected by the user.';
       } else if (result.rejectedCount == 0) {
         resultText =
             'All ${result.approvedCount} ticket proposals were approved '
@@ -215,6 +351,958 @@ class InternalToolsService extends ChangeNotifier {
     );
 
     return resultFuture;
+  }
+
+  // ===========================================================================
+  // Orchestration tools
+  // ===========================================================================
+
+  List<InternalToolDefinition> _normalTools() {
+    return _registry.tools
+        .where((tool) => !_orchestratorToolNames.contains(tool.name))
+        .toList();
+  }
+
+  List<InternalToolDefinition> _orchestratorTools(Chat orchestratorChat) {
+    return [
+      _launchAgentTool(orchestratorChat),
+      _tellAgentTool(orchestratorChat),
+      _askAgentTool(orchestratorChat),
+      _waitForAgentsTool(orchestratorChat),
+      _checkAgentTool(orchestratorChat),
+      _listTicketsTool(),
+      _getTicketTool(),
+      _updateTicketTool(),
+      _createWorktreeTool(orchestratorChat),
+      _rebaseAndMergeTool(orchestratorChat),
+      _deleteWorktreeTool(),
+    ];
+  }
+
+  void attachOrchestratorState(Chat chat, OrchestratorState state) {
+    _orchestratorsByChatId[chat.id] = state;
+    chat.settings.setIsOrchestratorChat(true);
+    chat.settings.setOrchestrationToolsEnabled(true);
+    chat.settings.setOrchestrationData(state.toSnapshot());
+    state.addListener(() {
+      if (_orchestratorsByChatId[chat.id] != state) return;
+      chat.settings.setOrchestrationData(state.toSnapshot());
+    });
+    notifyListeners();
+  }
+
+  OrchestratorState? _restoreOrchestratorStateFromSnapshot(
+    Chat chat,
+    Map<String, dynamic> snapshot,
+  ) {
+    final ticketBoard = _ticketBoard;
+    if (ticketBoard == null) return null;
+    final ticketIds = (snapshot['ticketIds'] as List<dynamic>? ?? [])
+        .map((e) => e as int)
+        .toList();
+    final basePath = snapshot['baseWorktreePath'] as String?;
+    if (basePath == null || ticketIds.isEmpty) return null;
+    final startTime = snapshot['startTime'] as String?;
+    final state = OrchestratorState(
+      ticketBoard: ticketBoard,
+      ticketIds: ticketIds,
+      baseWorktreePath: basePath,
+      startTime: startTime != null ? DateTime.tryParse(startTime) : null,
+    );
+    attachOrchestratorState(chat, state);
+
+    final agents = snapshot['agents'] as List<dynamic>? ?? [];
+    for (final raw in agents) {
+      if (raw is! Map<String, dynamic>) continue;
+      final agentId = raw['id'] as String?;
+      final chatId = raw['chatId'] as String?;
+      if (agentId == null || chatId == null) continue;
+      final worker = _findChatById(chatId);
+      if (worker == null) continue;
+      state.registerAgent(
+        agentId: agentId,
+        chat: worker,
+        ticketId: raw['ticketId'] as int?,
+      );
+    }
+    return state;
+  }
+
+  InternalToolDefinition _launchAgentTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'launch_agent',
+      description: 'Launches a worker agent in a worktree with instructions.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'worktree': {'type': 'string'},
+          'instructions': {'type': 'string'},
+          'ticket_id': {'type': 'integer'},
+          'name': {'type': 'string'},
+        },
+        'required': ['worktree', 'instructions'],
+      },
+      handler: (input) => _handleLaunchAgent(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleLaunchAgent(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final context = _orchestrationContext;
+    if (context == null) {
+      return InternalToolResult.error(
+        'Orchestration context is not initialized.',
+      );
+    }
+
+    final worktreePath = input['worktree'] as String?;
+    final instructions = input['instructions'] as String?;
+    final ticketId = (input['ticket_id'] as num?)?.toInt();
+    final name = input['name'] as String?;
+    if (worktreePath == null || worktreePath.isEmpty) {
+      return InternalToolResult.error('Missing required "worktree"');
+    }
+    if (instructions == null || instructions.trim().isEmpty) {
+      return InternalToolResult.error('Missing required "instructions"');
+    }
+
+    final worktree = _findWorktreeByPath(worktreePath);
+    if (worktree == null) {
+      return InternalToolResult.error('Worktree not found: $worktreePath');
+    }
+
+    try {
+      final chat = await _createWorkerChat(
+        context: context,
+        worktree: worktree,
+        worktreePath: worktreePath,
+        ticketId: ticketId,
+        name: name,
+      );
+      await _startWorkerSession(
+        context: context,
+        chat: chat,
+        instructions: instructions,
+      );
+
+      final state = getOrchestratorState(orchestratorChat);
+      if (state == null) {
+        return InternalToolResult.error('Orchestrator state is not available.');
+      }
+
+      final agentId = 'agent-${chat.id}';
+      state.registerAgent(agentId: agentId, chat: chat, ticketId: ticketId);
+      _linkWorkerTicket(
+        context: context,
+        ticketId: ticketId,
+        worktree: worktree,
+        chat: chat,
+      );
+
+      return InternalToolResult.text(
+        jsonEncode({
+          'agent_id': agentId,
+          'chat_id': chat.id,
+          'worktree': worktreePath,
+        }),
+      );
+    } catch (e) {
+      return InternalToolResult.error('Failed to launch agent session: $e');
+    }
+  }
+
+  Future<Chat> _createWorkerChat({
+    required _OrchestrationContext context,
+    required WorktreeState worktree,
+    required String worktreePath,
+    required int? ticketId,
+    required String? name,
+  }) async {
+    final chat = Chat.create(
+      name:
+          name ?? (ticketId != null ? 'TKT-$ticketId Worker' : 'Worker Agent'),
+      worktreeRoot: worktreePath,
+    );
+    await context.restoreService.addChatToWorktree(
+      context.project.data.repoRoot,
+      worktreePath,
+      chat,
+    );
+    worktree.addChat(chat, select: false);
+    return chat;
+  }
+
+  Future<void> _startWorkerSession({
+    required _OrchestrationContext context,
+    required Chat chat,
+    required String instructions,
+  }) {
+    return chat.session.start(
+      backend: context.backend,
+      eventHandler: context.eventHandler,
+      prompt: instructions,
+      internalToolsService: this,
+    );
+  }
+
+  void _linkWorkerTicket({
+    required _OrchestrationContext context,
+    required int? ticketId,
+    required WorktreeState worktree,
+    required Chat chat,
+  }) {
+    if (ticketId == null) return;
+    context.ticketBoard.setStatus(ticketId, TicketStatus.active);
+    context.ticketBoard.linkWorktree(
+      ticketId,
+      worktree.data.worktreeRoot,
+      worktree.data.branch,
+    );
+    context.ticketBoard.linkChat(
+      ticketId,
+      chat.id,
+      chat.name,
+      worktree.data.worktreeRoot,
+    );
+  }
+
+  InternalToolDefinition _tellAgentTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'tell_agent',
+      description: 'Send a non-blocking message to an idle agent.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'agent_id': {'type': 'string'},
+          'message': {'type': 'string'},
+        },
+        'required': ['agent_id', 'message'],
+      },
+      handler: (input) => _handleTellAgent(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleTellAgent(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final agentId = input['agent_id'] as String?;
+    final message = input['message'] as String?;
+    if (agentId == null || message == null) {
+      return InternalToolResult.error(
+        'Missing required fields: agent_id, message',
+      );
+    }
+    final agent = getOrchestratorState(orchestratorChat)?.getAgent(agentId);
+    if (agent == null)
+      return InternalToolResult.error('agent_not_found: $agentId');
+    if (!agent.chat.session.hasActiveSession) {
+      return InternalToolResult.error('agent_stopped: $agentId');
+    }
+    if (agent.chat.session.isWorking) {
+      return InternalToolResult.error('agent_busy: $agentId');
+    }
+
+    await agent.chat.session.sendMessage(message);
+    return InternalToolResult.text(jsonEncode({'success': true}));
+  }
+
+  InternalToolDefinition _askAgentTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'ask_agent',
+      description: 'Send a message and wait for the agent turn to complete.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'agent_id': {'type': 'string'},
+          'message': {'type': 'string'},
+          'timeout_seconds': {
+            'type': 'integer',
+            'description':
+                'Optional wait timeout in seconds (default: '
+                '$_defaultWaitTimeoutSeconds)',
+          },
+        },
+        'required': ['agent_id', 'message'],
+      },
+      handler: (input) => _handleAskAgent(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleAskAgent(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final agentId = input['agent_id'] as String?;
+    final message = input['message'] as String?;
+    if (agentId == null || message == null) {
+      return InternalToolResult.error(
+        'Missing required fields: agent_id, message',
+      );
+    }
+    final agent = getOrchestratorState(orchestratorChat)?.getAgent(agentId);
+    if (agent == null)
+      return InternalToolResult.error('agent_not_found: $agentId');
+    if (!agent.chat.session.hasActiveSession) {
+      return InternalToolResult.error('agent_stopped: $agentId');
+    }
+    if (agent.chat.session.isWorking) {
+      return InternalToolResult.error('agent_busy: $agentId');
+    }
+
+    final timeout = _parseWaitTimeout(input);
+    await agent.chat.session.sendMessage(message);
+    final completed = await _waitUntilAgentIdle(agent.chat, timeout: timeout);
+    final response = _extractLastAssistantMessage(agent.chat);
+    return InternalToolResult.text(
+      jsonEncode({
+        'response': response,
+        'completion_status': AgentCompletionStatus.unknown.wireValue,
+        'wait_timed_out': !completed,
+        if (!completed) 'status': _reasonForAgent(agent.chat).wireValue,
+      }),
+    );
+  }
+
+  InternalToolDefinition _waitForAgentsTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'wait_for_agents',
+      description: 'Waits until one or more agents become ready.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'agent_ids': {
+            'type': 'array',
+            'items': {'type': 'string'},
+          },
+          'timeout_seconds': {
+            'type': 'integer',
+            'description':
+                'Optional wait timeout in seconds (default: '
+                '$_defaultWaitTimeoutSeconds). If timed out, check status and '
+                'call wait_for_agents again.',
+          },
+        },
+        'required': ['agent_ids'],
+      },
+      handler: (input) => _handleWaitForAgents(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleWaitForAgents(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final idsRaw = input['agent_ids'];
+    if (idsRaw is! List || idsRaw.isEmpty) {
+      return InternalToolResult.error(
+        'Missing required non-empty "agent_ids" array',
+      );
+    }
+    final ids = idsRaw.map((e) => e.toString()).toList();
+    final timeout = _parseWaitTimeout(input);
+    final state = getOrchestratorState(orchestratorChat);
+    if (state == null) {
+      return InternalToolResult.error('Orchestrator state not found');
+    }
+
+    final agents = <ManagedAgent>[];
+    for (final id in ids) {
+      final agent = state.getAgent(id);
+      if (agent == null) {
+        return InternalToolResult.error('agent_not_found: $id');
+      }
+      agents.add(agent);
+    }
+
+    List<Map<String, String>> collectReady() {
+      return agents
+          .where((a) => _isAgentReady(a.chat))
+          .map(
+            (a) => {
+              'agent_id': a.id,
+              'reason': _reasonForAgent(a.chat).wireValue,
+            },
+          )
+          .toList();
+    }
+
+    var ready = collectReady();
+    if (ready.isNotEmpty) {
+      return InternalToolResult.text(
+        jsonEncode({'ready': ready, 'wait_timed_out': false}),
+      );
+    }
+
+    final completer = Completer<void>();
+    final listeners = <VoidCallback>[];
+
+    void onAnyChange() {
+      if (!completer.isCompleted && collectReady().isNotEmpty) {
+        completer.complete();
+      }
+    }
+
+    for (final agent in agents) {
+      agent.chat.session.addListener(onAnyChange);
+      listeners.add(() => agent.chat.session.removeListener(onAnyChange));
+      agent.chat.permissions.addListener(onAnyChange);
+      listeners.add(() => agent.chat.permissions.removeListener(onAnyChange));
+    }
+
+    var timedOut = false;
+    try {
+      await completer.future.timeout(timeout);
+    } on TimeoutException {
+      timedOut = true;
+    } finally {
+      for (final dispose in listeners) {
+        dispose();
+      }
+    }
+
+    ready = collectReady();
+    if (ready.isNotEmpty) {
+      return InternalToolResult.text(
+        jsonEncode({'ready': ready, 'wait_timed_out': false}),
+      );
+    }
+
+    return InternalToolResult.text(
+      jsonEncode({
+        'ready': ready,
+        'wait_timed_out': timedOut,
+        if (timedOut) 'timeout_seconds': timeout.inSeconds,
+        if (timedOut)
+          'status': agents
+              .map(
+                (a) => {
+                  'agent_id': a.id,
+                  'reason': _reasonForAgent(a.chat).wireValue,
+                  'is_working': a.chat.session.isWorking,
+                },
+              )
+              .toList(),
+      }),
+    );
+  }
+
+  InternalToolDefinition _checkAgentTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'check_agent',
+      description: 'Returns a non-blocking status snapshot for an agent.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'agent_id': {'type': 'string'},
+        },
+        'required': ['agent_id'],
+      },
+      handler: (input) => _handleCheckAgent(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleCheckAgent(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final agentId = input['agent_id'] as String?;
+    if (agentId == null || agentId.isEmpty) {
+      return InternalToolResult.error('Missing "agent_id"');
+    }
+    final agent = getOrchestratorState(orchestratorChat)?.getAgent(agentId);
+    if (agent == null) {
+      return InternalToolResult.error('agent_not_found: $agentId');
+    }
+    final lastMessage = _extractLastAssistantMessage(agent.chat);
+    final entryCount = agent.chat.data.primaryConversation.entries.length;
+    final status = _reasonForAgent(agent.chat);
+    return InternalToolResult.text(
+      jsonEncode({
+        'status': status.wireValue,
+        'is_working': agent.chat.session.isWorking,
+        if (lastMessage.isNotEmpty)
+          'last_message': lastMessage.substring(
+            0,
+            lastMessage.length.clamp(0, 100),
+          ),
+        'turn_count': (entryCount / 2).floor(),
+        'has_pending_permission':
+            agent.chat.permissions.pendingPermission != null,
+      }),
+    );
+  }
+
+  InternalToolDefinition _listTicketsTool() {
+    return InternalToolDefinition(
+      name: 'list_tickets',
+      description: 'Lists tickets with optional filters.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'status': {
+            'type': 'array',
+            'items': {'type': 'string'},
+          },
+          'category': {'type': 'string'},
+          'depends_on': {'type': 'integer'},
+          'dependency_of': {'type': 'integer'},
+          'ids': {
+            'type': 'array',
+            'items': {'type': 'integer'},
+          },
+        },
+      },
+      handler: _handleListTickets,
+    );
+  }
+
+  Future<InternalToolResult> _handleListTickets(
+    Map<String, dynamic> input,
+  ) async {
+    final ticketBoard = _ticketBoard;
+    if (ticketBoard == null) {
+      return InternalToolResult.error('Ticket board not available');
+    }
+    var tickets = ticketBoard.tickets.toList();
+    final statuses = (input['status'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toSet();
+    if (statuses != null && statuses.isNotEmpty) {
+      tickets = tickets.where((t) => statuses.contains(t.status.name)).toList();
+    }
+    final category = input['category'] as String?;
+    if (category != null && category.isNotEmpty) {
+      tickets = tickets.where((t) => t.category == category).toList();
+    }
+    final dependsOn = (input['depends_on'] as num?)?.toInt();
+    if (dependsOn != null) {
+      tickets = tickets.where((t) => t.dependsOn.contains(dependsOn)).toList();
+    }
+    final dependencyOf = (input['dependency_of'] as num?)?.toInt();
+    if (dependencyOf != null) {
+      final target = ticketBoard.getTicket(dependencyOf);
+      if (target != null) {
+        tickets = tickets
+            .where((t) => target.dependsOn.contains(t.id))
+            .toList();
+      } else {
+        tickets = [];
+      }
+    }
+    final ids = (input['ids'] as List<dynamic>?)
+        ?.map((e) => (e as num).toInt())
+        .toSet();
+    if (ids != null && ids.isNotEmpty) {
+      tickets = tickets.where((t) => ids.contains(t.id)).toList();
+    }
+
+    final summaries = tickets
+        .map(
+          (t) => {
+            'id': t.id,
+            'display_id': t.displayId,
+            'title': t.title,
+            'status': t.status.name,
+            'kind': t.kind.name,
+            'priority': t.priority.name,
+            'depends_on': t.dependsOn,
+          },
+        )
+        .toList();
+    return InternalToolResult.text(jsonEncode({'tickets': summaries}));
+  }
+
+  InternalToolDefinition _getTicketTool() {
+    return InternalToolDefinition(
+      name: 'get_ticket',
+      description: 'Gets full details for a single ticket.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'ticket_id': {'type': 'integer'},
+        },
+        'required': ['ticket_id'],
+      },
+      handler: _handleGetTicket,
+    );
+  }
+
+  Future<InternalToolResult> _handleGetTicket(
+    Map<String, dynamic> input,
+  ) async {
+    final ticketBoard = _ticketBoard;
+    if (ticketBoard == null) {
+      return InternalToolResult.error('Ticket board not available');
+    }
+    final id = (input['ticket_id'] as num?)?.toInt();
+    if (id == null) return InternalToolResult.error('Missing "ticket_id"');
+    final ticket = ticketBoard.getTicket(id);
+    if (ticket == null)
+      return InternalToolResult.error('ticket_not_found: $id');
+    final unblockedBy = ticket.dependsOn.where((depId) {
+      final dep = ticketBoard.getTicket(depId);
+      return dep?.status == TicketStatus.completed;
+    }).toList();
+    return InternalToolResult.text(
+      jsonEncode({'ticket': ticket.toJson(), 'unblocked_by': unblockedBy}),
+    );
+  }
+
+  InternalToolDefinition _updateTicketTool() {
+    return InternalToolDefinition(
+      name: 'update_ticket',
+      description: 'Updates ticket status and/or appends a comment.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'ticket_id': {'type': 'integer'},
+          'status': {'type': 'string'},
+          'comment': {'type': 'string'},
+        },
+        'required': ['ticket_id'],
+      },
+      handler: _handleUpdateTicket,
+    );
+  }
+
+  Future<InternalToolResult> _handleUpdateTicket(
+    Map<String, dynamic> input,
+  ) async {
+    final ticketBoard = _ticketBoard;
+    if (ticketBoard == null) {
+      return InternalToolResult.error('Ticket board not available');
+    }
+    final ticketId = (input['ticket_id'] as num?)?.toInt();
+    if (ticketId == null)
+      return InternalToolResult.error('Missing "ticket_id"');
+    final ticket = ticketBoard.getTicket(ticketId);
+    if (ticket == null)
+      return InternalToolResult.error('ticket_not_found: $ticketId');
+
+    final previousStatus = ticket.status.name;
+    TicketStatus? nextStatus;
+    final rawStatus = input['status'] as String?;
+    if (rawStatus != null) {
+      nextStatus = _parseTicketStatus(rawStatus);
+      if (nextStatus == null) {
+        return InternalToolResult.error('invalid_status: $rawStatus');
+      }
+      ticketBoard.setStatus(ticketId, nextStatus);
+    }
+
+    final comment = input['comment'] as String?;
+    if (comment != null && comment.trim().isNotEmpty) {
+      ticketBoard.addComment(ticketId, comment.trim());
+    }
+
+    final unblocked = ticketBoard
+        .getBlockedBy(ticketId)
+        .where((id) => ticketBoard.getTicket(id)?.status == TicketStatus.ready)
+        .toList();
+
+    return InternalToolResult.text(
+      jsonEncode({
+        'success': true,
+        'previous_status': previousStatus,
+        'new_status': (nextStatus ?? ticket.status).name,
+        'unblocked_tickets': unblocked,
+      }),
+    );
+  }
+
+  InternalToolDefinition _createWorktreeTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'create_worktree',
+      description: 'Creates a new linked worktree.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'branch_name': {'type': 'string'},
+          'base_ref': {'type': 'string'},
+        },
+        'required': ['branch_name'],
+      },
+      handler: (input) => _handleCreateWorktree(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleCreateWorktree(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final project = _project;
+    final worktreeService = _worktreeService;
+    if (project == null || worktreeService == null) {
+      return InternalToolResult.error('Worktree context not available');
+    }
+    final branchName = input['branch_name'] as String?;
+    if (branchName == null || branchName.isEmpty) {
+      return InternalToolResult.error('Missing "branch_name"');
+    }
+    var baseRef = input['base_ref'] as String?;
+    if (baseRef == null || baseRef.isEmpty) {
+      final state = getOrchestratorState(orchestratorChat);
+      final baseWorktree = state != null
+          ? _findWorktreeByPath(state.baseWorktreePath)
+          : project.primaryWorktree;
+      baseRef = baseWorktree?.data.branch;
+    }
+
+    try {
+      final worktreeRoot = await calculateDefaultWorktreeRoot(
+        project.data.repoRoot,
+      );
+      final worktree = await worktreeService.createWorktree(
+        project: project,
+        branch: branchName,
+        worktreeRoot: worktreeRoot,
+        base: baseRef,
+      );
+      project.addLinkedWorktree(worktree);
+      return InternalToolResult.text(
+        jsonEncode({
+          'worktree_path': worktree.data.worktreeRoot,
+          'branch': worktree.data.branch,
+        }),
+      );
+    } catch (e) {
+      return InternalToolResult.error('Failed to create worktree: $e');
+    }
+  }
+
+  InternalToolDefinition _rebaseAndMergeTool(Chat orchestratorChat) {
+    return InternalToolDefinition(
+      name: 'rebase_and_merge',
+      description:
+          'Rebases a worker branch onto base and merges into the base worktree.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'worktree_path': {'type': 'string'},
+        },
+        'required': ['worktree_path'],
+      },
+      handler: (input) => _handleRebaseAndMerge(orchestratorChat, input),
+    );
+  }
+
+  Future<InternalToolResult> _handleRebaseAndMerge(
+    Chat orchestratorChat,
+    Map<String, dynamic> input,
+  ) async {
+    final path = input['worktree_path'] as String?;
+    final gitService = _gitService;
+    final project = _project;
+    if (path == null || path.isEmpty) {
+      return InternalToolResult.error('Missing "worktree_path"');
+    }
+    if (gitService == null || project == null) {
+      return InternalToolResult.error('Git/project context not available');
+    }
+
+    final worker = _findWorktreeByPath(path);
+    if (worker == null)
+      return InternalToolResult.error('worktree_not_found: $path');
+    final orchestratorState = getOrchestratorState(orchestratorChat);
+    if (orchestratorState == null) {
+      return InternalToolResult.error('orchestrator_state_missing');
+    }
+    final baseWorktree = _findWorktreeByPath(
+      orchestratorState.baseWorktreePath,
+    );
+    if (baseWorktree == null) {
+      return InternalToolResult.error(
+        'base_worktree_not_found: ${orchestratorState.baseWorktreePath}',
+      );
+    }
+    final baseBranch = baseWorktree.data.branch;
+
+    final rebase = await gitService.rebase(path, baseBranch);
+    if (rebase.hasConflicts) {
+      return InternalToolResult.text(
+        jsonEncode({'success': false, 'conflicts': true, 'merged_commits': 0}),
+      );
+    }
+    if (rebase.error != null) {
+      return InternalToolResult.error(rebase.error ?? 'Rebase failed');
+    }
+
+    final merge = await gitService.merge(
+      baseWorktree.data.worktreeRoot,
+      worker.data.branch,
+    );
+    if (merge.hasConflicts) {
+      return InternalToolResult.text(
+        jsonEncode({'success': false, 'conflicts': true, 'merged_commits': 0}),
+      );
+    }
+    if (merge.error != null) {
+      return InternalToolResult.error(merge.error ?? 'Merge failed');
+    }
+    return InternalToolResult.text(
+      jsonEncode({'success': true, 'conflicts': false, 'merged_commits': 1}),
+    );
+  }
+
+  InternalToolDefinition _deleteWorktreeTool() {
+    return InternalToolDefinition(
+      name: 'delete_worktree',
+      description: 'Deletes a linked worktree and optionally its branch.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'worktree_path': {'type': 'string'},
+          'delete_branch': {'type': 'boolean'},
+        },
+        'required': ['worktree_path'],
+      },
+      handler: _handleDeleteWorktree,
+    );
+  }
+
+  Future<InternalToolResult> _handleDeleteWorktree(
+    Map<String, dynamic> input,
+  ) async {
+    final path = input['worktree_path'] as String?;
+    final deleteBranch = input['delete_branch'] as bool? ?? false;
+    final project = _project;
+    final gitService = _gitService;
+    if (path == null || path.isEmpty) {
+      return InternalToolResult.error('Missing "worktree_path"');
+    }
+    if (project == null || gitService == null) {
+      return InternalToolResult.error('Worktree context not available');
+    }
+    final worktree = _findWorktreeByPath(path);
+    if (worktree == null) {
+      return InternalToolResult.error('worktree_not_found: $path');
+    }
+    if (worktree.data.isPrimary) {
+      return InternalToolResult.error('Cannot delete primary worktree');
+    }
+
+    try {
+      await gitService.removeWorktree(
+        repoRoot: project.data.repoRoot,
+        worktreePath: path,
+      );
+      if (deleteBranch) {
+        await gitService.deleteBranch(
+          repoRoot: project.data.repoRoot,
+          branchName: worktree.data.branch,
+        );
+      }
+      project.removeLinkedWorktree(worktree);
+      return InternalToolResult.text(jsonEncode({'success': true}));
+    } catch (e) {
+      return InternalToolResult.error('Failed to delete worktree: $e');
+    }
+  }
+
+  WorktreeState? _findWorktreeByPath(String path) {
+    final project = _project;
+    if (project == null) return null;
+    return project.allWorktrees
+        .where((w) => w.data.worktreeRoot == path)
+        .firstOrNull;
+  }
+
+  Chat? _findChatById(String chatId) {
+    final project = _project;
+    if (project == null) return null;
+    for (final worktree in project.allWorktrees) {
+      for (final chat in worktree.chats) {
+        if (chat.id == chatId) return chat;
+      }
+    }
+    return null;
+  }
+
+  bool _isAgentReady(Chat chat) {
+    if (chat.permissions.pendingPermission != null) return true;
+    if (chat.session.sessionPhase == SessionPhase.errored) return true;
+    if (!chat.session.hasActiveSession) return true;
+    return !chat.session.isWorking;
+  }
+
+  AgentReadyReason _reasonForAgent(Chat chat) {
+    if (chat.permissions.pendingPermission != null) {
+      return AgentReadyReason.permissionNeeded;
+    }
+    if (chat.session.sessionPhase == SessionPhase.errored) {
+      return AgentReadyReason.error;
+    }
+    if (!chat.session.hasActiveSession) {
+      return AgentReadyReason.stopped;
+    }
+    return AgentReadyReason.turnComplete;
+  }
+
+  Future<bool> _waitUntilAgentIdle(
+    Chat chat, {
+    required Duration timeout,
+  }) async {
+    if (_isAgentReady(chat)) return true;
+    final completer = Completer<void>();
+    void listener() {
+      if (_isAgentReady(chat) && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    chat.session.addListener(listener);
+    chat.permissions.addListener(listener);
+    try {
+      await completer.future.timeout(timeout);
+      return true;
+    } on TimeoutException {
+      return false;
+    } finally {
+      chat.session.removeListener(listener);
+      chat.permissions.removeListener(listener);
+    }
+  }
+
+  String _extractLastAssistantMessage(Chat chat) {
+    final entries = chat.data.primaryConversation.entries;
+    for (final entry in entries.reversed) {
+      if (entry is TextOutputEntry &&
+          entry.contentType != 'error' &&
+          entry.text.trim().isNotEmpty) {
+        return entry.text.trim();
+      }
+    }
+    return '';
+  }
+
+  Duration _parseWaitTimeout(Map<String, dynamic> input) {
+    final raw = (input['timeout_seconds'] as num?)?.toInt();
+    if (raw == null || raw <= 0) {
+      return const Duration(seconds: _defaultWaitTimeoutSeconds);
+    }
+    final seconds = raw.clamp(1, _maxWaitTimeoutSeconds);
+    return Duration(seconds: seconds);
+  }
+
+  TicketStatus? _parseTicketStatus(String statusName) {
+    for (final status in TicketStatus.values) {
+      if (status.name == statusName) {
+        return status;
+      }
+    }
+    return null;
+  }
+
+  String? _mergePromptText(List<String?> parts) {
+    final filtered = parts
+        .whereType<String>()
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
+    if (filtered.isEmpty) return null;
+    return filtered.join('\n\n');
   }
 
   // ===========================================================================
@@ -294,8 +1382,7 @@ class InternalToolsService extends ChangeNotifier {
       final branch = results[0] as String?;
       final changedFiles = results[1] as List<GitFileChange>;
       final diffStat = results[2] as String;
-      final recentCommits =
-          results[3] as List<({String sha, String message})>;
+      final recentCommits = results[3] as List<({String sha, String message})>;
 
       // Group files by status
       final modified = <String>[];
@@ -361,10 +1448,7 @@ class InternalToolsService extends ChangeNotifier {
                 'File paths (relative to path) to stage. '
                 'No "." or "*" wildcards.',
           },
-          'message': {
-            'type': 'string',
-            'description': 'The commit message',
-          },
+          'message': {'type': 'string', 'description': 'The commit message'},
           'co_author': {
             'type': 'string',
             'description':
@@ -422,9 +1506,7 @@ class InternalToolsService extends ChangeNotifier {
     // Validate message
     final message = input['message'] as String?;
     if (message == null || message.isEmpty) {
-      return InternalToolResult.error(
-        'Missing or empty "message" field.',
-      );
+      return InternalToolResult.error('Missing or empty "message" field.');
     }
 
     // Build full message with optional co-author trailer
@@ -486,9 +1568,7 @@ class InternalToolsService extends ChangeNotifier {
     );
   }
 
-  Future<InternalToolResult> _handleGitLog(
-    Map<String, dynamic> input,
-  ) async {
+  Future<InternalToolResult> _handleGitLog(Map<String, dynamic> input) async {
     final gitService = _gitService;
     if (gitService == null) {
       return InternalToolResult.error('Git service not available');
@@ -552,9 +1632,7 @@ class InternalToolsService extends ChangeNotifier {
     );
   }
 
-  Future<InternalToolResult> _handleGitDiff(
-    Map<String, dynamic> input,
-  ) async {
+  Future<InternalToolResult> _handleGitDiff(Map<String, dynamic> input) async {
     final gitService = _gitService;
     if (gitService == null) {
       return InternalToolResult.error('Git service not available');
@@ -576,11 +1654,7 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     try {
-      final diff = await gitService.getDiff(
-        path,
-        staged: staged,
-        files: files,
-      );
+      final diff = await gitService.getDiff(path, staged: staged, files: files);
       if (diff.isEmpty) {
         return InternalToolResult.text('(no changes)');
       }

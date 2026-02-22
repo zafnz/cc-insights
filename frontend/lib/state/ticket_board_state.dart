@@ -38,7 +38,7 @@ class TicketRepository extends ChangeNotifier {
   /// The [storage] parameter is optional for testing; if not provided,
   /// a default instance is created.
   TicketRepository(this.projectId, {TicketStorageService? storage})
-      : _storage = storage ?? TicketStorageService();
+    : _storage = storage ?? TicketStorageService();
 
   @override
   void dispose() {
@@ -165,9 +165,7 @@ class TicketRepository extends ChangeNotifier {
 
     // Validate: no cycle
     if (wouldCreateCycle(ticketId, dependsOnId)) {
-      throw ArgumentError(
-        'Adding this dependency would create a cycle',
-      );
+      throw ArgumentError('Adding this dependency would create a cycle');
     }
 
     // Add the dependency
@@ -349,10 +347,11 @@ class TicketRepository extends ChangeNotifier {
     }
 
     // Update parent: status -> split, kind -> split
-    updateTicket(parentId, (ticket) => ticket.copyWith(
-      status: TicketStatus.split,
-      kind: TicketKind.split,
-    ));
+    updateTicket(
+      parentId,
+      (ticket) =>
+          ticket.copyWith(status: TicketStatus.split, kind: TicketKind.split),
+    );
 
     // Create child tickets
     final children = <TicketData>[];
@@ -401,12 +400,15 @@ class TicketRepository extends ChangeNotifier {
   ///
   /// Adds a [LinkedChat] entry to the ticket's [linkedChats] list.
   /// Does nothing if the ticket is not found.
-  void linkChat(int ticketId, String chatId, String chatName, String worktreeRoot) {
+  void linkChat(
+    int ticketId,
+    String chatId,
+    String chatName,
+    String worktreeRoot,
+  ) {
     updateTicket(ticketId, (ticket) {
       // Avoid duplicate links
-      final alreadyLinked = ticket.linkedChats.any(
-        (c) => c.chatId == chatId,
-      );
+      final alreadyLinked = ticket.linkedChats.any((c) => c.chatId == chatId);
       if (alreadyLinked) return ticket;
 
       return ticket.copyWith(
@@ -419,6 +421,24 @@ class TicketRepository extends ChangeNotifier {
           ),
         ],
       );
+    });
+  }
+
+  /// Adds a comment entry to a ticket.
+  void addComment(
+    int ticketId,
+    String text, {
+    String author = 'orchestrator',
+    String type = 'note',
+  }) {
+    updateTicket(ticketId, (ticket) {
+      final comment = TicketComment(
+        text: text,
+        author: author,
+        type: type,
+        createdAt: DateTime.now(),
+      );
+      return ticket.copyWith(comments: [...ticket.comments, comment]);
     });
   }
 
@@ -444,8 +464,9 @@ class TicketRepository extends ChangeNotifier {
       TicketPriority.medium: 2,
       TicketPriority.low: 1,
     };
-    final priorityCompare = (priorityOrder[b.priority] ?? 0)
-        .compareTo(priorityOrder[a.priority] ?? 0);
+    final priorityCompare = (priorityOrder[b.priority] ?? 0).compareTo(
+      priorityOrder[a.priority] ?? 0,
+    );
     if (priorityCompare != 0) return priorityCompare;
     return a.id.compareTo(b.id);
   }
@@ -537,11 +558,7 @@ class TicketRepository extends ChangeNotifier {
   void _autoSave() {
     // Fire and forget - don't await
     save().catchError((e) {
-      developer.log(
-        'Auto-save failed: $e',
-        name: 'TicketRepository',
-        error: e,
-      );
+      developer.log('Auto-save failed: $e', name: 'TicketRepository', error: e);
     });
   }
 }

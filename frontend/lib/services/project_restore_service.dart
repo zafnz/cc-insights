@@ -359,6 +359,10 @@ class ProjectRestoreService {
         notifyChange: false,
       );
     }
+
+    chat.settings.setOrchestrationToolsEnabled(meta.orchestrationToolsEnabled);
+    chat.settings.setIsOrchestratorChat(meta.isOrchestratorChat);
+    chat.settings.setOrchestrationData(meta.orchestrationData);
   }
 
   /// Creates a new project and saves it to persistence.

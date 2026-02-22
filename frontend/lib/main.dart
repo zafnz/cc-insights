@@ -46,6 +46,7 @@ import 'services/event_handler.dart';
 import 'services/internal_tools_service.dart';
 import 'services/worktree_watcher_service.dart';
 import 'services/menu_action_service.dart';
+import 'services/worktree_service.dart';
 import 'state/file_manager_state.dart';
 import 'state/selection_state.dart';
 import 'state/theme_state.dart';
@@ -924,10 +925,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final dialogContext = _navigatorKey.currentContext;
             if (dialogContext != null && mounted) {
-              showCliLauncherDialog(
-                context: dialogContext,
-                isFirstRun: true,
-              );
+              showCliLauncherDialog(context: dialogContext, isFirstRun: true);
             }
           });
         }
@@ -939,7 +937,6 @@ class _CCInsightsAppState extends State<CCInsightsApp>
       },
     );
   }
-
 
   /// Builds the validation screen content that shows the directory validation message.
   Widget _buildValidationContent() {
@@ -1001,14 +998,14 @@ class _CCInsightsAppState extends State<CCInsightsApp>
 
   // ========== Menu Action Handlers ==========
 
-  static const _windowChannel =
-      MethodChannel('com.nickclifford.ccinsights/window');
+  static const _windowChannel = MethodChannel(
+    'com.nickclifford.ccinsights/window',
+  );
 
   /// Opens a folder picker and loads the selected project.
   Future<void> _handleOpenProject() async {
     try {
-      final result =
-          await _windowChannel.invokeMethod<String>('pickDirectory');
+      final result = await _windowChannel.invokeMethod<String>('pickDirectory');
 
       if (result != null) {
         await _validateAndOpenProject(result);
@@ -1196,6 +1193,10 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         Provider<ProjectRestoreService>.value(value: _restoreService!),
         // Git service for git operations (stateless)
         Provider<GitService>.value(value: const RealGitService()),
+        Provider<WorktreeService>(
+          create: (context) =>
+              WorktreeService(gitService: context.read<GitService>()),
+        ),
         // Git operations service for push/pull/conflict operations
         Provider<GitOperationsService>(
           create: (context) => GitOperationsService(
@@ -1306,6 +1307,42 @@ class _CCInsightsAppState extends State<CCInsightsApp>
           },
           update: (context, repo, previous) =>
               previous ?? BulkProposalState(repo),
+        ),
+        ProxyProvider6<
+          BackendService,
+          EventHandler,
+          ProjectState,
+          SelectionState,
+          TicketRepository,
+          WorktreeService,
+          InternalToolsService
+        >(
+          update:
+              (
+                context,
+                backend,
+                eventHandler,
+                project,
+                selection,
+                ticketBoard,
+                worktreeService,
+                _,
+              ) {
+                final tools = context.read<InternalToolsService>();
+                final restoreService = context.read<ProjectRestoreService>();
+                final gitService = context.read<GitService>();
+                tools.bindOrchestrationContext(
+                  backend: backend,
+                  eventHandler: eventHandler,
+                  project: project,
+                  selection: selection,
+                  ticketBoard: ticketBoard,
+                  worktreeService: worktreeService,
+                  restoreService: restoreService,
+                  gitService: gitService,
+                );
+                return tools;
+              },
         ),
       ],
       child: child,

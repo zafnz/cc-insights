@@ -5,7 +5,12 @@ import '../models/project.dart';
 import '../models/ticket.dart';
 import '../models/worktree.dart';
 import '../state/selection_state.dart';
+import '../state/orchestrator_state.dart';
 import '../state/ticket_board_state.dart';
+import 'backend_service.dart';
+import 'chat_session_service.dart';
+import 'event_handler.dart';
+import 'internal_tools_service.dart';
 import 'project_restore_service.dart';
 import 'worktree_service.dart';
 
@@ -19,6 +24,10 @@ class TicketDispatchService {
   final SelectionState _selection;
   final WorktreeService _worktreeService;
   final ProjectRestoreService _restoreService;
+  final BackendService? _backend;
+  final EventHandler? _eventHandler;
+  final InternalToolsService? _internalToolsService;
+  final ChatSessionService? _chatSessionService;
 
   /// Creates a [TicketDispatchService] with required dependencies.
   TicketDispatchService({
@@ -27,11 +36,19 @@ class TicketDispatchService {
     required SelectionState selection,
     required WorktreeService worktreeService,
     ProjectRestoreService? restoreService,
+    BackendService? backend,
+    EventHandler? eventHandler,
+    InternalToolsService? internalToolsService,
+    ChatSessionService? chatSessionService,
   }) : _ticketBoard = ticketBoard,
        _project = project,
        _selection = selection,
        _worktreeService = worktreeService,
-       _restoreService = restoreService ?? ProjectRestoreService();
+       _restoreService = restoreService ?? ProjectRestoreService(),
+       _backend = backend,
+       _eventHandler = eventHandler,
+       _internalToolsService = internalToolsService,
+       _chatSessionService = chatSessionService;
 
   /// Derives a git-safe branch name from a ticket.
   ///
@@ -274,5 +291,56 @@ class TicketDispatchService {
     chatState.viewState.draftText = prompt;
 
     return chatState;
+  }
+
+  /// Creates and launches an orchestrator chat in the given worktree.
+  Future<Chat> createOrchestratorChat({
+    required WorktreeState worktreeState,
+    required List<int> ticketIds,
+    required String initialInstructions,
+  }) async {
+    final chat = Chat.create(
+      name: 'Orchestrator',
+      worktreeRoot: worktreeState.data.worktreeRoot,
+    );
+    chat.settings.setIsOrchestratorChat(true);
+    chat.settings.setOrchestrationToolsEnabled(true);
+
+    final internalTools = _internalToolsService;
+    if (internalTools != null) {
+      final state = OrchestratorState(
+        ticketBoard: _ticketBoard,
+        ticketIds: ticketIds,
+        baseWorktreePath: worktreeState.data.worktreeRoot,
+      );
+      internalTools.attachOrchestratorState(chat, state);
+    }
+
+    await _restoreService.addChatToWorktree(
+      _project.data.repoRoot,
+      worktreeState.data.worktreeRoot,
+      chat,
+    );
+    worktreeState.addChat(chat, select: true);
+    _selection.selectWorktree(worktreeState);
+    _selection.selectChat(chat);
+
+    if (_chatSessionService != null) {
+      await _chatSessionService!.startSession(
+        chat,
+        prompt: initialInstructions,
+      );
+    } else if (_backend != null && _eventHandler != null) {
+      await chat.session.start(
+        backend: _backend!,
+        eventHandler: _eventHandler!,
+        prompt: initialInstructions,
+        internalToolsService: _internalToolsService,
+      );
+    } else {
+      chat.viewState.draftText = initialInstructions;
+    }
+
+    return chat;
   }
 }

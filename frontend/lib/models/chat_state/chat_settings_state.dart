@@ -14,6 +14,9 @@ class ChatSettingsState extends ChangeNotifier {
       _chat.acpAvailableCommands;
   String? get acpCurrentModeId => _chat.acpCurrentModeId;
   List<Map<String, dynamic>>? get acpAvailableModes => _chat.acpAvailableModes;
+  bool get orchestrationToolsEnabled => _chat.orchestrationToolsEnabled;
+  bool get isOrchestratorChat => _chat.isOrchestratorChat;
+  Map<String, dynamic>? get orchestrationData => _chat.orchestrationData;
 
   void setModel(ChatModel model) => _chat.setModel(model);
 
@@ -67,6 +70,18 @@ class ChatSettingsState extends ChangeNotifier {
   void clearAcpMetadata() {
     _chat._clearAcpSessionMetadata();
     notifyListeners();
+  }
+
+  void setOrchestrationToolsEnabled(bool enabled) {
+    _chat.setOrchestrationToolsEnabled(enabled);
+  }
+
+  void setIsOrchestratorChat(bool enabled) {
+    _chat.setIsOrchestratorChat(enabled);
+  }
+
+  void setOrchestrationData(Map<String, dynamic>? data) {
+    _chat.setOrchestrationData(data);
   }
 
   void syncPermissionModeFromResponse(

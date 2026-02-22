@@ -459,6 +459,15 @@ class _ChatCore extends ChangeNotifier {
   /// was found nor a matching agent by name+driver exists.
   String? _missingAgentMessage;
 
+  /// Whether orchestration tools are enabled on this chat.
+  bool _orchestrationToolsEnabled = false;
+
+  /// Whether this chat is an orchestrator chat.
+  bool _isOrchestratorChat = false;
+
+  /// Persisted orchestration runtime metadata.
+  Map<String, dynamic>? _orchestrationData;
+
   /// The persistence service instance.
   ///
   /// Can be overridden for testing.
@@ -604,6 +613,15 @@ class _ChatCore extends ChangeNotifier {
   /// Null when the agent is present or was actively removed (uses the
   /// generic agent-removed message instead).
   String? get missingAgentMessage => _missingAgentMessage;
+
+  /// Whether orchestration tools are enabled for this chat.
+  bool get orchestrationToolsEnabled => _orchestrationToolsEnabled;
+
+  /// Whether this chat is marked as an orchestrator chat.
+  bool get isOrchestratorChat => _isOrchestratorChat;
+
+  /// Persisted orchestration runtime metadata.
+  Map<String, dynamic>? get orchestrationData => _orchestrationData;
 
   /// Marks this chat as having a missing agent.
   ///
@@ -962,6 +980,27 @@ class _ChatCore extends ChangeNotifier {
     _acpAvailableCommands = null;
     _acpCurrentModeId = null;
     _acpAvailableModes = null;
+  }
+
+  void setOrchestrationToolsEnabled(bool enabled) {
+    if (_orchestrationToolsEnabled == enabled) return;
+    _orchestrationToolsEnabled = enabled;
+    _scheduleMetaSave();
+    settings.notifyListeners();
+  }
+
+  void setIsOrchestratorChat(bool enabled) {
+    if (_isOrchestratorChat == enabled) return;
+    _isOrchestratorChat = enabled;
+    _scheduleMetaSave();
+    settings.notifyListeners();
+  }
+
+  void setOrchestrationData(Map<String, dynamic>? data) {
+    if (mapEquals(_orchestrationData, data)) return;
+    _orchestrationData = data;
+    _scheduleMetaSave();
+    settings.notifyListeners();
   }
 
   /// Disposes per-session EventHandler routing state for this chat.
@@ -1385,7 +1424,7 @@ class _ChatCore extends ChangeNotifier {
         systemPrompt: sdk.PresetSystemPrompt(
           append: _mergeAppend(
             systemPromptAppend,
-            internalToolsService?.systemPromptAppend,
+            internalToolsService?.systemPromptAppendForChat(_facade),
           ),
         ),
         // Stream partial messages if the setting is enabled
@@ -1393,13 +1432,14 @@ class _ChatCore extends ChangeNotifier {
       );
 
       _t('Chat', 'Using agent-keyed transport for agent $_agentId');
+      final toolRegistry = internalToolsService?.registryForChat(_facade);
       _transport = await backend.createTransportForAgent(
         agentId: _agentId ?? RuntimeConfig.instance.defaultAgentId,
         prompt: prompt,
         cwd: worktreeRoot,
         options: sessionOptions,
         content: content,
-        registry: internalToolsService?.registry,
+        registry: toolRegistry,
       );
 
       _t(
@@ -1482,7 +1522,9 @@ class _ChatCore extends ChangeNotifier {
         // Auto-approve internal CCI MCP tools (git tools, create_ticket, etc.)
         // These are our own tools registered via InternalToolRegistry and don't
         // need user permission.
-        if (req.toolName.startsWith('mcp__${sdk.InternalToolRegistry.serverName}__')) {
+        if (req.toolName.startsWith(
+          'mcp__${sdk.InternalToolRegistry.serverName}__',
+        )) {
           _t('Chat', 'Auto-approving internal tool: ${req.toolName}');
           req.allow();
           return;

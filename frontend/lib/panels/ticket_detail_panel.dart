@@ -5,9 +5,8 @@ import '../config/fonts.dart';
 import '../models/project.dart';
 import '../models/ticket.dart';
 import '../models/worktree.dart';
-import '../services/git_service.dart';
+import '../services/ticket_dispatch_factory.dart';
 import '../services/ticket_dispatch_service.dart';
-import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
 import '../state/ticket_board_state.dart';
 import '../state/ticket_view_state.dart';
@@ -25,8 +24,12 @@ class TicketDetailPanelKeys {
   static const Key blocksSection = Key('ticket-detail-blocks');
   static const Key actionsSection = Key('ticket-detail-actions');
   static const Key costSection = Key('ticket-detail-cost');
-  static const Key beginNewWorktreeButton = Key('ticket-detail-begin-new-worktree');
-  static const Key beginInWorktreeButton = Key('ticket-detail-begin-in-worktree');
+  static const Key beginNewWorktreeButton = Key(
+    'ticket-detail-begin-new-worktree',
+  );
+  static const Key beginInWorktreeButton = Key(
+    'ticket-detail-begin-in-worktree',
+  );
   static const Key openLinkedChatButton = Key('ticket-detail-open-linked-chat');
   static const Key markCompleteButton = Key('ticket-detail-mark-complete');
   static const Key cancelButton = Key('ticket-detail-cancel');
@@ -65,9 +68,7 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Text(
         'Select a ticket to view details',
-        style: TextStyle(
-          color: colorScheme.onSurfaceVariant,
-        ),
+        style: TextStyle(color: colorScheme.onSurfaceVariant),
       ),
     );
   }
@@ -89,38 +90,38 @@ class _TicketDetailContent extends StatelessWidget {
         padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _HeaderSection(ticket: ticket),
-          const SizedBox(height: 16),
-          _MetadataPillsRow(ticket: ticket),
-          if (ticket.tags.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _TagsRow(tags: ticket.tags),
-          ],
-          const SizedBox(height: 24),
-          _SectionDivider(label: 'Description'),
-          const SizedBox(height: 8),
-          _DescriptionSection(ticket: ticket),
-          const SizedBox(height: 24),
-          _SectionDivider(label: 'Dependencies'),
-          const SizedBox(height: 8),
-          _DependenciesSection(ticket: ticket),
-          const SizedBox(height: 24),
-          _SectionDivider(label: 'Linked Work'),
-          const SizedBox(height: 8),
-          _LinkedWorkSection(ticket: ticket),
-          const SizedBox(height: 24),
-          _SectionDivider(label: 'Actions'),
-          const SizedBox(height: 8),
-          _ActionsSection(ticket: ticket),
-          if (ticket.costStats != null) ...[
+          children: [
+            _HeaderSection(ticket: ticket),
+            const SizedBox(height: 16),
+            _MetadataPillsRow(ticket: ticket),
+            if (ticket.tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _TagsRow(tags: ticket.tags),
+            ],
             const SizedBox(height: 24),
-            _SectionDivider(label: 'Cost & Time'),
+            _SectionDivider(label: 'Description'),
             const SizedBox(height: 8),
-            _CostSection(costStats: ticket.costStats!),
+            _DescriptionSection(ticket: ticket),
+            const SizedBox(height: 24),
+            _SectionDivider(label: 'Dependencies'),
+            const SizedBox(height: 8),
+            _DependenciesSection(ticket: ticket),
+            const SizedBox(height: 24),
+            _SectionDivider(label: 'Linked Work'),
+            const SizedBox(height: 8),
+            _LinkedWorkSection(ticket: ticket),
+            const SizedBox(height: 24),
+            _SectionDivider(label: 'Actions'),
+            const SizedBox(height: 8),
+            _ActionsSection(ticket: ticket),
+            if (ticket.costStats != null) ...[
+              const SizedBox(height: 24),
+              _SectionDivider(label: 'Cost & Time'),
+              const SizedBox(height: 8),
+              _CostSection(costStats: ticket.costStats!),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -154,10 +155,7 @@ class _HeaderSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                ticket.title,
-                style: textTheme.headlineSmall,
-              ),
+              Text(ticket.title, style: textTheme.headlineSmall),
             ],
           ),
         ),
@@ -166,7 +164,9 @@ class _HeaderSection extends StatelessWidget {
           key: TicketDetailPanelKeys.editButton,
           icon: const Icon(Icons.edit),
           onPressed: () {
-            context.read<TicketViewState>().setDetailMode(TicketDetailMode.edit);
+            context.read<TicketViewState>().setDetailMode(
+              TicketDetailMode.edit,
+            );
           },
           tooltip: 'Edit',
         ),
@@ -198,26 +198,35 @@ class _MetadataPillsRow extends StatelessWidget {
           key: TicketDetailPanelKeys.statusPill,
           icon: TicketStatusVisuals.icon(ticket.status),
           label: ticket.status.label.toLowerCase(),
-          backgroundColor: TicketStatusVisuals.color(ticket.status, colorScheme)
-              .withOpacity(0.15),
-          foregroundColor:
-              TicketStatusVisuals.color(ticket.status, colorScheme),
+          backgroundColor: TicketStatusVisuals.color(
+            ticket.status,
+            colorScheme,
+          ).withOpacity(0.15),
+          foregroundColor: TicketStatusVisuals.color(
+            ticket.status,
+            colorScheme,
+          ),
         ),
         MetadataPill(
           icon: TicketKindVisuals.icon(ticket.kind),
           label: ticket.kind.label.toLowerCase(),
-          backgroundColor: TicketKindVisuals.color(ticket.kind, colorScheme)
-              .withOpacity(0.15),
+          backgroundColor: TicketKindVisuals.color(
+            ticket.kind,
+            colorScheme,
+          ).withOpacity(0.15),
           foregroundColor: TicketKindVisuals.color(ticket.kind, colorScheme),
         ),
         MetadataPill(
           icon: TicketPriorityVisuals.icon(ticket.priority),
           label: ticket.priority.label.toLowerCase(),
-          backgroundColor:
-              TicketPriorityVisuals.color(ticket.priority, colorScheme)
-                  .withOpacity(0.15),
-          foregroundColor:
-              TicketPriorityVisuals.color(ticket.priority, colorScheme),
+          backgroundColor: TicketPriorityVisuals.color(
+            ticket.priority,
+            colorScheme,
+          ).withOpacity(0.15),
+          foregroundColor: TicketPriorityVisuals.color(
+            ticket.priority,
+            colorScheme,
+          ),
         ),
         if (ticket.category != null)
           MetadataPill(
@@ -352,20 +361,18 @@ class _DependenciesSection extends StatelessWidget {
           color: Theme.of(context).colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
         child: Text(
           'No dependencies',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurfaceVariant
-                    .withOpacity(0.6),
-              ),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant.withOpacity(0.6),
+          ),
         ),
       );
     }
@@ -377,10 +384,9 @@ class _DependenciesSection extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Theme.of(context)
-              .colorScheme
-              .outlineVariant
-              .withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
@@ -532,8 +538,11 @@ class _LinkedWorkSection extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
                       children: [
-                        Icon(Icons.account_tree,
-                            size: 14, color: colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.account_tree,
+                          size: 14,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           wt.branch ?? wt.worktreeRoot,
@@ -550,8 +559,11 @@ class _LinkedWorkSection extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
                       children: [
-                        Icon(Icons.chat_bubble_outline,
-                            size: 14, color: colorScheme.onSurfaceVariant),
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 14,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           chat.chatName,
@@ -568,8 +580,8 @@ class _LinkedWorkSection extends StatelessWidget {
           : Text(
               'No linked work',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.6),
-                  ),
+                color: colorScheme.onSurfaceVariant.withOpacity(0.6),
+              ),
             ),
     );
   }
@@ -601,14 +613,7 @@ class _ActionsSectionState extends State<_ActionsSection> {
 
   /// Creates a [TicketDispatchService] from available providers.
   TicketDispatchService _createDispatchService() {
-    return TicketDispatchService(
-      ticketBoard: context.read<TicketRepository>(),
-      project: context.read<ProjectState>(),
-      selection: context.read<SelectionState>(),
-      worktreeService: WorktreeService(
-        gitService: context.read<GitService>(),
-      ),
-    );
+    return createTicketDispatchService(context);
   }
 
   Future<void> _handleBeginNewWorktree() async {
@@ -744,8 +749,11 @@ class _ActionsSectionState extends State<_ActionsSection> {
           OutlinedButton.icon(
             key: TicketDetailPanelKeys.cancelButton,
             onPressed: () => ticketBoard.markCancelled(widget.ticket.id),
-            icon: Icon(Icons.cancel_outlined, size: 16,
-                color: const Color(0xFFEF5350)),
+            icon: Icon(
+              Icons.cancel_outlined,
+              size: 16,
+              color: const Color(0xFFEF5350),
+            ),
             label: Text(
               'Cancel',
               style: TextStyle(color: const Color(0xFFEF5350)),
@@ -796,10 +804,30 @@ class _CostSection extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _StatCell(label: 'Tokens', value: _formatTokens(costStats.totalTokens))),
-          Expanded(child: _StatCell(label: 'Cost', value: _formatCost(costStats.totalCost))),
-          Expanded(child: _StatCell(label: 'Agent Time', value: _formatDuration(costStats.agentTimeMs))),
-          Expanded(child: _StatCell(label: 'Waiting', value: _formatDuration(costStats.waitingTimeMs))),
+          Expanded(
+            child: _StatCell(
+              label: 'Tokens',
+              value: _formatTokens(costStats.totalTokens),
+            ),
+          ),
+          Expanded(
+            child: _StatCell(
+              label: 'Cost',
+              value: _formatCost(costStats.totalCost),
+            ),
+          ),
+          Expanded(
+            child: _StatCell(
+              label: 'Agent Time',
+              value: _formatDuration(costStats.agentTimeMs),
+            ),
+          ),
+          Expanded(
+            child: _StatCell(
+              label: 'Waiting',
+              value: _formatDuration(costStats.waitingTimeMs),
+            ),
+          ),
         ],
       ),
     );
@@ -851,9 +879,7 @@ class _StatCell extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: textTheme.titleMedium?.copyWith(
-            color: colorScheme.onSurface,
-          ),
+          style: textTheme.titleMedium?.copyWith(color: colorScheme.onSurface),
         ),
       ],
     );
@@ -1009,14 +1035,15 @@ class _TicketSplitDialogState extends State<_TicketSplitDialog> {
                             items: TicketKind.values
                                 .where((k) => k != TicketKind.split)
                                 .map((kind) {
-                              return DropdownMenuItem(
-                                value: kind,
-                                child: Text(
-                                  kind.label,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              );
-                            }).toList(),
+                                  return DropdownMenuItem(
+                                    value: kind,
+                                    child: Text(
+                                      kind.label,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  );
+                                })
+                                .toList(),
                             onChanged: (value) {
                               if (value != null) {
                                 setState(() => _kinds[index] = value);
