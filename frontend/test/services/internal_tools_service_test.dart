@@ -1,15 +1,26 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cc_insights_v2/models/chat.dart';
+import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
+import 'package:cc_insights_v2/models/worktree.dart';
+import 'package:cc_insights_v2/models/worktree_tag.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
+import 'package:cc_insights_v2/services/project_restore_service.dart';
+import 'package:cc_insights_v2/services/settings_service.dart';
+import 'package:cc_insights_v2/services/worktree_service.dart';
 import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
+import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:claude_sdk/claude_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../fakes/fake_git_service.dart';
+import '../fakes/fake_persistence_service.dart';
 import '../test_helpers.dart';
 
 void main() {
@@ -1047,6 +1058,264 @@ void main() {
 
         expect(result.isError, isFalse);
       });
+    });
+  });
+
+  group('InternalToolsService - set_tags handler', () {
+    late InternalToolsService service;
+    late WorktreeState worktree;
+
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worktree',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      final repo = resources.track(TicketRepository('test-project'));
+      final fakeGit = FakeGitService();
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+    });
+
+    InternalToolDefinition getSetTagsTool() {
+      final chat = Chat.create(name: 'Orchestrator', worktreeRoot: '/test/worktree');
+      chat.settings.setOrchestrationToolsEnabled(true);
+      final registry = service.registryForChat(chat);
+      return registry['set_tags']!;
+    }
+
+    test('returns error for missing worktree', () async {
+      final tool = getSetTagsTool();
+      final result = await tool.handler({'tags': ['ready']});
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing required "worktree"'));
+    });
+
+    test('returns error for empty worktree', () async {
+      final tool = getSetTagsTool();
+      final result = await tool.handler({'worktree': '', 'tags': ['ready']});
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing required "worktree"'));
+    });
+
+    test('returns error for missing tags', () async {
+      final tool = getSetTagsTool();
+      final result = await tool.handler({'worktree': '/test/worktree'});
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing or invalid "tags"'));
+    });
+
+    test('returns error for non-array tags', () async {
+      final tool = getSetTagsTool();
+      final result = await tool.handler({
+        'worktree': '/test/worktree',
+        'tags': 'not-an-array',
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('Missing or invalid "tags"'));
+    });
+
+    test('returns error for unknown worktree path', () async {
+      final tool = getSetTagsTool();
+      final result = await tool.handler({
+        'worktree': '/unknown/path',
+        'tags': ['ready'],
+      });
+
+      expect(result.isError, isTrue);
+      expect(result.content, contains('worktree_not_found'));
+    });
+
+    test('sets tags on worktree successfully', () async {
+      final tool = getSetTagsTool();
+      final result = await tool.handler({
+        'worktree': '/test/worktree',
+        'tags': ['ready', 'testing'],
+      });
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      expect(json['success'], isTrue);
+      expect(json['worktree'], '/test/worktree');
+      expect(json['tags'], ['ready', 'testing']);
+
+      // Verify worktree state was updated
+      expect(worktree.tags, ['ready', 'testing']);
+    });
+
+    test('replaces existing tags', () async {
+      worktree.setTags(['old-tag']);
+      expect(worktree.tags, ['old-tag']);
+
+      final tool = getSetTagsTool();
+      final result = await tool.handler({
+        'worktree': '/test/worktree',
+        'tags': ['new-tag'],
+      });
+
+      expect(result.isError, isFalse);
+      expect(worktree.tags, ['new-tag']);
+    });
+
+    test('sets empty tags list', () async {
+      worktree.setTags(['ready', 'testing']);
+
+      final tool = getSetTagsTool();
+      final result = await tool.handler({
+        'worktree': '/test/worktree',
+        'tags': [],
+      });
+
+      expect(result.isError, isFalse);
+      expect(worktree.tags, isEmpty);
+    });
+  });
+
+  group('InternalToolsService - list_tags handler', () {
+    late InternalToolsService service;
+
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worktree',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      final repo = resources.track(TicketRepository('test-project'));
+      final fakeGit = FakeGitService();
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+    });
+
+    InternalToolDefinition getListTagsTool() {
+      final chat = Chat.create(name: 'Orchestrator', worktreeRoot: '/test/worktree');
+      chat.settings.setOrchestrationToolsEnabled(true);
+      final registry = service.registryForChat(chat);
+      return registry['list_tags']!;
+    }
+
+    test('returns default tags when no custom tags configured', () async {
+      final tool = getListTagsTool();
+      final result = await tool.handler({});
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      final tags = json['tags'] as List;
+
+      // Should return default tags
+      expect(tags.length, WorktreeTag.defaults.length);
+      expect(
+        tags.map((t) => (t as Map<String, dynamic>)['name']),
+        containsAll(['ready', 'testing', 'mergable', 'in-review']),
+      );
+    });
+
+    test('returns tag names and colors', () async {
+      final tool = getListTagsTool();
+      final result = await tool.handler({});
+
+      expect(result.isError, isFalse);
+      final json = jsonDecode(result.content) as Map<String, dynamic>;
+      final tags = json['tags'] as List;
+
+      // Verify structure of each tag
+      for (final tag in tags) {
+        final tagMap = tag as Map<String, dynamic>;
+        expect(tagMap.containsKey('name'), isTrue);
+        expect(tagMap.containsKey('color'), isTrue);
+        expect(tagMap['name'], isA<String>());
+        expect(tagMap['color'], isA<int>());
+      }
+    });
+
+    test('tool is registered in orchestrator tools', () async {
+      final chat = Chat.create(name: 'Orchestrator', worktreeRoot: '/test/worktree');
+      chat.settings.setOrchestrationToolsEnabled(true);
+      final registry = service.registryForChat(chat);
+
+      expect(registry['set_tags'], isNotNull);
+      expect(registry['list_tags'], isNotNull);
+    });
+
+    test('tools are not available for non-orchestrator chats', () async {
+      final chat = Chat.create(name: 'Regular Chat', worktreeRoot: '/test/worktree');
+      final registry = service.registryForChat(chat);
+
+      expect(registry['set_tags'], isNull);
+      expect(registry['list_tags'], isNull);
     });
   });
 }

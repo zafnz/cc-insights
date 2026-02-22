@@ -1336,6 +1336,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
                 final tools = context.read<InternalToolsService>();
                 final restoreService = context.read<ProjectRestoreService>();
                 final gitService = context.read<GitService>();
+                final settingsService = context.read<SettingsService>();
+                final persistenceService = context.read<PersistenceService>();
                 tools.bindOrchestrationContext(
                   backend: backend,
                   eventHandler: eventHandler,
@@ -1345,6 +1347,8 @@ class _CCInsightsAppState extends State<CCInsightsApp>
                   worktreeService: worktreeService,
                   restoreService: restoreService,
                   gitService: gitService,
+                  settingsService: settingsService,
+                  persistenceService: persistenceService,
                 );
                 return const Object();
               },

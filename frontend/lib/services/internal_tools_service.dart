@@ -12,6 +12,7 @@ import '../models/output_entry.dart';
 import '../models/project.dart';
 import '../models/ticket.dart';
 import '../models/worktree.dart';
+import '../models/worktree_tag.dart';
 import '../state/bulk_proposal_state.dart';
 import '../state/orchestrator_state.dart';
 import '../state/selection_state.dart';
@@ -20,7 +21,9 @@ import 'backend_service.dart';
 import 'event_handler.dart';
 import 'git_service.dart';
 import 'orchestration_prompts.dart';
+import 'persistence_service.dart';
 import 'project_restore_service.dart';
+import 'settings_service.dart';
 import 'worktree_service.dart';
 
 class _OrchestrationContext {
@@ -104,6 +107,9 @@ class InternalToolsService extends ChangeNotifier {
   ProjectRestoreService? get _restoreService =>
       _orchestrationContext?.restoreService;
 
+  SettingsService? _settingsService;
+  PersistenceService? _persistenceService;
+
   /// Binds orchestration dependencies from app providers.
   void bindOrchestrationContext({
     required BackendService backend,
@@ -114,6 +120,8 @@ class InternalToolsService extends ChangeNotifier {
     required WorktreeService worktreeService,
     required ProjectRestoreService restoreService,
     required GitService gitService,
+    required SettingsService settingsService,
+    required PersistenceService persistenceService,
   }) {
     _orchestrationContext = _OrchestrationContext(
       backend: backend,
@@ -125,6 +133,8 @@ class InternalToolsService extends ChangeNotifier {
       restoreService: restoreService,
     );
     _gitService ??= gitService;
+    _settingsService ??= settingsService;
+    _persistenceService ??= persistenceService;
   }
 
   bool shouldEnableOrchestrationTools(Chat chat) {
@@ -166,6 +176,8 @@ class InternalToolsService extends ChangeNotifier {
     'create_worktree',
     'rebase_and_merge',
     // 'delete_worktree', // Disabled: finished worktrees should be left as-is
+    'set_tags',
+    'list_tags',
   };
 
   /// Register the create_ticket tool with the given bulk proposal state.
@@ -377,6 +389,8 @@ class InternalToolsService extends ChangeNotifier {
       _createWorktreeTool(orchestratorChat),
       _rebaseAndMergeTool(orchestratorChat),
       // _deleteWorktreeTool(), // Disabled: finished worktrees should be left as-is
+      _setTagsTool(),
+      _listTagsTool(),
     ];
   }
 
@@ -1215,6 +1229,101 @@ class InternalToolsService extends ChangeNotifier {
     } catch (e) {
       return InternalToolResult.error('Failed to delete worktree: $e');
     }
+  }
+
+  InternalToolDefinition _setTagsTool() {
+    return InternalToolDefinition(
+      name: 'set_tags',
+      description: 'Sets the tags for a given worktree.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'worktree': {
+            'type': 'string',
+            'description': 'Absolute path to the worktree',
+          },
+          'tags': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description': 'List of tag names to assign to the worktree',
+          },
+        },
+        'required': ['worktree', 'tags'],
+      },
+      handler: _handleSetTags,
+    );
+  }
+
+  Future<InternalToolResult> _handleSetTags(
+    Map<String, dynamic> input,
+  ) async {
+    final worktreePath = input['worktree'] as String?;
+    if (worktreePath == null || worktreePath.isEmpty) {
+      return InternalToolResult.error('Missing required "worktree"');
+    }
+    final tagsInput = input['tags'];
+    if (tagsInput == null || tagsInput is! List) {
+      return InternalToolResult.error(
+        'Missing or invalid "tags" field. Expected an array of strings.',
+      );
+    }
+    final tags = tagsInput.map((e) => e.toString()).toList();
+
+    final worktree = _findWorktreeByPath(worktreePath);
+    if (worktree == null) {
+      return InternalToolResult.error('worktree_not_found: $worktreePath');
+    }
+
+    worktree.setTags(tags);
+
+    final project = _project;
+    final persistence = _persistenceService;
+    if (project != null && persistence != null) {
+      try {
+        await persistence.updateWorktreeTags(
+          projectRoot: project.data.repoRoot,
+          worktreePath: worktreePath,
+          tags: tags,
+        );
+      } catch (e) {
+        developer.log(
+          'set_tags: failed to persist tags: $e',
+          name: 'InternalToolsService',
+        );
+      }
+    }
+
+    return InternalToolResult.text(
+      jsonEncode({
+        'success': true,
+        'worktree': worktreePath,
+        'tags': tags,
+      }),
+    );
+  }
+
+  InternalToolDefinition _listTagsTool() {
+    return InternalToolDefinition(
+      name: 'list_tags',
+      description: 'Lists all available tags that can be applied to worktrees.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {},
+      },
+      handler: _handleListTags,
+    );
+  }
+
+  Future<InternalToolResult> _handleListTags(
+    Map<String, dynamic> input,
+  ) async {
+    final settings = _settingsService;
+    final tags = settings?.availableTags ?? WorktreeTag.defaults;
+    return InternalToolResult.text(
+      jsonEncode({
+        'tags': tags.map((t) => {'name': t.name, 'color': t.colorValue}).toList(),
+      }),
+    );
   }
 
   WorktreeState? _findWorktreeByPath(String path) {
