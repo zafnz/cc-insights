@@ -20,7 +20,6 @@ class TicketListPanelKeys {
   static const Key startNextButton = Key('ticket-list-start-next');
   static const Key filterButton = Key('ticket-list-filter');
   static const Key runButton = Key('ticket-list-run');
-  static const Key multiSelectButton = Key('ticket-list-multiselect');
   static const Key bulkChangeButton = Key('ticket-list-bulk-change');
   static const Key listViewToggle = Key('ticket-list-view-toggle');
   static const Key graphViewToggle = Key('ticket-graph-view-toggle');
@@ -175,32 +174,6 @@ class _Toolbar extends StatelessWidget {
               ),
               const Spacer(),
               if (showOrchestrationButtons) ...[
-                IconButton(
-                  key: TicketListPanelKeys.multiSelectButton,
-                  onPressed: () {
-                    viewState.setMultiSelectEnabled(
-                      !viewState.multiSelectEnabled,
-                    );
-                  },
-                  icon: Icon(
-                    viewState.multiSelectEnabled
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                    size: 16,
-                    color: viewState.multiSelectEnabled
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                  ),
-                  iconSize: 16,
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  padding: EdgeInsets.zero,
-                  tooltip: viewState.multiSelectEnabled
-                      ? 'Disable multi-select'
-                      : 'Enable multi-select',
-                ),
                 IconButton(
                   key: TicketListPanelKeys.runButton,
                   onPressed: canRun ? () => _openRunDialog(context) : null,
@@ -817,12 +790,9 @@ class _TicketList extends StatelessWidget {
         return _TicketListItem(
           ticket: ticket,
           isSelected: isSelected,
-          multiSelectEnabled: viewState.multiSelectEnabled,
           isChecked: isChecked,
           isOrchestrated: orchestrated,
-          onTap: () => viewState.multiSelectEnabled
-              ? viewState.toggleTicketSelected(ticket.id)
-              : viewState.selectTicket(ticket.id),
+          onTap: () => viewState.toggleTicketSelected(ticket.id),
         );
       },
     );
@@ -959,7 +929,6 @@ class _TicketListItem extends StatelessWidget {
   const _TicketListItem({
     required this.ticket,
     required this.isSelected,
-    required this.multiSelectEnabled,
     required this.isChecked,
     required this.isOrchestrated,
     required this.onTap,
@@ -967,7 +936,6 @@ class _TicketListItem extends StatelessWidget {
 
   final TicketData ticket;
   final bool isSelected;
-  final bool multiSelectEnabled;
   final bool isChecked;
   final bool isOrchestrated;
   final VoidCallback onTap;
@@ -994,14 +962,12 @@ class _TicketListItem extends StatelessWidget {
             ),
             child: Row(
               children: [
-                if (multiSelectEnabled) ...[
-                  Checkbox(
-                    value: isChecked,
-                    onChanged: (_) => onTap(),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const SizedBox(width: 4),
-                ],
+                Checkbox(
+                  value: isChecked,
+                  onChanged: (_) => onTap(),
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 4),
                 // Status icon
                 TicketStatusIcon(status: ticket.status, size: 14),
                 const SizedBox(width: 6),

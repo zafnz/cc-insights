@@ -190,9 +190,9 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Selecting a ticket calls selectTicket
+  // 5. Tapping a ticket toggles its multi-select checkbox
   // ---------------------------------------------------------------------------
-  testWidgets('tapping a ticket item selects it', (tester) async {
+  testWidgets('tapping a ticket item toggles its selection', (tester) async {
     repo.createTicket(
       title: 'Clickable ticket',
       kind: TicketKind.feature,
@@ -202,13 +202,12 @@ void main() {
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(viewState.selectedTicket, isNull);
+    expect(viewState.selectedTicketIds, isEmpty);
 
     await tester.tap(find.text('Clickable ticket'));
     await safePumpAndSettle(tester);
 
-    expect(viewState.selectedTicket, isNotNull);
-    expect(viewState.selectedTicket!.title, equals('Clickable ticket'));
+    expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
   });
 
   // ---------------------------------------------------------------------------
