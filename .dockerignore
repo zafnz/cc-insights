@@ -1,0 +1,25 @@
+# Build artifacts
+frontend/build/
+frontend/.dart_tool/
+**/.dart_tool/
+
+# Dev container archives
+*.tar.gz
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Git
+.git/
+
+# Logs
+.cc-insights-logs/
+
+# Test results
+frontend/test/
+frontend/integration_test/
+
+# Documentation (not needed in build)
+docs/

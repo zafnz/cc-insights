@@ -1,0 +1,30 @@
+services:
+  cc-linux:
+    platform: linux/arm64
+
+    image: ccinsights-linux:${CC_INSTANCE}
+    build:
+      context: ..
+      dockerfile: dev-linux/Dockerfile
+      args:
+        FLUTTER_VERSION: ${FLUTTER_VERSION}
+        FLUTTER_CHANNEL: ${FLUTTER_CHANNEL:-stable}
+
+    ports:
+      - target: 14500
+        published: 0
+        protocol: tcp
+        mode: host
+
+    environment:
+      - CC_INSTANCE=${CC_INSTANCE}
+
+    volumes:
+      - ${CC_PROJECT_PATH}:/workspace:rw
+      - devuser-home:/home/devuser
+
+    restart: unless-stopped
+
+volumes:
+  devuser-home:
+    name: ccinsights-devuser-home

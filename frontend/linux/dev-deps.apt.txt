@@ -1,0 +1,20 @@
+# Core build toolchain
+clang
+lld
+llvm
+cmake
+ninja-build
+pkg-config
+
+# Flutter Linux desktop
+libgtk-3-dev
+libstdc++-12-dev
+liblzma-dev
+libglu1-mesa
+
+# Notifications (local_notifier plugin)
+libnotify-dev
+
+# Audio / video plugins (audioplayers, etc.)
+libgstreamer1.0-dev
+libgstreamer-plugins-base1.0-dev

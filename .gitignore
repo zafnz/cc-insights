@@ -53,3 +53,4 @@ codex_dart_sdk/.dart_tool/
 codex_dart_sdk/build/
 acp_dart_sdk/.dart_tool/
 acp_dart_sdk/pubspec.lock
+.cc-insights-logs/
