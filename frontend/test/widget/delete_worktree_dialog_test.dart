@@ -547,15 +547,25 @@ void main() {
       );
     });
 
-    testWidgets('toggling checkbox changes subtitle text', (tester) async {
+    testWidgets('toggling checkbox changes subtitle text for merged branch',
+        (tester) async {
       gitService.statuses[testWorktreePath] = const GitStatus();
 
       await tester.pumpWidget(createTestWidget());
       await tester.tap(find.text('Open Dialog'));
       await tester.pump();
 
-      // Initially checked
-      expect(find.textContaining('Work not merged will be lost'), findsOneWidget);
+      // Wait for safety checks to complete
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      // Merged branch: checked shows safe-to-delete message
+      expect(
+        find.textContaining('Branch is fully merged'),
+        findsOneWidget,
+      );
 
       // Find and tap the checkbox
       final checkbox = find.descendant(
@@ -565,7 +575,47 @@ void main() {
       await tester.tap(checkbox);
       await tester.pump();
 
-      // Now unchecked
+      // Merged branch unchecked: still shows merged message
+      expect(
+        find.textContaining('Branch is fully merged'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('toggling checkbox changes subtitle text for unmerged branch',
+        (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      gitService
+          .branchMerged['$testWorktreePath:$testBranch:$testBase'] = false;
+      gitService.unmergedCommits['$testWorktreePath:$testBranch:$testBase'] = [
+        'Some commit',
+      ];
+      // No upstream -> force delete state
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for safety checks to complete
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+      );
+
+      // Unmerged branch: checked shows loss warning
+      expect(
+        find.textContaining('Work not merged will be lost'),
+        findsOneWidget,
+      );
+
+      // Find and tap the checkbox to uncheck
+      final checkbox = find.descendant(
+        of: find.byKey(DeleteWorktreeDialogKeys.deleteBranchCheckbox),
+        matching: find.byType(Checkbox),
+      );
+      await tester.tap(checkbox);
+      await tester.pump();
+
+      // Unmerged branch unchecked: shows recovery message
       expect(find.textContaining('Work can be recovered'), findsOneWidget);
     });
 
@@ -682,6 +732,59 @@ void main() {
 
       // Worktree was still removed
       expect(gitService.removeWorktreeCalls.length, 1);
+    });
+  });
+
+  group('Merged branch checkbox toggling', () {
+    testWidgets('toggling checkbox on merged branch stays in readyToDelete',
+        (tester) async {
+      gitService.statuses[testWorktreePath] = const GitStatus();
+      // Branch is fully merged (default in FakeGitService)
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.tap(find.text('Open Dialog'));
+      await tester.pump();
+
+      // Wait for readyToDelete state
+      await pumpUntilFound(
+        tester,
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+      );
+
+      // Uncheck "Delete branch too"
+      final checkbox = find.descendant(
+        of: find.byKey(DeleteWorktreeDialogKeys.deleteBranchCheckbox),
+        matching: find.byType(Checkbox),
+      );
+      await tester.tap(checkbox);
+      await tester.pump();
+
+      // Should still show regular delete button (not force, not warning)
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+        findsNothing,
+      );
+      // Should NOT show upstream warning
+      expect(find.textContaining('No upstream'), findsNothing);
+      expect(find.textContaining('lose work'), findsNothing);
+
+      // Re-check "Delete branch too"
+      await tester.tap(checkbox);
+      await tester.pump();
+
+      // Should still be in readyToDelete state
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.deleteButton),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(DeleteWorktreeDialogKeys.forceDeleteButton),
+        findsNothing,
+      );
     });
   });
 

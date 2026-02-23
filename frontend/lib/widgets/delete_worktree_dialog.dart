@@ -196,6 +196,11 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
   int _uncommittedCount = 0;
   late bool _deleteBranch;
 
+  /// Whether the branch was determined to be fully merged into base
+  /// (via merge-base ancestor check or squash merge check).
+  /// When true, toggling the delete-branch checkbox doesn't change risk level.
+  bool _isBranchMerged = false;
+
   @override
   void initState() {
     super.initState();
@@ -372,6 +377,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     final isMerged = await _checkBaseHasChanges();
     if (!mounted) return;
     if (isMerged) {
+      _isBranchMerged = true;
       _addLog('Ready to remove worktree', LogEntryStatus.success);
       setState(() {
         _actionState = _ActionState.readyToDelete;
@@ -383,6 +389,7 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     final isSquashMerged = await _checkSquashMerge();
     if (!mounted) return;
     if (isSquashMerged) {
+      _isBranchMerged = true;
       _addLog('Ready to remove worktree', LogEntryStatus.success);
       setState(() {
         _actionState = _ActionState.readyToDelete;
@@ -950,10 +957,14 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
                 ),
               ),
               Text(
-                _deleteBranch
-                    ? 'Work not merged will be lost'
-                    : 'Work can be recovered by creating a worktree '
-                        'with the same branch',
+                _isBranchMerged
+                    ? (_deleteBranch
+                        ? 'Branch is fully merged — safe to delete'
+                        : 'Branch is fully merged — keeping locally')
+                    : (_deleteBranch
+                        ? 'Work not merged will be lost'
+                        : 'Work can be recovered by creating a worktree '
+                            'with the same branch'),
                 style: TextStyle(
                   fontSize: 11,
                   color: colorScheme.onErrorContainer.withValues(alpha: 0.7),
@@ -976,7 +987,6 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
     if (upstreamIdx >= 0) {
       setState(() {
         _log.removeRange(upstreamIdx, _log.length);
-        // Also remove the "Ready to remove worktree" entry if present
       });
     }
 
@@ -985,6 +995,16 @@ class _DeleteWorktreeDialogState extends State<DeleteWorktreeDialog> {
       setState(() {
         _log.removeLast();
       });
+    }
+
+    // If the branch is fully merged, the upstream check is irrelevant —
+    // no work will be lost regardless of delete-branch setting.
+    if (_isBranchMerged) {
+      _addLog('Ready to remove worktree', LogEntryStatus.success);
+      setState(() {
+        _actionState = _ActionState.readyToDelete;
+      });
+      return;
     }
 
     setState(() {
