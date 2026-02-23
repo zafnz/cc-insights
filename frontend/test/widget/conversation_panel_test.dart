@@ -10,11 +10,16 @@ import 'package:cc_insights_v2/services/chat_session_service.dart';
 import 'package:cc_insights_v2/services/chat_title_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/event_handler.dart';
+import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
+import 'package:cc_insights_v2/services/menu_action_service.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
+import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 import 'package:cc_insights_v2/widgets/permission_dialog.dart';
+import 'package:cc_insights_v2/widgets/ticket_proposal_card.dart';
 import 'package:checks/checks.dart';
 import 'package:claude_sdk/claude_sdk.dart' as sdk;
 import 'package:codex_sdk/codex_sdk.dart'
@@ -420,11 +425,17 @@ void main() {
     late FakeCliAvailabilityService fakeCliAvailability;
     late EventHandler fakeEventHandler;
     late Chat testChat;
+    late TicketRepository ticketRepo;
+    late BulkProposalState bulkProposalState;
+    late MenuActionService menuActionService;
 
     setUp(() {
       fakeBackend = FakeBackendService();
       fakeCliAvailability = FakeCliAvailabilityService();
       fakeEventHandler = EventHandler();
+      ticketRepo = resources.track(TicketRepository('test-conv-panel'));
+      bulkProposalState = resources.track(BulkProposalState(ticketRepo));
+      menuActionService = resources.track(MenuActionService());
 
       // Create a chat for testing (NOT tracked separately - owned by worktree)
       testChat = Chat.create(name: 'Test Chat', worktreeRoot: '/test/path');
@@ -488,6 +499,15 @@ void main() {
               ),
             ),
             ChangeNotifierProvider(create: (_) => ThemeState()),
+            ChangeNotifierProvider<TicketRepository>.value(
+              value: ticketRepo,
+            ),
+            ChangeNotifierProvider<BulkProposalState>.value(
+              value: bulkProposalState,
+            ),
+            ChangeNotifierProvider<MenuActionService>.value(
+              value: menuActionService,
+            ),
           ],
           child: const Scaffold(
             body: KeyboardFocusManager(
@@ -744,6 +764,194 @@ void main() {
 
         // Message input should be gone, replaced by banner
         expect(find.byType(TextField), findsNothing);
+      });
+    });
+
+    group('Ticket proposal card', () {
+      testWidgets('shows when proposeBulk called with matching chat ID', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Initially no proposal card
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card should be visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+        expect(
+          find.text('1 ticket proposed by "Test Chat"'),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('does not show for a different chat ID', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for a different chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Other Ticket',
+              kind: TicketKind.feature,
+              description: 'A ticket for another chat.',
+            ),
+          ],
+          sourceChatId: 'different-chat-id',
+          sourceChatName: 'Other Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card should NOT be visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+        // Message input should still be shown
+        expect(find.byType(TextField), findsOneWidget);
+      });
+
+      testWidgets('hidden when agent is removed', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card should be visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+
+        // Terminate the chat (agent removed has highest priority)
+        await testChat.agents.terminateForAgentRemoval();
+        await safePumpAndSettle(tester);
+
+        // Agent removed banner should be visible, proposal card hidden
+        expect(
+          find.text(
+            'Agent removed \u2014 this chat can no longer send messages',
+          ),
+          findsOneWidget,
+        );
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+      });
+
+      testWidgets('approve clears card and restores message input', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card visible, message input hidden
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+        expect(find.byType(TextField), findsNothing);
+
+        // Approve
+        await tester.tap(find.byKey(TicketProposalCardKeys.approveButton));
+        await safePumpAndSettle(tester);
+
+        // Card gone, message input restored
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+      });
+
+      testWidgets('reject clears card and restores message input', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+
+        // Reject
+        await tester.tap(find.byKey(TicketProposalCardKeys.rejectButton));
+        await safePumpAndSettle(tester);
+
+        // Card gone, message input restored
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+      });
+
+      testWidgets('hidden when permission dialog is showing', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card should be visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+
+        // Now set a pending permission (higher priority)
+        final permissionRequest = createFakePermissionRequest();
+        testChat.permissions.add(permissionRequest);
+        await safePumpAndSettle(tester);
+
+        // Permission dialog should be visible, proposal card hidden
+        expect(find.byKey(PermissionDialogKeys.dialog), findsOneWidget);
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
       });
     });
   });

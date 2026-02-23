@@ -8,6 +8,7 @@ enum MenuAction {
   showSettings,
   showLogs,
   showStats,
+  showTickets,
   showProjectSettings,
 
   // Worktree actions

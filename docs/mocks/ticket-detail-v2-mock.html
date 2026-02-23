@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Detail V2 Mock — GitHub-style Issue View</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary: #381e72;
+    --secondary-container: #4a4458;
+    --error: #f2b8b5;
+
+    --green: #4caf50;
+    --green-dim: rgba(76,175,80,0.15);
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    --timeline-color: rgba(73,69,79,0.4);
+    --comment-border: rgba(73,69,79,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  .detail-view {
+    width: 780px;
+    background: var(--surface);
+    border-radius: 4px;
+    border: 1px solid var(--outline-variant);
+    padding: 32px;
+  }
+
+  /* ── Title header ── */
+  .issue-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .status-badge.open {
+    background: var(--green-dim);
+    border: 1px solid rgba(76,175,80,0.4);
+    color: var(--green);
+  }
+  .status-badge.closed {
+    background: rgba(156,39,176,0.15);
+    border: 1px solid rgba(156,39,176,0.4);
+    color: var(--purple);
+  }
+  .status-badge .mi { font-size: 14px; }
+
+  .issue-title {
+    flex: 1;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--on-surface);
+    line-height: 1.3;
+  }
+
+  .issue-title .ticket-number {
+    color: var(--on-surface-variant);
+    font-weight: 400;
+  }
+
+  .issue-meta {
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--comment-border);
+  }
+  .issue-meta .author { color: var(--primary); font-weight: 500; }
+
+  /* ── Main content area with timeline ── */
+  .content-area {
+    display: flex;
+    gap: 24px;
+  }
+
+  /* ── Timeline column (left) ── */
+  .timeline {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── Comment block (body + comments) ── */
+  .comment-block {
+    position: relative;
+    margin-bottom: 0;
+  }
+
+  .comment-box {
+    border: 1px solid var(--comment-border);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+  }
+
+  .comment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-container-high);
+    border-bottom: 1px solid var(--comment-border);
+    font-size: 12px;
+    color: var(--on-surface-variant);
+  }
+
+  .comment-header .avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .avatar.user {
+    background: rgba(208,188,255,0.2);
+    color: var(--primary);
+  }
+  .avatar.agent {
+    background: rgba(66,165,245,0.2);
+    color: var(--blue);
+  }
+
+  .comment-header .author-name { font-weight: 500; color: var(--on-surface); }
+  .comment-header .badge-agent {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(66,165,245,0.15);
+    border: 0.5px solid rgba(66,165,245,0.4);
+    color: var(--blue);
+    font-weight: 500;
+  }
+  .comment-header .timestamp { margin-left: auto; }
+  .comment-header .label-owner {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    border: 1px solid var(--outline-variant);
+    color: var(--on-surface-variant);
+  }
+
+  .comment-body {
+    padding: 12px 16px;
+    background: var(--surface-container-low);
+    font-size: 13px;
+    color: var(--on-surface);
+    line-height: 1.6;
+  }
+  .comment-body p { margin-bottom: 8px; }
+  .comment-body p:last-child { margin-bottom: 0; }
+  .comment-body ul {
+    margin: 4px 0 8px 20px;
+    list-style: disc;
+  }
+  .comment-body li {
+    font-size: 13px;
+    color: var(--on-surface);
+    line-height: 1.5;
+    margin-bottom: 2px;
+  }
+  .comment-body code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: rgba(208,188,255,0.08);
+    padding: 1px 4px;
+    border-radius: 4px;
+    color: var(--primary);
+  }
+
+  /* Image placeholder in comment body */
+  .image-placeholder {
+    margin: 8px 0;
+    padding: 40px;
+    background: var(--surface-container-high);
+    border: 1px dashed var(--outline-variant);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+  }
+  .image-placeholder .mi { font-size: 20px; }
+
+  /* ── Timeline connector ── */
+  .timeline-connector {
+    position: relative;
+    padding: 0 0 0 28px;
+    margin: 0;
+  }
+
+  .timeline-connector::before {
+    content: '';
+    position: absolute;
+    left: 13px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--timeline-color);
+  }
+
+  /* ── Activity event on timeline ── */
+  .activity-event {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    font-size: 12px;
+    color: var(--on-surface-variant);
+  }
+
+  .activity-event .event-icon {
+    position: absolute;
+    left: -28px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border-radius: 50%;
+    border: 2px solid var(--timeline-color);
+    z-index: 1;
+  }
+  .activity-event .event-icon .mi { font-size: 12px; }
+
+  .activity-event .event-icon.tag { color: var(--primary); }
+  .activity-event .event-icon.link { color: var(--blue); }
+  .activity-event .event-icon.status { color: var(--green); }
+
+  .event-actor { font-weight: 500; color: var(--on-surface); }
+  .event-actor .badge-agent {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(66,165,245,0.15);
+    border: 0.5px solid rgba(66,165,245,0.4);
+    color: var(--blue);
+    font-weight: 500;
+    margin-left: 2px;
+  }
+  .event-text { color: var(--on-surface-variant); }
+  .event-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    background: rgba(208,188,255,0.10);
+    border: 0.5px solid rgba(208,188,255,0.3);
+    color: var(--primary);
+  }
+  .event-tag.todo { background: rgba(255,167,38,0.10); border-color: rgba(255,167,38,0.3); color: var(--orange); }
+  .event-tag.inprogress { background: rgba(66,165,245,0.10); border-color: rgba(66,165,245,0.3); color: var(--blue); }
+  .event-tag.done { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.3); color: var(--green); }
+  .event-tag.bug { background: rgba(239,83,80,0.10); border-color: rgba(239,83,80,0.3); color: var(--red); }
+  .event-tag.feature { background: rgba(186,104,200,0.10); border-color: rgba(186,104,200,0.3); color: #ba68c8; }
+
+  .event-timestamp { margin-left: auto; white-space: nowrap; }
+
+  .event-link {
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  /* ── Sidebar (right column) ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-section {
+    margin-bottom: 20px;
+  }
+
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--comment-border);
+  }
+
+  .sidebar-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .sidebar-tag {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .sidebar-tag.feature { background: rgba(186,104,200,0.12); border: 0.5px solid rgba(186,104,200,0.35); color: #ba68c8; }
+  .sidebar-tag.auth { background: rgba(77,182,172,0.12); border: 0.5px solid rgba(77,182,172,0.35); color: var(--teal); }
+  .sidebar-tag.done { background: rgba(76,175,80,0.12); border: 0.5px solid rgba(76,175,80,0.35); color: var(--green); }
+  .sidebar-tag.high { background: rgba(239,83,80,0.12); border: 0.5px solid rgba(239,83,80,0.35); color: var(--red); }
+
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 4px;
+    transition: background 0.1s;
+  }
+  .sidebar-link:hover { background: rgba(208,188,255,0.06); }
+  .sidebar-link .mi { font-size: 14px; color: var(--on-surface-variant); }
+  .sidebar-link .link-name {
+    font-size: 12px;
+    color: var(--primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar-link .link-meta {
+    font-size: 10px;
+    color: var(--on-surface-variant);
+  }
+
+  .spinner-sm {
+    width: 8px; height: 8px;
+    border: 1.5px solid transparent;
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .dep-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 4px;
+  }
+  .dep-item:hover { background: rgba(208,188,255,0.06); }
+  .dep-item .mi { font-size: 13px; }
+  .dep-item .mi.done { color: var(--green); }
+  .dep-item .mi.open { color: var(--on-surface-variant); }
+  .dep-item .dep-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--primary);
+  }
+  .dep-item .dep-title {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── New comment box at bottom ── */
+  .new-comment {
+    margin-top: 16px;
+  }
+
+  .new-comment-box {
+    border: 1px solid var(--comment-border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .new-comment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-container-high);
+    border-bottom: 1px solid var(--comment-border);
+  }
+
+  .new-comment-input {
+    padding: 12px 16px;
+    background: var(--surface-container-low);
+    min-height: 60px;
+    font-size: 12px;
+    color: var(--on-surface-variant);
+    font-style: italic;
+  }
+
+  .new-comment-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-container-low);
+    border-top: 1px solid var(--comment-border);
+    justify-content: flex-end;
+  }
+
+  .btn-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-system);
+    cursor: pointer;
+    border: none;
+  }
+  .btn-sm.secondary {
+    background: transparent;
+    border: 1px solid rgba(73,69,79,0.5);
+    color: var(--on-surface-variant);
+  }
+  .btn-sm.primary {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  .btn-sm .mi { font-size: 14px; }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    margin-bottom: 16px;
+    max-width: 780px;
+  }
+</style>
+</head>
+<body>
+
+<div style="display:flex;flex-direction:column;align-items:center;">
+
+<div class="variant-label">Ticket Detail V2 — GitHub-style Issue View with Timeline</div>
+
+<div class="detail-view">
+
+  <!-- ── Title ── -->
+  <div class="issue-header">
+    <span class="status-badge open">
+      <span class="mi material-icons">radio_button_checked</span>
+      Open
+    </span>
+    <div class="issue-title">
+      Implement token refresh <span class="ticket-number">#4</span>
+    </div>
+  </div>
+
+  <div class="issue-meta">
+    <span class="author">zaf</span> opened on 22 Jun
+  </div>
+
+  <!-- ── Content area: timeline + sidebar ── -->
+  <div class="content-area">
+
+    <!-- ── Timeline (left) ── -->
+    <div class="timeline">
+
+      <!-- Body (first comment-like block) -->
+      <div class="comment-block">
+        <div class="comment-box">
+          <div class="comment-header">
+            <div class="avatar user">Z</div>
+            <span class="author-name">zaf</span>
+            <span class="label-owner">Owner</span>
+            <span class="timestamp">22 Jun</span>
+          </div>
+          <div class="comment-body">
+            <p>Implement automatic token refresh using the refresh token stored in secure storage. Handle edge cases:</p>
+            <ul>
+              <li>Token expiry during active request</li>
+              <li>Refresh token rotation</li>
+              <li>Network failure during refresh</li>
+              <li>Concurrent refresh attempts (debounce)</li>
+            </ul>
+            <p>The refresh logic should be transparent to calling code &mdash; wrap the HTTP client so retries happen automatically on <code>401</code>.</p>
+            <div class="image-placeholder">
+              <span class="mi material-icons">image</span>
+              auth-flow-diagram.png
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline connector with activity events -->
+      <div class="timeline-connector">
+
+        <div class="activity-event">
+          <span class="event-icon tag"><span class="mi material-icons">sell</span></span>
+          <span class="event-actor">zaf</span>
+          <span class="event-text">added tag</span>
+          <span class="event-tag todo">todo</span>
+          <span class="event-timestamp">22 Jun</span>
+        </div>
+
+        <div class="activity-event">
+          <span class="event-icon tag"><span class="mi material-icons">sell</span></span>
+          <span class="event-actor">zaf</span>
+          <span class="event-text">added tag</span>
+          <span class="event-tag feature">feature</span>
+          <span class="event-timestamp">22 Jun</span>
+        </div>
+
+        <div class="activity-event">
+          <span class="event-icon tag"><span class="mi material-icons">sell</span></span>
+          <span class="event-actor">
+            agent &middot; auth-refactor
+            <span class="badge-agent">agent</span>
+          </span>
+          <span class="event-text">removed tag</span>
+          <span class="event-tag todo">todo</span>
+          <span class="event-text">and added</span>
+          <span class="event-tag inprogress">inprogress</span>
+          <span class="event-timestamp">22 Jun</span>
+        </div>
+
+        <div class="activity-event">
+          <span class="event-icon link"><span class="mi material-icons">account_tree</span></span>
+          <span class="event-actor">
+            agent &middot; auth-refactor
+            <span class="badge-agent">agent</span>
+          </span>
+          <span class="event-text">linked worktree</span>
+          <span class="event-link">feat/token-refresh</span>
+          <span class="event-timestamp">22 Jun</span>
+        </div>
+
+        <div class="activity-event">
+          <span class="event-icon tag"><span class="mi material-icons">sell</span></span>
+          <span class="event-actor">
+            agent &middot; auth-refactor
+            <span class="badge-agent">agent</span>
+          </span>
+          <span class="event-text">removed tag</span>
+          <span class="event-tag inprogress">inprogress</span>
+          <span class="event-timestamp">23 Jun</span>
+        </div>
+
+        <div class="activity-event">
+          <span class="event-icon tag"><span class="mi material-icons">sell</span></span>
+          <span class="event-actor">
+            agent &middot; auth-refactor
+            <span class="badge-agent">agent</span>
+          </span>
+          <span class="event-text">added tag</span>
+          <span class="event-tag done">done</span>
+          <span class="event-timestamp">23 Jun, 15:30</span>
+        </div>
+
+      </div>
+
+      <!-- Agent comment -->
+      <div class="comment-block" style="margin-top: 0;">
+        <div class="comment-box">
+          <div class="comment-header">
+            <div class="avatar agent">A</div>
+            <span class="author-name">agent &middot; auth-refactor</span>
+            <span class="badge-agent" style="font-size:9px">agent</span>
+            <span class="timestamp">23 Jun</span>
+          </div>
+          <div class="comment-body">
+            <p>Work is complete. Implemented the token refresh interceptor in <code>lib/services/auth_interceptor.dart</code>.</p>
+            <p>Changes include:</p>
+            <ul>
+              <li>Automatic retry on 401 responses with refreshed token</li>
+              <li>Mutex-based debouncing for concurrent refresh attempts</li>
+              <li>Graceful fallback to login screen on refresh failure</li>
+            </ul>
+            <p>All 12 auth integration tests pass.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- More timeline events after comment -->
+      <div class="timeline-connector">
+        <div class="activity-event">
+          <span class="event-icon status"><span class="mi material-icons">check_circle</span></span>
+          <span class="event-actor">zaf</span>
+          <span class="event-text">closed this</span>
+          <span class="event-timestamp">23 Jun, 16:00</span>
+        </div>
+      </div>
+
+      <!-- New comment input -->
+      <div class="new-comment">
+        <div class="new-comment-box">
+          <div class="new-comment-header">
+            <div class="avatar user">Z</div>
+            <span style="font-size:12px;color:var(--on-surface-variant)">Add a comment</span>
+          </div>
+          <div class="new-comment-input">
+            Write a comment...
+          </div>
+          <div class="new-comment-footer">
+            <button class="btn-sm secondary">
+              <span class="mi material-icons">image</span>
+              Attach
+            </button>
+            <button class="btn-sm secondary">
+              Close ticket
+            </button>
+            <button class="btn-sm primary">
+              Comment
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Sidebar (right) ── -->
+    <div class="sidebar">
+
+      <!-- Tags -->
+      <div class="sidebar-section">
+        <div class="sidebar-label">Tags</div>
+        <div class="sidebar-tags">
+          <span class="sidebar-tag feature">feature</span>
+          <span class="sidebar-tag auth">auth</span>
+          <span class="sidebar-tag done">done</span>
+          <span class="sidebar-tag high">high-priority</span>
+        </div>
+      </div>
+
+      <!-- Linked Chats -->
+      <div class="sidebar-section">
+        <div class="sidebar-label">Linked Chats</div>
+        <div class="sidebar-link">
+          <span class="mi material-icons">chat_bubble_outline</span>
+          <span class="link-name">auth-refactor</span>
+          <span class="link-meta">done</span>
+        </div>
+      </div>
+
+      <!-- Linked Worktrees -->
+      <div class="sidebar-section">
+        <div class="sidebar-label">Linked Worktrees</div>
+        <div class="sidebar-link">
+          <span class="mi material-icons">account_tree</span>
+          <span class="link-name">feat/token-refresh</span>
+          <div class="spinner-sm"></div>
+        </div>
+      </div>
+
+      <!-- Dependencies -->
+      <div class="sidebar-section">
+        <div class="sidebar-label">Depends On</div>
+        <div class="dep-item">
+          <span class="mi material-icons done">check_circle</span>
+          <span class="dep-id">#2</span>
+          <span class="dep-title">Design auth data model</span>
+        </div>
+        <div class="dep-item">
+          <span class="mi material-icons done">check_circle</span>
+          <span class="dep-id">#7</span>
+          <span class="dep-title">Decide: session vs JWT?</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Blocks</div>
+        <div class="dep-item">
+          <span class="mi material-icons open">radio_button_unchecked</span>
+          <span class="dep-id">#5</span>
+          <span class="dep-title">Add permission middleware</span>
+        </div>
+        <div class="dep-item">
+          <span class="mi material-icons open">radio_button_unchecked</span>
+          <span class="dep-id">#6</span>
+          <span class="dep-title">Write auth integration tests</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+</div>
+
+</body>
+</html>

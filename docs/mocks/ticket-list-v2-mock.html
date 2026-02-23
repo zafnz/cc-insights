@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket List V2 Mock — GitHub-style Issue List</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+  :root {
+    --surface: #141218;
+    --surface-dim: #0e0c11;
+    --surface-container-low: #1d1b20;
+    --surface-container-high: #2b2930;
+    --surface-container-highest: #36343b;
+    --on-surface: #e6e0e9;
+    --on-surface-variant: #cac4d0;
+    --outline: #948f99;
+    --outline-variant: #49454f;
+    --primary: #d0bcff;
+    --primary-container: #4f378b;
+    --on-primary: #381e72;
+    --secondary-container: #4a4458;
+
+    --green: #4caf50;
+    --green-dim: rgba(76,175,80,0.15);
+    --blue: #42a5f5;
+    --orange: #ffa726;
+    --amber: #ffca28;
+    --red: #ef5350;
+    --purple: #ce93d8;
+    --purple-dim: rgba(156,39,176,0.15);
+    --teal: #4db6ac;
+    --grey: #9e9e9e;
+    --grey-dark: #757575;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--surface-dim);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 32px;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: var(--font-system);
+  }
+
+  .variant-label {
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+  }
+
+  /* ── Panel shell ── */
+  .panel {
+    width: 360px;
+    background: var(--surface);
+    border-radius: 4px;
+    border: 1px solid var(--outline-variant);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 750px;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--surface-container-highest);
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .panel-header .mi { font-size: 14px; color: var(--on-surface-variant); }
+  .panel-header .title {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.7);
+  }
+
+  /* ── Search + filter bar ── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    gap: 6px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    flex-shrink: 0;
+  }
+
+  .search-box {
+    flex: 1;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    background: var(--surface-container-low);
+    border-radius: 6px;
+    border: 1px solid rgba(73,69,79,0.3);
+  }
+  .search-box .mi { font-size: 14px; color: var(--on-surface-variant); }
+  .search-box .placeholder {
+    font-size: 11px;
+    color: rgba(202,196,208,0.5);
+    font-family: var(--font-mono);
+  }
+
+  .icon-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; border-radius: 6px;
+    cursor: pointer; color: var(--primary);
+  }
+  .icon-btn:hover { background: rgba(208,188,255,0.08); }
+  .icon-btn .mi { font-size: 16px; }
+
+  /* ── Status filter tabs ── */
+  .status-tabs {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    flex-shrink: 0;
+    gap: 0;
+  }
+
+  .status-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--on-surface-variant);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.1s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: var(--font-system);
+  }
+  .status-tab:hover { color: var(--on-surface); }
+  .status-tab.active {
+    color: var(--on-surface);
+    border-bottom-color: var(--primary);
+  }
+  .status-tab .mi { font-size: 14px; }
+  .status-tab .count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: var(--surface-container-high);
+  }
+
+  .tab-spacer { flex: 1; }
+
+  .sort-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--on-surface-variant);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-system);
+  }
+  .sort-btn:hover { color: var(--on-surface); }
+  .sort-btn .mi { font-size: 14px; }
+
+  /* ── Active filter chips row ── */
+  .filter-chips {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    gap: 4px;
+    border-bottom: 1px solid rgba(73,69,79,0.3);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .filter-chip .mi { font-size: 11px; }
+  .filter-chip.tag-auth { background: rgba(77,182,172,0.12); border: 0.5px solid rgba(77,182,172,0.35); color: var(--teal); }
+  .filter-chip.clear {
+    background: none;
+    border: none;
+    color: var(--on-surface-variant);
+    font-weight: 400;
+    text-decoration: underline;
+    padding: 2px 4px;
+  }
+
+  /* ── Ticket list ── */
+  .ticket-list { flex: 1; overflow-y: auto; }
+
+  .ticket-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 12px;
+    gap: 10px;
+    border-bottom: 1px solid rgba(73,69,79,0.15);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .ticket-item:hover { background: rgba(208,188,255,0.04); }
+  .ticket-item.selected { background: rgba(79,55,139,0.3); }
+
+  .ticket-status-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .ticket-status-icon.open { color: var(--green); }
+  .ticket-status-icon.closed { color: var(--purple); }
+
+  .ticket-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ticket-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 3px;
+  }
+
+  .ticket-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--on-surface);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .ticket-item.closed-item .ticket-title {
+    color: var(--on-surface-variant);
+  }
+
+  .ticket-tags {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .ticket-tag {
+    padding: 0px 5px;
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 500;
+  }
+  .ticket-tag.feature { background: rgba(186,104,200,0.10); border: 0.5px solid rgba(186,104,200,0.3); color: #ba68c8; }
+  .ticket-tag.auth { background: rgba(77,182,172,0.10); border: 0.5px solid rgba(77,182,172,0.3); color: var(--teal); }
+  .ticket-tag.bug { background: rgba(239,83,80,0.10); border: 0.5px solid rgba(239,83,80,0.3); color: var(--red); }
+  .ticket-tag.todo { background: rgba(255,167,38,0.10); border: 0.5px solid rgba(255,167,38,0.3); color: var(--orange); }
+  .ticket-tag.inprogress { background: rgba(66,165,245,0.10); border: 0.5px solid rgba(66,165,245,0.3); color: var(--blue); }
+  .ticket-tag.done { background: rgba(76,175,80,0.10); border: 0.5px solid rgba(76,175,80,0.3); color: var(--green); }
+  .ticket-tag.docs { background: rgba(158,158,158,0.10); border: 0.5px solid rgba(158,158,158,0.3); color: var(--grey); }
+  .ticket-tag.high { background: rgba(239,83,80,0.10); border: 0.5px solid rgba(239,83,80,0.3); color: var(--red); }
+  .ticket-tag.test { background: rgba(77,182,172,0.10); border: 0.5px solid rgba(77,182,172,0.3); color: var(--teal); }
+
+  .ticket-subtitle {
+    font-size: 11px;
+    color: var(--on-surface-variant);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ticket-subtitle .ticket-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+
+  .ticket-subtitle .comment-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+  }
+  .ticket-subtitle .comment-count .mi { font-size: 12px; }
+
+  .ticket-subtitle .dep-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .ticket-subtitle .dep-indicator .mi { font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Ticket List V2 — Open/Closed with Tags and Search</div>
+
+<div class="panel">
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <span class="mi material-icons">task_alt</span>
+    <span class="title">Tickets</span>
+    <span class="mi material-icons" style="font-size:14px;color:rgba(202,196,208,0.5)">&#x2630;</span>
+  </div>
+
+  <!-- Search + New -->
+  <div class="toolbar">
+    <div class="search-box">
+      <span class="mi material-icons">search</span>
+      <span class="placeholder">Search tickets...</span>
+    </div>
+    <button class="icon-btn"><span class="mi material-icons">add</span></button>
+  </div>
+
+  <!-- Status filter tabs (like GitHub Open/Closed) -->
+  <div class="status-tabs">
+    <button class="status-tab active">
+      <span class="mi material-icons" style="color:var(--green)">radio_button_checked</span>
+      Open
+      <span class="count">8</span>
+    </button>
+    <button class="status-tab">
+      <span class="mi material-icons" style="color:var(--purple)">check_circle</span>
+      Closed
+      <span class="count">6</span>
+    </button>
+    <div class="tab-spacer"></div>
+    <button class="sort-btn">
+      <span class="mi material-icons">sort</span>
+      Newest
+    </button>
+  </div>
+
+  <!-- Active filter chips (shown when filters applied) -->
+  <div class="filter-chips">
+    <span class="filter-chip tag-auth">
+      auth
+      <span class="mi material-icons">close</span>
+    </span>
+    <span class="filter-chip clear">Clear all</span>
+  </div>
+
+  <!-- Ticket List -->
+  <div class="ticket-list">
+
+    <!-- Open tickets -->
+    <div class="ticket-item selected">
+      <span class="mi material-icons ticket-status-icon open">radio_button_checked</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Implement token refresh</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag feature">feature</span>
+            <span class="ticket-tag auth">auth</span>
+            <span class="ticket-tag inprogress">inprogress</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#4</span>
+          opened 22 Jun by zaf
+          <span class="dep-indicator" title="2 dependencies">
+            <span class="mi material-icons">link</span>
+            2
+          </span>
+          <span class="comment-count" title="1 comment">
+            <span class="mi material-icons">chat_bubble_outline</span>
+            1
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons ticket-status-icon open">radio_button_checked</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Add permission middleware</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag feature">feature</span>
+            <span class="ticket-tag auth">auth</span>
+            <span class="ticket-tag todo">todo</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#5</span>
+          opened 22 Jun by zaf
+          <span class="dep-indicator" title="Blocked by #4">
+            <span class="mi material-icons" style="color:var(--orange)">link</span>
+            1
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons ticket-status-icon open">radio_button_checked</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Write auth integration tests</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag test">test</span>
+            <span class="ticket-tag auth">auth</span>
+            <span class="ticket-tag todo">todo</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#6</span>
+          opened 22 Jun by zaf
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons ticket-status-icon open">radio_button_checked</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Design database schema</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag feature">feature</span>
+            <span class="ticket-tag high">high-priority</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#8</span>
+          opened 20 Jun by zaf
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons ticket-status-icon open">radio_button_checked</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Fix race condition in WebSocket handler</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag bug">bug</span>
+            <span class="ticket-tag inprogress">inprogress</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#12</span>
+          opened 23 Jun by agent &middot; debug-ws
+          <span class="comment-count">
+            <span class="mi material-icons">chat_bubble_outline</span>
+            3
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item">
+      <span class="mi material-icons ticket-status-icon open">radio_button_checked</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Update API documentation</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag docs">docs</span>
+            <span class="ticket-tag todo">todo</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#13</span>
+          opened 23 Jun by zaf
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Closed view variant ── -->
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="mi material-icons">task_alt</span>
+    <span class="title">Tickets</span>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <span class="mi material-icons">search</span>
+      <span class="placeholder">Search tickets...</span>
+    </div>
+    <button class="icon-btn"><span class="mi material-icons">add</span></button>
+  </div>
+
+  <div class="status-tabs">
+    <button class="status-tab">
+      <span class="mi material-icons" style="color:var(--green)">radio_button_checked</span>
+      Open
+      <span class="count">8</span>
+    </button>
+    <button class="status-tab active">
+      <span class="mi material-icons" style="color:var(--purple)">check_circle</span>
+      Closed
+      <span class="count">6</span>
+    </button>
+    <div class="tab-spacer"></div>
+    <button class="sort-btn">
+      <span class="mi material-icons">sort</span>
+      Newest
+    </button>
+  </div>
+
+  <div class="ticket-list">
+
+    <div class="ticket-item closed-item">
+      <span class="mi material-icons ticket-status-icon closed">check_circle</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Research OAuth providers</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag auth">auth</span>
+            <span class="ticket-tag done">done</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#1</span>
+          closed 20 Jun by agent &middot; research
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item closed-item">
+      <span class="mi material-icons ticket-status-icon closed">check_circle</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Design auth data model</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag feature">feature</span>
+            <span class="ticket-tag auth">auth</span>
+            <span class="ticket-tag done">done</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#2</span>
+          closed 21 Jun by zaf
+          <span class="comment-count">
+            <span class="mi material-icons">chat_bubble_outline</span>
+            2
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item closed-item">
+      <span class="mi material-icons ticket-status-icon closed">check_circle</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Implement login screen</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag feature">feature</span>
+            <span class="ticket-tag done">done</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#3</span>
+          closed 22 Jun by agent &middot; auth-impl
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket-item closed-item">
+      <span class="mi material-icons ticket-status-icon closed">check_circle</span>
+      <div class="ticket-content">
+        <div class="ticket-title-row">
+          <span class="ticket-title">Decide: session vs JWT?</span>
+          <div class="ticket-tags">
+            <span class="ticket-tag done">done</span>
+          </div>
+        </div>
+        <div class="ticket-subtitle">
+          <span class="ticket-id">#7</span>
+          closed 19 Jun by zaf
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

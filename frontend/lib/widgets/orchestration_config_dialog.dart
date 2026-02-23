@@ -9,6 +9,7 @@ import '../models/ticket.dart';
 import '../models/project.dart';
 import '../services/backend_service.dart';
 import '../services/ticket_dispatch_factory.dart';
+import '../services/worktree_name_generator.dart';
 import '../services/worktree_service.dart';
 import '../services/git_service.dart';
 import '../models/worktree.dart';
@@ -28,6 +29,8 @@ class OrchestrationConfigDialogKeys {
       Key('orchestration_config_model_permission');
   static const baseWorktreeDropdown =
       Key('orchestration_config_base_worktree');
+  static const regenerateNameButton =
+      Key('orchestration_config_regenerate_name');
 }
 
 class OrchestrationConfigDialog extends StatefulWidget {
@@ -52,15 +55,24 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
   @override
   void initState() {
     super.initState();
-    final slug = widget.ticketIds.isEmpty
-        ? 'orchestration'
-        : 'orchestrate-${widget.ticketIds.first}-${widget.ticketIds.last}';
-    _branchController = TextEditingController(text: slug);
+    final project = context.read<ProjectState>();
+    final existingBranches =
+        project.allWorktrees.map((wt) => wt.data.branch).toSet();
+    final slug = generateWorktreeName(existingBranches: existingBranches);
+    _branchController = TextEditingController(text: 'orchestrate-$slug');
     _instructionsController = TextEditingController(
       text:
           'Run tickets ${widget.ticketIds.join(', ')}. '
           '$defaultOrchestrationInstructions',
     );
+  }
+
+  void _regenerateName() {
+    final project = context.read<ProjectState>();
+    final existingBranches =
+        project.allWorktrees.map((wt) => wt.data.branch).toSet();
+    _branchController.text =
+        generateWorktreeName(existingBranches: existingBranches);
   }
 
   @override
@@ -152,9 +164,15 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
             TextField(
               key: OrchestrationConfigDialogKeys.branchField,
               controller: _branchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Feature branch name',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  key: OrchestrationConfigDialogKeys.regenerateNameButton,
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Generate new name',
+                  onPressed: _regenerateName,
+                ),
               ),
             ),
             const SizedBox(height: 12),

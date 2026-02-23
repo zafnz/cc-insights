@@ -41,6 +41,17 @@ need decisions, ask the user rather than guessing.
 
 ## Agent instructions
 
+When launching an agent to implement a ticket, tell the agent to propose
+a solution to the user and await the users approval before doing any work.
+
+### CRITICAL: Never auto-approve agent proposals
+
+When a worker agent proposes a solution (before implementing), you must NEVER
+approve it on the user's behalf. Always surface the proposal to the user and
+wait for their explicit approval before telling the agent to proceed with
+implementation. This applies even if the proposal looks correct to you — the
+user must review and approve every proposal themselves.
+
 When launching or messaging agents, be clear and specific in your instructions.
 If the user has provided specific requirements for how the work should be done,
 include those. Remind the agent that they can and should stop and ask the user 

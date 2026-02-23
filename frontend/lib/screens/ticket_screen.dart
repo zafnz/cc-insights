@@ -37,8 +37,6 @@ class _TicketScreenState extends State<TicketScreen> {
       children: [
         SplitNode.leaf(
           id: 'ticket_list',
-          size: 300,
-          minSize: 250,
           widgetBuilder: (context) => const TicketListPanel(),
         ),
         SplitNode.leaf(
