@@ -6,12 +6,18 @@ class ChatViewState extends ChangeNotifier {
   final _ChatCore _chat;
 
   String _draftText = '';
+  List<AttachedImage> _draftImages = [];
   int _unreadCount = 0;
   bool _isBeingViewed = false;
 
   String get draftText => _draftText;
   set draftText(String value) {
     _draftText = value;
+  }
+
+  List<AttachedImage> get draftImages => _draftImages;
+  set draftImages(List<AttachedImage> value) {
+    _draftImages = value;
   }
 
   int get unreadCount => _unreadCount;

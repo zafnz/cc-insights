@@ -31,7 +31,9 @@ class MessageInput extends StatefulWidget {
     required this.onSubmit,
     this.onInterrupt,
     this.onTextChanged,
+    this.onImagesChanged,
     this.initialText = '',
+    this.initialImages = const [],
     this.placeholder = 'Type a message...',
     this.enabled = true,
     this.autofocus = true,
@@ -53,8 +55,14 @@ class MessageInput extends StatefulWidget {
   /// Called when the text changes (for saving drafts).
   final ValueChanged<String>? onTextChanged;
 
+  /// Called when the attached images change (for saving drafts).
+  final ValueChanged<List<AttachedImage>>? onImagesChanged;
+
   /// Initial text to populate the input with.
   final String initialText;
+
+  /// Initial images to populate the input with (e.g., draft from previous session).
+  final List<AttachedImage> initialImages;
 
   /// Placeholder text shown when the input is empty.
   final String placeholder;
@@ -90,9 +98,10 @@ class _MessageInputState extends State<MessageInput>
     WidgetsBinding.instance.addObserver(this);
 
     _attachments = ImageAttachmentHelper(
-      onChanged: () => setState(() {}),
+      onChanged: _onImagesChanged,
       onError: _showError,
       isMounted: () => mounted,
+      initialImages: widget.initialImages,
     );
 
     // Restore initial text (e.g., draft from previous session)
@@ -119,6 +128,11 @@ class _MessageInputState extends State<MessageInput>
 
   void _onTextChanged() {
     widget.onTextChanged?.call(_controller.text);
+  }
+
+  void _onImagesChanged() {
+    setState(() {});
+    widget.onImagesChanged?.call(List.from(_attachments.images));
   }
 
   @override

@@ -605,15 +605,20 @@ class _ConversationPanelState extends State<ConversationPanel>
                   : MessageInput(
                       key: ValueKey('input-${chat.data.id}'),
                       initialText: chat.viewState.draftText,
+                      initialImages: chat.viewState.draftImages,
                       onTextChanged: (text) =>
                           chat.viewState.draftText = text,
-                      onSubmit: (text, images, displayFormat) =>
-                          context.read<ChatSessionService>().submitMessage(
-                            chat,
-                            text: text,
-                            images: images,
-                            displayFormat: displayFormat,
-                          ),
+                      onImagesChanged: (images) =>
+                          chat.viewState.draftImages = images,
+                      onSubmit: (text, images, displayFormat) {
+                        chat.viewState.draftImages = [];
+                        context.read<ChatSessionService>().submitMessage(
+                          chat,
+                          text: text,
+                          images: images,
+                          displayFormat: displayFormat,
+                        );
+                      },
                       isWorking: isWorking,
                       onInterrupt: isWorking
                           ? () => context
