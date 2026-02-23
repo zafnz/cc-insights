@@ -1,6 +1,8 @@
 import 'package:agent_sdk_core/agent_sdk_core.dart'
     show BackendCapabilities, BackendType, PermissionMode;
+import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
+import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
@@ -70,6 +72,25 @@ void main() {
     return (repo, ids);
   }
 
+  ProjectState createTestProject({
+    List<WorktreeState>? linkedWorktrees,
+  }) {
+    final primaryWorktree = WorktreeState(
+      const WorktreeData(
+        worktreeRoot: '/repo',
+        isPrimary: true,
+        branch: 'main',
+      ),
+    );
+    return resources.track(ProjectState(
+      const ProjectData(name: 'Test Project', repoRoot: '/repo'),
+      primaryWorktree,
+      linkedWorktrees: linkedWorktrees,
+      autoValidate: false,
+      watchFilesystem: false,
+    ));
+  }
+
   Widget createTestApp({
     int ticketCount = 2,
     BackendCapabilities capabilities = const BackendCapabilities(
@@ -80,6 +101,7 @@ void main() {
     BackendType? backendType = BackendType.directCli,
     TicketRepository? repoOverride,
     List<int>? ticketIdsOverride,
+    ProjectState? projectOverride,
   }) {
     final TicketRepository repo;
     final List<int> ticketIds;
@@ -98,12 +120,15 @@ void main() {
       backendType: backendType,
     ));
 
+    final project = projectOverride ?? createTestProject();
+
     return MaterialApp(
       home: Scaffold(
         body: MultiProvider(
           providers: [
             ChangeNotifierProvider<TicketRepository>.value(value: repo),
             ChangeNotifierProvider<BackendService>.value(value: backend),
+            ChangeNotifierProvider<ProjectState>.value(value: project),
           ],
           child: Builder(
             builder: (context) => OrchestrationConfigDialog(
@@ -347,12 +372,14 @@ void main() {
           ),
           backendType: BackendType.directCli,
         ));
+        final project = createTestProject();
 
         await tester.pumpWidget(MaterialApp(
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider<TicketRepository>.value(value: repo),
               ChangeNotifierProvider<BackendService>.value(value: backend),
+              ChangeNotifierProvider<ProjectState>.value(value: project),
             ],
             child: Builder(
               builder: (context) => Scaffold(
@@ -366,6 +393,9 @@ void main() {
                         ),
                         ChangeNotifierProvider<BackendService>.value(
                           value: backend,
+                        ),
+                        ChangeNotifierProvider<ProjectState>.value(
+                          value: project,
                         ),
                       ],
                       child: OrchestrationConfigDialog(ticketIds: ids),
@@ -393,6 +423,74 @@ void main() {
 
         // Dialog should be dismissed
         expect(find.text('Run orchestration'), findsNothing);
+      });
+    });
+    group('base worktree selector', () {
+      testWidgets('renders base worktree dropdown', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        expect(
+          find.byKey(OrchestrationConfigDialogKeys.baseWorktreeDropdown),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('defaults to primary worktree', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        expect(find.text('main (primary)'), findsOneWidget);
+      });
+
+      testWidgets('shows all worktrees in dropdown', (tester) async {
+        final linkedWt = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/repo-wt/feature',
+            isPrimary: false,
+            branch: 'feature-branch',
+          ),
+        );
+        final project = createTestProject(linkedWorktrees: [linkedWt]);
+
+        await tester.pumpWidget(createTestApp(projectOverride: project));
+        await safePumpAndSettle(tester);
+
+        // Open the dropdown
+        await tester.tap(
+          find.byKey(OrchestrationConfigDialogKeys.baseWorktreeDropdown),
+        );
+        await tester.pump();
+
+        expect(find.text('main (primary)'), findsWidgets);
+        expect(find.text('feature-branch'), findsWidgets);
+      });
+
+      testWidgets('allows selecting a different worktree', (tester) async {
+        final linkedWt = WorktreeState(
+          const WorktreeData(
+            worktreeRoot: '/repo-wt/develop',
+            isPrimary: false,
+            branch: 'develop',
+          ),
+        );
+        final project = createTestProject(linkedWorktrees: [linkedWt]);
+
+        await tester.pumpWidget(createTestApp(projectOverride: project));
+        await safePumpAndSettle(tester);
+
+        // Open the dropdown
+        await tester.tap(
+          find.byKey(OrchestrationConfigDialogKeys.baseWorktreeDropdown),
+        );
+        await tester.pump();
+
+        // Select the linked worktree
+        await tester.tap(find.text('develop').last);
+        await safePumpAndSettle(tester);
+
+        // Verify selection updated
+        expect(find.text('develop'), findsOneWidget);
       });
     });
   });
