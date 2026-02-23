@@ -27,5 +27,28 @@ void main() {
       service.clearAction();
       check(service.lastAction).isNull();
     });
+
+    test('MenuAction.showTickets exists in enum', () {
+      const action = MenuAction.showTickets;
+      check(action).equals(MenuAction.showTickets);
+    });
+
+    test('triggerAction sets showTickets as lastAction', () {
+      final service = MenuActionService();
+
+      service.triggerAction(MenuAction.showTickets);
+
+      check(service.lastAction).equals(MenuAction.showTickets);
+    });
+
+    test('clearAction removes showTickets action', () {
+      final service = MenuActionService();
+
+      service.triggerAction(MenuAction.showTickets);
+      check(service.lastAction).equals(MenuAction.showTickets);
+
+      service.clearAction();
+      check(service.lastAction).isNull();
+    });
   });
 }
