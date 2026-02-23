@@ -53,6 +53,7 @@ class _OrchestrationContext {
 class InternalToolsService extends ChangeNotifier {
   final InternalToolRegistry _registry = InternalToolRegistry();
   final Map<String, OrchestratorState> _orchestratorsByChatId = {};
+  BulkProposalState? _bulkProposalState;
 
   /// The tool registry to pass to backend sessions.
   InternalToolRegistry get registry => _registry;
@@ -86,6 +87,25 @@ class InternalToolsService extends ChangeNotifier {
       for (final tool in _orchestratorTools(chat)) {
         chatRegistry.register(tool);
       }
+    }
+    // Replace create_ticket handler to inject the calling chat's identity,
+    // so ticket proposals appear in the correct conversation panel.
+    final proposalState = _bulkProposalState;
+    final existingTool = chatRegistry['create_ticket'];
+    if (proposalState != null && existingTool != null) {
+      chatRegistry.register(
+        InternalToolDefinition(
+          name: existingTool.name,
+          description: existingTool.description,
+          inputSchema: existingTool.inputSchema,
+          handler: (input) => _handleCreateTicket(
+            proposalState,
+            input,
+            sourceChatId: chat.id,
+            sourceChatName: chat.name,
+          ),
+        ),
+      );
     }
     return chatRegistry;
   }
@@ -182,6 +202,7 @@ class InternalToolsService extends ChangeNotifier {
   /// stages them for user review, and waits for
   /// the review to complete via [BulkProposalState.onBulkReviewComplete] stream.
   void registerTicketTools(BulkProposalState proposalState) {
+    _bulkProposalState = proposalState;
     _registry.register(
       InternalToolDefinition(
         name: 'create_ticket',
@@ -254,7 +275,12 @@ class InternalToolsService extends ChangeNotifier {
           },
           'required': ['tickets'],
         },
-        handler: (input) => _handleCreateTicket(proposalState, input),
+        handler: (input) => _handleCreateTicket(
+        proposalState,
+        input,
+        sourceChatId: 'mcp-tool',
+        sourceChatName: 'Agent',
+      ),
       ),
     );
   }
@@ -262,12 +288,15 @@ class InternalToolsService extends ChangeNotifier {
   /// Unregister ticket tools (e.g., when board changes).
   void unregisterTicketTools() {
     _registry.unregister('create_ticket');
+    _bulkProposalState = null;
   }
 
   Future<InternalToolResult> _handleCreateTicket(
     BulkProposalState proposalState,
-    Map<String, dynamic> input,
-  ) async {
+    Map<String, dynamic> input, {
+    required String sourceChatId,
+    required String sourceChatName,
+  }) async {
     // Parse tickets array
     final ticketsInput = input['tickets'];
     if (ticketsInput == null || ticketsInput is! List) {
@@ -350,8 +379,8 @@ class InternalToolsService extends ChangeNotifier {
     // Stage proposals
     proposalState.proposeBulk(
       proposals,
-      sourceChatId: 'mcp-tool',
-      sourceChatName: 'Agent',
+      sourceChatId: sourceChatId,
+      sourceChatName: sourceChatName,
     );
 
     developer.log(
