@@ -72,7 +72,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
     final existingBranches =
         project.allWorktrees.map((wt) => wt.data.branch).toSet();
     _branchController.text =
-        generateWorktreeName(existingBranches: existingBranches);
+        'orchestrate-${generateWorktreeName(existingBranches: existingBranches)}';
   }
 
   @override

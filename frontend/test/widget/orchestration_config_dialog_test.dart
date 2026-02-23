@@ -229,8 +229,8 @@ void main() {
 
         check(newName).not((s) => s.equals(originalName));
         check(newName)
-            .has((s) => RegExp(r'^[a-z]+-[a-z]+$').hasMatch(s),
-                'adjective-noun format')
+            .has((s) => RegExp(r'^orchestrate-[a-z]+-[a-z]+$').hasMatch(s),
+                'orchestrate-adjective-noun format')
             .isTrue();
       });
 
