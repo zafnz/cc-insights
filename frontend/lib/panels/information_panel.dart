@@ -211,10 +211,20 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
     BuildContext context,
     MergeOperationType operation,
   ) async {
+    final baseRef = data.baseRef ?? 'main';
+    if (data.baseRefMissing) {
+      if (context.mounted) {
+        showErrorSnackBar(
+          context,
+          'Cannot ${operation.name}: "$baseRef" no longer exists. '
+          'Change the base ref first.',
+        );
+      }
+      return;
+    }
     LogService.instance.info('InfoPanel', '${operation.name} from base: ${data.branch}');
     final gitService = context.read<GitService>();
     final project = context.read<ProjectState>();
-    final baseRef = data.baseRef ?? 'main';
 
     if (!context.mounted) return;
 
@@ -561,9 +571,11 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
   // ---------------------------------------------------------------------------
 
   bool get _canUpdateFromBase =>
-      data.isRemoteBase || data.commitsBehindMain > 0;
+      !data.baseRefMissing &&
+      (data.isRemoteBase || data.commitsBehindMain > 0);
 
   bool get _canMergeIntoMain =>
+      !data.baseRefMissing &&
       data.commitsAheadOfMain > 0 &&
       data.commitsBehindMain == 0 &&
       !data.isPrimary;
@@ -572,6 +584,7 @@ class _WorktreeInfoState extends State<_WorktreeInfo> {
       data.upstreamBranch != null && data.commitsAhead > 0;
 
   bool get _canCreatePr =>
+      !data.baseRefMissing &&
       data.commitsAheadOfMain > 0 &&
       data.upstreamBranch != null &&
       !data.isPrimary;

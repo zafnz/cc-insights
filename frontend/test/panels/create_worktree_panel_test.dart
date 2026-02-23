@@ -100,6 +100,12 @@ class TestGitService implements GitService {
   }
 
   @override
+  Future<bool> refExists(String repoRoot, String ref) async {
+    if (simulatedDelay != null) await Future.delayed(simulatedDelay!);
+    return false;
+  }
+
+  @override
   Future<void> createWorktree({
     required String repoRoot,
     required String worktreePath,

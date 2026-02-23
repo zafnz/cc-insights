@@ -58,6 +58,7 @@ class FakeGitService implements GitService {
     discoverWorktreesCalls = 0;
     findRepoRootCalls = 0;
     fileAtRefContents.clear();
+    existingRefs.clear();
     remoteMainBranches.clear();
     stageFilesCalls.clear();
     stageFilesError = null;
@@ -162,6 +163,16 @@ class FakeGitService implements GitService {
     _maybeThrow();
     // Return false by default
     return false;
+  }
+
+  /// Set of refs that exist. Key is "$repoRoot:$ref".
+  final Set<String> existingRefs = {};
+
+  @override
+  Future<bool> refExists(String repoRoot, String ref) async {
+    await _maybeDelay();
+    _maybeThrow();
+    return existingRefs.contains('$repoRoot:$ref');
   }
 
   @override

@@ -43,6 +43,7 @@ dependencies:
   drag_split_layout:
     path: /Users/zaf/projects/drag_split_layout
   crypto: ^3.0.7
+  namer: ^1.0.0
 
   # Advanced list widgets
   super_sliver_list: ^0.4.1

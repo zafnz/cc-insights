@@ -71,6 +71,12 @@ class WorktreeData {
   /// "origin/main"). Used in tooltips to show the comparison target.
   final String? baseRef;
 
+  /// Whether the configured base ref does not exist in git.
+  ///
+  /// When true, the ahead/behind counts are meaningless and the UI should
+  /// show a "?" indicator instead of counts.
+  final bool baseRefMissing;
+
   /// Creates a new [WorktreeData] instance.
   const WorktreeData({
     required this.worktreeRoot,
@@ -87,6 +93,7 @@ class WorktreeData {
     this.commitsBehindMain = 0,
     this.isRemoteBase = false,
     this.baseRef,
+    this.baseRefMissing = false,
   });
 
   /// Creates a copy with the given mutable fields replaced.
@@ -108,6 +115,7 @@ class WorktreeData {
     bool? isRemoteBase,
     String? baseRef,
     bool clearBaseRef = false,
+    bool? baseRefMissing,
   }) {
     return WorktreeData(
       worktreeRoot: worktreeRoot,
@@ -128,6 +136,7 @@ class WorktreeData {
       commitsBehindMain: commitsBehindMain ?? this.commitsBehindMain,
       isRemoteBase: isRemoteBase ?? this.isRemoteBase,
       baseRef: clearBaseRef ? null : (baseRef ?? this.baseRef),
+      baseRefMissing: baseRefMissing ?? this.baseRefMissing,
     );
   }
 
@@ -148,7 +157,8 @@ class WorktreeData {
         other.commitsAheadOfMain == commitsAheadOfMain &&
         other.commitsBehindMain == commitsBehindMain &&
         other.isRemoteBase == isRemoteBase &&
-        other.baseRef == baseRef;
+        other.baseRef == baseRef &&
+        other.baseRefMissing == baseRefMissing;
   }
 
   @override
@@ -168,6 +178,7 @@ class WorktreeData {
       commitsBehindMain,
       isRemoteBase,
       baseRef,
+      baseRefMissing,
     );
   }
 
@@ -182,7 +193,8 @@ class WorktreeData {
         'commitsAheadOfMain: $commitsAheadOfMain, '
         'commitsBehindMain: $commitsBehindMain, '
         'isRemoteBase: $isRemoteBase, '
-        'baseRef: $baseRef)';
+        'baseRef: $baseRef, '
+        'baseRefMissing: $baseRefMissing)';
   }
 }
 

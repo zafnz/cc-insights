@@ -245,6 +245,12 @@ abstract class GitService {
   /// if no remote main branch can be determined.
   Future<String?> getRemoteMainBranch(String repoRoot);
 
+  /// Checks whether a git ref (branch, remote tracking ref, tag) exists.
+  ///
+  /// Uses `git rev-parse --verify` to test existence.
+  /// Returns true if the ref resolves, false otherwise.
+  Future<bool> refExists(String repoRoot, String ref);
+
   /// Gets a list of all changed files (staged, unstaged, untracked).
   ///
   /// Returns a list of [GitFileChange] with file paths and statuses.
@@ -719,6 +725,19 @@ class RealGitService implements GitService {
     try {
       await _runGit(
         ['rev-parse', '--verify', 'refs/heads/$branchName'],
+        workingDirectory: repoRoot,
+      );
+      return true;
+    } on GitException {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> refExists(String repoRoot, String ref) async {
+    try {
+      await _runGit(
+        ['rev-parse', '--verify', ref],
         workingDirectory: repoRoot,
       );
       return true;

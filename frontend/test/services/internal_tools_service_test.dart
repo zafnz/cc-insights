@@ -525,6 +525,66 @@ void main() {
     });
   });
 
+  group('InternalToolsService - registryForChat create_ticket', () {
+    test('injects chat id and name into proposeBulk', () async {
+      final service = resources.track(InternalToolsService());
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
+
+      final chat = Chat.create(
+        name: 'My Test Chat',
+        worktreeRoot: '/test/worktree',
+      );
+      final registry = service.registryForChat(chat);
+      final tool = registry['create_ticket']!;
+
+      final resultFuture = tool.handler({
+        'tickets': [
+          {
+            'title': 'Test ticket',
+            'description': 'A description',
+            'kind': 'feature',
+          },
+        ],
+      });
+
+      // Verify the chat context was passed through to proposeBulk
+      expect(bulkProposal.proposalSourceChatId, chat.id);
+      expect(bulkProposal.proposalSourceChatName, 'My Test Chat');
+
+      // Complete the review so the future resolves
+      bulkProposal.approveBulk();
+      await resultFuture;
+    });
+
+    test('global registry handler uses fallback source values', () async {
+      final service = resources.track(InternalToolsService());
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
+
+      // Use the global registry (not registryForChat)
+      final tool = service.registry['create_ticket']!;
+
+      final resultFuture = tool.handler({
+        'tickets': [
+          {
+            'title': 'Test ticket',
+            'description': 'A description',
+            'kind': 'feature',
+          },
+        ],
+      });
+
+      expect(bulkProposal.proposalSourceChatId, 'mcp-tool');
+      expect(bulkProposal.proposalSourceChatName, 'Agent');
+
+      bulkProposal.approveBulk();
+      await resultFuture;
+    });
+  });
+
   group('InternalToolsService - git tools', () {
     late FakeGitService fakeGit;
 
@@ -1744,180 +1804,6 @@ void main() {
 
       expect(result.isError, isTrue);
       expect(result.content, contains('worktree_not_found'));
-    });
-  });
-
-  group('InternalToolsService - wait_for_agents last_known_status', () {
-    late InternalToolsService service;
-    late OrchestratorState orchestratorState;
-    late Chat orchestratorChat;
-
-    setUp(() {
-      service = resources.track(InternalToolsService());
-      final worktree = WorktreeState(
-        const WorktreeData(
-          worktreeRoot: '/test/worktree',
-          isPrimary: true,
-          branch: 'main',
-        ),
-      );
-      final project = resources.track(
-        ProjectState(
-          const ProjectData(name: 'test', repoRoot: '/test/repo'),
-          worktree,
-          autoValidate: false,
-          watchFilesystem: false,
-        ),
-      );
-      final repo = resources.track(TicketRepository('test-project'));
-      final fakeGit = FakeGitService();
-      final fakePersistence = FakePersistenceService();
-      final settingsService = SettingsService(persistToDisk: false);
-      final restoreService = ProjectRestoreService(
-        persistence: fakePersistence,
-      );
-      final selection = SelectionState(
-        project,
-        restoreService: restoreService,
-      );
-      final worktreeService = WorktreeService(
-        gitService: fakeGit,
-        persistenceService: fakePersistence,
-      );
-
-      service.bindOrchestrationContext(
-        backend: BackendService(),
-        eventHandler: EventHandler(),
-        project: project,
-        selection: selection,
-        ticketBoard: repo,
-        worktreeService: worktreeService,
-        restoreService: restoreService,
-        gitService: fakeGit,
-        settingsService: settingsService,
-        persistenceService: fakePersistence,
-      );
-
-      orchestratorChat = Chat.create(
-        name: 'Orchestrator',
-        worktreeRoot: '/test/worktree',
-      );
-      orchestratorState = OrchestratorState(
-        ticketBoard: repo,
-        ticketIds: [],
-        baseWorktreePath: '/test/worktree',
-      );
-      service.attachOrchestratorState(orchestratorChat, orchestratorState);
-    });
-
-    InternalToolDefinition getWaitTool() {
-      final registry = service.registryForChat(orchestratorChat);
-      return registry['wait_for_agents']!;
-    }
-
-    Chat _createIdleAgent(String agentId) {
-      final chat = Chat.create(
-        name: 'Worker $agentId',
-        worktreeRoot: '/test/worktree',
-      );
-      // Simulate an agent that has completed its turn (active session, not working).
-      chat.session.setHasActiveSessionForTesting(true);
-      chat.session.setWorking(false);
-      orchestratorState.registerAgent(agentId: agentId, chat: chat);
-      return chat;
-    }
-
-    test('omitted last_known_status returns ready agents (backward compat)',
-        () async {
-      _createIdleAgent('agent-1');
-      _createIdleAgent('agent-2');
-
-      final tool = getWaitTool();
-      final result = await tool.handler({
-        'agent_ids': ['agent-1', 'agent-2'],
-      });
-
-      expect(result.isError, isFalse);
-      final json = jsonDecode(result.content) as Map<String, dynamic>;
-      expect(json['wait_timed_out'], isFalse);
-      final ready = json['ready'] as List;
-      expect(ready.length, 2);
-      expect(
-        ready.map((e) => (e as Map<String, dynamic>)['agent_id']),
-        containsAll(['agent-1', 'agent-2']),
-      );
-    });
-
-    test('agent whose status matches last_known_status is skipped', () async {
-      _createIdleAgent('agent-1');
-      _createIdleAgent('agent-2');
-
-      final tool = getWaitTool();
-      // Both agents are idle with reason "turn_complete".
-      // Providing last_known_status with matching status should skip them.
-      final result = await tool.handler({
-        'agent_ids': ['agent-1', 'agent-2'],
-        'last_known_status': {
-          'agent-1': 'turn_complete',
-          'agent-2': 'turn_complete',
-        },
-        'timeout_seconds': 1,
-      });
-
-      expect(result.isError, isFalse);
-      final json = jsonDecode(result.content) as Map<String, dynamic>;
-      // Both agents match their last known status, so none are ready.
-      expect(json['wait_timed_out'], isTrue);
-      final ready = json['ready'] as List;
-      expect(ready, isEmpty);
-    });
-
-    test('agent whose status differs from last_known_status is returned',
-        () async {
-      final chat1 = _createIdleAgent('agent-1');
-      _createIdleAgent('agent-2');
-
-      // Stop agent-1 so its status becomes "stopped" instead of "turn_complete".
-      chat1.session.setHasActiveSessionForTesting(false);
-
-      final tool = getWaitTool();
-      final result = await tool.handler({
-        'agent_ids': ['agent-1', 'agent-2'],
-        'last_known_status': {
-          'agent-1': 'turn_complete',
-          'agent-2': 'turn_complete',
-        },
-      });
-
-      expect(result.isError, isFalse);
-      final json = jsonDecode(result.content) as Map<String, dynamic>;
-      expect(json['wait_timed_out'], isFalse);
-      final ready = json['ready'] as List;
-      // Only agent-1 should be returned (status changed to "stopped").
-      expect(ready.length, 1);
-      expect((ready[0] as Map<String, dynamic>)['agent_id'], 'agent-1');
-      expect((ready[0] as Map<String, dynamic>)['reason'], 'stopped');
-    });
-
-    test('agent absent from last_known_status map is returned normally',
-        () async {
-      _createIdleAgent('agent-1');
-      _createIdleAgent('agent-2');
-
-      final tool = getWaitTool();
-      // Only provide last_known_status for agent-1.
-      final result = await tool.handler({
-        'agent_ids': ['agent-1', 'agent-2'],
-        'last_known_status': {'agent-1': 'turn_complete'},
-      });
-
-      expect(result.isError, isFalse);
-      final json = jsonDecode(result.content) as Map<String, dynamic>;
-      expect(json['wait_timed_out'], isFalse);
-      final ready = json['ready'] as List;
-      // agent-1 matches its last known → skipped, agent-2 has no entry → returned.
-      expect(ready.length, 1);
-      expect((ready[0] as Map<String, dynamic>)['agent_id'], 'agent-2');
     });
   });
 

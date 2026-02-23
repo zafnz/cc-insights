@@ -650,6 +650,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.6.1"
+  namer:
+    dependency: "direct main"
+    description:
+      name: namer
+      sha256: "942d84cb77fe1c3477c98121d4958ca59d9e81beba0cf5e390ab399d2151426a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   native_toolchain_c:
     dependency: transitive
     description:

@@ -259,6 +259,7 @@ class WorktreeWatcherService extends ChangeNotifier {
       final isRemoteBase = resolved.isRemoteBase;
 
       ({int ahead, int behind})? baseComparison;
+      bool baseRefMissing = false;
       if (baseRef != null &&
           worktree.data.branch != baseRef) {
         baseComparison = await _gitService.getBranchComparison(
@@ -266,6 +267,14 @@ class WorktreeWatcherService extends ChangeNotifier {
           worktree.data.branch,
           baseRef,
         );
+        // When comparison fails, check whether the ref actually exists.
+        if (baseComparison == null) {
+          final exists = await _gitService.refExists(
+            _project.data.repoRoot,
+            baseRef,
+          );
+          baseRefMissing = !exists;
+        }
       }
 
       if (_disposed) return;
@@ -302,6 +311,7 @@ class WorktreeWatcherService extends ChangeNotifier {
         isRemoteBase: isRemoteBase,
         baseRef: baseRef,
         clearBaseRef: baseRef == null,
+        baseRefMissing: baseRefMissing,
       ));
     } catch (e) {
       // Git poll failed — will retry on next interval.

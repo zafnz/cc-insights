@@ -221,13 +221,31 @@ class InfoBaseSection extends StatelessWidget {
           },
         ),
         const SizedBox(height: 4),
-        InfoAheadBehindIndicator(
-          ahead: data.commitsAheadOfMain,
-          behind: data.commitsBehindMain,
-          targetRef: baseRef,
-          aheadPrefix: '+',
-          behindPrefix: '-',
-        ),
+        if (data.baseRefMissing)
+          Row(
+            children: [
+              Icon(Icons.warning_amber, size: 14, color: Colors.orange),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  '"$baseRef" not found',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: Colors.orange,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          )
+        else
+          InfoAheadBehindIndicator(
+            ahead: data.commitsAheadOfMain,
+            behind: data.commitsBehindMain,
+            targetRef: baseRef,
+            aheadPrefix: '+',
+            behindPrefix: '-',
+          ),
       ],
     );
   }
@@ -538,7 +556,7 @@ class InfoActionsSection extends StatelessWidget {
                 onPressed: canUpdateFromBase ? onRebaseOntoBase : null,
                 label: 'Rebase',
                 icon: Icons.low_priority,
-                tooltip: canUpdateFromBase ? null : 'Already up to date',
+                tooltip: _updateFromBaseTooltip,
               ),
             ),
             const SizedBox(width: 6),
@@ -548,7 +566,7 @@ class InfoActionsSection extends StatelessWidget {
                 onPressed: canUpdateFromBase ? onMergeBase : null,
                 label: 'Merge',
                 icon: Icons.merge,
-                tooltip: canUpdateFromBase ? null : 'Already up to date',
+                tooltip: _updateFromBaseTooltip,
               ),
             ),
           ],
@@ -640,7 +658,18 @@ class InfoActionsSection extends StatelessWidget {
     );
   }
 
+  String? get _updateFromBaseTooltip {
+    if (canUpdateFromBase) return null;
+    if (data.baseRefMissing) {
+      return '"$baseRef" not found \u{2014} change base first';
+    }
+    return 'Already up to date';
+  }
+
   String? get _mergeIntoMainTooltip {
+    if (data.baseRefMissing) {
+      return '"$baseRef" not found \u{2014} change base first';
+    }
     if (data.commitsAheadOfMain == 0) return 'No commits to merge';
     if (data.commitsBehindMain > 0) {
       return 'Update this branch with the latest from $baseRef '
@@ -650,6 +679,9 @@ class InfoActionsSection extends StatelessWidget {
   }
 
   String? get _createPrTooltip {
+    if (data.baseRefMissing) {
+      return '"$baseRef" not found \u{2014} change base first';
+    }
     if (data.commitsAheadOfMain == 0) return 'No commits to push';
     return null;
   }

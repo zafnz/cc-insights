@@ -9,9 +9,10 @@ import '../models/ticket.dart';
 import '../models/project.dart';
 import '../services/backend_service.dart';
 import '../services/ticket_dispatch_factory.dart';
+import '../services/worktree_name_generator.dart';
 import '../services/worktree_service.dart';
 import '../services/git_service.dart';
-import '../state/selection_state.dart';
+import '../models/worktree.dart';
 import '../state/ticket_board_state.dart';
 import 'model_permission_selector.dart';
 
@@ -26,6 +27,8 @@ class OrchestrationConfigDialogKeys {
   static const launchButton = Key('orchestration_config_launch');
   static const modelPermissionSelector =
       Key('orchestration_config_model_permission');
+  static const baseWorktreeDropdown =
+      Key('orchestration_config_base_worktree');
 }
 
 class OrchestrationConfigDialog extends StatefulWidget {
@@ -43,16 +46,18 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
   late final TextEditingController _instructionsController;
   bool _launching = false;
 
+  WorktreeState? _selectedBaseWorktree;
   String _selectedModelId = 'default';
   PermissionMode _selectedPermissionMode = PermissionMode.defaultMode;
 
   @override
   void initState() {
     super.initState();
-    final slug = widget.ticketIds.isEmpty
-        ? 'orchestration'
-        : 'orchestrate-${widget.ticketIds.first}-${widget.ticketIds.last}';
-    _branchController = TextEditingController(text: slug);
+    final project = context.read<ProjectState>();
+    final existingBranches =
+        project.allWorktrees.map((wt) => wt.data.branch).toSet();
+    final slug = generateWorktreeName(existingBranches: existingBranches);
+    _branchController = TextEditingController(text: 'orchestrate-$slug');
     _instructionsController = TextEditingController(
       text:
           'Run tickets ${widget.ticketIds.join(', ')}. '
@@ -74,6 +79,12 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         .map(ticketBoard.getTicket)
         .whereType<TicketData>()
         .toList();
+
+    final project = context.watch<ProjectState>();
+    final worktrees = project.allWorktrees;
+    final effectiveBaseWorktree = worktrees.contains(_selectedBaseWorktree)
+        ? _selectedBaseWorktree!
+        : project.primaryWorktree;
 
     final backend = context.watch<BackendService>();
     final backendType = backend.backendType;
@@ -114,6 +125,30 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
                     )
                     .toList(),
               ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<WorktreeState>(
+              key: OrchestrationConfigDialogKeys.baseWorktreeDropdown,
+              value: effectiveBaseWorktree,
+              decoration: const InputDecoration(
+                labelText: 'Base worktree',
+                border: OutlineInputBorder(),
+              ),
+              isExpanded: true,
+              items: worktrees.map((wt) {
+                final label = wt.data.isPrimary
+                    ? '${wt.data.branch} (primary)'
+                    : wt.data.branch;
+                return DropdownMenuItem<WorktreeState>(
+                  value: wt,
+                  child: Text(label, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedBaseWorktree = value);
+                }
+              },
             ),
             const SizedBox(height: 12),
             TextField(
@@ -176,13 +211,11 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
     setState(() => _launching = true);
     try {
       final project = context.read<ProjectState>();
-      final selection = context.read<SelectionState>();
       final gitService = context.read<GitService>();
       final worktreeService = WorktreeService(gitService: gitService);
 
       final root = await calculateDefaultWorktreeRoot(project.data.repoRoot);
-      final base =
-          selection.selectedWorktree?.data.branch ??
+      final base = _selectedBaseWorktree?.data.branch ??
           project.primaryWorktree.data.branch;
       final created = await worktreeService.createWorktree(
         project: project,

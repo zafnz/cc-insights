@@ -11,7 +11,9 @@ import 'package:cc_insights_v2/panels/conversation_panel.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
+import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
+import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/widgets/keyboard_focus_manager.dart';
 
 import '../fakes/fake_cli_availability_service.dart';
@@ -103,6 +105,10 @@ void main() {
             ),
             ChangeNotifierProvider<InternalToolsService>(
               create: (_) => InternalToolsService(),
+            ),
+            ChangeNotifierProvider<BulkProposalState>(
+              create: (_) =>
+                  BulkProposalState(TicketRepository('test-scroll')),
             ),
           ],
           child: const Scaffold(

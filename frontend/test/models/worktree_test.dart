@@ -162,6 +162,33 @@ void main() {
 
         check(modified.baseRef).isNull();
       });
+
+      test('updates baseRefMissing', () {
+        const original = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'feature',
+          baseRef: 'deleted-branch',
+        );
+
+        final modified = original.copyWith(baseRefMissing: true);
+
+        check(modified.baseRefMissing).isTrue();
+        check(modified.baseRef).equals('deleted-branch');
+      });
+
+      test('preserves baseRefMissing when not specified', () {
+        const original = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'feature',
+          baseRefMissing: true,
+        );
+
+        final modified = original.copyWith(branch: 'develop');
+
+        check(modified.baseRefMissing).isTrue();
+      });
     });
 
     group('equality', () {
@@ -229,6 +256,25 @@ void main() {
           isPrimary: true,
           branch: 'main',
           baseRef: 'origin/main',
+        );
+
+        check(worktree1 == worktree2).isFalse();
+      });
+
+      test('equals returns false for different baseRefMissing', () {
+        const worktree1 = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+          baseRef: 'deleted',
+          baseRefMissing: false,
+        );
+        const worktree2 = WorktreeData(
+          worktreeRoot: '/path',
+          isPrimary: true,
+          branch: 'main',
+          baseRef: 'deleted',
+          baseRefMissing: true,
         );
 
         check(worktree1 == worktree2).isFalse();
