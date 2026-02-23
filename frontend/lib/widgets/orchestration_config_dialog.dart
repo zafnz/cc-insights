@@ -57,7 +57,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
     final existingBranches =
         project.allWorktrees.map((wt) => wt.data.branch).toSet();
     final slug = generateWorktreeName(existingBranches: existingBranches);
-    _branchController = TextEditingController(text: slug);
+    _branchController = TextEditingController(text: 'orchestrate-$slug');
     _instructionsController = TextEditingController(
       text:
           'Run tickets ${widget.ticketIds.join(', ')}. '
