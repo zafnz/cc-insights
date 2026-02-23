@@ -736,9 +736,7 @@ class InternalToolsService extends ChangeNotifier {
     return InternalToolDefinition(
       name: 'wait_for_agents',
       description:
-          'Waits until one or more agents become ready. '
-          'Pass last_known_status to skip agents whose status has not changed '
-          'since the previous call.',
+          'Waits until one or more agents become ready (idle, stopped, or errored).',
       inputSchema: {
         'type': 'object',
         'properties': {
@@ -752,14 +750,6 @@ class InternalToolsService extends ChangeNotifier {
                 'Optional wait timeout in seconds (default: '
                 '$_defaultWaitTimeoutSeconds). If timed out, check status and '
                 'call wait_for_agents again.',
-          },
-          'last_known_status': {
-            'type': 'object',
-            'description':
-                'Optional map of agent_id → last known status string. '
-                'Agents whose current status matches the provided value '
-                'are not considered ready.',
-            'additionalProperties': {'type': 'string'},
           },
         },
         'required': ['agent_ids'],
@@ -785,17 +775,6 @@ class InternalToolsService extends ChangeNotifier {
       return InternalToolResult.error('Orchestrator state not found');
     }
 
-    // Parse optional last_known_status map.
-    final lastKnownRaw = input['last_known_status'];
-    final Map<String, String>? lastKnownStatus;
-    if (lastKnownRaw is Map) {
-      lastKnownStatus = lastKnownRaw.map(
-        (k, v) => MapEntry(k.toString(), v.toString()),
-      );
-    } else {
-      lastKnownStatus = null;
-    }
-
     final agents = <ManagedAgent>[];
     for (final id in ids) {
       final agent = state.getAgent(id);
@@ -807,16 +786,7 @@ class InternalToolsService extends ChangeNotifier {
 
     List<Map<String, String>> collectReady() {
       return agents
-          .where((a) {
-            if (!_isAgentReady(a.chat)) return false;
-            if (lastKnownStatus != null &&
-                lastKnownStatus.containsKey(a.id)) {
-              // Skip if current status matches last known status.
-              final current = _reasonForAgent(a.chat).wireValue;
-              if (current == lastKnownStatus[a.id]) return false;
-            }
-            return true;
-          })
+          .where((a) => _isAgentReady(a.chat))
           .map(
             (a) => {
               'agent_id': a.id,
