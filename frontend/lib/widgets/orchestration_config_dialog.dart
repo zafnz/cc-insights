@@ -9,6 +9,7 @@ import '../models/ticket.dart';
 import '../models/project.dart';
 import '../services/backend_service.dart';
 import '../services/ticket_dispatch_factory.dart';
+import '../services/worktree_name_generator.dart';
 import '../services/worktree_service.dart';
 import '../services/git_service.dart';
 import '../models/worktree.dart';
@@ -52,9 +53,10 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
   @override
   void initState() {
     super.initState();
-    final slug = widget.ticketIds.isEmpty
-        ? 'orchestration'
-        : 'orchestrate-${widget.ticketIds.first}-${widget.ticketIds.last}';
+    final project = context.read<ProjectState>();
+    final existingBranches =
+        project.allWorktrees.map((wt) => wt.data.branch).toSet();
+    final slug = generateWorktreeName(existingBranches: existingBranches);
     _branchController = TextEditingController(text: slug);
     _instructionsController = TextEditingController(
       text:
