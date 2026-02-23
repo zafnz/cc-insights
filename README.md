@@ -1,3 +1,8 @@
+![GitHub Release](https://img.shields.io/github/v/release/zafnz/cc-insights)
+![Static Badge](https://img.shields.io/badge/Vibe_Coded-100%25-blue)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/zafnz/cc-insights/build-desktop.yml)
+![GitHub License](https://img.shields.io/github/license/zafnz/cc-insights)
+
 # CC Insights - Insights into Claude & Codex
 
 Yet another Claude coordinator desktop GUI application. (Codex is still in very early stages)
