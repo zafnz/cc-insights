@@ -236,6 +236,12 @@ class WorktreeState extends ChangeNotifier {
   /// in-progress messages on worktrees that don't have a chat yet.
   String welcomeDraftText = '';
 
+  /// Draft images attached in the welcome screen before any chat is created.
+  ///
+  /// Preserved when switching between chats/worktrees so users don't lose
+  /// attached images on the new-chat screen.
+  List<AttachedImage> welcomeDraftImages = [];
+
   /// Model explicitly chosen by the user in the welcome screen, or `null`
   /// when the user hasn't overridden the global default yet.
   ChatModel? _welcomeModelOverride;
