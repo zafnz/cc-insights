@@ -41,9 +41,6 @@ need decisions, ask the user rather than guessing.
 
 ## Agent instructions
 
-When launching an agent to implement a ticket, tell the agent to propose 
-a solution to the user and await the users approval before doing any work. 
-
 When launching or messaging agents, be clear and specific in your instructions.
 If the user has provided specific requirements for how the work should be done,
 include those. Remind the agent that they can and should stop and ask the user 
