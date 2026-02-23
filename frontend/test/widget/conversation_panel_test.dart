@@ -823,6 +823,106 @@ void main() {
         expect(find.byType(TextField), findsOneWidget);
       });
 
+      testWidgets('hidden when agent is removed', (tester) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card should be visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+
+        // Terminate the chat (agent removed has highest priority)
+        await testChat.agents.terminateForAgentRemoval();
+        await safePumpAndSettle(tester);
+
+        // Agent removed banner should be visible, proposal card hidden
+        expect(
+          find.text(
+            'Agent removed \u2014 this chat can no longer send messages',
+          ),
+          findsOneWidget,
+        );
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+      });
+
+      testWidgets('approve clears card and restores message input', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card visible, message input hidden
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+        expect(find.byType(TextField), findsNothing);
+
+        // Approve
+        await tester.tap(find.byKey(TicketProposalCardKeys.approveButton));
+        await safePumpAndSettle(tester);
+
+        // Card gone, message input restored
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+      });
+
+      testWidgets('reject clears card and restores message input', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        await safePumpAndSettle(tester);
+
+        // Create a proposal for this chat
+        bulkProposalState.proposeBulk(
+          [
+            TicketProposal(
+              title: 'Test Ticket',
+              kind: TicketKind.feature,
+              description: 'A test ticket.',
+            ),
+          ],
+          sourceChatId: testChat.data.id,
+          sourceChatName: 'Test Chat',
+        );
+        await safePumpAndSettle(tester);
+
+        // Proposal card visible
+        expect(find.byKey(TicketProposalCardKeys.card), findsOneWidget);
+
+        // Reject
+        await tester.tap(find.byKey(TicketProposalCardKeys.rejectButton));
+        await safePumpAndSettle(tester);
+
+        // Card gone, message input restored
+        expect(find.byKey(TicketProposalCardKeys.card), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+      });
+
       testWidgets('hidden when permission dialog is showing', (tester) async {
         await tester.pumpWidget(buildTestWidget());
         await safePumpAndSettle(tester);

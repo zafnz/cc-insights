@@ -106,6 +106,21 @@ void main() {
       expect(find.byKey(TicketProposalCardKeys.overflowText), findsNothing);
     });
 
+    testWidgets('shows exactly 4 tickets with no overflow at boundary',
+        (tester) async {
+      createProposals(count: 4);
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      expect(find.text('Ticket 1'), findsOneWidget);
+      expect(find.text('Ticket 2'), findsOneWidget);
+      expect(find.text('Ticket 3'), findsOneWidget);
+      expect(find.text('Ticket 4'), findsOneWidget);
+      expect(find.byKey(TicketProposalCardKeys.overflowText), findsNothing);
+      expect(find.byKey(TicketProposalCardKeys.ticketList), findsOneWidget);
+    });
+
     testWidgets('shows overflow text when more than 4 tickets',
         (tester) async {
       createProposals(count: 6);
