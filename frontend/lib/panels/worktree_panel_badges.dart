@@ -53,6 +53,26 @@ class _BaseBadge extends StatelessWidget {
     final style = textTheme.labelSmall;
     final icon = data.isRemoteBase ? '\u{1F310}' : '\u{1F3E0}';
     final refName = data.baseRef ?? 'main';
+
+    // When the base ref is missing, show a "?" indicator.
+    if (data.baseRefMissing) {
+      return Tooltip(
+        message: 'Base: $refName (not found)\n'
+            'Use Change\u{2026} to select a different base.',
+        child: _BadgeContainer(
+          child: RichText(
+            text: TextSpan(children: [
+              TextSpan(text: '$icon ', style: style),
+              TextSpan(
+                text: '?',
+                style: style?.copyWith(color: Colors.red),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
     final ahead = data.commitsAheadOfMain;
     final behind = data.commitsBehindMain;
 

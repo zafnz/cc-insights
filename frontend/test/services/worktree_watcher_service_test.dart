@@ -994,5 +994,79 @@ void main() {
         service.dispose();
       });
     });
+
+    test('sets baseRefMissing when configured base ref does not exist', () {
+      fakeAsync((async) {
+        featureWorktree.setBase('deleted-branch');
+        // No branchComparison configured → getBranchComparison returns null.
+        // No existingRefs entry → refExists returns false.
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        check(featureWorktree.data.baseRefMissing).equals(true);
+        check(featureWorktree.data.baseRef).equals('deleted-branch');
+        check(featureWorktree.data.commitsAheadOfMain).equals(0);
+        check(featureWorktree.data.commitsBehindMain).equals(0);
+
+        service.dispose();
+      });
+    });
+
+    test('clears baseRefMissing when base ref exists again', () {
+      fakeAsync((async) {
+        featureWorktree.setBase('develop');
+        // First poll: ref missing (no comparison, no existingRefs entry).
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        check(featureWorktree.data.baseRefMissing).equals(true);
+
+        // Make the ref exist and add a comparison result.
+        gitService.existingRefs.add('$repoRoot:develop');
+        gitService.branchComparisons['/fake/linked:feature:develop'] =
+            (ahead: 1, behind: 0);
+        service.forceRefresh(featureWorktree);
+        async.flushMicrotasks();
+
+        check(featureWorktree.data.baseRefMissing).equals(false);
+        check(featureWorktree.data.commitsAheadOfMain).equals(1);
+
+        service.dispose();
+      });
+    });
+
+    test('baseRefMissing is false when comparison succeeds', () {
+      fakeAsync((async) {
+        featureWorktree.setBase('develop');
+        gitService.branchComparisons['/fake/linked:feature:develop'] =
+            (ahead: 3, behind: 1);
+
+        final service = WorktreeWatcherService(
+          gitService: gitService,
+          project: project,
+          configService: configService,
+          enablePeriodicPolling: false,
+        );
+        async.flushMicrotasks();
+
+        check(featureWorktree.data.baseRefMissing).equals(false);
+        check(featureWorktree.data.commitsAheadOfMain).equals(3);
+        check(featureWorktree.data.commitsBehindMain).equals(1);
+
+        service.dispose();
+      });
+    });
   });
 }

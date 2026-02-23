@@ -738,6 +738,97 @@ void main() {
     );
   });
 
+  group('Missing base ref', () {
+    testWidgets(
+      'disables rebase and merge when base ref is missing',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(
+          worktreeData: const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+            baseRef: 'deleted-branch',
+            isRemoteBase: false,
+            baseRefMissing: true,
+            commitsBehindMain: 0,
+          ),
+        ));
+        await safePumpAndSettle(tester);
+
+        final rebaseButton =
+            find.byKey(InformationPanelKeys.rebaseOntoBaseButton);
+        final rebaseInkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: rebaseButton,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(rebaseInkWell.onTap).isNull();
+
+        final mergeButton =
+            find.byKey(InformationPanelKeys.mergeBaseButton);
+        final mergeInkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: mergeButton,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(mergeInkWell.onTap).isNull();
+      },
+    );
+
+    testWidgets(
+      'shows "not found" warning in base section',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(
+          worktreeData: const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+            baseRef: 'deleted-branch',
+            isRemoteBase: false,
+            baseRefMissing: true,
+          ),
+        ));
+        await safePumpAndSettle(tester);
+
+        check(
+          find.text('"deleted-branch" not found').evaluate(),
+        ).isNotEmpty();
+      },
+    );
+
+    testWidgets(
+      'disables merge into main when base ref is missing',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(
+          worktreeData: const WorktreeData(
+            worktreeRoot: linkedPath,
+            isPrimary: false,
+            branch: 'feature',
+            baseRef: 'deleted-branch',
+            isRemoteBase: false,
+            baseRefMissing: true,
+            commitsAheadOfMain: 2,
+            commitsBehindMain: 0,
+          ),
+        ));
+        await safePumpAndSettle(tester);
+
+        final button = find.byKey(
+          InformationPanelKeys.mergeBranchIntoMainButton,
+        );
+        final inkWell = tester.widget<InkWell>(
+          find.descendant(
+            of: button,
+            matching: find.byType(InkWell),
+          ),
+        );
+        check(inkWell.onTap).isNull();
+      },
+    );
+  });
+
   group('Conflict section', () {
     testWidgets(
       'shows conflict banner instead of actions',
