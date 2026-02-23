@@ -215,16 +215,20 @@ class WelcomeCard extends StatelessWidget {
             'input-welcome-${worktree?.data.worktreeRoot ?? 'none'}',
           ),
           initialText: worktree?.welcomeDraftText ?? '',
+          initialImages: worktree?.welcomeDraftImages ?? const [],
           onTextChanged: (text) => worktree?.welcomeDraftText = text,
-          onSubmit: (text, images, displayFormat) =>
-              MacroExecutor.createChatAndSendMessage(
-                context,
-                worktree: worktree,
-                text: text,
-                images: images,
-                displayFormat: displayFormat,
-                clearWelcomeDraft: true,
-              ),
+          onImagesChanged: (images) => worktree?.welcomeDraftImages = images,
+          onSubmit: (text, images, displayFormat) {
+            worktree?.welcomeDraftImages = [];
+            MacroExecutor.createChatAndSendMessage(
+              context,
+              worktree: worktree,
+              text: text,
+              images: images,
+              displayFormat: displayFormat,
+              clearWelcomeDraft: true,
+            );
+          },
         ),
       ],
     );

@@ -134,20 +134,27 @@ class _NavRailButton extends StatelessWidget {
       );
     }
 
-    return _SideTooltip(
+    // Invisible Tooltip for accessibility/test discoverability (never shown
+    // visually). The visible tooltip is the _SideTooltip overlay positioned
+    // to the right of the button.
+    return Tooltip(
       message: tooltip,
-      child: Material(
-        color: isSelected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
+      triggerMode: TooltipTriggerMode.manual,
+      child: _SideTooltip(
+        message: tooltip,
+        child: Material(
+          color: isSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: iconWidget,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: iconWidget,
+            ),
           ),
         ),
       ),
@@ -241,11 +248,7 @@ class _SideTooltipState extends State<_SideTooltip> {
       child: MouseRegion(
         onEnter: (_) => _scheduleShow(),
         onExit: (_) => _removeTooltip(),
-        child: Tooltip(
-          message: widget.message,
-          triggerMode: TooltipTriggerMode.manual,
-          child: widget.child,
-        ),
+        child: widget.child,
       ),
     );
   }

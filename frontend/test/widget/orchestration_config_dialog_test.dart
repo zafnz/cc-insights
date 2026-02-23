@@ -207,6 +207,33 @@ void main() {
             .isTrue();
       });
 
+      testWidgets('regenerate button produces a new name', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        final textField = tester.widget<TextField>(
+          find.byKey(OrchestrationConfigDialogKeys.branchField),
+        );
+        final originalName = textField.controller!.text;
+
+        // Tap the regenerate button repeatedly until a different name appears
+        // (names are random so the first tap may rarely collide).
+        String newName = originalName;
+        for (var i = 0; i < 5 && newName == originalName; i++) {
+          await tester.tap(
+            find.byKey(OrchestrationConfigDialogKeys.regenerateNameButton),
+          );
+          await tester.pump();
+          newName = textField.controller!.text;
+        }
+
+        check(newName).not((s) => s.equals(originalName));
+        check(newName)
+            .has((s) => RegExp(r'^orchestrate-[a-z]+-[a-z]+$').hasMatch(s),
+                'orchestrate-adjective-noun format')
+            .isTrue();
+      });
+
       testWidgets('populates default instructions', (tester) async {
         final (repo, ids) = createRepoWithTickets(2);
         await tester.pumpWidget(createTestApp(
