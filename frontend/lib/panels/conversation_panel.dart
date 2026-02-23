@@ -19,6 +19,8 @@ import '../widgets/message_input.dart';
 import '../widgets/orchestration_progress_widget.dart';
 import '../widgets/output_entries.dart';
 import '../widgets/permission_dialog.dart';
+import '../widgets/ticket_proposal_card.dart';
+import '../state/bulk_proposal_state.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 import 'conversation_header.dart';
@@ -39,7 +41,7 @@ class ConversationPanel extends StatefulWidget {
 }
 
 class _ConversationPanelState extends State<ConversationPanel>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   final ListController _listController = ListController();
 
@@ -70,6 +72,14 @@ class _ConversationPanelState extends State<ConversationPanel>
   /// This ensures we can still render the widget while animating out.
   sdk.PermissionRequest? _cachedPermission;
   bool _permissionWasAtBottom = false;
+
+  /// Animation controller for proposal card slide-up.
+  late final AnimationController _proposalAnimController;
+  late final Animation<double> _proposalAnimation;
+
+  /// Whether a proposal was showing (for animation-out).
+  bool _cachedHasProposal = false;
+  bool _proposalWasAtBottom = false;
 
   @override
   void initState() {
@@ -112,6 +122,39 @@ class _ConversationPanelState extends State<ConversationPanel>
     });
     // Also handle animation value changes to keep scroll at bottom during animation
     _permissionAnimController.addListener(_onPermissionAnimationChanged);
+
+    // Proposal animation (mirrors permission animation pattern)
+    _proposalAnimController = AnimationController(
+      duration: AnimDurations.standard,
+      vsync: this,
+    );
+    _proposalAnimation = CurvedAnimation(
+      parent: _proposalAnimController,
+      curve: Curves.easeOut,
+    );
+    _proposalAnimController.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) {
+        final shouldScrollToBottom = _proposalWasAtBottom;
+        _proposalWasAtBottom = false;
+        setState(() {
+          _cachedHasProposal = false;
+        });
+        if (shouldScrollToBottom) {
+          _scheduleScrollToBottom();
+        }
+      } else if (status == AnimationStatus.completed) {
+        if (_isAtBottom) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _scrollController.hasClients) {
+              _scrollController.jumpTo(
+                _scrollController.position.maxScrollExtent,
+              );
+            }
+          });
+        }
+      }
+    });
+    _proposalAnimController.addListener(_onProposalAnimationChanged);
   }
 
   /// Called when the permission animation value changes.
@@ -122,6 +165,16 @@ class _ConversationPanelState extends State<ConversationPanel>
         _isAtBottom &&
         _scrollController.hasClients) {
       // Jump to bottom immediately to keep content pinned during animation
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+  }
+
+  /// Called when the proposal animation value changes.
+  /// Keeps scroll at bottom during animation if user was at bottom.
+  void _onProposalAnimationChanged() {
+    if (_proposalAnimController.status == AnimationStatus.forward &&
+        _isAtBottom &&
+        _scrollController.hasClients) {
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     }
   }
@@ -289,6 +342,8 @@ class _ConversationPanelState extends State<ConversationPanel>
     _scrollController.removeListener(_onScroll);
     _permissionAnimController.removeListener(_onPermissionAnimationChanged);
     _permissionAnimController.dispose();
+    _proposalAnimController.removeListener(_onProposalAnimationChanged);
+    _proposalAnimController.dispose();
     _scrollController.dispose();
     _listController.dispose();
     _listeningToConversations?.removeListener(_onChatChanged);
@@ -452,6 +507,30 @@ class _ConversationPanelState extends State<ConversationPanel>
             _permissionAnimController.status == AnimationStatus.completed ||
             _permissionAnimController.value > 0);
 
+    // Proposal animation state
+    final bulkState = context.watch<BulkProposalState>();
+    final hasProposalForThisChat = bulkState.hasActiveProposal &&
+        bulkState.proposalSourceChatId == chat?.data.id;
+
+    if (hasProposalForThisChat && !shouldShowPermissionWidget) {
+      if (!_cachedHasProposal) {
+        _proposalWasAtBottom = _isAtBottom;
+      }
+      _cachedHasProposal = true;
+      if (!_proposalAnimController.isCompleted) {
+        _proposalAnimController.forward();
+      }
+    } else if (_cachedHasProposal) {
+      _proposalAnimController.reverse();
+    }
+
+    final shouldShowProposalWidget =
+        _cachedHasProposal &&
+        !shouldShowPermissionWidget &&
+        (_proposalAnimController.status == AnimationStatus.forward ||
+            _proposalAnimController.status == AnimationStatus.completed ||
+            _proposalAnimController.value > 0);
+
     // Check if Claude is working (for spinner display)
     final isWorking = chat?.session.isWorking ?? false;
     final isCompacting = chat?.session.isCompacting ?? false;
@@ -508,7 +587,7 @@ class _ConversationPanelState extends State<ConversationPanel>
                   isCompacting: isCompacting,
                 ),
         ),
-        // Bottom area: agent-removed banner, permission widget, or message input
+        // Bottom area: agent-removed > permission > ticket proposal > message input
         if (isPrimary && chat.agents.agentRemoved)
           _AgentRemovedBanner(message: chat.agents.missingAgentMessage)
         else if (isPrimary)
@@ -521,22 +600,27 @@ class _ConversationPanelState extends State<ConversationPanel>
                       .read<ChatSessionService>()
                       .approvePlanWithClearContext(chat, planText),
                 )
-              : MessageInput(
-                  key: ValueKey('input-${chat.data.id}'),
-                  initialText: chat.viewState.draftText,
-                  onTextChanged: (text) => chat.viewState.draftText = text,
-                  onSubmit: (text, images, displayFormat) =>
-                      context.read<ChatSessionService>().submitMessage(
-                        chat,
-                        text: text,
-                        images: images,
-                        displayFormat: displayFormat,
-                      ),
-                  isWorking: isWorking,
-                  onInterrupt: isWorking
-                      ? () => context.read<ChatSessionService>().interrupt(chat)
-                      : null,
-                ),
+              : shouldShowProposalWidget
+                  ? _ProposalSection(animation: _proposalAnimation)
+                  : MessageInput(
+                      key: ValueKey('input-${chat.data.id}'),
+                      initialText: chat.viewState.draftText,
+                      onTextChanged: (text) =>
+                          chat.viewState.draftText = text,
+                      onSubmit: (text, images, displayFormat) =>
+                          context.read<ChatSessionService>().submitMessage(
+                            chat,
+                            text: text,
+                            images: images,
+                            displayFormat: displayFormat,
+                          ),
+                      isWorking: isWorking,
+                      onInterrupt: isWorking
+                          ? () => context
+                              .read<ChatSessionService>()
+                              .interrupt(chat)
+                          : null,
+                    ),
       ],
     );
   }
@@ -680,6 +764,22 @@ class _PermissionSection extends StatelessWidget {
       sizeFactor: animation,
       axisAlignment: 1.0, // Align to bottom (slide up from bottom)
       child: dialogWidget,
+    );
+  }
+}
+
+/// Builds the proposal card with slide-up animation.
+class _ProposalSection extends StatelessWidget {
+  const _ProposalSection({required this.animation});
+
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizeTransition(
+      sizeFactor: animation,
+      axisAlignment: 1.0, // Align to bottom (slide up from bottom)
+      child: const TicketProposalCard(),
     );
   }
 }
