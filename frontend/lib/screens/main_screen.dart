@@ -19,7 +19,6 @@ import '../services/settings_service.dart';
 import '../services/window_layout_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
-import '../state/bulk_proposal_state.dart';
 import '../widgets/dialog_observer.dart';
 import '../widgets/insights_widgets.dart';
 import '../widgets/restore_worktree_dialog.dart';
@@ -67,8 +66,6 @@ class _MainScreenState extends State<MainScreen> {
   // Tracked listeners for safe disposal (avoids context.read in dispose)
   BackendService? _backendService;
   MenuActionService? _menuActionService;
-  BulkProposalState? _bulkProposalState;
-
   // Debounce timer for saving panel layout after divider drag
   Timer? _layoutSaveDebounce;
 
@@ -93,13 +90,12 @@ class _MainScreenState extends State<MainScreen> {
     // Listen for native menu actions
     _windowChannel.setMethodCallHandler(_handleNativeMethodCall);
 
-    // Listen for backend errors, menu actions, unhandled exceptions,
-    // and ticket board state changes after the first frame
+    // Listen for backend errors, menu actions, and unhandled exceptions
+    // after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupBackendErrorListener();
       _setupMenuActionListener();
       _setupUnhandledErrorListener();
-      _setupBulkProposalListener();
       _syncMergeStateToMenu();
       _showCliWarnings();
     });
@@ -174,21 +170,6 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _setupBulkProposalListener() {
-    final bulkProposal = context.read<BulkProposalState>();
-    _bulkProposalState = bulkProposal;
-    bulkProposal.addListener(_onBulkProposalChanged);
-  }
-
-  void _onBulkProposalChanged() {
-    if (!mounted) return;
-    final bulkProposal = context.read<BulkProposalState>();
-    // Auto-navigate to ticket screen when bulk proposal is active
-    if (bulkProposal.hasActiveProposal && _selectedNavIndex != 4) {
-      _handleNavigationChange(4);
-    }
-  }
-
   void _setupMenuActionListener() {
     final menuService = context.read<MenuActionService>();
     _menuActionService = menuService;
@@ -220,6 +201,9 @@ class _MainScreenState extends State<MainScreen> {
         break;
       case MenuAction.showStats:
         _handleNavigationChange(5);
+        break;
+      case MenuAction.showTickets:
+        _handleNavigationChange(4);
         break;
       case MenuAction.showProjectSettings:
         _handleNavigationChange(0);
@@ -513,7 +497,6 @@ class _MainScreenState extends State<MainScreen> {
     _controller.removeListener(_onLayoutChanged);
     _backendService?.removeListener(_onBackendChanged);
     _menuActionService?.removeListener(_onMenuAction);
-    _bulkProposalState?.removeListener(_onBulkProposalChanged);
     _controller.dispose();
     super.dispose();
   }

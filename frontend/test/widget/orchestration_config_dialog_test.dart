@@ -200,10 +200,10 @@ void main() {
           find.byKey(OrchestrationConfigDialogKeys.branchField),
         );
         final name = textField.controller!.text;
-        // Should be adjective-noun format: lowercase, hyphen-separated
-        check(name).has((s) => s.contains('-'), 'contains hyphen').isTrue();
+        // Should be orchestrate-adjective-noun format
+        check(name).has((s) => s.startsWith('orchestrate-'), 'orchestrate prefix').isTrue();
         check(name)
-            .has((s) => RegExp(r'^[a-z]+-[a-z]+$').hasMatch(s), 'adjective-noun format')
+            .has((s) => RegExp(r'^orchestrate-[a-z]+-[a-z]+$').hasMatch(s), 'orchestrate-adjective-noun format')
             .isTrue();
       });
 

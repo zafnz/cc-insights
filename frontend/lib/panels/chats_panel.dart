@@ -138,10 +138,20 @@ class _ChatsListContentState extends State<_ChatsListContent> {
     }
   }
 
+  /// The number of chats that listeners were last set up for.
+  ///
+  /// Used to skip redundant teardown/rebuild when the chat list hasn't changed.
+  int _listenedChatCount = 0;
+
   /// Sets up listeners for permission changes on all chats.
   void _setupChatListeners(List<Chat> chats) {
+    // Skip if the chat list length hasn't changed — the existing listeners
+    // are still valid and each _ChatListItem self-updates via ListenableBuilder.
+    if (chats.length == _listenedChatCount) return;
+
     // Remove old listeners
     _removeChatListeners();
+    _listenedChatCount = chats.length;
 
     for (final chat in chats) {
       // Track initial permission count
@@ -180,6 +190,7 @@ class _ChatsListContentState extends State<_ChatsListContent> {
       removeListener();
     }
     _chatListeners.clear();
+    _listenedChatCount = 0;
   }
 
   /// Called when the bell animation completes.
@@ -208,67 +219,74 @@ class _ChatsListContentState extends State<_ChatsListContent> {
       );
     }
 
-    final chats = selectedWorktree.chats;
+    // Listen to WorktreeState so the panel rebuilds when chats are
+    // added or removed (e.g. launch_agent with select: false).
+    return ListenableBuilder(
+      listenable: selectedWorktree,
+      builder: (context, _) {
+        final chats = selectedWorktree.chats;
 
-    // Show empty state with placeholder message AND New Chat card
-    if (chats.isEmpty) {
-      return GestureDetector(
-        onSecondaryTapUp: (details) =>
-            _showBodyContextMenu(context, details.globalPosition),
-        child: const Column(
-          children: [
-            Expanded(
-              child: _EmptyChatsPlaceholder(
-                message: 'No chats in this worktree',
+        // Show empty state with placeholder message AND New Chat card
+        if (chats.isEmpty) {
+          return GestureDetector(
+            onSecondaryTapUp: (details) =>
+                _showBodyContextMenu(context, details.globalPosition),
+            child: const Column(
+              children: [
+                Expanded(
+                  child: _EmptyChatsPlaceholder(
+                    message: 'No chats in this worktree',
+                  ),
+                ),
+                NewChatCard(),
+              ],
+            ),
+          );
+        }
+
+        // Ensure keys and listeners are set up
+        _ensureKeysForChats(chats);
+        _setupChatListeners(chats);
+
+        // +1 for the ghost "New Chat" card
+        final itemCount = chats.length + 1;
+
+        return GestureDetector(
+          onSecondaryTapUp: (details) =>
+              _showBodyContextMenu(context, details.globalPosition),
+          child: Stack(
+            children: [
+              ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: itemCount,
+                itemBuilder: (context, index) {
+                  // Last item is the ghost card
+                  if (index == chats.length) {
+                    return const NewChatCard();
+                  }
+
+                  final chat = chats[index];
+                  final isSelected = selection.selectedChat == chat;
+                  return _ChatListItem(
+                    key: _chatKeys[chat.data.id],
+                    chat: chat,
+                    isSelected: isSelected,
+                    onTap: () => selection.selectChat(chat),
+                    onClose: () => _closeChat(context, selection, chat),
+                    onRename: (newName) => chat.conversations.rename(newName),
+                  );
+                },
               ),
-            ),
-            NewChatCard(),
-          ],
-        ),
-      );
-    }
-
-    // Ensure keys and listeners are set up
-    _ensureKeysForChats(chats);
-    _setupChatListeners(chats);
-
-    // +1 for the ghost "New Chat" card
-    final itemCount = chats.length + 1;
-
-    return GestureDetector(
-      onSecondaryTapUp: (details) =>
-          _showBodyContextMenu(context, details.globalPosition),
-      child: Stack(
-        children: [
-          ListView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: itemCount,
-            itemBuilder: (context, index) {
-              // Last item is the ghost card
-              if (index == chats.length) {
-                return const NewChatCard();
-              }
-
-              final chat = chats[index];
-              final isSelected = selection.selectedChat == chat;
-              return _ChatListItem(
-                key: _chatKeys[chat.data.id],
-                chat: chat,
-                isSelected: isSelected,
-                onTap: () => selection.selectChat(chat),
-                onClose: () => _closeChat(context, selection, chat),
-                onRename: (newName) => chat.conversations.rename(newName),
-              );
-            },
+              // Animated bell overlay
+              if (_bellTargetChatId != null)
+                _AnimatedBellOverlay(
+                  targetKey: _chatKeys[_bellTargetChatId],
+                  onAnimationComplete: _onBellAnimationComplete,
+                ),
+            ],
           ),
-          // Animated bell overlay
-          if (_bellTargetChatId != null)
-            _AnimatedBellOverlay(
-              targetKey: _chatKeys[_bellTargetChatId],
-              onAnimationComplete: _onBellAnimationComplete,
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

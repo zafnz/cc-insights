@@ -24,7 +24,7 @@ class ImageAttachmentHelper {
   /// Called to check whether the owning widget is still mounted.
   final bool Function() isMounted;
 
-  final List<AttachedImage> _images = [];
+  final List<AttachedImage> _images;
   bool isProcessing = false;
 
   ImageAttachmentHelper({
@@ -32,7 +32,8 @@ class ImageAttachmentHelper {
     required this.onChanged,
     required this.onError,
     required this.isMounted,
-  });
+    List<AttachedImage> initialImages = const [],
+  }) : _images = List.from(initialImages);
 
   /// The current list of attached images (unmodifiable view).
   List<AttachedImage> get images => List.unmodifiable(_images);
