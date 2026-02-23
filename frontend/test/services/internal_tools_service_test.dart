@@ -525,6 +525,66 @@ void main() {
     });
   });
 
+  group('InternalToolsService - registryForChat create_ticket', () {
+    test('injects chat id and name into proposeBulk', () async {
+      final service = resources.track(InternalToolsService());
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
+
+      final chat = Chat.create(
+        name: 'My Test Chat',
+        worktreeRoot: '/test/worktree',
+      );
+      final registry = service.registryForChat(chat);
+      final tool = registry['create_ticket']!;
+
+      final resultFuture = tool.handler({
+        'tickets': [
+          {
+            'title': 'Test ticket',
+            'description': 'A description',
+            'kind': 'feature',
+          },
+        ],
+      });
+
+      // Verify the chat context was passed through to proposeBulk
+      expect(bulkProposal.proposalSourceChatId, chat.id);
+      expect(bulkProposal.proposalSourceChatName, 'My Test Chat');
+
+      // Complete the review so the future resolves
+      bulkProposal.approveBulk();
+      await resultFuture;
+    });
+
+    test('global registry handler uses fallback source values', () async {
+      final service = resources.track(InternalToolsService());
+      final repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      service.registerTicketTools(bulkProposal);
+
+      // Use the global registry (not registryForChat)
+      final tool = service.registry['create_ticket']!;
+
+      final resultFuture = tool.handler({
+        'tickets': [
+          {
+            'title': 'Test ticket',
+            'description': 'A description',
+            'kind': 'feature',
+          },
+        ],
+      });
+
+      expect(bulkProposal.proposalSourceChatId, 'mcp-tool');
+      expect(bulkProposal.proposalSourceChatName, 'Agent');
+
+      bulkProposal.approveBulk();
+      await resultFuture;
+    });
+  });
+
   group('InternalToolsService - git tools', () {
     late FakeGitService fakeGit;
 

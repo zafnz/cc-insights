@@ -187,7 +187,7 @@ void main() {
         expect(find.textContaining('Test ticket 2'), findsOneWidget);
       });
 
-      testWidgets('populates default branch name from ticket IDs',
+      testWidgets('populates default branch name with random adjective-noun',
           (tester) async {
         final (repo, ids) = createRepoWithTickets(3);
         await tester.pumpWidget(createTestApp(
@@ -199,8 +199,12 @@ void main() {
         final textField = tester.widget<TextField>(
           find.byKey(OrchestrationConfigDialogKeys.branchField),
         );
-        check(textField.controller!.text)
-            .equals('orchestrate-${ids.first}-${ids.last}');
+        final name = textField.controller!.text;
+        // Should be orchestrate-adjective-noun format
+        check(name).has((s) => s.startsWith('orchestrate-'), 'orchestrate prefix').isTrue();
+        check(name)
+            .has((s) => RegExp(r'^orchestrate-[a-z]+-[a-z]+$').hasMatch(s), 'orchestrate-adjective-noun format')
+            .isTrue();
       });
 
       testWidgets('populates default instructions', (tester) async {
