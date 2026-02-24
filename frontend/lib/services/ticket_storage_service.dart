@@ -46,23 +46,30 @@ class TicketStorageService {
     }
   }
 
-  /// Saves tickets to disk.
+  /// Saves tickets to disk using atomic write.
   ///
   /// Creates the project directory if it doesn't exist.
+  /// Uses write-to-temp-then-rename to prevent corruption on crash.
   Future<void> saveTickets(String projectId, Map<String, dynamic> data) async {
     final path = ticketsPath(projectId);
 
+    // Ensure project directory exists
+    final dir = Directory(PersistenceService.projectDir(projectId));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final encoder = const JsonEncoder.withIndent('  ');
+    final content = encoder.convert(data);
+
+    // Write to temp file in the same directory, then rename atomically.
+    final tempPath =
+        '$path.tmp.${DateTime.now().microsecondsSinceEpoch}';
+    final tempFile = File(tempPath);
+
     try {
-      // Ensure project directory exists
-      final dir = Directory(PersistenceService.projectDir(projectId));
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-
-      final encoder = const JsonEncoder.withIndent('  ');
-      final content = encoder.convert(data);
-      await File(path).writeAsString(content);
-
+      await tempFile.writeAsString(content);
+      await tempFile.rename(path);
       developer.log('Saved tickets: $projectId', name: 'TicketStorageService');
     } catch (e) {
       developer.log(
@@ -70,6 +77,14 @@ class TicketStorageService {
         name: 'TicketStorageService',
         error: e,
       );
+      // Clean up temp file on any failure
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {
+        // Best-effort cleanup
+      }
       rethrow;
     }
   }
