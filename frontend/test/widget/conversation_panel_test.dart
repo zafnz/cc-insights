@@ -13,6 +13,7 @@ import 'package:cc_insights_v2/services/event_handler.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/services/internal_tools_service.dart';
 import 'package:cc_insights_v2/services/menu_action_service.dart';
+import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/theme_state.dart';
@@ -430,6 +431,8 @@ void main() {
     late MenuActionService menuActionService;
 
     setUp(() {
+      // Disable idle session timeout to avoid pending timer issues in tests.
+      RuntimeConfig.instance.idleSessionTimeout = false;
       fakeBackend = FakeBackendService();
       fakeCliAvailability = FakeCliAvailabilityService();
       fakeEventHandler = EventHandler();

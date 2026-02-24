@@ -412,6 +412,18 @@ class _ChatCore extends ChangeNotifier {
   /// Context window tracking for this chat.
   final ContextTracker _contextTracker = ContextTracker();
 
+  /// Timestamp of the last activity on this session (for idle detection).
+  ///
+  /// Updated when the session starts working, finishes a turn, receives a
+  /// permission request, or the user sends a message. Null when no session
+  /// has been active.
+  DateTime? _lastActivityTime;
+
+  /// Periodic timer that checks whether the session has been idle too long.
+  ///
+  /// Created when a session starts, cancelled on teardown.
+  Timer? _idleCheckTimer;
+
   /// Cumulative usage for this chat across all sessions.
   ///
   /// Updated authoritatively by [updateCumulativeUsage] at end of each turn.
@@ -1537,6 +1549,7 @@ class _ChatCore extends ChangeNotifier {
       _isWorking = true;
       _workingStopwatch = Stopwatch()..start();
       _sessionPhase = SessionPhase.active;
+      _startIdleTimer();
 
       _t('Chat', '========== Session fully set up, working=true ==========');
       session.notifyListeners();
@@ -1579,6 +1592,8 @@ class _ChatCore extends ChangeNotifier {
       _t('Chat', 'ERROR: sendMessage called with no active session');
       throw StateError('No active session');
     }
+
+    _updateLastActivity();
 
     // Add user message to conversation
     addEntry(
@@ -1689,6 +1704,7 @@ class _ChatCore extends ChangeNotifier {
   /// stopwatch is paused so that user response time is not counted as
   /// Claude working time.
   void addPendingPermission(sdk.PermissionRequest request) {
+    _updateLastActivity();
     permissions.add(request);
   }
 
@@ -1720,6 +1736,7 @@ class _ChatCore extends ChangeNotifier {
       }
 
       _isWorking = working;
+      _updateLastActivity();
       if (working) {
         _workingStopwatch = Stopwatch()..start();
       } else {
@@ -1738,6 +1755,71 @@ class _ChatCore extends ChangeNotifier {
     if (_isCompacting != compacting) {
       _isCompacting = compacting;
       session.notifyListeners();
+    }
+  }
+
+  /// Updates the last activity timestamp for idle detection.
+  void _updateLastActivity() {
+    _lastActivityTime = DateTime.now();
+  }
+
+  /// Starts the periodic idle check timer.
+  ///
+  /// Called when a session becomes active. Checks every 60 seconds whether
+  /// the session has exceeded the idle timeout threshold. Does nothing if
+  /// idle session timeout is disabled in settings.
+  void _startIdleTimer() {
+    _cancelIdleTimer();
+    if (!RuntimeConfig.instance.idleSessionTimeout) return;
+    _updateLastActivity();
+    _idleCheckTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      _checkIdleTimeout,
+    );
+  }
+
+  /// Cancels the idle check timer.
+  void _cancelIdleTimer() {
+    _idleCheckTimer?.cancel();
+    _idleCheckTimer = null;
+  }
+
+  /// Periodic callback that terminates the session if it has been idle.
+  ///
+  /// A session is considered idle when it is not working, not waiting on
+  /// permission, and not compacting context. The session is stopped (not
+  /// destroyed) so it can be resumed when the user sends a new message.
+  void _checkIdleTimeout(Timer timer) {
+    final config = RuntimeConfig.instance;
+    if (!config.idleSessionTimeout || !hasActiveSession) {
+      _cancelIdleTimer();
+      return;
+    }
+
+    // Don't terminate if the session is actively doing something
+    if (_isWorking || _pendingPermissions.isNotEmpty || _isCompacting) {
+      return;
+    }
+
+    final lastActivity = _lastActivityTime;
+    if (lastActivity == null) return;
+
+    final idleMinutes = config.idleSessionTimeoutMinutes;
+    final elapsed = DateTime.now().difference(lastActivity);
+    if (elapsed >= Duration(minutes: idleMinutes)) {
+      _cancelIdleTimer();
+      LogService.instance.info(
+        'Chat',
+        'Terminating idle session (chat=${_data.id}, '
+            'idle=${elapsed.inMinutes}m, threshold=${idleMinutes}m)',
+      );
+      addEntry(
+        SessionMarkerEntry(
+          timestamp: DateTime.now(),
+          markerType: SessionMarkerType.idleTimeout,
+        ),
+      );
+      stopSession();
     }
   }
 
@@ -1858,6 +1940,7 @@ class _ChatCore extends ChangeNotifier {
     _isCompacting = false;
     _workingStopwatch?.stop();
     _workingStopwatch = null;
+    _cancelIdleTimer();
 
     if (clearSessionId) {
       _lastSessionId = null;
@@ -2216,6 +2299,7 @@ class _ChatCore extends ChangeNotifier {
   @override
   void dispose() {
     persistence.dispose();
+    _cancelIdleTimer();
     // Cancel stream subscriptions.
     _permissionSubscription?.cancel();
     _eventSubscription?.cancel();

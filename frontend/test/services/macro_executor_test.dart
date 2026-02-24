@@ -49,6 +49,7 @@ void main() {
         ),
       ];
       RuntimeConfig.instance.defaultAgentId = 'codex-default';
+      RuntimeConfig.instance.idleSessionTimeout = false;
       ChatModelCatalog.updateCodexModels(const [
         ChatModel(
           id: 'o3-mini',
