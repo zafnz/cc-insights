@@ -62,8 +62,10 @@ class TicketIssueHeader extends StatelessWidget {
     final subdued = theme.colorScheme.onSurfaceVariant;
 
     return Container(
-      decoration: Border(
-        bottom: BorderSide(color: theme.dividerColor),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor),
+        ),
       ),
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
