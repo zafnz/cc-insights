@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../models/ticket.dart';
 import '../panels/ticket_bulk_review_panel.dart';
-import '../panels/ticket_create_form.dart';
 import '../panels/ticket_detail_panel.dart';
 import '../panels/ticket_graph_view.dart';
 import '../panels/ticket_list_panel.dart';
@@ -97,14 +96,8 @@ class _TicketContentPanel extends StatelessWidget {
       child: bulkProposal.hasActiveProposal
           ? const TicketBulkReviewPanel()
           : viewState.viewMode == TicketViewMode.graph
-          ? const TicketGraphView()
-          : switch (viewState.detailMode) {
-              TicketDetailMode.detail => const TicketDetailPanel(),
-              TicketDetailMode.edit => TicketCreateForm(
-                editingTicket: viewState.selectedTicket,
-              ),
-              TicketDetailMode.create => const TicketCreateForm(),
-            },
+              ? const TicketGraphView()
+              : const TicketDetailPanel(),
     );
   }
 }
