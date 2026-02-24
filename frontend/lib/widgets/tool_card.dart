@@ -518,6 +518,11 @@ class _ToolResult extends StatelessWidget {
       return ImageResultWidget(content: entry.result);
     }
 
+    // Special rendering for MCP tool results (images, text, structured content)
+    if (entry.toolKind == ToolKind.mcp && !isError) {
+      return McpResultWidget(result: entry.result);
+    }
+
     // Special rendering for Bash results (black box with grey text)
     if (entry.toolKind == ToolKind.execute && !isError) {
       final bashOutput = _extractBashOutput(entry.result);

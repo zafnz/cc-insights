@@ -1,4 +1,4 @@
-import 'dart:convert' show base64Decode;
+import 'dart:convert' show JsonEncoder, base64Decode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -364,6 +364,172 @@ class ImageResultWidget extends StatelessWidget {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+// -----------------------------------------------------------------------------
+// MCP result widget
+// -----------------------------------------------------------------------------
+
+/// Renders MCP tool results with structured content support.
+///
+/// Handles two MCP content formats:
+/// - Single content item: `{type: "image"|"text", ...}`
+/// - List of content items: `[{type: "image", ...}, {type: "text", ...}]`
+///
+/// Falls back to pretty-printed JSON for Map/List results, or plain text.
+class McpResultWidget extends StatelessWidget {
+  final dynamic result;
+
+  const McpResultWidget({super.key, required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    // Normalize to a list of content items
+    final items = _extractContentItems(result);
+
+    if (items != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final item in items) _buildContentItem(context, item),
+        ],
+      );
+    }
+
+    // Fallback: pretty-print JSON for Map/List, otherwise plain text
+    final monoFont = RuntimeConfig.instance.monoFontFamily;
+    String text;
+    if (result is Map || result is List) {
+      const encoder = JsonEncoder.withIndent('  ');
+      text = encoder.convert(result);
+    } else {
+      text = result?.toString() ?? '';
+    }
+
+    return ClickToScrollContainer(
+      maxHeight: 400,
+      padding: const EdgeInsets.all(8),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(4),
+      child: SelectableText(
+        text,
+        style: GoogleFonts.getFont(
+          monoFont,
+          fontSize: 11,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+    );
+  }
+
+  /// Tries to extract a list of typed content items from the result.
+  /// Returns null if the result doesn't match the MCP structured format.
+  List<Map<String, dynamic>>? _extractContentItems(dynamic data) {
+    if (data is Map && data['type'] is String) {
+      return [Map<String, dynamic>.from(data)];
+    }
+    if (data is List && data.isNotEmpty) {
+      final items = <Map<String, dynamic>>[];
+      for (final item in data) {
+        if (item is! Map || item['type'] is! String) return null;
+        items.add(Map<String, dynamic>.from(item));
+      }
+      return items;
+    }
+    return null;
+  }
+
+  Widget _buildContentItem(BuildContext context, Map<String, dynamic> item) {
+    final type = item['type'] as String;
+
+    if (type == 'image') {
+      return _buildImageItem(context, item);
+    }
+
+    if (type == 'text') {
+      final text = item['text'] as String? ?? '';
+      if (text.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: SelectableText(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      );
+    }
+
+    // Unknown content type - show type label
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        '[$type content]',
+        style: TextStyle(
+          fontSize: 11,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageItem(BuildContext context, Map<String, dynamic> item) {
+    final source = item['source'] as Map<String, dynamic>?;
+    final base64Data = source?['data'] as String?;
+
+    if (base64Data == null || base64Data.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final imageBytes = base64Decode(base64Data);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 500),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: Theme.of(context)
+                .colorScheme
+                .outline
+                .withValues(alpha: 0.2),
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.memory(
+            imageBytes,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.broken_image,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Failed to load image',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 }
 
