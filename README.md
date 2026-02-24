@@ -161,48 +161,7 @@ If you wish to contribute, this section is for you.
 ### Architecture
 
 CC-Insights uses a **multi-backend architecture** with a unified event protocol. Each backend SDK converts its native wire format into typed `InsightsEvent` objects, which the frontend consumes through an `EventTransport` abstraction. No Node.js backend required.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Flutter Desktop App                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐   │
-│  │ Worktree     │  │  Agent Tree  │  │     Output Panel        │   │
-│  │ & Chat List  │  │              │  │  - Text output          │   │
-│  │              │  │ - Main       │  │  - Tool use/results     │   │
-│  │ - Worktrees  │  │ - Subagents  │  │  - Permissions          │   │
-│  │ - Chats      │  │ - Status     │  │  - Streaming            │   │
-│  │ - Costs      │  │              │  │  - Markdown render      │   │
-│  └──────────────┘  └──────────────┘  └─────────────────────────┘   │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │              EventTransport (BackendCommands ↓ Events ↑)    │   │
-│  │  - InProcessTransport (current: wraps in-process sessions)  │   │
-│  │  - Future: WebSocketTransport, DockerTransport              │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  ┌─────────────────────────────┐  ┌─────────────────────────────┐  │
-│  │  Claude SDK (claude_sdk)    │  │  Codex SDK (codex_sdk)      │  │
-│  │  - CLI process management   │  │  - JSON-RPC 2.0 protocol    │  │
-│  │  - InsightsEvent emission   │  │  - InsightsEvent emission   │  │
-│  │  - Streaming deltas         │  │  - File diffs & reasoning   │  │
-│  │  - Cost/context tracking    │  │  - Plan mode support        │  │
-│  └─────────────────────────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-          │                                      │
-          │ stdin/stdout (stream-json)           │ JSON-RPC 2.0
-          ▼                                      ▼
-┌──────────────────────┐              ┌──────────────────────┐
-│   Claude CLI         │              │   Codex CLI          │
-│   (claude)           │              │   (codex)            │
-└──────────────────────┘              └──────────────────────┘
-          │                                      │
-          ▼                                      ▼
-┌──────────────────────┐              ┌──────────────────────┐
-│   Anthropic API      │              │   OpenAI API         │
-└──────────────────────┘              └──────────────────────┘
-```
-
-
+<img width="1536" height="1024" alt="flutter-app-diagram" src="https://github.com/user-attachments/assets/1bdf1d2c-5db5-4a2b-82c1-b2d8582ae6f5" />
 
 ### Frontend
 
