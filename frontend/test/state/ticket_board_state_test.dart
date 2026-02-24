@@ -918,6 +918,353 @@ void main() {
     });
   });
 
+  group('TicketRepository - linkWorktreeWithEvent', () {
+    test('links worktree and records worktreeLinked event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktreeWithEvent(
+        ticket.id,
+        '/path/to/wt',
+        'feat/branch',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedWorktrees.length, 1);
+      expect(updated.linkedWorktrees.first.worktreeRoot, '/path/to/wt');
+      expect(updated.linkedWorktrees.first.branch, 'feat/branch');
+
+      expect(updated.activityLog.length, 1);
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.worktreeLinked);
+      expect(event.actor, 'testuser');
+      expect(event.actorType, AuthorType.user);
+      expect(event.data['worktreeRoot'], '/path/to/wt');
+      expect(event.data['branch'], 'feat/branch');
+    });
+
+    test('skips duplicate and records no event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktreeWithEvent(
+        ticket.id,
+        '/path/to/wt',
+        'feat/branch',
+        'testuser',
+        AuthorType.user,
+      );
+      state.linkWorktreeWithEvent(
+        ticket.id,
+        '/path/to/wt',
+        'feat/branch',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedWorktrees.length, 1);
+      expect(updated.activityLog.length, 1);
+    });
+
+    test('omits branch from event data when null', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktreeWithEvent(
+        ticket.id,
+        '/path/to/wt',
+        null,
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.activityLog.first.data.containsKey('branch'), isFalse);
+    });
+
+    test('does nothing for non-existent ticket', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.linkWorktreeWithEvent(
+        999,
+        '/path/to/wt',
+        'branch',
+        'testuser',
+        AuthorType.user,
+      );
+
+      expect(state.tickets, isEmpty);
+    });
+  });
+
+  group('TicketRepository - unlinkWorktree', () {
+    test('removes worktree and records worktreeUnlinked event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktree(ticket.id, '/path/to/wt', 'feat/branch');
+      expect(state.getTicket(ticket.id)!.linkedWorktrees.length, 1);
+
+      state.unlinkWorktree(
+        ticket.id,
+        '/path/to/wt',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedWorktrees, isEmpty);
+
+      expect(updated.activityLog.length, 1);
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.worktreeUnlinked);
+      expect(event.actor, 'testuser');
+      expect(event.data['worktreeRoot'], '/path/to/wt');
+    });
+
+    test('no-op when worktree not linked', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.unlinkWorktree(
+        ticket.id,
+        '/no/such/path',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.activityLog, isEmpty);
+    });
+
+    test('does nothing for non-existent ticket', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.unlinkWorktree(
+        999,
+        '/path/to/wt',
+        'testuser',
+        AuthorType.user,
+      );
+    });
+  });
+
+  group('TicketRepository - linkChatWithEvent', () {
+    test('links chat and records chatLinked event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkChatWithEvent(
+        ticket.id,
+        'chat-1',
+        'auth-refactor',
+        '/path/wt',
+        'agent auth',
+        AuthorType.agent,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedChats.length, 1);
+      expect(updated.linkedChats.first.chatId, 'chat-1');
+      expect(updated.linkedChats.first.chatName, 'auth-refactor');
+      expect(updated.linkedChats.first.worktreeRoot, '/path/wt');
+
+      expect(updated.activityLog.length, 1);
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.chatLinked);
+      expect(event.actor, 'agent auth');
+      expect(event.actorType, AuthorType.agent);
+      expect(event.data['chatId'], 'chat-1');
+      expect(event.data['chatName'], 'auth-refactor');
+    });
+
+    test('skips duplicate and records no event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkChatWithEvent(
+        ticket.id,
+        'chat-1',
+        'auth',
+        '/path/wt',
+        'testuser',
+        AuthorType.user,
+      );
+      state.linkChatWithEvent(
+        ticket.id,
+        'chat-1',
+        'auth',
+        '/path/wt',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedChats.length, 1);
+      expect(updated.activityLog.length, 1);
+    });
+
+    test('does nothing for non-existent ticket', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.linkChatWithEvent(
+        999,
+        'chat-1',
+        'name',
+        '/path',
+        'testuser',
+        AuthorType.user,
+      );
+
+      expect(state.tickets, isEmpty);
+    });
+  });
+
+  group('TicketRepository - unlinkChat', () {
+    test('removes chat and records chatUnlinked event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkChat(ticket.id, 'chat-1', 'auth', '/path/wt');
+      expect(state.getTicket(ticket.id)!.linkedChats.length, 1);
+
+      state.unlinkChat(
+        ticket.id,
+        'chat-1',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedChats, isEmpty);
+
+      expect(updated.activityLog.length, 1);
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.chatUnlinked);
+      expect(event.actor, 'testuser');
+      expect(event.data['chatId'], 'chat-1');
+    });
+
+    test('no-op when chat not linked', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.unlinkChat(
+        ticket.id,
+        'no-such-chat',
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.activityLog, isEmpty);
+    });
+
+    test('does nothing for non-existent ticket', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.unlinkChat(
+        999,
+        'chat-1',
+        'testuser',
+        AuthorType.user,
+      );
+    });
+  });
+
+  group('TicketRepository - addDependency with events', () {
+    test('records dependencyAdded activity event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final t1 = state.createTicket(title: 'A');
+      final t2 = state.createTicket(title: 'B');
+
+      state.addDependency(
+        t2.id,
+        t1.id,
+        actor: 'testuser',
+        actorType: AuthorType.user,
+      );
+
+      final updated = state.getTicket(t2.id)!;
+      expect(updated.dependsOn, [t1.id]);
+      expect(updated.activityLog.length, 1);
+
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.dependencyAdded);
+      expect(event.actor, 'testuser');
+      expect(event.actorType, AuthorType.user);
+      expect(event.data['dependsOnId'], t1.id);
+    });
+
+    test('duplicate dependency records no event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final t1 = state.createTicket(title: 'A');
+      final t2 = state.createTicket(title: 'B');
+
+      state.addDependency(t2.id, t1.id);
+      state.addDependency(t2.id, t1.id);
+
+      final updated = state.getTicket(t2.id)!;
+      expect(updated.dependsOn, [t1.id]);
+      // First call creates event, second is idempotent (no extra event)
+      expect(updated.activityLog.length, 1);
+    });
+
+    test('uses default actor from AuthorService', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final t1 = state.createTicket(title: 'A');
+      final t2 = state.createTicket(title: 'B');
+
+      state.addDependency(t2.id, t1.id);
+
+      final updated = state.getTicket(t2.id)!;
+      expect(updated.activityLog.first.actor, 'testuser');
+      expect(updated.activityLog.first.actorType, AuthorType.user);
+    });
+  });
+
+  group('TicketRepository - removeDependency with events', () {
+    test('records dependencyRemoved activity event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final t1 = state.createTicket(title: 'A');
+      final t2 = state.createTicket(title: 'B');
+
+      state.addDependency(t2.id, t1.id);
+
+      state.removeDependency(
+        t2.id,
+        t1.id,
+        actor: 'agent cleanup',
+        actorType: AuthorType.agent,
+      );
+
+      final updated = state.getTicket(t2.id)!;
+      expect(updated.dependsOn, isEmpty);
+      // dependencyAdded + dependencyRemoved
+      expect(updated.activityLog.length, 2);
+
+      final event = updated.activityLog.last;
+      expect(event.type, ActivityEventType.dependencyRemoved);
+      expect(event.actor, 'agent cleanup');
+      expect(event.actorType, AuthorType.agent);
+      expect(event.data['dependsOnId'], t1.id);
+    });
+
+    test('no-op when dependency does not exist', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final t1 = state.createTicket(title: 'A');
+      final t2 = state.createTicket(title: 'B');
+
+      state.removeDependency(t2.id, t1.id);
+
+      final updated = state.getTicket(t2.id)!;
+      expect(updated.activityLog, isEmpty);
+    });
+  });
+
   group('TicketRepository - getTicketsForChat', () {
     test('returns tickets linked to a chat', () {
       final state = resources.track(TicketRepository('test-project'));

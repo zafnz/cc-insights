@@ -253,8 +253,14 @@ class TicketRepository extends ChangeNotifier {
   /// - The target ticket exists
   /// - The dependency does not create a cycle
   ///
+  /// Records a [ActivityEventType.dependencyAdded] activity event.
   /// Throws [ArgumentError] if validation fails.
-  void addDependency(int ticketId, int dependsOnId) {
+  void addDependency(
+    int ticketId,
+    int dependsOnId, {
+    String? actor,
+    AuthorType? actorType,
+  }) {
     // Validate: not self-reference
     if (ticketId == dependsOnId) {
       throw ArgumentError('A ticket cannot depend on itself');
@@ -271,20 +277,61 @@ class TicketRepository extends ChangeNotifier {
       throw ArgumentError('Adding this dependency would create a cycle');
     }
 
+    final resolvedActor = actor ?? AuthorService.currentUser;
+    final resolvedActorType = actorType ?? AuthorType.user;
+    final now = DateTime.now();
+
     // Add the dependency
     _applyUpdate(ticketId, (ticket) {
       if (ticket.dependsOn.contains(dependsOnId)) {
         return ticket; // Already exists
       }
-      return ticket.copyWith(dependsOn: [...ticket.dependsOn, dependsOnId]);
+      return ticket.copyWith(
+        dependsOn: [...ticket.dependsOn, dependsOnId],
+        activityLog: [
+          ...ticket.activityLog,
+          ActivityEvent(
+            id: _uuid.v4(),
+            type: ActivityEventType.dependencyAdded,
+            actor: resolvedActor,
+            actorType: resolvedActorType,
+            timestamp: now,
+            data: {'dependsOnId': dependsOnId},
+          ),
+        ],
+      );
     });
   }
 
   /// Removes a dependency relationship.
-  void removeDependency(int ticketId, int dependsOnId) {
+  ///
+  /// Records a [ActivityEventType.dependencyRemoved] activity event.
+  void removeDependency(
+    int ticketId,
+    int dependsOnId, {
+    String? actor,
+    AuthorType? actorType,
+  }) {
+    final resolvedActor = actor ?? AuthorService.currentUser;
+    final resolvedActorType = actorType ?? AuthorType.user;
+    final now = DateTime.now();
+
     _applyUpdate(ticketId, (ticket) {
-      final updated = ticket.dependsOn.where((d) => d != dependsOnId).toList();
-      return ticket.copyWith(dependsOn: updated);
+      if (!ticket.dependsOn.contains(dependsOnId)) return ticket;
+      return ticket.copyWith(
+        dependsOn: ticket.dependsOn.where((d) => d != dependsOnId).toList(),
+        activityLog: [
+          ...ticket.activityLog,
+          ActivityEvent(
+            id: _uuid.v4(),
+            type: ActivityEventType.dependencyRemoved,
+            actor: resolvedActor,
+            actorType: resolvedActorType,
+            timestamp: now,
+            data: {'dependsOnId': dependsOnId},
+          ),
+        ],
+      );
     });
   }
 
@@ -354,6 +401,83 @@ class TicketRepository extends ChangeNotifier {
     });
   }
 
+  /// Links a worktree to a ticket with an activity event.
+  ///
+  /// Adds a [LinkedWorktree] entry and records a
+  /// [ActivityEventType.worktreeLinked] activity event.
+  void linkWorktreeWithEvent(
+    int ticketId,
+    String worktreeRoot,
+    String? branch,
+    String actor,
+    AuthorType actorType,
+  ) {
+    final now = DateTime.now();
+    _applyUpdate(ticketId, (ticket) {
+      final alreadyLinked = ticket.linkedWorktrees.any(
+        (w) => w.worktreeRoot == worktreeRoot,
+      );
+      if (alreadyLinked) return ticket;
+
+      return ticket.copyWith(
+        linkedWorktrees: [
+          ...ticket.linkedWorktrees,
+          LinkedWorktree(worktreeRoot: worktreeRoot, branch: branch),
+        ],
+        activityLog: [
+          ...ticket.activityLog,
+          ActivityEvent(
+            id: _uuid.v4(),
+            type: ActivityEventType.worktreeLinked,
+            actor: actor,
+            actorType: actorType,
+            timestamp: now,
+            data: {
+              'worktreeRoot': worktreeRoot,
+              if (branch != null) 'branch': branch,
+            },
+          ),
+        ],
+      );
+    });
+  }
+
+  /// Unlinks a worktree from a ticket.
+  ///
+  /// Removes the [LinkedWorktree] entry and records a
+  /// [ActivityEventType.worktreeUnlinked] activity event.
+  void unlinkWorktree(
+    int ticketId,
+    String worktreeRoot,
+    String actor,
+    AuthorType actorType,
+  ) {
+    final now = DateTime.now();
+    _applyUpdate(ticketId, (ticket) {
+      final exists = ticket.linkedWorktrees.any(
+        (w) => w.worktreeRoot == worktreeRoot,
+      );
+      if (!exists) return ticket;
+
+      return ticket.copyWith(
+        linkedWorktrees: ticket.linkedWorktrees
+            .where((w) => w.worktreeRoot != worktreeRoot)
+            .toList(),
+        activityLog: [
+          ...ticket.activityLog,
+          ActivityEvent(
+            id: _uuid.v4(),
+            type: ActivityEventType.worktreeUnlinked,
+            actor: actor,
+            actorType: actorType,
+            timestamp: now,
+            data: {'worktreeRoot': worktreeRoot},
+          ),
+        ],
+      );
+    });
+  }
+
   /// Links a chat to a ticket.
   ///
   /// Adds a [LinkedChat] entry to the ticket's [linkedChats] list.
@@ -376,6 +500,80 @@ class TicketRepository extends ChangeNotifier {
             chatId: chatId,
             chatName: chatName,
             worktreeRoot: worktreeRoot,
+          ),
+        ],
+      );
+    });
+  }
+
+  /// Links a chat to a ticket with an activity event.
+  ///
+  /// Adds a [LinkedChat] entry and records a
+  /// [ActivityEventType.chatLinked] activity event.
+  void linkChatWithEvent(
+    int ticketId,
+    String chatId,
+    String chatName,
+    String worktreeRoot,
+    String actor,
+    AuthorType actorType,
+  ) {
+    final now = DateTime.now();
+    _applyUpdate(ticketId, (ticket) {
+      final alreadyLinked = ticket.linkedChats.any((c) => c.chatId == chatId);
+      if (alreadyLinked) return ticket;
+
+      return ticket.copyWith(
+        linkedChats: [
+          ...ticket.linkedChats,
+          LinkedChat(
+            chatId: chatId,
+            chatName: chatName,
+            worktreeRoot: worktreeRoot,
+          ),
+        ],
+        activityLog: [
+          ...ticket.activityLog,
+          ActivityEvent(
+            id: _uuid.v4(),
+            type: ActivityEventType.chatLinked,
+            actor: actor,
+            actorType: actorType,
+            timestamp: now,
+            data: {'chatId': chatId, 'chatName': chatName},
+          ),
+        ],
+      );
+    });
+  }
+
+  /// Unlinks a chat from a ticket.
+  ///
+  /// Removes the [LinkedChat] entry and records a
+  /// [ActivityEventType.chatUnlinked] activity event.
+  void unlinkChat(
+    int ticketId,
+    String chatId,
+    String actor,
+    AuthorType actorType,
+  ) {
+    final now = DateTime.now();
+    _applyUpdate(ticketId, (ticket) {
+      final exists = ticket.linkedChats.any((c) => c.chatId == chatId);
+      if (!exists) return ticket;
+
+      return ticket.copyWith(
+        linkedChats:
+            ticket.linkedChats.where((c) => c.chatId != chatId).toList(),
+        activityLog: [
+          ...ticket.activityLog,
+          ActivityEvent(
+            id: _uuid.v4(),
+            type: ActivityEventType.chatUnlinked,
+            actor: actor,
+            actorType: actorType,
+            timestamp: now,
+            data: {'chatId': chatId},
           ),
         ],
       );
