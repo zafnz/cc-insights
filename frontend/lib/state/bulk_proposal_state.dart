@@ -8,6 +8,51 @@ import 'ticket_board_state.dart';
 /// Result emitted when a bulk review completes.
 typedef BulkReviewResult = ({int approvedCount, int rejectedCount});
 
+/// A ticket proposal submitted by an agent for bulk review.
+///
+/// Contains the fields needed to create a ticket. Dependency indices refer to
+/// other proposals in the same batch (0-based).
+@immutable
+class TicketProposal {
+  /// Short title describing the ticket.
+  final String title;
+
+  /// Markdown body content.
+  final String body;
+
+  /// Free-form tags for categorization.
+  final Set<String> tags;
+
+  /// Indices of other proposals in the same batch that this ticket depends on.
+  final List<int> dependsOnIndices;
+
+  /// Creates a [TicketProposal].
+  const TicketProposal({
+    required this.title,
+    this.body = '',
+    this.tags = const {},
+    this.dependsOnIndices = const [],
+  });
+
+  /// Deserializes a [TicketProposal] from a JSON map.
+  ///
+  /// Accepts both `body` and `description` keys for backwards compatibility
+  /// with the MCP tool schema.
+  factory TicketProposal.fromJson(Map<String, dynamic> json) {
+    final tagsList = json['tags'] as List<dynamic>? ?? [];
+    final depsList = json['dependsOnIndices'] as List<dynamic>? ?? [];
+
+    return TicketProposal(
+      title: json['title'] as String? ?? '',
+      body: (json['body'] as String?) ??
+          (json['description'] as String?) ??
+          '',
+      tags: Set<String>.from(tagsList.map((e) => e.toString())),
+      dependsOnIndices: depsList.map((e) => e as int).toList(),
+    );
+  }
+}
+
 /// State management for the bulk proposal review workflow.
 ///
 /// Manages the lifecycle of bulk ticket proposals: receiving them from an
@@ -49,7 +94,7 @@ class BulkProposalState extends ChangeNotifier {
   /// The chat ID that proposed the current bulk tickets.
   String? get proposalSourceChatId => _proposalSourceChatId;
 
-  /// All draft tickets from the current proposal batch.
+  /// All tickets from the current proposal batch.
   List<TicketData> get proposedTickets {
     return _repo.tickets
         .where((t) => _proposalTicketIds.contains(t.id))
@@ -65,11 +110,11 @@ class BulkProposalState extends ChangeNotifier {
   /// Whether there is an active proposal workflow in progress.
   bool get hasActiveProposal => _proposalTicketIds.isNotEmpty;
 
-  /// Creates draft tickets from a list of proposals.
+  /// Creates tickets from a list of proposals.
   ///
-  /// Converts [TicketProposal] objects into [TicketData] with status
-  /// [TicketStatus.draft]. Dependency indices are mapped to the actual IDs
-  /// of the newly created tickets. Out-of-range indices are silently dropped.
+  /// Converts [TicketProposal] objects into [TicketData]. Dependency indices
+  /// are mapped to the actual IDs of the newly created tickets. Out-of-range
+  /// indices are silently dropped.
   ///
   /// All newly created tickets are auto-checked for approval.
   List<TicketData> proposeBulk(
@@ -102,20 +147,14 @@ class BulkProposalState extends ChangeNotifier {
       final proposal = proposals[i];
       if (proposal.dependsOnIndices.isEmpty) continue;
 
-      final resolvedDeps = <int>[];
       for (final index in proposal.dependsOnIndices) {
         if (index >= 0 && index < createdTickets.length) {
-          resolvedDeps.add(createdTickets[index].id);
+          _repo.addDependency(createdTickets[i].id, createdTickets[index].id);
         }
       }
 
-      if (resolvedDeps.isNotEmpty) {
-        for (final depId in resolvedDeps) {
-          _repo.addDependency(createdTickets[i].id, depId);
-        }
-        // Refresh the local reference
-        createdTickets[i] = _repo.getTicket(createdTickets[i].id)!;
-      }
+      // Refresh the local reference
+      createdTickets[i] = _repo.getTicket(createdTickets[i].id)!;
     }
 
     notifyListeners();
@@ -150,8 +189,8 @@ class BulkProposalState extends ChangeNotifier {
 
   /// Approves checked proposals and deletes unchecked ones.
   ///
-  /// Checked draft tickets are promoted to [TicketStatus.ready].
-  /// Unchecked draft tickets are deleted.
+  /// Checked tickets are kept as-is (already open).
+  /// Unchecked tickets are deleted.
   ///
   /// Emits a [BulkReviewResult] on [onBulkReviewComplete] with the counts of
   /// approved and rejected tickets.
@@ -160,9 +199,7 @@ class BulkProposalState extends ChangeNotifier {
     final rejectedCount = _proposalTicketIds.length - approvedCount;
 
     for (final ticketId in _proposalTicketIds) {
-      if (_proposalCheckedIds.contains(ticketId)) {
-        // Ticket is already open — no status change needed in V2
-      } else {
+      if (!_proposalCheckedIds.contains(ticketId)) {
         _repo.deleteTicket(ticketId);
       }
     }
@@ -178,7 +215,7 @@ class BulkProposalState extends ChangeNotifier {
 
   /// Rejects all proposed tickets by deleting them.
   ///
-  /// All draft tickets from the current proposal are deleted.
+  /// All tickets from the current proposal are deleted.
   ///
   /// Emits a [BulkReviewResult] on [onBulkReviewComplete] with all tickets
   /// counted as rejected.
