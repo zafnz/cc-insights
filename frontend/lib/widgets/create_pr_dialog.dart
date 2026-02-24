@@ -124,7 +124,8 @@ class _CreatePrDialogState extends State<CreatePrDialog>
 
       // Auto-populate title
       if (commits.length == 1) {
-        _titleController.text = commits.first.message;
+        // Use only the first line (subject) of the commit message.
+        _titleController.text = commits.first.message.split('\n').first.trim();
       } else {
         _titleController.text = _formatBranchAsTitle(widget.branch);
       }

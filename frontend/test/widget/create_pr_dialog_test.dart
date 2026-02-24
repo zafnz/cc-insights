@@ -127,6 +127,26 @@ void main() {
       expect(titleField.controller!.text, 'Add login form');
     });
 
+    testWidgets('uses only first line of multi-line commit for title',
+        (tester) async {
+      const commitKey = '$testWorktreePath:$testMainBranch';
+      gitService.commitsAhead[commitKey] = [
+        (
+          sha: 'abc1234',
+          message: 'Add login form\n\nThis adds a login form with validation\n'
+              'and error handling.',
+        ),
+      ];
+
+      await openDialog(tester);
+      await tester.pump();
+
+      final titleField = tester.widget<TextField>(
+        find.byKey(CreatePrDialogKeys.titleField),
+      );
+      expect(titleField.controller!.text, 'Add login form');
+    });
+
     testWidgets('shows commits in changelog tab', (tester) async {
       await openDialog(tester);
       await tester.pump();
