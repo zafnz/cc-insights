@@ -176,6 +176,7 @@ class TicketRepository extends ChangeNotifier {
     if (index == -1) return;
 
     final ticket = _tickets[index];
+    if (!ticket.isOpen) return;
     final now = DateTime.now();
 
     _tickets[index] = ticket.copyWith(
@@ -207,6 +208,7 @@ class TicketRepository extends ChangeNotifier {
     if (index == -1) return;
 
     final ticket = _tickets[index];
+    if (ticket.isOpen) return;
     final now = DateTime.now();
 
     _tickets[index] = ticket.copyWith(

@@ -350,6 +350,39 @@ void main() {
       // Should not throw
       state.reopenTicket(999, 'testuser', AuthorType.user);
     });
+
+    test('closeTicket on already-closed ticket is a no-op', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.closeTicket(ticket.id, 'testuser', AuthorType.user);
+      final afterFirstClose = state.getTicket(ticket.id)!;
+      final closedAt = afterFirstClose.closedAt;
+      final eventCount = afterFirstClose.activityLog.length;
+
+      // Close again — should not add event or change closedAt
+      state.closeTicket(ticket.id, 'testuser', AuthorType.user);
+
+      final afterSecondClose = state.getTicket(ticket.id)!;
+      expect(afterSecondClose.activityLog.length, eventCount);
+      expect(afterSecondClose.closedAt, closedAt);
+      expect(afterSecondClose.isOpen, isFalse);
+    });
+
+    test('reopenTicket on already-open ticket is a no-op', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      // Ticket starts open — reopen should be a no-op
+      final before = state.getTicket(ticket.id)!;
+
+      state.reopenTicket(ticket.id, 'testuser', AuthorType.user);
+
+      final after = state.getTicket(ticket.id)!;
+      expect(after.activityLog.length, before.activityLog.length);
+      expect(after.isOpen, isTrue);
+      expect(after.closedAt, isNull);
+    });
   });
 
   group('TicketRepository - Open/Closed counts', () {
@@ -730,6 +763,184 @@ void main() {
       state.addDependency(ticket2.id, ticket1.id);
 
       expect(notified, isTrue);
+    });
+  });
+
+  group('TicketRepository - addComment', () {
+    test('adds comment with default author', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addComment(ticket.id, 'A comment');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.comments.length, 1);
+      expect(updated.comments.first.text, 'A comment');
+      expect(updated.comments.first.author, 'testuser');
+      expect(updated.comments.first.authorType, AuthorType.user);
+      expect(updated.comments.first.id, isNotEmpty);
+    });
+
+    test('adds comment with explicit author', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addComment(
+        ticket.id,
+        'Agent note',
+        author: 'agent refactor',
+        authorType: AuthorType.agent,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.comments.first.author, 'agent refactor');
+      expect(updated.comments.first.authorType, AuthorType.agent);
+    });
+
+    test('adds multiple comments in order', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addComment(ticket.id, 'First');
+      state.addComment(ticket.id, 'Second');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.comments.length, 2);
+      expect(updated.comments[0].text, 'First');
+      expect(updated.comments[1].text, 'Second');
+    });
+
+    test('addComment updates updatedAt', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      state.addComment(ticket.id, 'A comment');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.updatedAt.isAfter(ticket.updatedAt), isTrue);
+    });
+
+    test('addComment on non-existent ticket does nothing', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      // Should not throw
+      state.addComment(999, 'Orphan comment');
+      expect(state.tickets, isEmpty);
+    });
+  });
+
+  group('TicketRepository - linkWorktree', () {
+    test('links worktree to ticket', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktree(ticket.id, '/path/to/wt', 'feat/branch');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedWorktrees.length, 1);
+      expect(updated.linkedWorktrees.first.worktreeRoot, '/path/to/wt');
+      expect(updated.linkedWorktrees.first.branch, 'feat/branch');
+    });
+
+    test('avoids duplicate worktree links', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktree(ticket.id, '/path/to/wt', 'feat/branch');
+      state.linkWorktree(ticket.id, '/path/to/wt', 'feat/branch');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedWorktrees.length, 1);
+    });
+
+    test('links multiple different worktrees', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkWorktree(ticket.id, '/path/a', 'branch-a');
+      state.linkWorktree(ticket.id, '/path/b', 'branch-b');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedWorktrees.length, 2);
+    });
+
+    test('linkWorktree on non-existent ticket does nothing', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      // Should not throw
+      state.linkWorktree(999, '/path/to/wt', 'branch');
+    });
+  });
+
+  group('TicketRepository - linkChat', () {
+    test('links chat to ticket', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkChat(ticket.id, 'chat-1', 'auth-refactor', '/path/wt');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedChats.length, 1);
+      expect(updated.linkedChats.first.chatId, 'chat-1');
+      expect(updated.linkedChats.first.chatName, 'auth-refactor');
+      expect(updated.linkedChats.first.worktreeRoot, '/path/wt');
+    });
+
+    test('avoids duplicate chat links', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkChat(ticket.id, 'chat-1', 'auth-refactor', '/path/wt');
+      state.linkChat(ticket.id, 'chat-1', 'auth-refactor', '/path/wt');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedChats.length, 1);
+    });
+
+    test('links multiple different chats', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.linkChat(ticket.id, 'chat-1', 'auth', '/path/wt');
+      state.linkChat(ticket.id, 'chat-2', 'ui', '/path/wt');
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.linkedChats.length, 2);
+    });
+
+    test('linkChat on non-existent ticket does nothing', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      // Should not throw
+      state.linkChat(999, 'chat-1', 'name', '/path');
+    });
+  });
+
+  group('TicketRepository - getTicketsForChat', () {
+    test('returns tickets linked to a chat', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      final t1 = state.createTicket(title: 'Ticket 1');
+      final t2 = state.createTicket(title: 'Ticket 2');
+      state.createTicket(title: 'Ticket 3');
+
+      state.linkChat(t1.id, 'chat-a', 'auth', '/path');
+      state.linkChat(t2.id, 'chat-a', 'auth', '/path');
+
+      final result = state.getTicketsForChat('chat-a');
+      expect(result.length, 2);
+      expect(result.map((t) => t.id).toSet(), {t1.id, t2.id});
+    });
+
+    test('returns empty list when no tickets linked', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.createTicket(title: 'Ticket 1');
+
+      final result = state.getTicketsForChat('no-such-chat');
+      expect(result, isEmpty);
     });
   });
 }
