@@ -4,125 +4,81 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 
 void main() {
-  group('TicketStatus enum', () {
-    test('has correct labels', () {
-      check(TicketStatus.draft.label).equals('Draft');
-      check(TicketStatus.ready.label).equals('Ready');
-      check(TicketStatus.active.label).equals('Active');
-      check(TicketStatus.blocked.label).equals('Blocked');
-      check(TicketStatus.needsInput.label).equals('Needs Input');
-      check(TicketStatus.inReview.label).equals('In Review');
-      check(TicketStatus.completed.label).equals('Completed');
-      check(TicketStatus.cancelled.label).equals('Cancelled');
-    });
-
+  group('AuthorType enum', () {
     test('has correct jsonValues', () {
-      check(TicketStatus.draft.jsonValue).equals('draft');
-      check(TicketStatus.ready.jsonValue).equals('ready');
-      check(TicketStatus.active.jsonValue).equals('active');
-      check(TicketStatus.blocked.jsonValue).equals('blocked');
-      check(TicketStatus.needsInput.jsonValue).equals('needsInput');
-      check(TicketStatus.inReview.jsonValue).equals('inReview');
-      check(TicketStatus.completed.jsonValue).equals('completed');
-      check(TicketStatus.cancelled.jsonValue).equals('cancelled');
+      check(AuthorType.user.jsonValue).equals('user');
+      check(AuthorType.agent.jsonValue).equals('agent');
     });
 
     test('fromJson round-trips', () {
-      for (final status in TicketStatus.values) {
-        check(TicketStatus.fromJson(status.jsonValue)).equals(status);
+      for (final type in AuthorType.values) {
+        check(AuthorType.fromJson(type.jsonValue)).equals(type);
       }
     });
 
     test('fromJson throws on invalid value', () {
-      check(() => TicketStatus.fromJson('invalid'))
+      check(() => AuthorType.fromJson('invalid')).throws<ArgumentError>();
+    });
+  });
+
+  group('ActivityEventType enum', () {
+    test('has all expected values', () {
+      check(ActivityEventType.values.length).equals(12);
+    });
+
+    test('has correct jsonValues', () {
+      check(ActivityEventType.tagAdded.jsonValue).equals('tagAdded');
+      check(ActivityEventType.tagRemoved.jsonValue).equals('tagRemoved');
+      check(ActivityEventType.worktreeLinked.jsonValue)
+          .equals('worktreeLinked');
+      check(ActivityEventType.worktreeUnlinked.jsonValue)
+          .equals('worktreeUnlinked');
+      check(ActivityEventType.chatLinked.jsonValue).equals('chatLinked');
+      check(ActivityEventType.chatUnlinked.jsonValue).equals('chatUnlinked');
+      check(ActivityEventType.dependencyAdded.jsonValue)
+          .equals('dependencyAdded');
+      check(ActivityEventType.dependencyRemoved.jsonValue)
+          .equals('dependencyRemoved');
+      check(ActivityEventType.closed.jsonValue).equals('closed');
+      check(ActivityEventType.reopened.jsonValue).equals('reopened');
+      check(ActivityEventType.titleEdited.jsonValue).equals('titleEdited');
+      check(ActivityEventType.bodyEdited.jsonValue).equals('bodyEdited');
+    });
+
+    test('fromJson round-trips', () {
+      for (final type in ActivityEventType.values) {
+        check(ActivityEventType.fromJson(type.jsonValue)).equals(type);
+      }
+    });
+
+    test('fromJson throws on invalid value', () {
+      check(() => ActivityEventType.fromJson('invalid'))
           .throws<ArgumentError>();
     });
   });
 
-  group('TicketKind enum', () {
+  group('TicketSortOrder enum', () {
     test('has correct labels', () {
-      check(TicketKind.feature.label).equals('Feature');
-      check(TicketKind.bugfix.label).equals('Bug Fix');
-      check(TicketKind.research.label).equals('Research');
-      check(TicketKind.split.label).equals('Split');
-      check(TicketKind.question.label).equals('Question');
-      check(TicketKind.test.label).equals('Test');
-      check(TicketKind.docs.label).equals('Docs');
-      check(TicketKind.chore.label).equals('Chore');
+      check(TicketSortOrder.newest.label).equals('Newest');
+      check(TicketSortOrder.oldest.label).equals('Oldest');
+      check(TicketSortOrder.recentlyUpdated.label).equals('Recently updated');
     });
 
     test('has correct jsonValues', () {
-      check(TicketKind.feature.jsonValue).equals('feature');
-      check(TicketKind.bugfix.jsonValue).equals('bugfix');
-      check(TicketKind.research.jsonValue).equals('research');
-      check(TicketKind.split.jsonValue).equals('split');
-      check(TicketKind.question.jsonValue).equals('question');
-      check(TicketKind.test.jsonValue).equals('test');
-      check(TicketKind.docs.jsonValue).equals('docs');
-      check(TicketKind.chore.jsonValue).equals('chore');
+      check(TicketSortOrder.newest.jsonValue).equals('newest');
+      check(TicketSortOrder.oldest.jsonValue).equals('oldest');
+      check(TicketSortOrder.recentlyUpdated.jsonValue)
+          .equals('recentlyUpdated');
     });
 
     test('fromJson round-trips', () {
-      for (final kind in TicketKind.values) {
-        check(TicketKind.fromJson(kind.jsonValue)).equals(kind);
+      for (final order in TicketSortOrder.values) {
+        check(TicketSortOrder.fromJson(order.jsonValue)).equals(order);
       }
     });
 
     test('fromJson throws on invalid value', () {
-      check(() => TicketKind.fromJson('invalid'))
-          .throws<ArgumentError>();
-    });
-  });
-
-  group('TicketPriority enum', () {
-    test('has correct labels', () {
-      check(TicketPriority.low.label).equals('Low');
-      check(TicketPriority.medium.label).equals('Medium');
-      check(TicketPriority.high.label).equals('High');
-      check(TicketPriority.critical.label).equals('Critical');
-    });
-
-    test('has correct jsonValues', () {
-      check(TicketPriority.low.jsonValue).equals('low');
-      check(TicketPriority.medium.jsonValue).equals('medium');
-      check(TicketPriority.high.jsonValue).equals('high');
-      check(TicketPriority.critical.jsonValue).equals('critical');
-    });
-
-    test('fromJson round-trips', () {
-      for (final priority in TicketPriority.values) {
-        check(TicketPriority.fromJson(priority.jsonValue)).equals(priority);
-      }
-    });
-
-    test('fromJson throws on invalid value', () {
-      check(() => TicketPriority.fromJson('invalid'))
-          .throws<ArgumentError>();
-    });
-  });
-
-  group('TicketEffort enum', () {
-    test('has correct labels', () {
-      check(TicketEffort.small.label).equals('Small');
-      check(TicketEffort.medium.label).equals('Medium');
-      check(TicketEffort.large.label).equals('Large');
-    });
-
-    test('has correct jsonValues', () {
-      check(TicketEffort.small.jsonValue).equals('small');
-      check(TicketEffort.medium.jsonValue).equals('medium');
-      check(TicketEffort.large.jsonValue).equals('large');
-    });
-
-    test('fromJson round-trips', () {
-      for (final effort in TicketEffort.values) {
-        check(TicketEffort.fromJson(effort.jsonValue)).equals(effort);
-      }
-    });
-
-    test('fromJson throws on invalid value', () {
-      check(() => TicketEffort.fromJson('invalid'))
-          .throws<ArgumentError>();
+      check(() => TicketSortOrder.fromJson('invalid')).throws<ArgumentError>();
     });
   });
 
@@ -144,35 +100,385 @@ void main() {
     });
 
     test('fromJson throws on invalid value', () {
-      check(() => TicketViewMode.fromJson('invalid'))
-          .throws<ArgumentError>();
+      check(() => TicketViewMode.fromJson('invalid')).throws<ArgumentError>();
     });
   });
 
-  group('TicketGroupBy enum', () {
-    test('has correct labels', () {
-      check(TicketGroupBy.category.label).equals('Category');
-      check(TicketGroupBy.status.label).equals('Status');
-      check(TicketGroupBy.kind.label).equals('Kind');
-      check(TicketGroupBy.priority.label).equals('Priority');
+  group('ActivityEvent', () {
+    final timestamp = DateTime.utc(2025, 6, 22, 10, 0, 0);
+
+    test('toJson/fromJson round-trip', () {
+      final event = ActivityEvent(
+        id: 'evt-001',
+        type: ActivityEventType.tagAdded,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+        data: {'tag': 'feature'},
+      );
+
+      final json = event.toJson();
+      final restored = ActivityEvent.fromJson(json);
+
+      check(restored.id).equals(event.id);
+      check(restored.type).equals(event.type);
+      check(restored.actor).equals(event.actor);
+      check(restored.actorType).equals(event.actorType);
+      check(restored.timestamp.toIso8601String())
+          .equals(event.timestamp.toIso8601String());
+      check(restored.data).deepEquals(event.data);
     });
 
-    test('has correct jsonValues', () {
-      check(TicketGroupBy.category.jsonValue).equals('category');
-      check(TicketGroupBy.status.jsonValue).equals('status');
-      check(TicketGroupBy.kind.jsonValue).equals('kind');
-      check(TicketGroupBy.priority.jsonValue).equals('priority');
+    test('toJson/fromJson round-trip with empty data', () {
+      final event = ActivityEvent(
+        id: 'evt-002',
+        type: ActivityEventType.closed,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+      );
+
+      final json = event.toJson();
+      check(json).not((it) => it.containsKey('data'));
+
+      final restored = ActivityEvent.fromJson(json);
+      check(restored.data).isEmpty();
     });
 
-    test('fromJson round-trips', () {
-      for (final groupBy in TicketGroupBy.values) {
-        check(TicketGroupBy.fromJson(groupBy.jsonValue)).equals(groupBy);
-      }
+    test('toJson includes non-empty data', () {
+      final event = ActivityEvent(
+        id: 'evt-003',
+        type: ActivityEventType.dependencyAdded,
+        actor: 'agent auth-refactor',
+        actorType: AuthorType.agent,
+        timestamp: timestamp,
+        data: {'ticketId': 5},
+      );
+
+      final json = event.toJson();
+      check(json).containsKey('data');
+      check(json['data']).isA<Map>().deepEquals({'ticketId': 5});
     });
 
-    test('fromJson throws on invalid value', () {
-      check(() => TicketGroupBy.fromJson('invalid'))
-          .throws<ArgumentError>();
+    test('copyWith updates fields', () {
+      final original = ActivityEvent(
+        id: 'evt-001',
+        type: ActivityEventType.tagAdded,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+        data: {'tag': 'feature'},
+      );
+
+      final updated = original.copyWith(
+        type: ActivityEventType.tagRemoved,
+        data: {'tag': 'bug'},
+      );
+
+      check(updated.id).equals('evt-001');
+      check(updated.type).equals(ActivityEventType.tagRemoved);
+      check(updated.actor).equals('zaf');
+      check(updated.data).deepEquals({'tag': 'bug'});
+    });
+
+    test('equality and hashCode', () {
+      final e1 = ActivityEvent(
+        id: 'evt-001',
+        type: ActivityEventType.closed,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+      );
+      final e2 = ActivityEvent(
+        id: 'evt-001',
+        type: ActivityEventType.closed,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+      );
+      final e3 = ActivityEvent(
+        id: 'evt-002',
+        type: ActivityEventType.reopened,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+      );
+
+      check(e1).equals(e2);
+      check(e1.hashCode).equals(e2.hashCode);
+      check(e1).not((it) => it.equals(e3));
+    });
+
+    test('toString', () {
+      final event = ActivityEvent(
+        id: 'evt-001',
+        type: ActivityEventType.tagAdded,
+        actor: 'zaf',
+        actorType: AuthorType.user,
+        timestamp: timestamp,
+      );
+
+      check(event.toString()).contains('ActivityEvent');
+      check(event.toString()).contains('evt-001');
+      check(event.toString()).contains('tagAdded');
+      check(event.toString()).contains('zaf');
+    });
+  });
+
+  group('TicketImage', () {
+    final createdAt = DateTime.utc(2025, 6, 22, 10, 0, 0);
+
+    test('toJson/fromJson round-trip', () {
+      final image = TicketImage(
+        id: 'img-001',
+        fileName: 'screenshot.png',
+        relativePath: 'ticket-images/1/screenshot.png',
+        mimeType: 'image/png',
+        createdAt: createdAt,
+      );
+
+      final json = image.toJson();
+      final restored = TicketImage.fromJson(json);
+
+      check(restored.id).equals(image.id);
+      check(restored.fileName).equals(image.fileName);
+      check(restored.relativePath).equals(image.relativePath);
+      check(restored.mimeType).equals(image.mimeType);
+      check(restored.createdAt.toIso8601String())
+          .equals(image.createdAt.toIso8601String());
+    });
+
+    test('fromJson handles missing fields', () {
+      final image = TicketImage.fromJson({});
+
+      check(image.id).equals('');
+      check(image.fileName).equals('');
+      check(image.relativePath).equals('');
+      check(image.mimeType).equals('');
+    });
+
+    test('equality and hashCode', () {
+      final i1 = TicketImage(
+        id: 'img-001',
+        fileName: 'screenshot.png',
+        relativePath: 'ticket-images/1/screenshot.png',
+        mimeType: 'image/png',
+        createdAt: createdAt,
+      );
+      final i2 = TicketImage(
+        id: 'img-001',
+        fileName: 'screenshot.png',
+        relativePath: 'ticket-images/1/screenshot.png',
+        mimeType: 'image/png',
+        createdAt: createdAt,
+      );
+      final i3 = TicketImage(
+        id: 'img-002',
+        fileName: 'other.jpg',
+        relativePath: 'ticket-images/1/other.jpg',
+        mimeType: 'image/jpeg',
+        createdAt: createdAt,
+      );
+
+      check(i1).equals(i2);
+      check(i1.hashCode).equals(i2.hashCode);
+      check(i1).not((it) => it.equals(i3));
+    });
+
+    test('toString', () {
+      final image = TicketImage(
+        id: 'img-001',
+        fileName: 'screenshot.png',
+        relativePath: 'ticket-images/1/screenshot.png',
+        mimeType: 'image/png',
+        createdAt: createdAt,
+      );
+
+      check(image.toString()).contains('TicketImage');
+      check(image.toString()).contains('img-001');
+      check(image.toString()).contains('screenshot.png');
+    });
+  });
+
+  group('TicketComment', () {
+    final createdAt = DateTime.utc(2025, 6, 22, 10, 0, 0);
+    final updatedAt = DateTime.utc(2025, 6, 23, 15, 30, 0);
+
+    test('toJson/fromJson round-trip with all fields', () {
+      final comment = TicketComment(
+        id: 'cmt-001',
+        text: 'This is a comment',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        images: [
+          TicketImage(
+            id: 'img-001',
+            fileName: 'screenshot.png',
+            relativePath: 'ticket-images/1/screenshot.png',
+            mimeType: 'image/png',
+            createdAt: createdAt,
+          ),
+        ],
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
+      final json = comment.toJson();
+      final restored = TicketComment.fromJson(json);
+
+      check(restored.id).equals(comment.id);
+      check(restored.text).equals(comment.text);
+      check(restored.author).equals(comment.author);
+      check(restored.authorType).equals(comment.authorType);
+      check(restored.images.length).equals(1);
+      check(restored.images.first.id).equals('img-001');
+      check(restored.createdAt.toIso8601String())
+          .equals(comment.createdAt.toIso8601String());
+      check(restored.updatedAt!.toIso8601String())
+          .equals(comment.updatedAt!.toIso8601String());
+    });
+
+    test('toJson/fromJson round-trip with minimal fields', () {
+      final comment = TicketComment(
+        id: 'cmt-002',
+        text: 'Simple comment',
+        author: 'agent bot',
+        authorType: AuthorType.agent,
+        createdAt: createdAt,
+      );
+
+      final json = comment.toJson();
+      check(json).not((it) => it.containsKey('images'));
+      check(json).not((it) => it.containsKey('updatedAt'));
+
+      final restored = TicketComment.fromJson(json);
+      check(restored.images).isEmpty();
+      check(restored.updatedAt).isNull();
+    });
+
+    test('copyWith updates fields', () {
+      final original = TicketComment(
+        id: 'cmt-001',
+        text: 'Original',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        createdAt: createdAt,
+      );
+
+      final updated = original.copyWith(
+        text: 'Edited',
+        updatedAt: updatedAt,
+      );
+
+      check(updated.id).equals('cmt-001');
+      check(updated.text).equals('Edited');
+      check(updated.updatedAt).equals(updatedAt);
+    });
+
+    test('copyWith clearUpdatedAt', () {
+      final original = TicketComment(
+        id: 'cmt-001',
+        text: 'Comment',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
+      final cleared = original.copyWith(clearUpdatedAt: true);
+      check(cleared.updatedAt).isNull();
+    });
+
+    test('equality and hashCode', () {
+      final c1 = TicketComment(
+        id: 'cmt-001',
+        text: 'Comment',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        createdAt: createdAt,
+      );
+      final c2 = TicketComment(
+        id: 'cmt-001',
+        text: 'Comment',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        createdAt: createdAt,
+      );
+      final c3 = TicketComment(
+        id: 'cmt-002',
+        text: 'Different',
+        author: 'agent',
+        authorType: AuthorType.agent,
+        createdAt: createdAt,
+      );
+
+      check(c1).equals(c2);
+      check(c1.hashCode).equals(c2.hashCode);
+      check(c1).not((it) => it.equals(c3));
+    });
+
+    test('toString', () {
+      final comment = TicketComment(
+        id: 'cmt-001',
+        text: 'Comment',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        createdAt: createdAt,
+      );
+
+      check(comment.toString()).contains('TicketComment');
+      check(comment.toString()).contains('cmt-001');
+      check(comment.toString()).contains('zaf');
+    });
+  });
+
+  group('TagDefinition', () {
+    test('normalizes name to lowercase', () {
+      final tag = TagDefinition(name: 'Feature');
+      check(tag.name).equals('feature');
+    });
+
+    test('toJson/fromJson round-trip', () {
+      final tag = TagDefinition(name: 'bug', color: '#ef5350');
+
+      final json = tag.toJson();
+      final restored = TagDefinition.fromJson(json);
+
+      check(restored).equals(tag);
+    });
+
+    test('toJson/fromJson round-trip with null color', () {
+      final tag = TagDefinition(name: 'feature');
+
+      final json = tag.toJson();
+      check(json).not((it) => it.containsKey('color'));
+
+      final restored = TagDefinition.fromJson(json);
+      check(restored).equals(tag);
+      check(restored.color).isNull();
+    });
+
+    test('fromJson handles missing fields', () {
+      final tag = TagDefinition.fromJson({});
+      check(tag.name).equals('');
+      check(tag.color).isNull();
+    });
+
+    test('equality and hashCode', () {
+      final t1 = TagDefinition(name: 'bug', color: '#ef5350');
+      final t2 = TagDefinition(name: 'BUG', color: '#ef5350');
+      final t3 = TagDefinition(name: 'feature');
+
+      check(t1).equals(t2);
+      check(t1.hashCode).equals(t2.hashCode);
+      check(t1).not((it) => it.equals(t3));
+    });
+
+    test('toString', () {
+      final tag = TagDefinition(name: 'bug', color: '#ef5350');
+      check(tag.toString()).contains('TagDefinition');
+      check(tag.toString()).contains('bug');
+      check(tag.toString()).contains('#ef5350');
     });
   });
 
@@ -307,157 +613,68 @@ void main() {
     });
   });
 
-  group('TicketCostStats', () {
-    test('toJson/fromJson round-trip', () {
-      const stats = TicketCostStats(
-        totalTokens: 1000,
-        totalCost: 0.05,
-        agentTimeMs: 30000,
-        waitingTimeMs: 5000,
-      );
-
-      final json = stats.toJson();
-      final restored = TicketCostStats.fromJson(json);
-
-      check(restored).equals(stats);
-    });
-
-    test('fromJson handles missing fields', () {
-      final stats = TicketCostStats.fromJson({});
-
-      check(stats.totalTokens).equals(0);
-      check(stats.totalCost).equals(0.0);
-      check(stats.agentTimeMs).equals(0);
-      check(stats.waitingTimeMs).equals(0);
-    });
-
-    test('equality and hashCode', () {
-      const s1 = TicketCostStats(
-        totalTokens: 1000,
-        totalCost: 0.05,
-        agentTimeMs: 30000,
-        waitingTimeMs: 5000,
-      );
-      const s2 = TicketCostStats(
-        totalTokens: 1000,
-        totalCost: 0.05,
-        agentTimeMs: 30000,
-        waitingTimeMs: 5000,
-      );
-      const s3 = TicketCostStats(
-        totalTokens: 2000,
-        totalCost: 0.10,
-        agentTimeMs: 60000,
-        waitingTimeMs: 10000,
-      );
-
-      check(s1).equals(s2);
-      check(s1.hashCode).equals(s2.hashCode);
-      check(s1).not((it) => it.equals(s3));
-    });
-
-    test('toString', () {
-      const stats = TicketCostStats(
-        totalTokens: 1000,
-        totalCost: 0.05,
-        agentTimeMs: 30000,
-        waitingTimeMs: 5000,
-      );
-
-      check(stats.toString()).contains('TicketCostStats');
-      check(stats.toString()).contains('1000');
-      check(stats.toString()).contains('0.05');
-    });
-  });
-
   group('TicketData', () {
-    final now = DateTime.now();
+    final now = DateTime.utc(2025, 6, 22, 10, 0, 0);
+    final later = DateTime.utc(2025, 6, 23, 15, 30, 0);
 
     TicketData createTestTicket({
       int id = 1,
       String title = 'Test Ticket',
-      String description = 'Test description',
-      TicketStatus status = TicketStatus.ready,
-      TicketKind kind = TicketKind.feature,
-      TicketPriority priority = TicketPriority.medium,
-      TicketEffort effort = TicketEffort.medium,
-      String? category,
+      String body = 'Test body',
+      String author = 'zaf',
+      bool isOpen = true,
       Set<String> tags = const {},
       List<int> dependsOn = const [],
       List<LinkedWorktree> linkedWorktrees = const [],
       List<LinkedChat> linkedChats = const [],
+      List<TicketComment> comments = const [],
+      List<ActivityEvent> activityLog = const [],
+      List<TicketImage> bodyImages = const [],
       String? sourceConversationId,
-      TicketCostStats? costStats,
+      DateTime? closedAt,
     }) {
       return TicketData(
         id: id,
         title: title,
-        description: description,
-        status: status,
-        kind: kind,
-        priority: priority,
-        effort: effort,
-        category: category,
+        body: body,
+        author: author,
+        isOpen: isOpen,
         tags: tags,
         dependsOn: dependsOn,
         linkedWorktrees: linkedWorktrees,
         linkedChats: linkedChats,
+        comments: comments,
+        activityLog: activityLog,
+        bodyImages: bodyImages,
         sourceConversationId: sourceConversationId,
-        costStats: costStats,
         createdAt: now,
         updatedAt: now,
+        closedAt: closedAt,
       );
     }
 
     test('displayId formats correctly', () {
-      check(createTestTicket(id: 1).displayId).equals('TKT-001');
-      check(createTestTicket(id: 42).displayId).equals('TKT-042');
-      check(createTestTicket(id: 999).displayId).equals('TKT-999');
-      check(createTestTicket(id: 1234).displayId).equals('TKT-1234');
+      check(createTestTicket(id: 1).displayId).equals('#1');
+      check(createTestTicket(id: 42).displayId).equals('#42');
+      check(createTestTicket(id: 999).displayId).equals('#999');
     });
 
-    test('isTerminal returns true for completed', () {
-      final ticket = createTestTicket(status: TicketStatus.completed);
-      check(ticket.isTerminal).isTrue();
-    });
-
-    test('isTerminal returns true for cancelled', () {
-      final ticket = createTestTicket(status: TicketStatus.cancelled);
-      check(ticket.isTerminal).isTrue();
-    });
-
-    test('isTerminal returns false for non-terminal states', () {
-      for (final status in [
-        TicketStatus.draft,
-        TicketStatus.ready,
-        TicketStatus.active,
-        TicketStatus.blocked,
-        TicketStatus.needsInput,
-        TicketStatus.inReview,
-      ]) {
-        final ticket = createTestTicket(status: status);
-        check(ticket.isTerminal).isFalse();
-      }
+    test('tags are normalized to lowercase on construction', () {
+      final ticket = createTestTicket(tags: {'Feature', 'BUG', 'ToDo'});
+      check(ticket.tags).deepEquals({'feature', 'bug', 'todo'});
     });
 
     test('copyWith updates fields', () {
       final original = createTestTicket();
       final updated = original.copyWith(
         title: 'Updated Title',
-        status: TicketStatus.active,
+        isOpen: false,
       );
 
       check(updated.title).equals('Updated Title');
-      check(updated.status).equals(TicketStatus.active);
+      check(updated.isOpen).isFalse();
       check(updated.id).equals(original.id);
-      check(updated.description).equals(original.description);
-    });
-
-    test('copyWith clears category', () {
-      final original = createTestTicket(category: 'Frontend');
-      final updated = original.copyWith(clearCategory: true);
-
-      check(updated.category).isNull();
+      check(updated.body).equals(original.body);
     });
 
     test('copyWith clears sourceConversationId', () {
@@ -467,30 +684,27 @@ void main() {
       check(updated.sourceConversationId).isNull();
     });
 
-    test('copyWith clears costStats', () {
-      final original = createTestTicket(
-        costStats: const TicketCostStats(
-          totalTokens: 1000,
-          totalCost: 0.05,
-          agentTimeMs: 30000,
-          waitingTimeMs: 5000,
-        ),
-      );
-      final updated = original.copyWith(clearCostStats: true);
+    test('copyWith clears closedAt', () {
+      final original = createTestTicket(closedAt: later);
+      final updated = original.copyWith(clearClosedAt: true);
 
-      check(updated.costStats).isNull();
+      check(updated.closedAt).isNull();
+    });
+
+    test('copyWith normalizes tags to lowercase', () {
+      final original = createTestTicket();
+      final updated = original.copyWith(tags: {'Feature', 'BUG'});
+
+      check(updated.tags).deepEquals({'feature', 'bug'});
     });
 
     test('toJson/fromJson round-trip with all fields', () {
       final ticket = createTestTicket(
         id: 42,
         title: 'Test Ticket',
-        description: 'Description',
-        status: TicketStatus.active,
-        kind: TicketKind.bugfix,
-        priority: TicketPriority.high,
-        effort: TicketEffort.small,
-        category: 'Backend',
+        body: 'Full description',
+        author: 'zaf',
+        isOpen: false,
         tags: {'bug', 'urgent'},
         dependsOn: [1, 2, 3],
         linkedWorktrees: [
@@ -506,38 +720,62 @@ void main() {
             worktreeRoot: '/path/to/wt1',
           ),
         ],
+        comments: [
+          TicketComment(
+            id: 'cmt-001',
+            text: 'A comment',
+            author: 'zaf',
+            authorType: AuthorType.user,
+            createdAt: now,
+          ),
+        ],
+        activityLog: [
+          ActivityEvent(
+            id: 'evt-001',
+            type: ActivityEventType.closed,
+            actor: 'zaf',
+            actorType: AuthorType.user,
+            timestamp: later,
+          ),
+        ],
+        bodyImages: [
+          TicketImage(
+            id: 'img-001',
+            fileName: 'screenshot.png',
+            relativePath: 'ticket-images/42/screenshot.png',
+            mimeType: 'image/png',
+            createdAt: now,
+          ),
+        ],
         sourceConversationId: 'conv-123',
-        costStats: const TicketCostStats(
-          totalTokens: 1000,
-          totalCost: 0.05,
-          agentTimeMs: 30000,
-          waitingTimeMs: 5000,
-        ),
+        closedAt: later,
       );
 
       final json = ticket.toJson();
       final restored = TicketData.fromJson(json);
 
-      // Check all fields individually since DateTime serialization may lose microseconds
       check(restored.id).equals(ticket.id);
       check(restored.title).equals(ticket.title);
-      check(restored.description).equals(ticket.description);
-      check(restored.status).equals(ticket.status);
-      check(restored.kind).equals(ticket.kind);
-      check(restored.priority).equals(ticket.priority);
-      check(restored.effort).equals(ticket.effort);
-      check(restored.category).equals(ticket.category);
+      check(restored.body).equals(ticket.body);
+      check(restored.author).equals(ticket.author);
+      check(restored.isOpen).equals(ticket.isOpen);
       check(restored.tags).deepEquals(ticket.tags);
       check(restored.dependsOn).deepEquals(ticket.dependsOn);
       check(restored.linkedWorktrees).deepEquals(ticket.linkedWorktrees);
       check(restored.linkedChats).deepEquals(ticket.linkedChats);
+      check(restored.comments.length).equals(1);
+      check(restored.comments.first.id).equals('cmt-001');
+      check(restored.activityLog.length).equals(1);
+      check(restored.activityLog.first.id).equals('evt-001');
+      check(restored.bodyImages.length).equals(1);
+      check(restored.bodyImages.first.id).equals('img-001');
       check(restored.sourceConversationId).equals(ticket.sourceConversationId);
-      check(restored.costStats).equals(ticket.costStats);
-      // DateTimes may differ by microseconds after serialization
       check(restored.createdAt.toIso8601String())
-          .equals(ticket.createdAt.toUtc().toIso8601String());
+          .equals(ticket.createdAt.toIso8601String());
       check(restored.updatedAt.toIso8601String())
-          .equals(ticket.updatedAt.toUtc().toIso8601String());
+          .equals(ticket.updatedAt.toIso8601String());
+      check(restored.closedAt!.toIso8601String())
+          .equals(ticket.closedAt!.toIso8601String());
     });
 
     test('toJson/fromJson round-trip with minimal fields', () {
@@ -548,11 +786,9 @@ void main() {
 
       check(restored.id).equals(ticket.id);
       check(restored.title).equals(ticket.title);
-      check(restored.description).equals(ticket.description);
-      check(restored.status).equals(ticket.status);
-      check(restored.kind).equals(ticket.kind);
-      check(restored.priority).equals(ticket.priority);
-      check(restored.effort).equals(ticket.effort);
+      check(restored.body).equals(ticket.body);
+      check(restored.author).equals(ticket.author);
+      check(restored.isOpen).equals(ticket.isOpen);
     });
 
     test('toJson excludes empty collections', () {
@@ -564,6 +800,9 @@ void main() {
       check(json).not((it) => it.containsKey('dependsOn'));
       check(json).not((it) => it.containsKey('linkedWorktrees'));
       check(json).not((it) => it.containsKey('linkedChats'));
+      check(json).not((it) => it.containsKey('comments'));
+      check(json).not((it) => it.containsKey('activityLog'));
+      check(json).not((it) => it.containsKey('bodyImages'));
     });
 
     test('toJson excludes null optional fields', () {
@@ -571,9 +810,8 @@ void main() {
 
       final json = ticket.toJson();
 
-      check(json).not((it) => it.containsKey('category'));
       check(json).not((it) => it.containsKey('sourceConversationId'));
-      check(json).not((it) => it.containsKey('costStats'));
+      check(json).not((it) => it.containsKey('closedAt'));
     });
 
     test('toJson includes non-empty collections', () {
@@ -584,12 +822,16 @@ void main() {
 
       final json = ticket.toJson();
 
-      check(json).has((it) => it['tags'], 'tags')
+      check(json)
+          .has((it) => it['tags'], 'tags')
           .isA<List>()
-          .length.equals(2);
-      check(json).has((it) => it['dependsOn'], 'dependsOn')
+          .length
+          .equals(2);
+      check(json)
+          .has((it) => it['dependsOn'], 'dependsOn')
           .isA<List>()
-          .length.equals(2);
+          .length
+          .equals(2);
     });
 
     test('toJson serializes dates as UTC ISO8601', () {
@@ -599,33 +841,42 @@ void main() {
 
       check(json['createdAt']).isA<String>();
       check(json['updatedAt']).isA<String>();
-      // Verify parseable
       DateTime.parse(json['createdAt'] as String);
       DateTime.parse(json['updatedAt'] as String);
+    });
+
+    test('toJson always includes isOpen and author', () {
+      final ticket = createTestTicket();
+      final json = ticket.toJson();
+
+      check(json).containsKey('isOpen');
+      check(json).containsKey('author');
+      check(json['isOpen']).equals(true);
+      check(json['author']).equals('zaf');
     });
 
     test('fromJson handles missing optional fields', () {
       final json = {
         'id': 1,
         'title': 'Test',
-        'description': 'Desc',
-        'status': 'ready',
-        'kind': 'feature',
-        'priority': 'medium',
-        'effort': 'medium',
+        'body': 'Desc',
+        'author': 'zaf',
+        'isOpen': true,
         'createdAt': now.toIso8601String(),
         'updatedAt': now.toIso8601String(),
       };
 
       final ticket = TicketData.fromJson(json);
 
-      check(ticket.category).isNull();
       check(ticket.tags).isEmpty();
       check(ticket.dependsOn).isEmpty();
       check(ticket.linkedWorktrees).isEmpty();
       check(ticket.linkedChats).isEmpty();
+      check(ticket.comments).isEmpty();
+      check(ticket.activityLog).isEmpty();
+      check(ticket.bodyImages).isEmpty();
       check(ticket.sourceConversationId).isNull();
-      check(ticket.costStats).isNull();
+      check(ticket.closedAt).isNull();
     });
 
     test('fromJson uses defaults for missing required fields', () {
@@ -633,11 +884,24 @@ void main() {
 
       check(ticket.id).equals(0);
       check(ticket.title).equals('');
-      check(ticket.description).equals('');
-      check(ticket.status).equals(TicketStatus.draft);
-      check(ticket.kind).equals(TicketKind.feature);
-      check(ticket.priority).equals(TicketPriority.medium);
-      check(ticket.effort).equals(TicketEffort.medium);
+      check(ticket.body).equals('');
+      check(ticket.author).equals('');
+      check(ticket.isOpen).isTrue();
+    });
+
+    test('fromJson normalizes tags to lowercase', () {
+      final ticket = TicketData.fromJson({
+        'id': 1,
+        'title': 'Test',
+        'body': '',
+        'author': 'zaf',
+        'isOpen': true,
+        'tags': ['Feature', 'BUG', 'ToDo'],
+        'createdAt': now.toIso8601String(),
+        'updatedAt': now.toIso8601String(),
+      });
+
+      check(ticket.tags).deepEquals({'feature', 'bug', 'todo'});
     });
 
     test('equality and hashCode', () {
@@ -663,14 +927,14 @@ void main() {
       final ticket = createTestTicket(
         id: 42,
         title: 'Test Ticket',
-        status: TicketStatus.active,
+        isOpen: false,
       );
 
       final str = ticket.toString();
       check(str).contains('TicketData');
       check(str).contains('42');
       check(str).contains('Test Ticket');
-      check(str).contains('active');
+      check(str).contains('isOpen: false');
     });
   });
 }

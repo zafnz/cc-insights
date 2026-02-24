@@ -1,201 +1,470 @@
 import 'package:flutter/foundation.dart';
 
-/// The current status of a ticket.
-enum TicketStatus {
-  /// Ticket is being drafted and is not yet ready for work.
-  draft,
+/// Whether the author is a human user or an AI agent.
+enum AuthorType {
+  /// A human user.
+  user,
 
-  /// Ticket is ready to be started.
-  ready,
-
-  /// Ticket is actively being worked on.
-  active,
-
-  /// Ticket is blocked by dependencies or external factors.
-  blocked,
-
-  /// Ticket needs user input or clarification.
-  needsInput,
-
-  /// Ticket is in review/testing.
-  inReview,
-
-  /// Ticket work is completed.
-  completed,
-
-  /// Ticket work was cancelled.
-  cancelled,
-
-  /// Ticket has been split into subtasks.
-  split;
-
-  /// User-friendly display label.
-  String get label {
-    switch (this) {
-      case draft:
-        return 'Draft';
-      case ready:
-        return 'Ready';
-      case active:
-        return 'Active';
-      case blocked:
-        return 'Blocked';
-      case needsInput:
-        return 'Needs Input';
-      case inReview:
-        return 'In Review';
-      case completed:
-        return 'Completed';
-      case cancelled:
-        return 'Cancelled';
-      case split:
-        return 'Split';
-    }
-  }
+  /// An AI agent.
+  agent;
 
   /// JSON serialization value.
   String get jsonValue => name;
 
-  /// Deserializes a [TicketStatus] from a JSON string.
-  static TicketStatus fromJson(String json) {
-    return TicketStatus.values.firstWhere(
+  /// Deserializes an [AuthorType] from a JSON string.
+  static AuthorType fromJson(String json) {
+    return AuthorType.values.firstWhere(
       (e) => e.name == json,
-      orElse: () => throw ArgumentError('Invalid TicketStatus: $json'),
+      orElse: () => throw ArgumentError('Invalid AuthorType: $json'),
     );
   }
 }
 
-/// The kind/type of work for a ticket.
-enum TicketKind {
-  /// New feature implementation.
-  feature,
+/// The type of activity event recorded on a ticket timeline.
+enum ActivityEventType {
+  /// A tag was added to the ticket.
+  tagAdded,
 
-  /// Bug fix.
-  bugfix,
+  /// A tag was removed from the ticket.
+  tagRemoved,
 
-  /// Research or investigation.
-  research,
+  /// A worktree was linked to the ticket.
+  worktreeLinked,
 
-  /// Split from another ticket.
-  split,
+  /// A worktree was unlinked from the ticket.
+  worktreeUnlinked,
 
-  /// Question or clarification request.
-  question,
+  /// A chat was linked to the ticket.
+  chatLinked,
 
-  /// Test implementation or updates.
-  test,
+  /// A chat was unlinked from the ticket.
+  chatUnlinked,
 
-  /// Documentation work.
-  docs,
+  /// A dependency was added to the ticket.
+  dependencyAdded,
 
-  /// General maintenance or chores.
-  chore;
+  /// A dependency was removed from the ticket.
+  dependencyRemoved,
 
-  /// User-friendly display label.
-  String get label {
-    switch (this) {
-      case feature:
-        return 'Feature';
-      case bugfix:
-        return 'Bug Fix';
-      case research:
-        return 'Research';
-      case split:
-        return 'Split';
-      case question:
-        return 'Question';
-      case test:
-        return 'Test';
-      case docs:
-        return 'Docs';
-      case chore:
-        return 'Chore';
-    }
-  }
+  /// The ticket was closed.
+  closed,
+
+  /// The ticket was reopened.
+  reopened,
+
+  /// The ticket title was edited.
+  titleEdited,
+
+  /// The ticket body was edited.
+  bodyEdited;
 
   /// JSON serialization value.
   String get jsonValue => name;
 
-  /// Deserializes a [TicketKind] from a JSON string.
-  static TicketKind fromJson(String json) {
-    return TicketKind.values.firstWhere(
+  /// Deserializes an [ActivityEventType] from a JSON string.
+  static ActivityEventType fromJson(String json) {
+    return ActivityEventType.values.firstWhere(
       (e) => e.name == json,
-      orElse: () => throw ArgumentError('Invalid TicketKind: $json'),
+      orElse: () => throw ArgumentError('Invalid ActivityEventType: $json'),
     );
   }
 }
 
-/// The priority level of a ticket.
-enum TicketPriority {
-  /// Low priority.
-  low,
+/// A chronological activity event recorded on a ticket timeline.
+///
+/// Every mutation to a ticket generates an activity event. Events are stored
+/// chronologically and displayed on the timeline between comments.
+@immutable
+class ActivityEvent {
+  /// Unique identifier (uuid).
+  final String id;
 
-  /// Medium priority.
-  medium,
+  /// The type of activity that occurred.
+  final ActivityEventType type;
 
-  /// High priority.
-  high,
+  /// Who performed the action (e.g. "zaf", "agent auth-refactor").
+  final String actor;
 
-  /// Critical priority.
-  critical;
+  /// Whether the actor is a user or agent.
+  final AuthorType actorType;
 
-  /// User-friendly display label.
-  String get label {
-    switch (this) {
-      case low:
-        return 'Low';
-      case medium:
-        return 'Medium';
-      case high:
-        return 'High';
-      case critical:
-        return 'Critical';
-    }
+  /// When the event occurred.
+  final DateTime timestamp;
+
+  /// Type-specific payload data.
+  final Map<String, dynamic> data;
+
+  /// Creates an [ActivityEvent] instance.
+  const ActivityEvent({
+    required this.id,
+    required this.type,
+    required this.actor,
+    required this.actorType,
+    required this.timestamp,
+    this.data = const {},
+  });
+
+  /// Serializes this [ActivityEvent] to a JSON map.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type.jsonValue,
+      'actor': actor,
+      'actorType': actorType.jsonValue,
+      'timestamp': timestamp.toUtc().toIso8601String(),
+      if (data.isNotEmpty) 'data': data,
+    };
   }
 
-  /// JSON serialization value.
-  String get jsonValue => name;
+  /// Deserializes an [ActivityEvent] from a JSON map.
+  factory ActivityEvent.fromJson(Map<String, dynamic> json) {
+    final dataMap = json['data'] as Map<String, dynamic>? ?? {};
 
-  /// Deserializes a [TicketPriority] from a JSON string.
-  static TicketPriority fromJson(String json) {
-    return TicketPriority.values.firstWhere(
-      (e) => e.name == json,
-      orElse: () => throw ArgumentError('Invalid TicketPriority: $json'),
+    return ActivityEvent(
+      id: json['id'] as String? ?? '',
+      type: ActivityEventType.fromJson(json['type'] as String? ?? 'closed'),
+      actor: json['actor'] as String? ?? '',
+      actorType: AuthorType.fromJson(json['actorType'] as String? ?? 'user'),
+      timestamp: json['timestamp'] != null
+          ? DateTime.parse(json['timestamp'] as String)
+          : DateTime.now(),
+      data: dataMap,
     );
+  }
+
+  /// Creates a copy with the given fields replaced.
+  ActivityEvent copyWith({
+    String? id,
+    ActivityEventType? type,
+    String? actor,
+    AuthorType? actorType,
+    DateTime? timestamp,
+    Map<String, dynamic>? data,
+  }) {
+    return ActivityEvent(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      actor: actor ?? this.actor,
+      actorType: actorType ?? this.actorType,
+      timestamp: timestamp ?? this.timestamp,
+      data: data ?? this.data,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ActivityEvent &&
+        other.id == id &&
+        other.type == type &&
+        other.actor == actor &&
+        other.actorType == actorType &&
+        other.timestamp == timestamp &&
+        mapEquals(other.data, data);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        type,
+        actor,
+        actorType,
+        timestamp,
+        Object.hashAll(data.entries.map((e) => Object.hash(e.key, e.value))),
+      );
+
+  @override
+  String toString() {
+    return 'ActivityEvent(id: $id, type: $type, actor: $actor, '
+        'actorType: $actorType)';
   }
 }
 
-/// The estimated effort/size of a ticket.
-enum TicketEffort {
-  /// Small effort (hours).
-  small,
+/// An image attached to a ticket body or comment.
+@immutable
+class TicketImage {
+  /// Unique identifier (uuid).
+  final String id;
 
-  /// Medium effort (days).
-  medium,
+  /// Original file name.
+  final String fileName;
 
-  /// Large effort (weeks).
-  large;
+  /// Path relative to the project data directory.
+  final String relativePath;
+
+  /// MIME type (e.g. "image/png").
+  final String mimeType;
+
+  /// When the image was attached.
+  final DateTime createdAt;
+
+  /// Creates a [TicketImage] instance.
+  const TicketImage({
+    required this.id,
+    required this.fileName,
+    required this.relativePath,
+    required this.mimeType,
+    required this.createdAt,
+  });
+
+  /// Serializes this [TicketImage] to a JSON map.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'fileName': fileName,
+      'relativePath': relativePath,
+      'mimeType': mimeType,
+      'createdAt': createdAt.toUtc().toIso8601String(),
+    };
+  }
+
+  /// Deserializes a [TicketImage] from a JSON map.
+  factory TicketImage.fromJson(Map<String, dynamic> json) {
+    return TicketImage(
+      id: json['id'] as String? ?? '',
+      fileName: json['fileName'] as String? ?? '',
+      relativePath: json['relativePath'] as String? ?? '',
+      mimeType: json['mimeType'] as String? ?? '',
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is TicketImage &&
+        other.id == id &&
+        other.fileName == fileName &&
+        other.relativePath == relativePath &&
+        other.mimeType == mimeType &&
+        other.createdAt == createdAt;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, fileName, relativePath, mimeType, createdAt);
+
+  @override
+  String toString() {
+    return 'TicketImage(id: $id, fileName: $fileName, '
+        'relativePath: $relativePath, mimeType: $mimeType)';
+  }
+}
+
+/// A comment entry attached to a ticket.
+///
+/// Comments support rich text (markdown) and image attachments. Each comment
+/// has proper author attribution indicating whether it came from a user or
+/// an AI agent.
+@immutable
+class TicketComment {
+  /// Unique identifier (uuid).
+  final String id;
+
+  /// Markdown content of the comment.
+  final String text;
+
+  /// Who wrote this comment (e.g. "zaf", "agent auth-refactor").
+  final String author;
+
+  /// Whether the author is a user or agent.
+  final AuthorType authorType;
+
+  /// Images attached to this comment.
+  final List<TicketImage> images;
+
+  /// When this comment was created.
+  final DateTime createdAt;
+
+  /// When this comment was last edited (null if never edited).
+  final DateTime? updatedAt;
+
+  /// Creates a [TicketComment] instance.
+  const TicketComment({
+    required this.id,
+    required this.text,
+    required this.author,
+    required this.authorType,
+    this.images = const [],
+    required this.createdAt,
+    this.updatedAt,
+  });
+
+  /// Serializes this [TicketComment] to a JSON map.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'text': text,
+      'author': author,
+      'authorType': authorType.jsonValue,
+      if (images.isNotEmpty)
+        'images': images.map((i) => i.toJson()).toList(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      if (updatedAt != null)
+        'updatedAt': updatedAt!.toUtc().toIso8601String(),
+    };
+  }
+
+  /// Deserializes a [TicketComment] from a JSON map.
+  factory TicketComment.fromJson(Map<String, dynamic> json) {
+    final imagesList = json['images'] as List<dynamic>? ?? [];
+
+    return TicketComment(
+      id: json['id'] as String? ?? '',
+      text: json['text'] as String? ?? '',
+      author: json['author'] as String? ?? '',
+      authorType: AuthorType.fromJson(
+        json['authorType'] as String? ?? 'user',
+      ),
+      images: imagesList
+          .map((i) => TicketImage.fromJson(i as Map<String, dynamic>))
+          .toList(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
+    );
+  }
+
+  /// Creates a copy with the given fields replaced.
+  TicketComment copyWith({
+    String? id,
+    String? text,
+    String? author,
+    AuthorType? authorType,
+    List<TicketImage>? images,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool clearUpdatedAt = false,
+  }) {
+    return TicketComment(
+      id: id ?? this.id,
+      text: text ?? this.text,
+      author: author ?? this.author,
+      authorType: authorType ?? this.authorType,
+      images: images ?? this.images,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: clearUpdatedAt ? null : (updatedAt ?? this.updatedAt),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is TicketComment &&
+        other.id == id &&
+        other.text == text &&
+        other.author == author &&
+        other.authorType == authorType &&
+        listEquals(other.images, images) &&
+        other.createdAt == createdAt &&
+        other.updatedAt == updatedAt;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        text,
+        author,
+        authorType,
+        Object.hashAll(images),
+        createdAt,
+        updatedAt,
+      );
+
+  @override
+  String toString() {
+    return 'TicketComment(id: $id, author: $author, '
+        'authorType: $authorType)';
+  }
+}
+
+/// A tag definition in the project-level tag registry.
+///
+/// Tags are free-form strings used for categorization. The registry stores
+/// known tags for autocomplete suggestions and optional colour overrides.
+@immutable
+class TagDefinition {
+  /// The tag text (always lowercase).
+  final String name;
+
+  /// Optional hex colour override (e.g. "#ef5350").
+  final String? color;
+
+  /// Creates a [TagDefinition] instance.
+  ///
+  /// The [name] is normalized to lowercase.
+  TagDefinition({required String name, this.color})
+      : name = name.toLowerCase();
+
+  /// Serializes this [TagDefinition] to a JSON map.
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      if (color != null) 'color': color,
+    };
+  }
+
+  /// Deserializes a [TagDefinition] from a JSON map.
+  factory TagDefinition.fromJson(Map<String, dynamic> json) {
+    return TagDefinition(
+      name: json['name'] as String? ?? '',
+      color: json['color'] as String?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is TagDefinition &&
+        other.name == name &&
+        other.color == color;
+  }
+
+  @override
+  int get hashCode => Object.hash(name, color);
+
+  @override
+  String toString() {
+    return 'TagDefinition(name: $name, color: $color)';
+  }
+}
+
+/// The sort order for ticket lists.
+enum TicketSortOrder {
+  /// Sort by creation date, newest first.
+  newest,
+
+  /// Sort by creation date, oldest first.
+  oldest,
+
+  /// Sort by last update date, most recent first.
+  recentlyUpdated;
 
   /// User-friendly display label.
   String get label {
     switch (this) {
-      case small:
-        return 'Small';
-      case medium:
-        return 'Medium';
-      case large:
-        return 'Large';
+      case newest:
+        return 'Newest';
+      case oldest:
+        return 'Oldest';
+      case recentlyUpdated:
+        return 'Recently updated';
     }
   }
 
   /// JSON serialization value.
   String get jsonValue => name;
 
-  /// Deserializes a [TicketEffort] from a JSON string.
-  static TicketEffort fromJson(String json) {
-    return TicketEffort.values.firstWhere(
+  /// Deserializes a [TicketSortOrder] from a JSON string.
+  static TicketSortOrder fromJson(String json) {
+    return TicketSortOrder.values.firstWhere(
       (e) => e.name == json,
-      orElse: () => throw ArgumentError('Invalid TicketEffort: $json'),
+      orElse: () => throw ArgumentError('Invalid TicketSortOrder: $json'),
     );
   }
 }
@@ -226,46 +495,6 @@ enum TicketViewMode {
     return TicketViewMode.values.firstWhere(
       (e) => e.name == json,
       orElse: () => throw ArgumentError('Invalid TicketViewMode: $json'),
-    );
-  }
-}
-
-/// The grouping method for ticket lists.
-enum TicketGroupBy {
-  /// Group by category.
-  category,
-
-  /// Group by status.
-  status,
-
-  /// Group by kind.
-  kind,
-
-  /// Group by priority.
-  priority;
-
-  /// User-friendly display label.
-  String get label {
-    switch (this) {
-      case category:
-        return 'Category';
-      case status:
-        return 'Status';
-      case kind:
-        return 'Kind';
-      case priority:
-        return 'Priority';
-    }
-  }
-
-  /// JSON serialization value.
-  String get jsonValue => name;
-
-  /// Deserializes a [TicketGroupBy] from a JSON string.
-  static TicketGroupBy fromJson(String json) {
-    return TicketGroupBy.values.firstWhere(
-      (e) => e.name == json,
-      orElse: () => throw ArgumentError('Invalid TicketGroupBy: $json'),
     );
   }
 }
@@ -368,123 +597,11 @@ class LinkedChat {
   }
 }
 
-/// A comment entry attached to a ticket.
-@immutable
-class TicketComment {
-  const TicketComment({
-    required this.text,
-    required this.createdAt,
-    this.author = 'orchestrator',
-    this.type = 'note',
-  });
-
-  final String text;
-  final DateTime createdAt;
-  final String author;
-  final String type;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'text': text,
-      'createdAt': createdAt.toUtc().toIso8601String(),
-      'author': author,
-      'type': type,
-    };
-  }
-
-  factory TicketComment.fromJson(Map<String, dynamic> json) {
-    return TicketComment(
-      text: json['text'] as String? ?? '',
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
-      author: json['author'] as String? ?? 'orchestrator',
-      type: json['type'] as String? ?? 'note',
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        other is TicketComment &&
-            other.text == text &&
-            other.createdAt == createdAt &&
-            other.author == author &&
-            other.type == type;
-  }
-
-  @override
-  int get hashCode => Object.hash(text, createdAt, author, type);
-}
-
-/// Cost and performance statistics for a ticket.
-@immutable
-class TicketCostStats {
-  /// Total tokens consumed across all chats.
-  final int totalTokens;
-
-  /// Total cost in USD across all chats.
-  final double totalCost;
-
-  /// Total time Claude spent working (milliseconds).
-  final int agentTimeMs;
-
-  /// Total time spent waiting for user input (milliseconds).
-  final int waitingTimeMs;
-
-  /// Creates a [TicketCostStats] instance.
-  const TicketCostStats({
-    required this.totalTokens,
-    required this.totalCost,
-    required this.agentTimeMs,
-    required this.waitingTimeMs,
-  });
-
-  /// Serializes this [TicketCostStats] to a JSON map.
-  Map<String, dynamic> toJson() {
-    return {
-      'totalTokens': totalTokens,
-      'totalCost': totalCost,
-      'agentTimeMs': agentTimeMs,
-      'waitingTimeMs': waitingTimeMs,
-    };
-  }
-
-  /// Deserializes a [TicketCostStats] from a JSON map.
-  factory TicketCostStats.fromJson(Map<String, dynamic> json) {
-    return TicketCostStats(
-      totalTokens: json['totalTokens'] as int? ?? 0,
-      totalCost: (json['totalCost'] as num?)?.toDouble() ?? 0.0,
-      agentTimeMs: json['agentTimeMs'] as int? ?? 0,
-      waitingTimeMs: json['waitingTimeMs'] as int? ?? 0,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is TicketCostStats &&
-        other.totalTokens == totalTokens &&
-        other.totalCost == totalCost &&
-        other.agentTimeMs == agentTimeMs &&
-        other.waitingTimeMs == waitingTimeMs;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(totalTokens, totalCost, agentTimeMs, waitingTimeMs);
-
-  @override
-  String toString() {
-    return 'TicketCostStats(totalTokens: $totalTokens, totalCost: $totalCost, '
-        'agentTimeMs: $agentTimeMs, waitingTimeMs: $waitingTimeMs)';
-  }
-}
-
-/// A project management ticket.
+/// A project management ticket following a GitHub Issues-style model.
 ///
-/// Represents a unit of work that can be tracked through completion. Tickets
-/// can have dependencies, linked worktrees/chats, and accumulated cost metrics.
+/// Tickets use an Open/Closed status model with free-form tags for
+/// categorization, a comment thread with activity timeline, and support
+/// for image attachments and author attribution.
 @immutable
 class TicketData {
   /// Unique numeric identifier for this ticket.
@@ -493,25 +610,16 @@ class TicketData {
   /// Short title describing the ticket.
   final String title;
 
-  /// Detailed description of the ticket work.
-  final String description;
+  /// Markdown body content (was 'description' in V1).
+  final String body;
 
-  /// Current status of the ticket.
-  final TicketStatus status;
+  /// Who created this ticket (e.g. "zaf", "agent auth-refactor").
+  final String author;
 
-  /// Kind/type of work this ticket represents.
-  final TicketKind kind;
+  /// Whether the ticket is open (true) or closed (false).
+  final bool isOpen;
 
-  /// Priority level of this ticket.
-  final TicketPriority priority;
-
-  /// Estimated effort/size of this ticket.
-  final TicketEffort effort;
-
-  /// Optional category for grouping tickets.
-  final String? category;
-
-  /// Tags for flexible categorization.
+  /// Free-form tags for categorization (always lowercase).
   final Set<String> tags;
 
   /// IDs of tickets this ticket depends on.
@@ -523,14 +631,17 @@ class TicketData {
   /// Chats linked to this ticket.
   final List<LinkedChat> linkedChats;
 
-  /// ID of the conversation that created this ticket (if any).
-  final String? sourceConversationId;
-
-  /// Comment timeline for this ticket.
+  /// Comment thread for this ticket.
   final List<TicketComment> comments;
 
-  /// Accumulated cost and performance statistics (if any).
-  final TicketCostStats? costStats;
+  /// Chronological activity timeline.
+  final List<ActivityEvent> activityLog;
+
+  /// Images attached to the ticket body.
+  final List<TicketImage> bodyImages;
+
+  /// ID of the conversation that created this ticket (if any).
+  final String? sourceConversationId;
 
   /// When this ticket was created.
   final DateTime createdAt;
@@ -538,79 +649,74 @@ class TicketData {
   /// When this ticket was last updated.
   final DateTime updatedAt;
 
+  /// When this ticket was closed (null if open).
+  final DateTime? closedAt;
+
   /// Creates a [TicketData] instance.
-  const TicketData({
+  ///
+  /// Tags are normalized to lowercase on construction.
+  TicketData({
     required this.id,
     required this.title,
-    required this.description,
-    required this.status,
-    required this.kind,
-    required this.priority,
-    required this.effort,
-    this.category,
-    this.tags = const {},
+    required this.body,
+    required this.author,
+    this.isOpen = true,
+    Set<String> tags = const {},
     this.dependsOn = const [],
     this.linkedWorktrees = const [],
     this.linkedChats = const [],
-    this.sourceConversationId,
     this.comments = const [],
-    this.costStats,
+    this.activityLog = const [],
+    this.bodyImages = const [],
+    this.sourceConversationId,
     required this.createdAt,
     required this.updatedAt,
-  });
+    this.closedAt,
+  }) : tags = {for (final t in tags) t.toLowerCase()};
 
-  /// Formatted display ID (e.g., "TKT-001").
-  String get displayId => 'TKT-${id.toString().padLeft(3, '0')}';
-
-  /// Whether this ticket is in a terminal state.
-  bool get isTerminal =>
-      status == TicketStatus.completed ||
-      status == TicketStatus.cancelled ||
-      status == TicketStatus.split;
+  /// Formatted display ID (e.g., "#1").
+  String get displayId => '#$id';
 
   /// Creates a copy with the given fields replaced.
   TicketData copyWith({
     int? id,
     String? title,
-    String? description,
-    TicketStatus? status,
-    TicketKind? kind,
-    TicketPriority? priority,
-    TicketEffort? effort,
-    String? category,
-    bool clearCategory = false,
+    String? body,
+    String? author,
+    bool? isOpen,
     Set<String>? tags,
     List<int>? dependsOn,
     List<LinkedWorktree>? linkedWorktrees,
     List<LinkedChat>? linkedChats,
+    List<TicketComment>? comments,
+    List<ActivityEvent>? activityLog,
+    List<TicketImage>? bodyImages,
     String? sourceConversationId,
     bool clearSourceConversationId = false,
-    List<TicketComment>? comments,
-    TicketCostStats? costStats,
-    bool clearCostStats = false,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? closedAt,
+    bool clearClosedAt = false,
   }) {
     return TicketData(
       id: id ?? this.id,
       title: title ?? this.title,
-      description: description ?? this.description,
-      status: status ?? this.status,
-      kind: kind ?? this.kind,
-      priority: priority ?? this.priority,
-      effort: effort ?? this.effort,
-      category: clearCategory ? null : (category ?? this.category),
+      body: body ?? this.body,
+      author: author ?? this.author,
+      isOpen: isOpen ?? this.isOpen,
       tags: tags ?? this.tags,
       dependsOn: dependsOn ?? this.dependsOn,
       linkedWorktrees: linkedWorktrees ?? this.linkedWorktrees,
       linkedChats: linkedChats ?? this.linkedChats,
+      comments: comments ?? this.comments,
+      activityLog: activityLog ?? this.activityLog,
+      bodyImages: bodyImages ?? this.bodyImages,
       sourceConversationId: clearSourceConversationId
           ? null
           : (sourceConversationId ?? this.sourceConversationId),
-      comments: comments ?? this.comments,
-      costStats: clearCostStats ? null : (costStats ?? this.costStats),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      closedAt: clearClosedAt ? null : (closedAt ?? this.closedAt),
     );
   }
 
@@ -619,25 +725,26 @@ class TicketData {
     return {
       'id': id,
       'title': title,
-      'description': description,
-      'status': status.jsonValue,
-      'kind': kind.jsonValue,
-      'priority': priority.jsonValue,
-      'effort': effort.jsonValue,
-      if (category != null) 'category': category,
+      'body': body,
+      'author': author,
+      'isOpen': isOpen,
       if (tags.isNotEmpty) 'tags': tags.toList(),
       if (dependsOn.isNotEmpty) 'dependsOn': dependsOn,
       if (linkedWorktrees.isNotEmpty)
         'linkedWorktrees': linkedWorktrees.map((w) => w.toJson()).toList(),
       if (linkedChats.isNotEmpty)
         'linkedChats': linkedChats.map((c) => c.toJson()).toList(),
-      if (sourceConversationId != null)
-        'sourceConversationId': sourceConversationId,
       if (comments.isNotEmpty)
         'comments': comments.map((c) => c.toJson()).toList(),
-      if (costStats != null) 'costStats': costStats!.toJson(),
+      if (activityLog.isNotEmpty)
+        'activityLog': activityLog.map((e) => e.toJson()).toList(),
+      if (bodyImages.isNotEmpty)
+        'bodyImages': bodyImages.map((i) => i.toJson()).toList(),
+      if (sourceConversationId != null)
+        'sourceConversationId': sourceConversationId,
       'createdAt': createdAt.toUtc().toIso8601String(),
       'updatedAt': updatedAt.toUtc().toIso8601String(),
+      if (closedAt != null) 'closedAt': closedAt!.toUtc().toIso8601String(),
     };
   }
 
@@ -648,21 +755,17 @@ class TicketData {
     final linkedWorktreesList = json['linkedWorktrees'] as List<dynamic>? ?? [];
     final linkedChatsList = json['linkedChats'] as List<dynamic>? ?? [];
     final commentsList = json['comments'] as List<dynamic>? ?? [];
-    final costStatsJson = json['costStats'] as Map<String, dynamic>?;
+    final activityLogList = json['activityLog'] as List<dynamic>? ?? [];
+    final bodyImagesList = json['bodyImages'] as List<dynamic>? ?? [];
 
     final now = DateTime.now();
 
     return TicketData(
       id: json['id'] as int? ?? 0,
       title: json['title'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      status: TicketStatus.fromJson(json['status'] as String? ?? 'draft'),
-      kind: TicketKind.fromJson(json['kind'] as String? ?? 'feature'),
-      priority: TicketPriority.fromJson(
-        json['priority'] as String? ?? 'medium',
-      ),
-      effort: TicketEffort.fromJson(json['effort'] as String? ?? 'medium'),
-      category: json['category'] as String?,
+      body: json['body'] as String? ?? '',
+      author: json['author'] as String? ?? '',
+      isOpen: json['isOpen'] as bool? ?? true,
       tags: Set<String>.from(tagsList.map((e) => e.toString())),
       dependsOn: dependsOnList.map((e) => e as int).toList(),
       linkedWorktrees: linkedWorktreesList
@@ -671,19 +774,25 @@ class TicketData {
       linkedChats: linkedChatsList
           .map((c) => LinkedChat.fromJson(c as Map<String, dynamic>))
           .toList(),
-      sourceConversationId: json['sourceConversationId'] as String?,
       comments: commentsList
           .map((c) => TicketComment.fromJson(c as Map<String, dynamic>))
           .toList(),
-      costStats: costStatsJson != null
-          ? TicketCostStats.fromJson(costStatsJson)
-          : null,
+      activityLog: activityLogList
+          .map((e) => ActivityEvent.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      bodyImages: bodyImagesList
+          .map((i) => TicketImage.fromJson(i as Map<String, dynamic>))
+          .toList(),
+      sourceConversationId: json['sourceConversationId'] as String?,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : now,
       updatedAt: json['updatedAt'] != null
           ? DateTime.parse(json['updatedAt'] as String)
           : now,
+      closedAt: json['closedAt'] != null
+          ? DateTime.parse(json['closedAt'] as String)
+          : null,
     );
   }
 
@@ -693,21 +802,20 @@ class TicketData {
     return other is TicketData &&
         other.id == id &&
         other.title == title &&
-        other.description == description &&
-        other.status == status &&
-        other.kind == kind &&
-        other.priority == priority &&
-        other.effort == effort &&
-        other.category == category &&
+        other.body == body &&
+        other.author == author &&
+        other.isOpen == isOpen &&
         setEquals(other.tags, tags) &&
         listEquals(other.dependsOn, dependsOn) &&
         listEquals(other.linkedWorktrees, linkedWorktrees) &&
         listEquals(other.linkedChats, linkedChats) &&
-        other.sourceConversationId == sourceConversationId &&
         listEquals(other.comments, comments) &&
-        other.costStats == costStats &&
+        listEquals(other.activityLog, activityLog) &&
+        listEquals(other.bodyImages, bodyImages) &&
+        other.sourceConversationId == sourceConversationId &&
         other.createdAt == createdAt &&
-        other.updatedAt == updatedAt;
+        other.updatedAt == updatedAt &&
+        other.closedAt == closedAt;
   }
 
   @override
@@ -715,126 +823,26 @@ class TicketData {
     return Object.hash(
       id,
       title,
-      description,
-      status,
-      kind,
-      priority,
-      effort,
-      category,
+      body,
+      author,
+      isOpen,
       Object.hashAll(tags),
       Object.hashAll(dependsOn),
       Object.hashAll(linkedWorktrees),
       Object.hashAll(linkedChats),
-      sourceConversationId,
       Object.hashAll(comments),
-      costStats,
+      Object.hashAll(activityLog),
+      Object.hashAll(bodyImages),
+      sourceConversationId,
       createdAt,
       updatedAt,
+      closedAt,
     );
   }
 
   @override
   String toString() {
-    return 'TicketData(id: $id, title: $title, status: $status, '
-        'kind: $kind, priority: $priority, effort: $effort)';
-  }
-}
-
-/// A proposal for a ticket, typically from an agent bulk-creation workflow.
-///
-/// Proposals are staging objects that get converted into [TicketData] with
-/// status [TicketStatus.draft] during bulk review. Dependencies are expressed
-/// as indices into the proposal array rather than ticket IDs, since IDs are
-/// not yet assigned.
-@immutable
-class TicketProposal {
-  /// Short title describing the proposed ticket.
-  final String title;
-
-  /// Detailed description of the proposed work.
-  final String description;
-
-  /// Kind/type of work this ticket represents.
-  final TicketKind kind;
-
-  /// Priority level of this ticket.
-  final TicketPriority priority;
-
-  /// Estimated effort/size of this ticket.
-  final TicketEffort effort;
-
-  /// Optional category for grouping.
-  final String? category;
-
-  /// Tags for flexible categorization.
-  final Set<String> tags;
-
-  /// Indices into the proposal array for dependencies.
-  ///
-  /// These are converted to actual ticket IDs when the proposals are created.
-  /// Out-of-range indices are silently dropped.
-  final List<int> dependsOnIndices;
-
-  /// Creates a [TicketProposal] instance.
-  const TicketProposal({
-    required this.title,
-    this.description = '',
-    this.kind = TicketKind.feature,
-    this.priority = TicketPriority.medium,
-    this.effort = TicketEffort.medium,
-    this.category,
-    this.tags = const {},
-    this.dependsOnIndices = const [],
-  });
-
-  /// Deserializes a [TicketProposal] from a JSON map.
-  factory TicketProposal.fromJson(Map<String, dynamic> json) {
-    final tagsList = json['tags'] as List<dynamic>? ?? [];
-    final depsList = json['dependsOnIndices'] as List<dynamic>? ?? [];
-
-    return TicketProposal(
-      title: json['title'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      kind: TicketKind.fromJson(json['kind'] as String? ?? 'feature'),
-      priority: TicketPriority.fromJson(
-        json['priority'] as String? ?? 'medium',
-      ),
-      effort: TicketEffort.fromJson(json['effort'] as String? ?? 'medium'),
-      category: json['category'] as String?,
-      tags: Set<String>.from(tagsList.map((e) => e.toString())),
-      dependsOnIndices: depsList.map((e) => e as int).toList(),
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is TicketProposal &&
-        other.title == title &&
-        other.description == description &&
-        other.kind == kind &&
-        other.priority == priority &&
-        other.effort == effort &&
-        other.category == category &&
-        setEquals(other.tags, tags) &&
-        listEquals(other.dependsOnIndices, dependsOnIndices);
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    title,
-    description,
-    kind,
-    priority,
-    effort,
-    category,
-    Object.hashAll(tags),
-    Object.hashAll(dependsOnIndices),
-  );
-
-  @override
-  String toString() {
-    return 'TicketProposal(title: $title, kind: $kind, '
-        'priority: $priority, effort: $effort)';
+    return 'TicketData(id: $id, title: $title, isOpen: $isOpen, '
+        'author: $author)';
   }
 }
