@@ -68,7 +68,7 @@ class TicketStorageService {
     final tempFile = File(tempPath);
 
     try {
-      await tempFile.writeAsString(content);
+      await tempFile.writeAsString(content, flush: true);
       await tempFile.rename(path);
       developer.log('Saved tickets: $projectId', name: 'TicketStorageService');
     } catch (e) {
