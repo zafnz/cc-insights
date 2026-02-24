@@ -485,7 +485,9 @@ class InternalToolsService extends ChangeNotifier {
   InternalToolDefinition _launchAgentTool(Chat orchestratorChat) {
     return InternalToolDefinition(
       name: 'launch_agent',
-      description: 'Launches a worker agent in a worktree with instructions.',
+      description:
+          'Launches a worker agent in a worktree with instructions. '
+          'Automatically retries if the session stops immediately after starting.',
       inputSchema: {
         'type': 'object',
         'properties': {
@@ -548,6 +550,16 @@ class InternalToolsService extends ChangeNotifier {
         instructions: instructions,
       );
 
+      // If the session stopped immediately (e.g. backend disconnected),
+      // attempt a restart (resume) so the agent is actually running.
+      if (!chat.session.hasActiveSession) {
+        await _restartAgentSession(
+          context: context,
+          chat: chat,
+          message: instructions,
+        );
+      }
+
       final state = getOrchestratorState(orchestratorChat);
       if (state == null) {
         return InternalToolResult.error('Orchestrator state is not available.');
@@ -608,6 +620,25 @@ class InternalToolsService extends ChangeNotifier {
     );
   }
 
+  /// Restarts a stopped agent session (resume) and sends a message.
+  ///
+  /// Used by `tell_agent` and `launch_agent` when the agent's session has
+  /// ended. This mirrors the normal chat resume flow: the session is restarted
+  /// with the new message as the prompt, and the backend uses the stored
+  /// `lastSessionId` to resume the conversation.
+  Future<void> _restartAgentSession({
+    required _OrchestrationContext context,
+    required Chat chat,
+    required String message,
+  }) {
+    return chat.session.start(
+      backend: context.backend,
+      eventHandler: context.eventHandler,
+      prompt: message,
+      internalToolsService: this,
+    );
+  }
+
   void _linkWorkerTicket({
     required _OrchestrationContext context,
     required int? ticketId,
@@ -632,7 +663,10 @@ class InternalToolsService extends ChangeNotifier {
   InternalToolDefinition _tellAgentTool(Chat orchestratorChat) {
     return InternalToolDefinition(
       name: 'tell_agent',
-      description: 'Send a non-blocking message to an idle agent.',
+      description:
+          'Send a non-blocking message to an agent. '
+          'Can be sent while the agent is busy (queued after current turn) '
+          'or stopped (automatically restarts the session).',
       inputSchema: {
         'type': 'object',
         'properties': {
@@ -649,6 +683,13 @@ class InternalToolsService extends ChangeNotifier {
     Chat orchestratorChat,
     Map<String, dynamic> input,
   ) async {
+    final context = _orchestrationContext;
+    if (context == null) {
+      return InternalToolResult.error(
+        'Orchestration context is not initialized.',
+      );
+    }
+
     final agentId = input['agent_id'] as String?;
     final message = input['message'] as String?;
     if (agentId == null || message == null) {
@@ -657,13 +698,8 @@ class InternalToolsService extends ChangeNotifier {
       );
     }
     final agent = getOrchestratorState(orchestratorChat)?.getAgent(agentId);
-    if (agent == null)
+    if (agent == null) {
       return InternalToolResult.error('agent_not_found: $agentId');
-    if (!agent.chat.session.hasActiveSession) {
-      return InternalToolResult.error('agent_stopped: $agentId');
-    }
-    if (agent.chat.session.isWorking) {
-      return InternalToolResult.error('agent_busy: $agentId');
     }
 
     agent.chat.conversations.addEntry(
@@ -673,6 +709,25 @@ class InternalToolsService extends ChangeNotifier {
         source: InstructionSource.orchestrator,
       ),
     );
+
+    // If the session has stopped, restart it (resume) with the new message.
+    if (!agent.chat.session.hasActiveSession) {
+      try {
+        await _restartAgentSession(
+          context: context,
+          chat: agent.chat,
+          message: message,
+        );
+        return InternalToolResult.text(
+          jsonEncode({'success': true, 'restarted': true}),
+        );
+      } catch (e) {
+        return InternalToolResult.error(
+          'Failed to restart agent session: $e',
+        );
+      }
+    }
+
     await agent.chat.session.sendMessage(message);
     return InternalToolResult.text(jsonEncode({'success': true}));
   }
