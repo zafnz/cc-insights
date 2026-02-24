@@ -5,11 +5,11 @@
 
 # CC Insights - Insights into Claude & Codex
 
-Yet another Claude coordinator desktop GUI application. (Codex is still in very early stages)
+Yet another AI coordinator desktop GUI application.
 
 ## What's different this time?
 <img align=right width="600" height="500" src="https://github.com/user-attachments/assets/f3b14f67-d1a1-4863-b125-15dda89609f2" />
-
+- Uses agents local CLI, so uses your subscription _without_ breaking terms-of-service. 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
 - Designed specifically for **Vibe coding** - your almost exclusive focus is on the AI agents and what they are doing.
 - **FULL** context tracking, cost tracking, token reporting. You get to see way more!
@@ -21,13 +21,15 @@ Yet another Claude coordinator desktop GUI application. (Codex is still in very 
 
 This application primarily works with Claude, and Codex support is rapidly evolving. Gemini and other ACP clients works but work is still needed.
 
+Authentication is entirely handled by the claude, codex, gemini clis, using your own subscription. All costs shown are estimated based on token usage.
+
 ## More features
+<img align=right width="400" height="450" alt="Screenshot 2026-02-24 at 15 28 11" src="https://github.com/user-attachments/assets/d323190b-9bdb-4bbf-89a6-668352bc8d24" />
 
 - **Multi-agent visualization** - See main agents and subagents of claude in a tree structure
 - **Cost and Token Statistics** - A breakdown of agent usage and equivalent cost (how much you'd pay if you were paying direct API costs).
 - **Real-time output streaming** - Watch the agents' responses and tool usage as they happen
 - **Tool execution monitoring** - View tool inputs, outputs, and results
-- **Interactive Q&A** - Answer questions from Claude directly in the UI
 - **Session management** - Create, monitor, and terminate multiple sessions
 - **Context management** - Continuously keep an eye on context usage, so you can compact or clear when you want, and not be surprised by Claude.
 - **Cost tracking** - Monitor token usage and costs per session
