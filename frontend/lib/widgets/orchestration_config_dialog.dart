@@ -136,9 +136,11 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
     final selectedAgent = RuntimeConfig.instance.agentById(_selectedAgentId);
     final effectiveBackendType = selectedAgent?.backendType ??
         backend.backendType;
-    final capabilities = effectiveBackendType != null
-        ? backend.capabilitiesFor(effectiveBackendType)
-        : const sdk.BackendCapabilities();
+    // Always enable model/permission selection in this pre-launch dialog.
+    const capabilities = sdk.BackendCapabilities(
+      supportsModelChange: true,
+      supportsPermissionModeChange: true,
+    );
     final models = effectiveBackendType != null
         ? ChatModelCatalog.forBackend(effectiveBackendType)
         : ChatModelCatalog.claudeModels;

@@ -362,31 +362,14 @@ void main() {
         expect(find.text('Accept Edits'), findsOneWidget);
       });
 
-      testWidgets('disables dropdowns when backend lacks capabilities',
+      testWidgets('always enables dropdowns in pre-launch dialog',
           (tester) async {
+        // Even when the backend reports no capabilities, the pre-launch
+        // dialog should allow model and permission selection.
         await tester.pumpWidget(createTestApp(
           capabilities: const BackendCapabilities(
             supportsModelChange: false,
             supportsPermissionModeChange: false,
-          ),
-        ));
-        await safePumpAndSettle(tester);
-
-        // Both dropdowns should be rendered but disabled (wrapped in Tooltip)
-        final tooltips = tester.widgetList<Tooltip>(find.byType(Tooltip));
-        final disabledMessages = tooltips
-            .map((t) => t.message)
-            .where((m) => m?.contains('not supported by this backend') ?? false)
-            .toList();
-        check(disabledMessages.length).isGreaterOrEqual(2);
-      });
-
-      testWidgets('enables dropdowns when backend supports changes',
-          (tester) async {
-        await tester.pumpWidget(createTestApp(
-          capabilities: const BackendCapabilities(
-            supportsModelChange: true,
-            supportsPermissionModeChange: true,
           ),
         ));
         await safePumpAndSettle(tester);
