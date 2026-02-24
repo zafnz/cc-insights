@@ -134,12 +134,59 @@ void main() {
   });
 
   group('InternalToolsService - create_ticket handler', () {
-    test('returns error for missing tickets field', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
+    late InternalToolsService service;
+    late TicketRepository repo;
 
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worktree',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      final fakeGit = FakeGitService();
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+      service.registerTicketTools(bulkProposal);
+    });
+
+    test('returns error for missing tickets field', () async {
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({});
 
@@ -148,11 +195,6 @@ void main() {
     });
 
     test('returns error for non-array tickets field', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({'tickets': 'not-an-array'});
 
@@ -161,11 +203,6 @@ void main() {
     });
 
     test('returns error for empty tickets array', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({'tickets': []});
 
@@ -174,38 +211,24 @@ void main() {
     });
 
     test('returns error for too many proposals', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tooMany = List.generate(
         InternalToolsService.maxProposalCount + 1,
-        (i) => {
-          'title': 'Ticket $i',
-          'description': 'Desc $i',
-          'kind': 'feature',
-        },
+        (i) => {'title': 'Ticket $i'},
       );
 
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({'tickets': tooMany});
 
       expect(result.isError, isTrue);
-      expect(result.content, contains('Too many proposals'));
+      expect(result.content, contains('Too many tickets'));
       expect(result.content, contains('> ${InternalToolsService.maxProposalCount}'));
     });
 
     test('returns error for ticket missing title', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
         'tickets': [
-          {'description': 'A desc', 'kind': 'feature'},
+          {'body': 'A body'},
         ],
       });
 
@@ -214,48 +237,7 @@ void main() {
       expect(result.content, contains('"title"'));
     });
 
-    test('returns error for ticket missing description', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
-      final tool = service.registry['create_ticket']!;
-      final result = await tool.handler({
-        'tickets': [
-          {'title': 'A title', 'kind': 'feature'},
-        ],
-      });
-
-      expect(result.isError, isTrue);
-      expect(result.content, contains('index 0'));
-      expect(result.content, contains('"description"'));
-    });
-
-    test('returns error for ticket missing kind', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
-      final tool = service.registry['create_ticket']!;
-      final result = await tool.handler({
-        'tickets': [
-          {'title': 'A title', 'description': 'A desc'},
-        ],
-      });
-
-      expect(result.isError, isTrue);
-      expect(result.content, contains('index 0'));
-      expect(result.content, contains('"kind"'));
-    });
-
     test('returns error for non-object ticket entry', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
         'tickets': ['not-an-object'],
@@ -266,238 +248,95 @@ void main() {
       expect(result.content, contains('not a valid object'));
     });
 
-    test('stages valid proposals in board and waits for review', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
+    test('creates ticket directly and returns success', () async {
       final tool = service.registry['create_ticket']!;
 
-      // Start the handler (it will return a Future that waits for review)
-      final resultFuture = tool.handler({
+      final result = await tool.handler({
         'tickets': [
           {
             'title': 'Add dark mode',
-            'description': 'Implement dark mode toggle',
-            'kind': 'feature',
-            'priority': 'high',
+            'body': 'Implement dark mode toggle',
           },
         ],
       });
 
-      // The repo should have the staged proposals
+      expect(result.isError, isFalse);
+      expect(result.content, contains('Created 1 ticket(s)'));
+      expect(result.content, contains('#1'));
+
       expect(repo.tickets.length, 1);
       expect(repo.tickets.first.title, 'Add dark mode');
-      expect(repo.tickets.first.status, TicketStatus.draft);
-      expect(bulkProposal.hasActiveProposal, isTrue);
-
-      // The future should not have completed yet
-      var completed = false;
-      unawaited(resultFuture.then((_) => completed = true));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(completed, isFalse);
-
-      // Simulate the user approving all tickets
-      bulkProposal.approveBulk();
-
-      // Now the future should complete
-      final result = await resultFuture;
-      expect(result.isError, isFalse);
-      expect(result.content, contains('approved'));
+      expect(repo.tickets.first.body, 'Implement dark mode toggle');
+      expect(repo.tickets.first.isOpen, isTrue);
     });
 
-    test('returns appropriate text when all approved', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
+    test('creates multiple tickets and returns success', () async {
       final tool = service.registry['create_ticket']!;
 
-      final resultFuture = tool.handler({
+      final result = await tool.handler({
         'tickets': [
-          {
-            'title': 'Ticket A',
-            'description': 'Desc A',
-            'kind': 'feature',
-          },
-          {
-            'title': 'Ticket B',
-            'description': 'Desc B',
-            'kind': 'bugfix',
-          },
+          {'title': 'Ticket A', 'body': 'Body A'},
+          {'title': 'Ticket B', 'body': 'Body B'},
         ],
       });
 
-      // All tickets are auto-checked, so approveBulk approves all
-      bulkProposal.approveBulk();
-
-      final result = await resultFuture;
       expect(result.isError, isFalse);
-      expect(result.content, contains('All 2'));
-      expect(result.content, contains('approved and created'));
+      expect(result.content, contains('Created 2 ticket(s)'));
+      expect(result.content, contains('#1'));
+      expect(result.content, contains('#2'));
+
+      expect(repo.tickets.length, 2);
+      expect(repo.tickets[0].title, 'Ticket A');
+      expect(repo.tickets[1].title, 'Ticket B');
     });
 
-    test('returns appropriate text when all rejected', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
+    test('sequential tool calls work correctly', () async {
       final tool = service.registry['create_ticket']!;
 
-      final resultFuture = tool.handler({
+      final result1 = await tool.handler({
         'tickets': [
-          {
-            'title': 'Ticket A',
-            'description': 'Desc A',
-            'kind': 'feature',
-          },
-          {
-            'title': 'Ticket B',
-            'description': 'Desc B',
-            'kind': 'bugfix',
-          },
+          {'title': 'Ticket A'},
         ],
       });
-
-      // Reject all tickets
-      bulkProposal.rejectAll();
-
-      final result = await resultFuture;
-      expect(result.isError, isFalse);
-      expect(result.content, contains('All 2'));
-      expect(result.content, contains('rejected'));
-    });
-
-    test('returns appropriate text for mixed approval', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
-      final tool = service.registry['create_ticket']!;
-
-      final resultFuture = tool.handler({
-        'tickets': [
-          {
-            'title': 'Ticket A',
-            'description': 'Desc A',
-            'kind': 'feature',
-          },
-          {
-            'title': 'Ticket B',
-            'description': 'Desc B',
-            'kind': 'bugfix',
-          },
-          {
-            'title': 'Ticket C',
-            'description': 'Desc C',
-            'kind': 'chore',
-          },
-        ],
-      });
-
-      // Uncheck one ticket before approving
-      final proposedTickets = bulkProposal.proposedTickets;
-      expect(proposedTickets.length, 3);
-
-      bulkProposal.toggleProposalChecked(proposedTickets[1].id);
-      bulkProposal.approveBulk();
-
-      final result = await resultFuture;
-      expect(result.isError, isFalse);
-      expect(result.content, contains('2 of 3'));
-      expect(result.content, contains('approved and created'));
-      expect(result.content, contains('1 were rejected'));
-    });
-
-    test('stream-based review supports sequential tool calls', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
-      final tool = service.registry['create_ticket']!;
-
-      // First call
-      final resultFuture1 = tool.handler({
-        'tickets': [
-          {
-            'title': 'Ticket A',
-            'description': 'Desc A',
-            'kind': 'feature',
-          },
-        ],
-      });
-
-      bulkProposal.approveBulk();
-      final result1 = await resultFuture1;
       expect(result1.isError, isFalse);
+      expect(repo.tickets.length, 1);
 
-      // Second call should also work (no stale callback issues)
-      final resultFuture2 = tool.handler({
+      final result2 = await tool.handler({
         'tickets': [
-          {
-            'title': 'Ticket B',
-            'description': 'Desc B',
-            'kind': 'feature',
-          },
+          {'title': 'Ticket B'},
         ],
       });
-
-      bulkProposal.approveBulk();
-      final result2 = await resultFuture2;
       expect(result2.isError, isFalse);
+      expect(repo.tickets.length, 2);
     });
 
     test('parses optional fields correctly', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tool = service.registry['create_ticket']!;
 
-      final resultFuture = tool.handler({
+      final result = await tool.handler({
         'tickets': [
           {
             'title': 'Complex ticket',
-            'description': 'Detailed work description',
-            'kind': 'feature',
-            'priority': 'critical',
-            'effort': 'large',
-            'category': 'Backend',
-            'tags': ['api', 'database'],
+            'body': 'Detailed work description',
+            'tags': ['api', 'database', 'high'],
           },
         ],
       });
 
+      expect(result.isError, isFalse);
+
       final ticket = repo.tickets.first;
       expect(ticket.title, 'Complex ticket');
-      expect(ticket.description, 'Detailed work description');
-      expect(ticket.kind, TicketKind.feature);
-      expect(ticket.priority, TicketPriority.critical);
-      expect(ticket.effort, TicketEffort.large);
-      expect(ticket.category, 'Backend');
-      expect(ticket.tags, containsAll(['api', 'database']));
-
-      // Clean up by completing the review
-      bulkProposal.approveBulk();
-      await resultFuture;
+      expect(ticket.body, 'Detailed work description');
+      expect(ticket.tags, containsAll(['api', 'database', 'high']));
+      expect(ticket.isOpen, isTrue);
     });
 
     test('returns error for ticket with empty title', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
       final tool = service.registry['create_ticket']!;
       final result = await tool.handler({
         'tickets': [
-          {'title': '', 'description': 'A desc', 'kind': 'feature'},
+          {'title': '', 'body': 'A body'},
         ],
       });
 
@@ -506,32 +345,81 @@ void main() {
       expect(result.content, contains('"title"'));
     });
 
-    test('returns error for ticket with empty kind', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
+    test('resolves dependency indices between tickets', () async {
       final tool = service.registry['create_ticket']!;
+
       final result = await tool.handler({
         'tickets': [
-          {'title': 'Test', 'description': 'A desc', 'kind': ''},
+          {'title': 'Ticket A'},
+          {
+            'title': 'Ticket B',
+            'dependsOnIndices': [0],
+          },
         ],
       });
 
-      expect(result.isError, isTrue);
-      expect(result.content, contains('index 0'));
-      expect(result.content, contains('"kind"'));
+      expect(result.isError, isFalse);
+      expect(repo.tickets.length, 2);
+
+      final ticketB = repo.tickets[1];
+      expect(ticketB.dependsOn, contains(repo.tickets[0].id));
     });
   });
 
   group('InternalToolsService - registryForChat create_ticket', () {
-    test('injects chat id and name into proposeBulk', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
+    late InternalToolsService service;
+    late TicketRepository repo;
 
+    setUp(() {
+      service = resources.track(InternalToolsService());
+      final worktree = WorktreeState(
+        const WorktreeData(
+          worktreeRoot: '/test/worktree',
+          isPrimary: true,
+          branch: 'main',
+        ),
+      );
+      final project = resources.track(
+        ProjectState(
+          const ProjectData(name: 'test', repoRoot: '/test/repo'),
+          worktree,
+          autoValidate: false,
+          watchFilesystem: false,
+        ),
+      );
+      repo = resources.track(TicketRepository('test-project'));
+      final bulkProposal = resources.track(BulkProposalState(repo));
+      final fakeGit = FakeGitService();
+      final fakePersistence = FakePersistenceService();
+      final settingsService = SettingsService(persistToDisk: false);
+      final restoreService = ProjectRestoreService(
+        persistence: fakePersistence,
+      );
+      final selection = SelectionState(
+        project,
+        restoreService: restoreService,
+      );
+      final worktreeService = WorktreeService(
+        gitService: fakeGit,
+        persistenceService: fakePersistence,
+      );
+
+      service.bindOrchestrationContext(
+        backend: BackendService(),
+        eventHandler: EventHandler(),
+        project: project,
+        selection: selection,
+        ticketBoard: repo,
+        worktreeService: worktreeService,
+        restoreService: restoreService,
+        gitService: fakeGit,
+        settingsService: settingsService,
+        persistenceService: fakePersistence,
+      );
+      service.registerTicketTools(bulkProposal);
+    });
+
+    test('uses chat name for author attribution', () async {
       final chat = Chat.create(
         name: 'My Test Chat',
         worktreeRoot: '/test/worktree',
@@ -539,49 +427,29 @@ void main() {
       final registry = service.registryForChat(chat);
       final tool = registry['create_ticket']!;
 
-      final resultFuture = tool.handler({
+      await tool.handler({
         'tickets': [
-          {
-            'title': 'Test ticket',
-            'description': 'A description',
-            'kind': 'feature',
-          },
+          {'title': 'Test ticket', 'body': 'A description'},
         ],
       });
 
-      // Verify the chat context was passed through to proposeBulk
-      expect(bulkProposal.proposalSourceChatId, chat.id);
-      expect(bulkProposal.proposalSourceChatName, 'My Test Chat');
-
-      // Complete the review so the future resolves
-      bulkProposal.approveBulk();
-      await resultFuture;
+      // Verify the ticket was created with the chat's name in the author
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.author, 'agent My Test Chat');
     });
 
-    test('global registry handler uses fallback source values', () async {
-      final service = resources.track(InternalToolsService());
-      final repo = resources.track(TicketRepository('test-project'));
-      final bulkProposal = resources.track(BulkProposalState(repo));
-      service.registerTicketTools(bulkProposal);
-
+    test('global registry handler uses fallback Agent author', () async {
       // Use the global registry (not registryForChat)
       final tool = service.registry['create_ticket']!;
 
-      final resultFuture = tool.handler({
+      await tool.handler({
         'tickets': [
-          {
-            'title': 'Test ticket',
-            'description': 'A description',
-            'kind': 'feature',
-          },
+          {'title': 'Test ticket', 'body': 'A description'},
         ],
       });
 
-      expect(bulkProposal.proposalSourceChatId, 'mcp-tool');
-      expect(bulkProposal.proposalSourceChatName, 'Agent');
-
-      bulkProposal.approveBulk();
-      await resultFuture;
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.author, 'agent Agent');
     });
   });
 
@@ -1387,11 +1255,11 @@ void main() {
 
   group('InternalToolsService - set_tags handler', () {
     late InternalToolsService service;
-    late WorktreeState worktree;
+    late TicketRepository repo;
 
     setUp(() {
       service = resources.track(InternalToolsService());
-      worktree = WorktreeState(
+      final worktree = WorktreeState(
         const WorktreeData(
           worktreeRoot: '/test/worktree',
           isPrimary: true,
@@ -1406,7 +1274,7 @@ void main() {
           watchFilesystem: false,
         ),
       );
-      final repo = resources.track(TicketRepository('test-project'));
+      repo = resources.track(TicketRepository('test-project'));
       final fakeGit = FakeGitService();
       final fakePersistence = FakePersistenceService();
       final settingsService = SettingsService(persistToDisk: false);
@@ -1443,34 +1311,30 @@ void main() {
       return registry['set_tags']!;
     }
 
-    test('returns error for missing worktree', () async {
+    test('returns error for missing ticket_id', () async {
       final tool = getSetTagsTool();
       final result = await tool.handler({'tags': ['ready']});
 
       expect(result.isError, isTrue);
-      expect(result.content, contains('Missing required "worktree"'));
-    });
-
-    test('returns error for empty worktree', () async {
-      final tool = getSetTagsTool();
-      final result = await tool.handler({'worktree': '', 'tags': ['ready']});
-
-      expect(result.isError, isTrue);
-      expect(result.content, contains('Missing required "worktree"'));
+      expect(result.content, contains('Missing "ticket_id"'));
     });
 
     test('returns error for missing tags', () async {
+      repo.createTicket(title: 'Test');
+
       final tool = getSetTagsTool();
-      final result = await tool.handler({'worktree': '/test/worktree'});
+      final result = await tool.handler({'ticket_id': 1});
 
       expect(result.isError, isTrue);
       expect(result.content, contains('Missing or invalid "tags"'));
     });
 
     test('returns error for non-array tags', () async {
+      repo.createTicket(title: 'Test');
+
       final tool = getSetTagsTool();
       final result = await tool.handler({
-        'worktree': '/test/worktree',
+        'ticket_id': 1,
         'tags': 'not-an-array',
       });
 
@@ -1478,59 +1342,62 @@ void main() {
       expect(result.content, contains('Missing or invalid "tags"'));
     });
 
-    test('returns error for unknown worktree path', () async {
+    test('returns error for unknown ticket_id', () async {
       final tool = getSetTagsTool();
       final result = await tool.handler({
-        'worktree': '/unknown/path',
+        'ticket_id': 999,
         'tags': ['ready'],
       });
 
       expect(result.isError, isTrue);
-      expect(result.content, contains('worktree_not_found'));
+      expect(result.content, contains('ticket_not_found'));
     });
 
-    test('sets tags on worktree successfully', () async {
+    test('sets tags on ticket successfully', () async {
+      repo.createTicket(title: 'Test ticket');
+
       final tool = getSetTagsTool();
       final result = await tool.handler({
-        'worktree': '/test/worktree',
-        'tags': ['ready', 'testing'],
+        'ticket_id': 1,
+        'tags': ['feature', 'high'],
       });
 
       expect(result.isError, isFalse);
       final json = jsonDecode(result.content) as Map<String, dynamic>;
       expect(json['success'], isTrue);
-      expect(json['worktree'], '/test/worktree');
-      expect(json['tags'], ['ready', 'testing']);
+      expect(json['ticket_id'], 1);
+      expect((json['tags'] as List).toSet(), {'feature', 'high'});
 
-      // Verify worktree state was updated
-      expect(worktree.tags, ['ready', 'testing']);
+      // Verify ticket state was updated
+      final ticket = repo.getTicket(1)!;
+      expect(ticket.tags, {'feature', 'high'});
     });
 
     test('replaces existing tags', () async {
-      worktree.setTags(['old-tag']);
-      expect(worktree.tags, ['old-tag']);
+      repo.createTicket(title: 'Test', tags: {'old-tag'});
+      expect(repo.getTicket(1)!.tags, {'old-tag'});
 
       final tool = getSetTagsTool();
       final result = await tool.handler({
-        'worktree': '/test/worktree',
+        'ticket_id': 1,
         'tags': ['new-tag'],
       });
 
       expect(result.isError, isFalse);
-      expect(worktree.tags, ['new-tag']);
+      expect(repo.getTicket(1)!.tags, {'new-tag'});
     });
 
     test('sets empty tags list', () async {
-      worktree.setTags(['ready', 'testing']);
+      repo.createTicket(title: 'Test', tags: {'feature', 'high'});
 
       final tool = getSetTagsTool();
       final result = await tool.handler({
-        'worktree': '/test/worktree',
+        'ticket_id': 1,
         'tags': [],
       });
 
       expect(result.isError, isFalse);
-      expect(worktree.tags, isEmpty);
+      expect(repo.getTicket(1)!.tags, isEmpty);
     });
   });
 
