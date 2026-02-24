@@ -2,7 +2,6 @@ import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_graph_view.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/ticket_view_state.dart';
-import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -52,11 +51,9 @@ void main() {
 
     repo.createTicket(
       title: 'Setup database',
-      kind: TicketKind.feature,
     );
     repo.createTicket(
       title: 'Build API layer',
-      kind: TicketKind.feature,
     );
 
     await tester.pumpWidget(createTestApp());
@@ -102,18 +99,15 @@ void main() {
 
     repo.createTicket(
       title: 'Implement authentication',
-      kind: TicketKind.feature,
     );
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    // Display ID (TKT-001) should be shown
-    expect(find.text('TKT-001'), findsOneWidget);
+    // Display ID (#1) should be shown
+    expect(find.text('#1'), findsOneWidget);
     // Title should be shown
     expect(find.text('Implement authentication'), findsOneWidget);
-    // Status icon should be present
-    expect(find.byType(TicketStatusIcon), findsOneWidget);
   });
 
   // ---------------------------------------------------------------------------
@@ -127,11 +121,9 @@ void main() {
 
     repo.createTicket(
       title: 'First ticket',
-      kind: TicketKind.feature,
     );
     repo.createTicket(
       title: 'Second ticket',
-      kind: TicketKind.bugfix,
     );
 
     await tester.pumpWidget(createTestApp());
@@ -159,7 +151,6 @@ void main() {
 
     repo.createTicket(
       title: 'My ticket',
-      kind: TicketKind.feature,
     );
 
     await tester.pumpWidget(createTestApp());
@@ -213,7 +204,6 @@ void main() {
 
     repo.createTicket(
       title: 'Some ticket',
-      kind: TicketKind.feature,
     );
 
     await tester.pumpWidget(createTestApp());
@@ -266,15 +256,12 @@ void main() {
   testWidgets('ticket count label shows correct count', (tester) async {
     repo.createTicket(
       title: 'Ticket A',
-      kind: TicketKind.feature,
     );
     repo.createTicket(
       title: 'Ticket B',
-      kind: TicketKind.bugfix,
     );
     repo.createTicket(
       title: 'Ticket C',
-      kind: TicketKind.chore,
     );
 
     await tester.pumpWidget(createTestApp());
@@ -294,15 +281,14 @@ void main() {
 
     repo.createTicket(
       title: 'Some ticket',
-      kind: TicketKind.feature,
     );
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
     expect(find.byKey(TicketGraphViewKeys.legend), findsOneWidget);
-    // Legend should show status labels
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
+    // Legend should show Open/Closed labels
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('Closed'), findsOneWidget);
   });
 }

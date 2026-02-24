@@ -7,7 +7,6 @@ import '../config/fonts.dart';
 import '../models/ticket.dart';
 import '../state/ticket_view_state.dart';
 import '../widgets/ticket_graph_layout.dart';
-import '../widgets/ticket_visuals.dart';
 
 /// Test keys for the ticket graph view.
 class TicketGraphViewKeys {
@@ -390,7 +389,10 @@ class _GraphArea extends StatelessWidget {
                   painter: _EdgePainter(
                     edges: layout.edges,
                     offset: Offset(_padding, _padding),
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ticketMap: ticketMap,
+                    satisfiedColor: _openClosedColors.closed,
+                    unsatisfiedColor: colorScheme.outlineVariant
+                        .withValues(alpha: 0.5),
                   ),
                 ),
                 // Node layer
@@ -465,10 +467,16 @@ class _EmptyGraphState extends StatelessWidget {
   }
 }
 
+/// Open/Closed colour constants for the graph.
+const _openClosedColors = (
+  open: Color(0xFF4CAF50),
+  closed: Color(0xFFCE93D8),
+);
+
 /// A card node representing a ticket in the graph.
 ///
-/// Displays the ticket's status icon, display ID, title, and a colored
-/// border indicating status. Tapping selects the ticket.
+/// Displays the ticket's open/closed icon, display ID, title, and tag chips.
+/// Tapping selects the ticket.
 class _TicketGraphNode extends StatelessWidget {
   const _TicketGraphNode({
     super.key,
@@ -484,7 +492,8 @@ class _TicketGraphNode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final statusColor = TicketStatusVisuals.color(ticket.status, colorScheme);
+    final statusColor =
+        ticket.isOpen ? _openClosedColors.open : _openClosedColors.closed;
 
     return GestureDetector(
       onTap: onTap,
@@ -525,12 +534,15 @@ class _TicketGraphNode extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header: status icon + display ID
+                      // Header: open/closed icon + display ID
                       Row(
                         children: [
-                          TicketStatusIcon(
-                            status: ticket.status,
+                          Icon(
+                            ticket.isOpen
+                                ? Icons.radio_button_unchecked
+                                : Icons.check_circle_outline,
                             size: 12,
+                            color: statusColor,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -556,14 +568,39 @@ class _TicketGraphNode extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      // Bottom status bar
-                      Container(
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(1),
+                      // Tag chips
+                      if (ticket.tags.isNotEmpty)
+                        SizedBox(
+                          height: 14,
+                          child: Row(
+                            children: ticket.tags
+                                .take(3)
+                                .map((tag) => Padding(
+                                      padding:
+                                          const EdgeInsets.only(right: 4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 1,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.surfaceContainerHighest,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: TextStyle(
+                                            fontSize: 8,
+                                            color:
+                                                colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -577,30 +614,42 @@ class _TicketGraphNode extends StatelessWidget {
 }
 
 /// Custom painter for drawing edges between ticket nodes.
+///
+/// Edges are coloured based on whether the dependency (source node) is
+/// satisfied (closed) or unsatisfied (open).
 class _EdgePainter extends CustomPainter {
   const _EdgePainter({
     required this.edges,
     required this.offset,
-    required this.color,
+    required this.ticketMap,
+    required this.satisfiedColor,
+    required this.unsatisfiedColor,
   });
 
   final List<GraphEdge> edges;
   final Offset offset;
-  final Color color;
+  final Map<int, TicketData> ticketMap;
+  final Color satisfiedColor;
+  final Color unsatisfiedColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    final arrowPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
     for (final edge in edges) {
       if (edge.points.length < 2) continue;
+
+      // Determine if the dependency (from-node) is satisfied (closed).
+      final fromTicket = ticketMap[edge.fromId];
+      final isSatisfied = fromTicket != null && !fromTicket.isOpen;
+      final edgeColor = isSatisfied ? satisfiedColor : unsatisfiedColor;
+
+      final paint = Paint()
+        ..color = edgeColor
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+
+      final arrowPaint = Paint()
+        ..color = edgeColor
+        ..style = PaintingStyle.fill;
 
       // Draw the line path
       final path = Path();
@@ -651,10 +700,12 @@ class _EdgePainter extends CustomPainter {
   bool shouldRepaint(covariant _EdgePainter oldDelegate) =>
       edges != oldDelegate.edges ||
       offset != oldDelegate.offset ||
-      color != oldDelegate.color;
+      ticketMap != oldDelegate.ticketMap ||
+      satisfiedColor != oldDelegate.satisfiedColor ||
+      unsatisfiedColor != oldDelegate.unsatisfiedColor;
 }
 
-/// Legend showing status colors and labels.
+/// Legend showing Open/Closed status colours.
 class _StatusLegend extends StatelessWidget {
   const _StatusLegend({super.key});
 
@@ -662,14 +713,9 @@ class _StatusLegend extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Show a subset of statuses to keep legend compact
-    final statuses = [
-      TicketStatus.ready,
-      TicketStatus.active,
-      TicketStatus.blocked,
-      TicketStatus.inReview,
-      TicketStatus.completed,
-      TicketStatus.cancelled,
+    const entries = [
+      (label: 'Open', color: _openClosedColors, isOpen: true),
+      (label: 'Closed', color: _openClosedColors, isOpen: false),
     ];
 
     return Container(
@@ -694,9 +740,9 @@ class _StatusLegend extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          ...statuses.map((status) {
-            final statusColor =
-                TicketStatusVisuals.color(status, colorScheme);
+          ...entries.map((entry) {
+            final dotColor =
+                entry.isOpen ? _openClosedColors.open : _openClosedColors.closed;
             return Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Row(
@@ -706,13 +752,13 @@ class _StatusLegend extends StatelessWidget {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: statusColor,
+                      color: dotColor,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    status.label,
+                    entry.label,
                     style: TextStyle(
                       fontSize: 10,
                       color: colorScheme.onSurfaceVariant,

@@ -12,11 +12,8 @@ TicketData _ticket(int id, {List<int> dependsOn = const []}) {
   return TicketData(
     id: id,
     title: 'Ticket $id',
-    description: 'Description for ticket $id',
-    status: TicketStatus.ready,
-    kind: TicketKind.feature,
-    priority: TicketPriority.medium,
-    effort: TicketEffort.medium,
+    body: '',
+    author: 'test',
     dependsOn: dependsOn,
     createdAt: now,
     updatedAt: now,
