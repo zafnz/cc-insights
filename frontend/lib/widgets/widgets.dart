@@ -12,5 +12,6 @@ export 'navigation_rail.dart';
 export 'output_entries.dart';
 export 'permission_dialog.dart';
 export 'status_bar.dart';
+export 'ticket_comment_input.dart';
 export 'ticket_proposal_card.dart';
 export 'tool_card.dart';
