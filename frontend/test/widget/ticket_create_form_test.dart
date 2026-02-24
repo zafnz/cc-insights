@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_create_form.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/ticket_view_state.dart';
@@ -42,8 +41,7 @@ void main() {
   }
 
   group('TicketCreateForm', () {
-    testWidgets('renders all fields', (tester) async {
-      // Use a tall surface to avoid off-screen issues
+    testWidgets('renders all V2 fields', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -54,34 +52,32 @@ void main() {
 
       // Header
       expect(find.byIcon(Icons.add_task), findsOneWidget);
+      expect(find.text('Create Ticket'), findsOneWidget);
 
       // Title field
       expect(find.byKey(TicketCreateFormKeys.titleField), findsOneWidget);
 
-      // Kind dropdown
-      expect(find.byKey(TicketCreateFormKeys.kindDropdown), findsOneWidget);
+      // Body field
+      expect(find.byKey(TicketCreateFormKeys.bodyField), findsOneWidget);
 
-      // Priority dropdown
-      expect(find.byKey(TicketCreateFormKeys.priorityDropdown), findsOneWidget);
+      // Tags section (TagPicker hint)
+      expect(find.text('Type tag name...'), findsOneWidget);
 
-      // Category field
-      expect(find.byKey(TicketCreateFormKeys.categoryField), findsOneWidget);
-
-      // Description field
-      expect(find.byKey(TicketCreateFormKeys.descriptionField), findsOneWidget);
-
-      // Effort selector
-      expect(find.byKey(TicketCreateFormKeys.effortSelector), findsOneWidget);
-
-      // Tags area (hint text for tag input)
-      expect(find.text('Type to add...'), findsOneWidget);
-
-      // Dependencies area (hint text for dep search)
+      // Dependencies section
       expect(find.text('Search tickets...'), findsOneWidget);
+
+      // Images section
+      expect(find.text('Attach images...'), findsOneWidget);
 
       // Action buttons
       expect(find.byKey(TicketCreateFormKeys.cancelButton), findsOneWidget);
       expect(find.byKey(TicketCreateFormKeys.createButton), findsOneWidget);
+
+      // V1 fields should NOT be present
+      expect(find.text('Kind'), findsNothing);
+      expect(find.text('Priority'), findsNothing);
+      expect(find.text('Estimated effort'), findsNothing);
+      expect(find.text('Category'), findsNothing);
     });
 
     testWidgets('title is required - shows error when empty', (tester) async {
@@ -102,62 +98,6 @@ void main() {
 
       // No ticket should have been created
       expect(repo.tickets, isEmpty);
-    });
-
-    testWidgets('kind dropdown shows all values', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      // Tap the kind dropdown to open it
-      await tester.tap(find.byKey(TicketCreateFormKeys.kindDropdown));
-      await tester.pump();
-
-      // All TicketKind values should be visible in the dropdown
-      for (final kind in TicketKind.values) {
-        expect(find.text(kind.label), findsWidgets);
-      }
-    });
-
-    testWidgets('priority dropdown shows all values', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      // Tap the priority dropdown to open it
-      await tester.tap(find.byKey(TicketCreateFormKeys.priorityDropdown));
-      await tester.pump();
-
-      // All TicketPriority values should be visible in the dropdown
-      for (final priority in TicketPriority.values) {
-        expect(find.text(priority.label), findsWidgets);
-      }
-    });
-
-    testWidgets('effort selector works', (tester) async {
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-      addTearDown(() => tester.view.resetDevicePixelRatio());
-
-      await tester.pumpWidget(createTestApp());
-      await safePumpAndSettle(tester);
-
-      // Tap 'small' to change selection
-      await tester.tap(find.text('small'));
-      await tester.pump();
-
-      // Now tap 'large'
-      await tester.tap(find.text('large'));
-      await tester.pump();
-
-      // Enter a title so we can create the ticket to verify effort
-      await tester.enterText(find.byKey(TicketCreateFormKeys.titleField), 'Test effort');
-
-      // Tap Create
-      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
-      await tester.pump();
-
-      expect(repo.tickets.length, 1);
-      expect(repo.tickets.first.effort, TicketEffort.large);
     });
 
     testWidgets('cancel calls showDetail', (tester) async {
@@ -181,7 +121,7 @@ void main() {
       expect(viewState.detailMode, TicketDetailMode.detail);
     });
 
-    testWidgets('create ticket with title', (tester) async {
+    testWidgets('create ticket with title and body', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -190,19 +130,26 @@ void main() {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      // Enter a title
-      await tester.enterText(find.byKey(TicketCreateFormKeys.titleField), 'My new ticket');
+      // Enter title
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.titleField), 'My new ticket');
+
+      // Enter body
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.bodyField), 'Some **markdown** body');
 
       // Tap Create
       await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
       await tester.pump();
 
-      // Ticket should be created
+      // Ticket should be created with V2 fields
       expect(repo.tickets.length, 1);
-      expect(repo.tickets.first.title, 'My new ticket');
-      expect(repo.tickets.first.kind, TicketKind.feature);
-      expect(repo.tickets.first.priority, TicketPriority.medium);
-      expect(repo.tickets.first.effort, TicketEffort.medium);
+      final ticket = repo.tickets.first;
+      expect(ticket.title, 'My new ticket');
+      expect(ticket.body, 'Some **markdown** body');
+      expect(ticket.isOpen, isTrue);
+      expect(ticket.tags, isEmpty);
+      expect(ticket.dependsOn, isEmpty);
     });
 
     testWidgets('created ticket is selected', (tester) async {
@@ -215,7 +162,8 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Enter a title
-      await tester.enterText(find.byKey(TicketCreateFormKeys.titleField), 'Selected ticket');
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.titleField), 'Selected ticket');
 
       // Tap Create
       await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
@@ -225,6 +173,90 @@ void main() {
       expect(viewState.selectedTicket, isNotNull);
       expect(viewState.selectedTicket!.title, 'Selected ticket');
       expect(viewState.detailMode, TicketDetailMode.detail);
+    });
+
+    testWidgets('create ticket with tags via TagPicker', (tester) async {
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // Enter a title
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.titleField), 'Tagged ticket');
+
+      // Find the TagPicker TextField inside the tags section
+      final tagTextField = find.descendant(
+        of: find.byKey(TicketCreateFormKeys.tagPicker),
+        matching: find.byType(TextField),
+      );
+      expect(tagTextField, findsOneWidget);
+
+      // Type a tag and submit
+      await tester.enterText(tagTextField, 'bugfix');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Tag chip should appear
+      expect(find.text('bugfix'), findsOneWidget);
+
+      // Add another tag
+      await tester.enterText(tagTextField, 'frontend');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      expect(find.text('frontend'), findsOneWidget);
+
+      // Tap Create
+      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
+      await tester.pump();
+
+      // Ticket should have both tags
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.tags, containsAll(['bugfix', 'frontend']));
+    });
+
+    testWidgets('create ticket with dependencies', (tester) async {
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      // Create a dependency ticket first
+      repo.createTicket(title: 'Dependency ticket');
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // Enter a title
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.titleField), 'Dependent ticket');
+
+      // Find the dependency search TextField inside the Autocomplete
+      final depTextField = find.widgetWithText(TextField, 'Search tickets...');
+      await tester.enterText(depTextField, 'Dependency');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Select it from autocomplete
+      final option = find.text('#1 - Dependency ticket');
+      if (option.evaluate().isNotEmpty) {
+        await tester.tap(option);
+        await tester.pump();
+      }
+
+      // Tap Create
+      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
+      await tester.pump();
+
+      // Should have 2 tickets total (dependency + new one)
+      expect(repo.tickets.length, 2);
+      final created = repo.tickets.last;
+      expect(created.title, 'Dependent ticket');
+      expect(created.dependsOn, contains(1));
     });
   });
 }
