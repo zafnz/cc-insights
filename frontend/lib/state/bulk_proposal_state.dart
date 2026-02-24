@@ -89,12 +89,7 @@ class BulkProposalState extends ChangeNotifier {
     for (final proposal in proposals) {
       final ticket = _repo.createTicket(
         title: proposal.title,
-        description: proposal.description,
-        status: TicketStatus.draft,
-        kind: proposal.kind,
-        priority: proposal.priority,
-        effort: proposal.effort,
-        category: proposal.category,
+        body: proposal.body,
         tags: proposal.tags,
       );
       createdTickets.add(ticket);
@@ -115,8 +110,9 @@ class BulkProposalState extends ChangeNotifier {
       }
 
       if (resolvedDeps.isNotEmpty) {
-        _repo.updateTicket(
-            createdTickets[i].id, (t) => t.copyWith(dependsOn: resolvedDeps));
+        for (final depId in resolvedDeps) {
+          _repo.addDependency(createdTickets[i].id, depId);
+        }
         // Refresh the local reference
         createdTickets[i] = _repo.getTicket(createdTickets[i].id)!;
       }
@@ -165,7 +161,7 @@ class BulkProposalState extends ChangeNotifier {
 
     for (final ticketId in _proposalTicketIds) {
       if (_proposalCheckedIds.contains(ticketId)) {
-        _repo.updateTicket(ticketId, (t) => t.copyWith(status: TicketStatus.ready));
+        // Ticket is already open — no status change needed in V2
       } else {
         _repo.deleteTicket(ticketId);
       }

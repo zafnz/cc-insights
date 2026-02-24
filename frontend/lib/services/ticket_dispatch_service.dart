@@ -12,6 +12,7 @@ import '../models/worktree.dart';
 import '../state/selection_state.dart';
 import '../state/orchestrator_state.dart';
 import '../state/ticket_board_state.dart';
+import 'author_service.dart' show AuthorService;
 import 'backend_service.dart';
 import 'chat_session_service.dart';
 import 'event_handler.dart';
@@ -155,8 +156,13 @@ class TicketDispatchService {
       worktreeState.data.worktreeRoot,
     );
 
-    // 8. Set ticket status to active
-    _ticketBoard.setStatus(ticketId, TicketStatus.active);
+    // 8. Tag ticket as active
+    _ticketBoard.addTag(
+      ticketId,
+      'active',
+      AuthorService.currentUser,
+      AuthorType.user,
+    );
 
     // 9. Navigate: select the worktree and chat
     _selection.selectWorktree(worktreeState);
@@ -172,7 +178,7 @@ class TicketDispatchService {
   ///
   /// Creates a chat in the given worktree, sets the chat's draft text to the
   /// ticket context prompt, links the ticket to the worktree and chat,
-  /// sets the ticket status to active, and navigates to the new chat.
+  /// tags the ticket as active, and navigates to the new chat.
   ///
   /// Throws if the ticket is not found.
   Future<void> beginInWorktree(int ticketId, WorktreeState worktree) async {
@@ -213,8 +219,13 @@ class TicketDispatchService {
       worktree.data.worktreeRoot,
     );
 
-    // 4. Set ticket status to active
-    _ticketBoard.setStatus(ticketId, TicketStatus.active);
+    // 4. Tag ticket as active
+    _ticketBoard.addTag(
+      ticketId,
+      'active',
+      AuthorService.currentUser,
+      AuthorType.user,
+    );
 
     // 5. Navigate: select the worktree and chat
     _selection.selectWorktree(worktree);

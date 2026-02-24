@@ -846,3 +846,65 @@ class TicketData {
         'author: $author)';
   }
 }
+
+/// A proposal for creating a ticket (used by bulk proposal workflow).
+///
+/// In V2, kind/priority/effort/category from the agent are converted to tags.
+@immutable
+class TicketProposal {
+  /// Short title describing the ticket.
+  final String title;
+
+  /// Markdown body content.
+  final String body;
+
+  /// Free-form tags for categorization.
+  final Set<String> tags;
+
+  /// Indices of other proposals in the same batch that this ticket depends on.
+  final List<int> dependsOnIndices;
+
+  /// Creates a [TicketProposal] instance.
+  const TicketProposal({
+    required this.title,
+    this.body = '',
+    this.tags = const {},
+    this.dependsOnIndices = const [],
+  });
+
+  /// Deserializes a [TicketProposal] from a JSON map.
+  ///
+  /// Converts V1 fields (kind, priority, effort, category) to tags.
+  factory TicketProposal.fromJson(Map<String, dynamic> json) {
+    final tags = <String>{};
+
+    // Collect explicit tags
+    final tagsList = json['tags'] as List<dynamic>?;
+    if (tagsList != null) {
+      tags.addAll(tagsList.map((e) => e.toString().toLowerCase()));
+    }
+
+    // Convert V1 enum fields to tags
+    final kind = json['kind'] as String?;
+    if (kind != null && kind.isNotEmpty) tags.add(kind.toLowerCase());
+
+    final priority = json['priority'] as String?;
+    if (priority != null && priority.isNotEmpty) tags.add(priority.toLowerCase());
+
+    final effort = json['effort'] as String?;
+    if (effort != null && effort.isNotEmpty) tags.add(effort.toLowerCase());
+
+    final category = json['category'] as String?;
+    if (category != null && category.isNotEmpty) tags.add(category.toLowerCase());
+
+    return TicketProposal(
+      title: json['title'] as String? ?? '',
+      body: json['description'] as String? ?? json['body'] as String? ?? '',
+      tags: tags,
+      dependsOnIndices:
+          ((json['depends_on_indices'] as List<dynamic>?) ?? [])
+              .map((e) => (e as num).toInt())
+              .toList(),
+    );
+  }
+}

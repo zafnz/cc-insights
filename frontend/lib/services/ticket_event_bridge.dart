@@ -4,11 +4,12 @@ import 'package:agent_sdk_core/agent_sdk_core.dart'
 import '../models/chat.dart';
 import '../models/ticket.dart';
 import '../state/ticket_board_state.dart';
+import 'author_service.dart' show AuthorService;
 
-/// Bridges event processing to ticket status transitions.
+/// Bridges event processing to ticket tag transitions.
 ///
 /// Extracted from [EventHandler] — all methods follow the same pattern:
-/// check if ticketBoard is non-null, get linked tickets, update status.
+/// check if ticketBoard is non-null, get linked tickets, update tags.
 /// This has zero interaction with any other event processing state.
 class TicketEventBridge {
   TicketRepository? _ticketBoard;
@@ -23,8 +24,8 @@ class TicketEventBridge {
 
   /// Updates linked tickets when a main agent turn completes.
   ///
-  /// Transitions non-terminal linked tickets to [TicketStatus.inReview] and
-  /// accumulates cost/usage statistics from the turn.
+  /// Adds an 'in-review' tag to open linked tickets so the user knows
+  /// the agent has finished a turn and the work is ready for review.
   void onTurnComplete(Chat chat, TurnCompleteEvent event) {
     final board = _ticketBoard;
     if (board == null) return;
@@ -32,58 +33,46 @@ class TicketEventBridge {
     final linkedTickets = board.getTicketsForChat(chat.data.id);
     if (linkedTickets.isEmpty) return;
 
-    int totalTokens = 0;
-    if (event.usage != null) {
-      totalTokens = event.usage!.inputTokens + event.usage!.outputTokens;
-    }
-
-    final costUsd = event.costUsd ?? 0.0;
-    final durationMs = event.durationMs ?? 0;
+    final author = AuthorService.agentAuthor(chat.data.name);
 
     for (final ticket in linkedTickets) {
-      if (!ticket.isTerminal) {
-        board.setStatus(ticket.id, TicketStatus.inReview);
-      }
-
-      if (totalTokens > 0 || costUsd > 0 || durationMs > 0) {
-        board.accumulateCostStats(
-          ticket.id,
-          tokens: totalTokens,
-          cost: costUsd,
-          agentTimeMs: durationMs,
-        );
+      if (ticket.isOpen) {
+        board.addTag(ticket.id, 'in-review', author, AuthorType.agent);
       }
     }
   }
 
-  /// Handles a permission request for ticket status transitions.
+  /// Handles a permission request for ticket tag transitions.
   ///
-  /// When a linked chat requests permission, transitions linked tickets
-  /// to [TicketStatus.needsInput] so the user knows attention is needed.
+  /// When a linked chat requests permission, adds a 'needs-input' tag
+  /// to open linked tickets so the user knows attention is needed.
   void onPermissionRequest(Chat chat) {
     final board = _ticketBoard;
     if (board == null) return;
 
+    final author = AuthorService.agentAuthor(chat.data.name);
+
     final linkedTickets = board.getTicketsForChat(chat.data.id);
     for (final ticket in linkedTickets) {
-      if (!ticket.isTerminal && ticket.status == TicketStatus.active) {
-        board.setStatus(ticket.id, TicketStatus.needsInput);
+      if (ticket.isOpen && !ticket.tags.contains('needs-input')) {
+        board.addTag(ticket.id, 'needs-input', author, AuthorType.agent);
       }
     }
   }
 
   /// Notifies the bridge that a permission response was sent.
   ///
-  /// Transitions linked tickets back to [TicketStatus.active] from
-  /// [TicketStatus.needsInput].
+  /// Removes the 'needs-input' tag from linked tickets.
   void onPermissionResponse(Chat chat) {
     final board = _ticketBoard;
     if (board == null) return;
 
+    final author = AuthorService.agentAuthor(chat.data.name);
+
     final linkedTickets = board.getTicketsForChat(chat.data.id);
     for (final ticket in linkedTickets) {
-      if (ticket.status == TicketStatus.needsInput) {
-        board.setStatus(ticket.id, TicketStatus.active);
+      if (ticket.tags.contains('needs-input')) {
+        board.removeTag(ticket.id, 'needs-input', author, AuthorType.agent);
       }
     }
   }

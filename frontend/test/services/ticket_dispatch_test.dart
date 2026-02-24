@@ -84,22 +84,22 @@ void main() {
     test('includes ticket ID and title', () {
       final ticket = ticketBoard.createTicket(
         title: 'Add dark mode',
-        kind: TicketKind.feature,
-        description: 'Implement dark mode toggle.',
+        body: 'Implement dark mode toggle.',
+        tags: {'feature'},
       );
 
       final service = _createTestService(ticketBoard);
       final prompt = service.buildTicketPrompt(ticket, ticketBoard.tickets);
 
-      expect(prompt, contains('TKT-001'));
+      expect(prompt, contains('#1'));
       expect(prompt, contains('Add dark mode'));
     });
 
-    test('includes description', () {
+    test('includes body', () {
       final ticket = ticketBoard.createTicket(
         title: 'Test ticket',
-        kind: TicketKind.feature,
-        description: 'This is the detailed description.',
+        body: 'This is the detailed description.',
+        tags: {'feature'},
       );
 
       final service = _createTestService(ticketBoard);
@@ -108,23 +108,15 @@ void main() {
       expect(prompt, contains('This is the detailed description.'));
     });
 
-    test('includes metadata', () {
+    test('includes tags', () {
       final ticket = ticketBoard.createTicket(
         title: 'Test ticket',
-        kind: TicketKind.bugfix,
-        priority: TicketPriority.high,
-        effort: TicketEffort.large,
-        category: 'Backend',
-        tags: {'api', 'urgent'},
+        tags: {'bugfix', 'high', 'large', 'backend', 'api', 'urgent'},
       );
 
       final service = _createTestService(ticketBoard);
       final prompt = service.buildTicketPrompt(ticket, ticketBoard.tickets);
 
-      expect(prompt, contains('**Kind:** Bug Fix'));
-      expect(prompt, contains('**Priority:** High'));
-      expect(prompt, contains('**Effort:** Large'));
-      expect(prompt, contains('**Category:** Backend'));
       expect(prompt, contains('**Tags:**'));
       expect(prompt, contains('api'));
       expect(prompt, contains('urgent'));
@@ -133,13 +125,13 @@ void main() {
     test('lists completed dependencies', () {
       final dep1 = ticketBoard.createTicket(
         title: 'Setup database',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
-      ticketBoard.markCompleted(dep1.id);
+      ticketBoard.closeTicket(dep1.id, 'test-user', AuthorType.user);
 
       final ticket = ticketBoard.createTicket(
         title: 'Add user auth',
-        kind: TicketKind.feature,
+        tags: {'feature'},
         dependsOn: [dep1.id],
       );
 
@@ -153,13 +145,13 @@ void main() {
     test('lists incomplete dependencies as blockers', () {
       final dep1 = ticketBoard.createTicket(
         title: 'Setup database',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
-      // dep1 is in 'ready' status (incomplete)
+      // dep1 is open (incomplete)
 
       final ticket = ticketBoard.createTicket(
         title: 'Add user auth',
-        kind: TicketKind.feature,
+        tags: {'feature'},
         dependsOn: [dep1.id],
       );
 
@@ -167,39 +159,39 @@ void main() {
       final prompt = service.buildTicketPrompt(ticket, ticketBoard.tickets);
 
       expect(prompt, contains('## Incomplete Dependencies'));
-      expect(prompt, contains('[ ] ${dep1.displayId}: Setup database (Ready)'));
+      expect(prompt, contains('[ ] ${dep1.displayId}: Setup database (Open)'));
     });
 
     test('handles ticket with no dependencies', () {
       final ticket = ticketBoard.createTicket(
         title: 'Standalone task',
-        kind: TicketKind.chore,
+        tags: {'chore'},
       );
 
       final service = _createTestService(ticketBoard);
       final prompt = service.buildTicketPrompt(ticket, ticketBoard.tickets);
 
       expect(prompt, isNot(contains('Dependencies')));
-      expect(prompt, contains('TKT-001'));
+      expect(prompt, contains('#1'));
       expect(prompt, contains('Standalone task'));
     });
 
     test('handles mix of completed and incomplete deps', () {
       final dep1 = ticketBoard.createTicket(
         title: 'Dep one',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
-      ticketBoard.markCompleted(dep1.id);
+      ticketBoard.closeTicket(dep1.id, 'test-user', AuthorType.user);
 
       final dep2 = ticketBoard.createTicket(
         title: 'Dep two',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
-      // dep2 stays as ready
+      // dep2 stays open
 
       final ticket = ticketBoard.createTicket(
         title: 'Main task',
-        kind: TicketKind.feature,
+        tags: {'feature'},
         dependsOn: [dep1.id, dep2.id],
       );
 
@@ -218,7 +210,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-wt'));
       final ticket = state.createTicket(
         title: 'Test linking',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       state.linkWorktree(ticket.id, '/path/to/worktree', 'tkt-1-test');
@@ -233,7 +225,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-wt-dup'));
       final ticket = state.createTicket(
         title: 'Test dup linking',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       state.linkWorktree(ticket.id, '/path/to/worktree', 'tkt-1-test');
@@ -247,7 +239,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-wt-notify'));
       final ticket = state.createTicket(
         title: 'Test notify',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       var notified = false;
@@ -264,7 +256,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-chat'));
       final ticket = state.createTicket(
         title: 'Test chat linking',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       state.linkChat(ticket.id, 'chat-123', 'TKT-001', '/path/to/worktree');
@@ -280,7 +272,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-chat-dup'));
       final ticket = state.createTicket(
         title: 'Test dup chat',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       state.linkChat(ticket.id, 'chat-123', 'TKT-001', '/path/wt');
@@ -294,7 +286,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-chat-notify'));
       final ticket = state.createTicket(
         title: 'Test notify',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       var notified = false;
@@ -311,15 +303,15 @@ void main() {
       final state = resources.track(TicketRepository('test-chat-lookup'));
       final ticket1 = state.createTicket(
         title: 'Ticket A',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
       final ticket2 = state.createTicket(
         title: 'Ticket B',
-        kind: TicketKind.bugfix,
+        tags: {'bugfix'},
       );
       state.createTicket(
         title: 'Ticket C (unlinked)',
-        kind: TicketKind.chore,
+        tags: {'chore'},
       );
 
       state.linkChat(ticket1.id, 'chat-abc', 'Chat', '/wt');
@@ -334,7 +326,7 @@ void main() {
       final state = resources.track(TicketRepository('test-chat-empty'));
       state.createTicket(
         title: 'Some ticket',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       final tickets = state.getTicketsForChat('nonexistent-chat');
@@ -347,7 +339,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-persist'));
       final ticket = state.createTicket(
         title: 'Persist test',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       state.linkWorktree(ticket.id, '/wt', 'branch');
@@ -368,7 +360,7 @@ void main() {
       final state = resources.track(TicketRepository('test-link-chat-persist'));
       final ticket = state.createTicket(
         title: 'Persist chat test',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       state.linkChat(ticket.id, 'chat-1', 'Chat', '/wt');

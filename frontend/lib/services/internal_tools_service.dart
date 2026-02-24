@@ -643,7 +643,12 @@ class InternalToolsService extends ChangeNotifier {
     required Chat chat,
   }) {
     if (ticketId == null) return;
-    context.ticketBoard.setStatus(ticketId, TicketStatus.active);
+    context.ticketBoard.addTag(
+      ticketId,
+      'active',
+      AuthorService.agentAuthor(chat.data.name),
+      AuthorType.agent,
+    );
     context.ticketBoard.linkWorktree(
       ticketId,
       worktree.data.worktreeRoot,
@@ -1116,7 +1121,13 @@ class InternalToolsService extends ChangeNotifier {
     if (ticket == null) {
       return InternalToolResult.error('ticket_not_found: $id');
     }
-    return InternalToolResult.text(jsonEncode({'ticket': ticket.toJson()}));
+    final unblockedBy = ticket.dependsOn.where((depId) {
+      final dep = ticketBoard.getTicket(depId);
+      return dep != null && !dep.isOpen;
+    }).toList();
+    return InternalToolResult.text(
+      jsonEncode({'ticket': ticket.toJson(), 'unblocked_by': unblockedBy}),
+    );
   }
 
   InternalToolDefinition _updateTicketTool(Chat orchestratorChat) {
@@ -1205,11 +1216,16 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     final updated = ticketBoard.getTicket(ticketId);
+    final unblocked = ticketBoard
+        .getBlockedBy(ticketId)
+        .where((id) => ticketBoard.getTicket(id)?.isOpen == true)
+        .toList();
     return InternalToolResult.text(
       jsonEncode({
         'success': true,
         'is_open': updated?.isOpen ?? ticket.isOpen,
         'tags': (updated?.tags ?? ticket.tags).toList(),
+        'unblocked_tickets': unblocked,
       }),
     );
   }

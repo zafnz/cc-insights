@@ -115,7 +115,7 @@ class OrchestratorState extends ChangeNotifier {
         .whereType<TicketData>()
         .toList();
     final completed = tickets
-        .where((t) => t.status == TicketStatus.completed)
+        .where((t) => !t.isOpen)
         .length;
     return (completed: completed, total: tickets.length);
   }
