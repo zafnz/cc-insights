@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/ticket.dart';
 import '../services/author_service.dart' show AuthorService;
+import '../services/ticket_migration_service.dart';
 import '../services/ticket_storage_service.dart';
 
 const _uuid = Uuid();
@@ -807,6 +808,7 @@ class TicketRepository extends ChangeNotifier {
     final current = previous.then((_) async {
       try {
         final data = {
+          'schemaVersion': currentTicketSchemaVersion,
           'tickets': _tickets.map((t) => t.toJson()).toList(),
           'tagRegistry': _tagRegistry.map((t) => t.toJson()).toList(),
           'nextId': _nextId,

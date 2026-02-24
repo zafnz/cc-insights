@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'persistence_service.dart';
+import 'ticket_migration_service.dart';
 
 /// Service for persisting and retrieving ticket board data.
 ///
@@ -34,7 +35,19 @@ class TicketStorageService {
         return null;
       }
 
-      final json = jsonDecode(content) as Map<String, dynamic>;
+      var json = jsonDecode(content) as Map<String, dynamic>;
+
+      // Run V1 → V2 migration if needed
+      if (TicketMigrationService.needsMigration(json)) {
+        developer.log(
+          'Migrating tickets for $projectId from V1 to V2',
+          name: 'TicketStorageService',
+        );
+        json = TicketMigrationService.migrate(json);
+        // Persist the migrated data atomically
+        await saveTickets(projectId, json);
+      }
+
       return json;
     } catch (e) {
       developer.log(

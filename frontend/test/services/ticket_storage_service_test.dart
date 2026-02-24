@@ -40,7 +40,7 @@ void main() {
       });
 
       test('returns parsed JSON for valid file', () async {
-        final data = {'tickets': [], 'version': 1};
+        final data = {'schemaVersion': 2, 'tickets': [], 'nextId': 1};
         final path = TicketStorageService.ticketsPath(projectId);
         final file = File(path);
         await file.parent.create(recursive: true);
@@ -112,11 +112,20 @@ void main() {
 
       test('round-trips through loadTickets', () async {
         final data = {
+          'schemaVersion': 2,
           'tickets': [
-            {'id': 'TKT-001', 'title': 'Test ticket', 'status': 'open'},
+            {
+              'id': 1,
+              'title': 'Test ticket',
+              'body': 'Some body',
+              'author': 'zaf',
+              'isOpen': true,
+              'tags': ['feature'],
+              'createdAt': '2026-01-01T00:00:00.000Z',
+              'updatedAt': '2026-01-01T00:00:00.000Z',
+            },
           ],
-          'version': 1,
-          'metadata': {'createdAt': '2026-01-01'},
+          'nextId': 2,
         };
 
         await service.saveTickets(projectId, data);
