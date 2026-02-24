@@ -9,6 +9,7 @@ Yet another AI coordinator desktop GUI application.
 
 ## What's different this time?
 <img align=right width="600" height="500" src="https://github.com/user-attachments/assets/f3b14f67-d1a1-4863-b125-15dda89609f2" />
+
 - Uses agents local CLI, so uses your subscription _without_ breaking terms-of-service. 
 - **Worktrees** are the first class and primary method of working (though you can just do multiple chats if you like pain)
 - Designed specifically for **Vibe coding** - your almost exclusive focus is on the AI agents and what they are doing.
