@@ -5,7 +5,7 @@ import '../config/fonts.dart';
 import '../models/ticket.dart';
 import '../state/bulk_proposal_state.dart';
 import '../state/ticket_board_state.dart';
-import '../widgets/ticket_visuals.dart';
+
 
 /// Test keys for the ticket bulk review panel.
 class TicketBulkReviewKeys {
@@ -184,13 +184,9 @@ class _TableHeader extends StatelessWidget {
             flex: 3,
             child: _headerText('Title', colorScheme),
           ),
-          SizedBox(
-            width: 80,
-            child: _headerText('Kind', colorScheme),
-          ),
-          SizedBox(
-            width: 100,
-            child: _headerText('Category', colorScheme),
+          Expanded(
+            flex: 2,
+            child: _headerText('Tags', colorScheme),
           ),
           SizedBox(
             width: 80,
@@ -281,18 +277,15 @@ class _TableRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              SizedBox(
-                width: 80,
-                child: KindBadge(kind: ticket.kind),
-              ),
-              SizedBox(
-                width: 100,
+              Expanded(
+                flex: 2,
                 child: Text(
-                  ticket.category ?? '',
+                  ticket.tags.join(', '),
                   style: TextStyle(
                     fontSize: 11,
                     color: colorScheme.onSurfaceVariant,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               SizedBox(
@@ -350,8 +343,7 @@ class _InlineEditCard extends StatefulWidget {
 
 class _InlineEditCardState extends State<_InlineEditCard> {
   late TextEditingController _titleController;
-  late TextEditingController _categoryController;
-  late TextEditingController _descriptionController;
+  late TextEditingController _bodyController;
 
   @override
   void initState() {
@@ -359,8 +351,7 @@ class _InlineEditCardState extends State<_InlineEditCard> {
     final ticketBoard = context.read<TicketRepository>();
     final ticket = ticketBoard.getTicket(widget.ticketId);
     _titleController = TextEditingController(text: ticket?.title ?? '');
-    _categoryController = TextEditingController(text: ticket?.category ?? '');
-    _descriptionController = TextEditingController(text: ticket?.description ?? '');
+    _bodyController = TextEditingController(text: ticket?.body ?? '');
   }
 
   @override
@@ -370,66 +361,41 @@ class _InlineEditCardState extends State<_InlineEditCard> {
       final ticketBoard = context.read<TicketRepository>();
       final ticket = ticketBoard.getTicket(widget.ticketId);
       _titleController.text = ticket?.title ?? '';
-      _categoryController.text = ticket?.category ?? '';
-      _descriptionController.text = ticket?.description ?? '';
+      _bodyController.text = ticket?.body ?? '';
     }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
-    _categoryController.dispose();
-    _descriptionController.dispose();
+    _bodyController.dispose();
     super.dispose();
   }
 
   void _updateTitle(String value) {
     context.read<TicketRepository>().updateTicket(
       widget.ticketId,
-      (t) => t.copyWith(title: value),
+      title: value,
     );
   }
 
-  void _updateCategory(String value) {
+  void _updateBody(String value) {
     context.read<TicketRepository>().updateTicket(
       widget.ticketId,
-      (t) => t.copyWith(
-        category: value.isNotEmpty ? value : null,
-        clearCategory: value.isEmpty,
-      ),
-    );
-  }
-
-  void _updateDescription(String value) {
-    context.read<TicketRepository>().updateTicket(
-      widget.ticketId,
-      (t) => t.copyWith(description: value),
-    );
-  }
-
-  void _updateKind(TicketKind kind) {
-    context.read<TicketRepository>().updateTicket(
-      widget.ticketId,
-      (t) => t.copyWith(kind: kind),
+      body: value,
     );
   }
 
   void _removeDependency(int depId) {
-    final ticketBoard = context.read<TicketRepository>();
-    final ticket = ticketBoard.getTicket(widget.ticketId);
-    if (ticket == null) return;
-    ticketBoard.updateTicket(
+    context.read<TicketRepository>().removeDependency(
       widget.ticketId,
-      (t) => t.copyWith(
-        dependsOn: t.dependsOn.where((id) => id != depId).toList(),
-      ),
+      depId,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final ticketBoard = context.watch<TicketRepository>();
     final ticket = ticketBoard.getTicket(widget.ticketId);
 
@@ -484,29 +450,47 @@ class _InlineEditCardState extends State<_InlineEditCard> {
           ),
           const SizedBox(height: 10),
 
-          // Kind + Category row
+          // Tags row
           _EditRow(
-            label: 'Kind / Cat.',
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildDropdown<TicketKind>(
-                    value: ticket.kind,
-                    items: TicketKind.values,
-                    labelBuilder: (k) => k.label.toLowerCase(),
-                    onChanged: (v) {
-                      if (v != null) _updateKind(v);
-                    },
-                  ),
+            label: 'Tags',
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildTextField(
-                    controller: _categoryController,
-                    onChanged: _updateCategory,
-                  ),
-                ),
-              ],
+                borderRadius: BorderRadius.circular(6),
+              ),
+              constraints: const BoxConstraints(minHeight: 32),
+              child: ticket.tags.isEmpty
+                  ? Text(
+                      'No tags',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                    )
+                  : Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: ticket.tags.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.onSecondaryContainer,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
             ),
           ),
           const SizedBox(height: 10),
@@ -546,12 +530,12 @@ class _InlineEditCardState extends State<_InlineEditCard> {
           ),
           const SizedBox(height: 10),
 
-          // Description field
+          // Body field
           _EditRow(
-            label: 'Description',
+            label: 'Body',
             child: _buildTextField(
-              controller: _descriptionController,
-              onChanged: _updateDescription,
+              controller: _bodyController,
+              onChanged: _updateBody,
               maxLines: 3,
             ),
           ),
@@ -589,43 +573,6 @@ class _InlineEditCardState extends State<_InlineEditCard> {
     );
   }
 
-  Widget _buildDropdown<T>({
-    required T value,
-    required List<T> items,
-    required String Function(T) labelBuilder,
-    required ValueChanged<T?> onChanged,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-        ),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: DropdownButtonFormField<T>(
-        value: value,
-        isExpanded: true,
-        style: const TextStyle(fontSize: 12),
-        dropdownColor: colorScheme.surfaceContainerHigh,
-        decoration: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 4),
-          border: InputBorder.none,
-        ),
-        items: items.map((item) {
-          return DropdownMenuItem<T>(
-            value: item,
-            child: Text(labelBuilder(item)),
-          );
-        }).toList(),
-        onChanged: onChanged,
-      ),
-    );
-  }
 }
 
 /// A row in the edit card with a label and child widget.

@@ -132,21 +132,19 @@ void main() {
     test('includes ticket ID and title', () {
       final ticket = ticketBoard.createTicket(
         title: 'Add dark mode',
-        kind: TicketKind.feature,
-        description: 'Implement dark mode toggle.',
+        body: 'Implement dark mode toggle.',
       );
 
       final prompt = buildTicketPrompt(ticket, ticketBoard.tickets);
 
-      expect(prompt, contains('TKT-001'));
+      expect(prompt, contains('#1'));
       expect(prompt, contains('Add dark mode'));
     });
 
-    test('includes description', () {
+    test('includes body', () {
       final ticket = ticketBoard.createTicket(
         title: 'Test ticket',
-        kind: TicketKind.feature,
-        description: 'Detailed description here.',
+        body: 'Detailed description here.',
       );
 
       final prompt = buildTicketPrompt(ticket, ticketBoard.tickets);
@@ -154,36 +152,30 @@ void main() {
       expect(prompt, contains('Detailed description here.'));
     });
 
-    test('includes metadata', () {
+    test('includes tags', () {
       final ticket = ticketBoard.createTicket(
         title: 'Test ticket',
-        kind: TicketKind.bugfix,
-        priority: TicketPriority.high,
-        effort: TicketEffort.large,
-        category: 'Backend',
-        tags: {'api', 'urgent'},
+        tags: {'bugfix', 'high', 'large', 'backend', 'api', 'urgent'},
       );
 
       final prompt = buildTicketPrompt(ticket, ticketBoard.tickets);
 
-      expect(prompt, contains('**Kind:** Bug Fix'));
-      expect(prompt, contains('**Priority:** High'));
-      expect(prompt, contains('**Effort:** Large'));
-      expect(prompt, contains('**Category:** Backend'));
+      expect(prompt, contains('**Tags:**'));
       expect(prompt, contains('api'));
       expect(prompt, contains('urgent'));
+      expect(prompt, contains('bugfix'));
     });
 
     test('lists completed dependencies', () {
       final dep = ticketBoard.createTicket(
         title: 'Setup database',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
-      ticketBoard.markCompleted(dep.id);
+      ticketBoard.closeTicket(dep.id, 'test', AuthorType.user);
 
       final ticket = ticketBoard.createTicket(
         title: 'Add user auth',
-        kind: TicketKind.feature,
+        tags: {'feature'},
         dependsOn: [dep.id],
       );
 
@@ -196,12 +188,12 @@ void main() {
     test('lists incomplete dependencies as blockers', () {
       final dep = ticketBoard.createTicket(
         title: 'Setup database',
-        kind: TicketKind.feature,
+        tags: {'feature'},
       );
 
       final ticket = ticketBoard.createTicket(
         title: 'Add user auth',
-        kind: TicketKind.feature,
+        tags: {'feature'},
         dependsOn: [dep.id],
       );
 
@@ -210,20 +202,20 @@ void main() {
       expect(prompt, contains('## Incomplete Dependencies'));
       expect(
         prompt,
-        contains('[ ] ${dep.displayId}: Setup database (Ready)'),
+        contains('[ ] ${dep.displayId}: Setup database (Open)'),
       );
     });
 
     test('handles ticket with no dependencies', () {
       final ticket = ticketBoard.createTicket(
         title: 'Standalone task',
-        kind: TicketKind.chore,
+        tags: {'chore'},
       );
 
       final prompt = buildTicketPrompt(ticket, ticketBoard.tickets);
 
       expect(prompt, isNot(contains('Dependencies')));
-      expect(prompt, contains('TKT-001'));
+      expect(prompt, contains('#1'));
     });
   });
 }

@@ -2,7 +2,7 @@ import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_bulk_review_panel.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
-import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -29,21 +29,18 @@ void main() {
       [
         const TicketProposal(
           title: 'Set up auth service',
-          kind: TicketKind.feature,
-          category: 'Auth',
-          description: 'Scaffold the auth service.',
+          tags: {'feature', 'auth'},
+          body: 'Scaffold the auth service.',
         ),
         const TicketProposal(
           title: 'Implement JWT tokens',
-          kind: TicketKind.feature,
-          category: 'Auth',
+          tags: {'feature', 'auth'},
           dependsOnIndices: [0],
-          description: 'Issue and validate JWT access tokens.',
+          body: 'Issue and validate JWT access tokens.',
         ),
         const TicketProposal(
           title: 'Write auth tests',
-          kind: TicketKind.test,
-          category: 'Testing',
+          tags: {'test', 'testing'},
           dependsOnIndices: [1],
         ),
       ],
@@ -92,8 +89,8 @@ void main() {
       // Header text
       expect(find.text('Review Proposed Tickets'), findsOneWidget);
 
-      // Kind badges
-      expect(find.byType(KindBadge), findsNWidgets(3));
+      // Tags should be visible
+      expect(find.text('feature, auth'), findsAtLeast(1));
     });
 
     testWidgets('checkbox toggles call toggleProposalChecked', (tester) async {
@@ -257,11 +254,10 @@ void main() {
       await safePumpAndSettle(tester);
 
       // After approval:
-      // - Checked tickets (0 and 1) should be promoted to ready
+      // - Checked tickets (0 and 1) should still be open
       // - Unchecked ticket (2) should be deleted
-      // - Detail mode should return to detail
-      expect(repo.getTicket(proposals[0].id)?.status, TicketStatus.ready);
-      expect(repo.getTicket(proposals[1].id)?.status, TicketStatus.ready);
+      expect(repo.getTicket(proposals[0].id)?.isOpen, isTrue);
+      expect(repo.getTicket(proposals[1].id)?.isOpen, isTrue);
       expect(repo.getTicket(proposals[2].id), isNull);
     });
 

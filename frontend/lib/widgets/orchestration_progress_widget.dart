@@ -89,7 +89,7 @@ class _OrchestrationProgressWidgetState
                       child: Chip(
                         label: Text(t.displayId),
                         visualDensity: VisualDensity.compact,
-                        backgroundColor: _colorForStatus(context, t.status),
+                        backgroundColor: _colorForOpen(context, t.isOpen),
                       ),
                     ),
                   )
@@ -111,15 +111,9 @@ class _OrchestrationProgressWidgetState
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  Color _colorForStatus(BuildContext context, TicketStatus status) {
+  Color _colorForOpen(BuildContext context, bool isOpen) {
     final scheme = Theme.of(context).colorScheme;
-    return switch (status) {
-      TicketStatus.completed => Colors.green.withValues(alpha: 0.18),
-      TicketStatus.active || TicketStatus.inReview => scheme.primaryContainer,
-      TicketStatus.blocked => Colors.orange.withValues(alpha: 0.20),
-      TicketStatus.cancelled => Colors.red.withValues(alpha: 0.16),
-      _ => scheme.surfaceContainerHigh,
-    };
+    return isOpen ? scheme.primaryContainer : Colors.green.withValues(alpha: 0.18);
   }
 
   void _openLinkedChat(BuildContext context, TicketData ticket) {

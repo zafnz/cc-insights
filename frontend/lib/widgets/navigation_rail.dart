@@ -53,8 +53,8 @@ class AppNavigationRail extends StatelessWidget {
             tooltip: 'Tickets',
             isSelected: selectedIndex == 4,
             onTap: () => onDestinationSelected(4),
-            badge: ticketBoard.activeCount > 0
-                ? ticketBoard.activeCount.toString()
+            badge: ticketBoard.openCount > 0
+                ? ticketBoard.openCount.toString()
                 : null,
           ),
           const SizedBox(height: 4),

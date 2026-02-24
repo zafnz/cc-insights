@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../models/chat_model.dart';
 import '../models/project.dart';
-import '../models/ticket.dart';
 import '../services/backend_service.dart';
 import '../services/settings_service.dart';
 import '../state/rate_limit_state.dart';
@@ -465,26 +464,17 @@ class _RateLimitStats extends StatelessWidget {
   }
 }
 
-/// Ticket statistics (total, by status).
+/// Ticket statistics (total, open/closed).
 class _TicketStats extends StatelessWidget {
   const _TicketStats();
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final ticketBoard = context.watch<TicketRepository>();
 
     final totalCount = ticketBoard.tickets.length;
-    final activeCount = ticketBoard.tickets
-        .where((t) => t.status == TicketStatus.active)
-        .length;
-    final readyCount = ticketBoard.tickets
-        .where((t) => t.status == TicketStatus.ready)
-        .length;
-    final blockedCount = ticketBoard.tickets
-        .where((t) => t.status == TicketStatus.blocked)
-        .length;
+    final openCount = ticketBoard.openCount;
+    final closedCount = ticketBoard.closedCount;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -493,17 +483,13 @@ class _TicketStats extends StatelessWidget {
           label: totalCount == 1 ? 'ticket' : 'tickets',
           count: totalCount,
         ),
-        if (activeCount > 0) ...[
+        if (openCount > 0) ...[
           const _StatusBarDot(),
-          _StatusBarStat(label: 'active', count: activeCount),
+          _StatusBarStat(label: 'open', count: openCount),
         ],
-        if (readyCount > 0) ...[
+        if (closedCount > 0) ...[
           const _StatusBarDot(),
-          _StatusBarStat(label: 'ready', count: readyCount),
-        ],
-        if (blockedCount > 0) ...[
-          const _StatusBarDot(),
-          _StatusBarStat(label: 'blocked', count: blockedCount),
+          _StatusBarStat(label: 'closed', count: closedCount),
         ],
       ],
     );

@@ -67,8 +67,7 @@ void main() {
     for (var i = 0; i < count; i++) {
       final ticket = repo.createTicket(
         title: '$prefix ${i + 1}',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
+        tags: {'feature'},
       );
       ids.add(ticket.id);
     }

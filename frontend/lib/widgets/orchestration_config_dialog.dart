@@ -170,7 +170,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text('${t.displayId}  ${t.title}'),
-                        subtitle: Text(t.status.label),
+                        subtitle: Text(t.isOpen ? 'Open' : 'Closed'),
                       ),
                     )
                     .toList(),

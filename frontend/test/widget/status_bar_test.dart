@@ -89,17 +89,9 @@ void main() {
         TicketRepository('test-project'),
       );
 
-      // Create some tickets
-      repo.createTicket(
-        title: 'Ticket 1',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-      );
-      repo.createTicket(
-        title: 'Ticket 2',
-        kind: TicketKind.bugfix,
-        status: TicketStatus.active,
-      );
+      // Create some open tickets
+      repo.createTicket(title: 'Ticket 1', tags: {'feature'});
+      repo.createTicket(title: 'Ticket 2', tags: {'bugfix'});
 
       await tester.pumpWidget(
         MultiProvider(
@@ -123,8 +115,7 @@ void main() {
 
       // Should show ticket stats
       expect(find.text('2 tickets'), findsOneWidget);
-      expect(find.text('1 active'), findsOneWidget);
-      expect(find.text('1 ready'), findsOneWidget);
+      expect(find.text('2 open'), findsOneWidget);
 
       // Should NOT show project stats
       expect(find.textContaining('worktrees'), findsNothing);
@@ -139,11 +130,7 @@ void main() {
       );
 
       // Create one ticket
-      repo.createTicket(
-        title: 'Ticket 1',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-      );
+      repo.createTicket(title: 'Ticket 1', tags: {'feature'});
 
       await tester.pumpWidget(
         MultiProvider(
@@ -192,24 +179,22 @@ void main() {
       // Should show zero tickets
       expect(find.text('0 tickets'), findsOneWidget);
 
-      // Should not show status breakdowns
-      expect(find.textContaining('active'), findsNothing);
-      expect(find.textContaining('ready'), findsNothing);
-      expect(find.textContaining('blocked'), findsNothing);
+      // Should not show open/closed breakdowns
+      expect(find.textContaining('open'), findsNothing);
+      expect(find.textContaining('closed'), findsNothing);
     });
 
-    testWidgets('updates reactively when ticket status changes',
+    testWidgets('updates reactively when ticket is closed',
         (tester) async {
       final project = createTestProject();
       final repo = resources.track(
         TicketRepository('test-project'),
       );
 
-      // Create a ticket in ready state
+      // Create an open ticket
       final ticket = repo.createTicket(
         title: 'Ticket 1',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
+        tags: {'feature'},
       );
 
       await tester.pumpWidget(
@@ -229,48 +214,33 @@ void main() {
       );
       await safePumpAndSettle(tester);
 
-      // Initial state: 1 ready, 0 active
+      // Initial state: 1 open
       expect(find.text('1 ticket'), findsOneWidget);
-      expect(find.text('1 ready'), findsOneWidget);
-      expect(find.textContaining('active'), findsNothing);
+      expect(find.text('1 open'), findsOneWidget);
 
-      // Change status to active
-      repo.setStatus(ticket.id, TicketStatus.active);
+      // Close the ticket
+      repo.closeTicket(ticket.id, 'test', AuthorType.user);
       await tester.pump();
 
-      // Should update to show 1 active, 0 ready
+      // Should update to show 1 closed, 0 open
       expect(find.text('1 ticket'), findsOneWidget);
-      expect(find.text('1 active'), findsOneWidget);
-      expect(find.textContaining('ready'), findsNothing);
+      expect(find.text('1 closed'), findsOneWidget);
+      expect(find.textContaining('open'), findsNothing);
     });
 
-    testWidgets('shows only non-zero status counts', (tester) async {
+    testWidgets('shows only non-zero open/closed counts', (tester) async {
       final project = createTestProject();
       final repo = resources.track(
         TicketRepository('test-project'),
       );
 
-      // Create tickets with various statuses
-      repo.createTicket(
-        title: 'Ticket 1',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-      );
-      repo.createTicket(
-        title: 'Ticket 2',
-        kind: TicketKind.bugfix,
-        status: TicketStatus.active,
-      );
-      repo.createTicket(
-        title: 'Ticket 3',
-        kind: TicketKind.chore,
-        status: TicketStatus.blocked,
-      );
-      repo.createTicket(
-        title: 'Ticket 4',
-        kind: TicketKind.feature,
-        status: TicketStatus.completed,
-      );
+      // Create open and closed tickets
+      repo.createTicket(title: 'Ticket 1', tags: {'feature'});
+      repo.createTicket(title: 'Ticket 2', tags: {'bugfix'});
+      final closed1 = repo.createTicket(title: 'Ticket 3', tags: {'chore'});
+      final closed2 = repo.createTicket(title: 'Ticket 4', tags: {'feature'});
+      repo.closeTicket(closed1.id, 'test', AuthorType.user);
+      repo.closeTicket(closed2.id, 'test', AuthorType.user);
 
       await tester.pumpWidget(
         MultiProvider(
@@ -289,15 +259,10 @@ void main() {
       );
       await safePumpAndSettle(tester);
 
-      // Should show total and non-zero status counts
+      // Should show total and both open/closed counts
       expect(find.text('4 tickets'), findsOneWidget);
-      expect(find.text('2 active'), findsOneWidget);
-      expect(find.text('1 blocked'), findsOneWidget);
-
-      // Should NOT show zero counts
-      expect(find.textContaining('ready'), findsNothing);
-      expect(find.textContaining('draft'), findsNothing);
-      expect(find.textContaining('completed'), findsNothing);
+      expect(find.text('2 open'), findsOneWidget);
+      expect(find.text('2 closed'), findsOneWidget);
     });
 
     testWidgets('updates when tickets are created', (tester) async {
@@ -327,16 +292,12 @@ void main() {
       expect(find.text('0 tickets'), findsOneWidget);
 
       // Create a new ticket
-      repo.createTicket(
-        title: 'New Ticket',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-      );
+      repo.createTicket(title: 'New Ticket', tags: {'feature'});
       await tester.pump();
 
       // Should update to show 1 ticket
       expect(find.text('1 ticket'), findsOneWidget);
-      expect(find.text('1 ready'), findsOneWidget);
+      expect(find.text('1 open'), findsOneWidget);
     });
 
     testWidgets('updates when tickets are deleted', (tester) async {
@@ -348,14 +309,9 @@ void main() {
       // Create tickets
       final ticket1 = repo.createTicket(
         title: 'Ticket 1',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
+        tags: {'feature'},
       );
-      repo.createTicket(
-        title: 'Ticket 2',
-        kind: TicketKind.bugfix,
-        status: TicketStatus.active,
-      );
+      repo.createTicket(title: 'Ticket 2', tags: {'bugfix'});
 
       await tester.pumpWidget(
         MultiProvider(
@@ -376,8 +332,7 @@ void main() {
 
       // Initial state: 2 tickets
       expect(find.text('2 tickets'), findsOneWidget);
-      expect(find.text('1 active'), findsOneWidget);
-      expect(find.text('1 ready'), findsOneWidget);
+      expect(find.text('2 open'), findsOneWidget);
 
       // Delete a ticket
       repo.deleteTicket(ticket1.id);
@@ -385,8 +340,7 @@ void main() {
 
       // Should update to show 1 ticket
       expect(find.text('1 ticket'), findsOneWidget);
-      expect(find.text('1 active'), findsOneWidget);
-      expect(find.textContaining('ready'), findsNothing);
+      expect(find.text('1 open'), findsOneWidget);
     });
   });
 }
