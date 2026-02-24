@@ -27,6 +27,14 @@ class TicketRepository extends ChangeNotifier {
   /// The next ID to assign when creating a ticket.
   int _nextId = 1;
 
+  /// Controller for the ticket-ready stream.
+  final StreamController<TicketData> _onTicketReadyController =
+      StreamController<TicketData>.broadcast();
+
+  /// Emits a ticket when all of its dependencies have been closed,
+  /// signalling that the ticket is now actionable.
+  Stream<TicketData> get onTicketReady => _onTicketReadyController.stream;
+
   /// Creates a [TicketRepository] for the given project.
   ///
   /// The [storage] parameter is optional for testing; if not provided,
@@ -197,6 +205,9 @@ class TicketRepository extends ChangeNotifier {
 
     notifyListeners();
     _autoSave();
+
+    // Check if closing this ticket unblocks any dependents.
+    _emitNewlyReady(id);
   }
 
   /// Reopens a closed ticket.
@@ -496,6 +507,31 @@ class TicketRepository extends ChangeNotifier {
 
     notifyListeners();
     _autoSave();
+  }
+
+  /// Emits open tickets that were blocked by [closedId] and now have all
+  /// dependencies closed onto [onTicketReady].
+  void _emitNewlyReady(int closedId) {
+    for (final ticket in _tickets) {
+      if (!ticket.isOpen) continue;
+      if (!ticket.dependsOn.contains(closedId)) continue;
+
+      // Check if ALL dependencies are now closed.
+      final allDepsClosed = ticket.dependsOn.every((depId) {
+        final dep = getTicket(depId);
+        return dep != null && !dep.isOpen;
+      });
+
+      if (allDepsClosed) {
+        _onTicketReadyController.add(ticket);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _onTicketReadyController.close();
+    super.dispose();
   }
 
   /// Auto-saves after mutations.

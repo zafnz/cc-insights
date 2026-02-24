@@ -943,4 +943,138 @@ void main() {
       expect(result, isEmpty);
     });
   });
+
+  group('TicketRepository - Dependency unblocking (onTicketReady)', () {
+    test('closing a dependency emits the dependent on onTicketReady', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final dep = state.createTicket(title: 'Dependency');
+      final blocked = state.createTicket(
+        title: 'Blocked',
+        dependsOn: [dep.id],
+      );
+
+      final ready = <TicketData>[];
+      state.onTicketReady.listen(ready.add);
+
+      state.closeTicket(dep.id, 'testuser', AuthorType.user);
+
+      // Allow stream event to propagate
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready.length, 1);
+      expect(ready.first.id, blocked.id);
+    });
+
+    test('does not emit until ALL dependencies are closed', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final dep1 = state.createTicket(title: 'Dep 1');
+      final dep2 = state.createTicket(title: 'Dep 2');
+      state.createTicket(
+        title: 'Blocked',
+        dependsOn: [dep1.id, dep2.id],
+      );
+
+      final ready = <TicketData>[];
+      state.onTicketReady.listen(ready.add);
+
+      // Close only one dependency
+      state.closeTicket(dep1.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready, isEmpty);
+
+      // Close second dependency — now all deps are closed
+      state.closeTicket(dep2.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready.length, 1);
+    });
+
+    test('closing one ticket unblocks multiple dependents', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final dep = state.createTicket(title: 'Shared Dep');
+      final blocked1 = state.createTicket(
+        title: 'Blocked 1',
+        dependsOn: [dep.id],
+      );
+      final blocked2 = state.createTicket(
+        title: 'Blocked 2',
+        dependsOn: [dep.id],
+      );
+
+      final ready = <TicketData>[];
+      state.onTicketReady.listen(ready.add);
+
+      state.closeTicket(dep.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready.length, 2);
+      expect(ready.map((t) => t.id).toSet(), {blocked1.id, blocked2.id});
+    });
+
+    test('ticket with no dependencies is never emitted', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final dep = state.createTicket(title: 'Dep');
+      state.createTicket(title: 'Independent'); // no dependsOn
+
+      final ready = <TicketData>[];
+      state.onTicketReady.listen(ready.add);
+
+      state.closeTicket(dep.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready, isEmpty);
+    });
+
+    test('closed dependent is not emitted', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final dep = state.createTicket(title: 'Dep');
+      final blocked = state.createTicket(
+        title: 'Blocked',
+        dependsOn: [dep.id],
+      );
+
+      // Close the dependent first
+      state.closeTicket(blocked.id, 'testuser', AuthorType.user);
+
+      final ready = <TicketData>[];
+      state.onTicketReady.listen(ready.add);
+
+      // Now close the dependency — dependent is already closed, should not emit
+      state.closeTicket(dep.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready, isEmpty);
+    });
+
+    test('reopening a dependency does NOT re-block dependents', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final dep = state.createTicket(title: 'Dep');
+      state.createTicket(title: 'Blocked', dependsOn: [dep.id]);
+
+      final ready = <TicketData>[];
+      state.onTicketReady.listen(ready.add);
+
+      // Close dep — unblocks blocked
+      state.closeTicket(dep.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+      expect(ready.length, 1);
+
+      ready.clear();
+
+      // Reopen dep — should NOT emit anything or re-block
+      state.reopenTicket(dep.id, 'testuser', AuthorType.user);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(ready, isEmpty);
+    });
+
+    test('onTicketReady is a broadcast stream', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      // Should be able to listen multiple times without error
+      state.onTicketReady.listen((_) {});
+      state.onTicketReady.listen((_) {});
+    });
+  });
 }
