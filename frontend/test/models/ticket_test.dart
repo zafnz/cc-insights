@@ -107,6 +107,56 @@ void main() {
   group('ActivityEvent', () {
     final timestamp = DateTime.utc(2025, 6, 22, 10, 0, 0);
 
+    test('fromJson handles missing fields with defaults', () {
+      final event = ActivityEvent.fromJson({});
+
+      check(event.id).equals('');
+      check(event.type).equals(ActivityEventType.closed);
+      check(event.actor).equals('');
+      check(event.actorType).equals(AuthorType.user);
+      check(event.data).isEmpty();
+    });
+
+    test('serializes all event types with data payloads', () {
+      final payloads = <ActivityEventType, Map<String, dynamic>>{
+        ActivityEventType.tagAdded: {'tag': 'bug'},
+        ActivityEventType.tagRemoved: {'tag': 'wontfix'},
+        ActivityEventType.worktreeLinked: {
+          'worktreeRoot': '/path/to/wt',
+          'branch': 'feat-x',
+        },
+        ActivityEventType.worktreeUnlinked: {'worktreeRoot': '/path/to/wt'},
+        ActivityEventType.chatLinked: {'chatId': 'chat-1'},
+        ActivityEventType.chatUnlinked: {'chatId': 'chat-1'},
+        ActivityEventType.dependencyAdded: {'ticketId': 5},
+        ActivityEventType.dependencyRemoved: {'ticketId': 5},
+        ActivityEventType.closed: {},
+        ActivityEventType.reopened: {},
+        ActivityEventType.titleEdited: {
+          'oldTitle': 'Old',
+          'newTitle': 'New',
+        },
+        ActivityEventType.bodyEdited: {'summary': 'Updated body'},
+      };
+
+      for (final entry in payloads.entries) {
+        final event = ActivityEvent(
+          id: 'evt-${entry.key.name}',
+          type: entry.key,
+          actor: 'tester',
+          actorType: AuthorType.agent,
+          timestamp: timestamp,
+          data: entry.value,
+        );
+
+        final json = event.toJson();
+        final restored = ActivityEvent.fromJson(json);
+
+        check(restored.type).equals(entry.key);
+        check(restored.data).deepEquals(entry.value);
+      }
+    });
+
     test('toJson/fromJson round-trip', () {
       final event = ActivityEvent(
         id: 'evt-001',
@@ -248,6 +298,24 @@ void main() {
           .equals(image.createdAt.toIso8601String());
     });
 
+    test('toJson includes all fields', () {
+      final image = TicketImage(
+        id: 'img-001',
+        fileName: 'screenshot.png',
+        relativePath: 'ticket-images/1/screenshot.png',
+        mimeType: 'image/png',
+        createdAt: createdAt,
+      );
+
+      final json = image.toJson();
+
+      check(json['id']).equals('img-001');
+      check(json['fileName']).equals('screenshot.png');
+      check(json['relativePath']).equals('ticket-images/1/screenshot.png');
+      check(json['mimeType']).equals('image/png');
+      check(json['createdAt']).isA<String>();
+    });
+
     test('fromJson handles missing fields', () {
       final image = TicketImage.fromJson({});
 
@@ -354,6 +422,43 @@ void main() {
       final restored = TicketComment.fromJson(json);
       check(restored.images).isEmpty();
       check(restored.updatedAt).isNull();
+    });
+
+    test('fromJson handles missing fields with defaults', () {
+      final comment = TicketComment.fromJson({});
+
+      check(comment.id).equals('');
+      check(comment.text).equals('');
+      check(comment.author).equals('');
+      check(comment.authorType).equals(AuthorType.user);
+      check(comment.images).isEmpty();
+      check(comment.updatedAt).isNull();
+    });
+
+    test('authorType distinguishes user and agent', () {
+      final userComment = TicketComment(
+        id: 'cmt-u',
+        text: 'User comment',
+        author: 'zaf',
+        authorType: AuthorType.user,
+        createdAt: createdAt,
+      );
+      final agentComment = TicketComment(
+        id: 'cmt-a',
+        text: 'Agent comment',
+        author: 'agent auth-refactor',
+        authorType: AuthorType.agent,
+        createdAt: createdAt,
+      );
+
+      check(userComment.authorType).equals(AuthorType.user);
+      check(agentComment.authorType).equals(AuthorType.agent);
+
+      final userJson = userComment.toJson();
+      final agentJson = agentComment.toJson();
+
+      check(userJson['authorType']).equals('user');
+      check(agentJson['authorType']).equals('agent');
     });
 
     test('copyWith updates fields', () {
@@ -653,6 +758,28 @@ void main() {
       );
     }
 
+    test('construction defaults isOpen to true', () {
+      final ticket = TicketData(
+        id: 1,
+        title: 'Test',
+        body: '',
+        author: 'zaf',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      check(ticket.isOpen).isTrue();
+      check(ticket.tags).isEmpty();
+      check(ticket.dependsOn).isEmpty();
+      check(ticket.linkedWorktrees).isEmpty();
+      check(ticket.linkedChats).isEmpty();
+      check(ticket.comments).isEmpty();
+      check(ticket.activityLog).isEmpty();
+      check(ticket.bodyImages).isEmpty();
+      check(ticket.sourceConversationId).isNull();
+      check(ticket.closedAt).isNull();
+    });
+
     test('displayId formats correctly', () {
       check(createTestTicket(id: 1).displayId).equals('#1');
       check(createTestTicket(id: 42).displayId).equals('#42');
@@ -689,6 +816,18 @@ void main() {
       final updated = original.copyWith(clearClosedAt: true);
 
       check(updated.closedAt).isNull();
+    });
+
+    test('copyWith with no changes preserves all fields', () {
+      final original = createTestTicket(
+        tags: {'bug'},
+        dependsOn: [2],
+        sourceConversationId: 'conv-1',
+        closedAt: later,
+      );
+      final copy = original.copyWith();
+
+      check(copy).equals(original);
     });
 
     test('copyWith normalizes tags to lowercase', () {
@@ -902,6 +1041,60 @@ void main() {
       });
 
       check(ticket.tags).deepEquals({'feature', 'bug', 'todo'});
+    });
+
+    test('closedAt round-trips when present', () {
+      final ticket = createTestTicket(
+        isOpen: false,
+        closedAt: later,
+      );
+
+      final json = ticket.toJson();
+      check(json).containsKey('closedAt');
+
+      final restored = TicketData.fromJson(json);
+      check(restored.closedAt).isNotNull();
+      check(restored.closedAt!.toIso8601String())
+          .equals(later.toUtc().toIso8601String());
+    });
+
+    test('closedAt is null when not provided in JSON', () {
+      final ticket = TicketData.fromJson({
+        'id': 1,
+        'title': 'Open ticket',
+        'body': '',
+        'author': 'zaf',
+        'isOpen': true,
+        'createdAt': now.toIso8601String(),
+        'updatedAt': now.toIso8601String(),
+      });
+
+      check(ticket.closedAt).isNull();
+    });
+
+    test('empty tags Set round-trips correctly', () {
+      final ticket = createTestTicket(tags: {});
+
+      final json = ticket.toJson();
+      check(json).not((it) => it.containsKey('tags'));
+
+      final restored = TicketData.fromJson(json);
+      check(restored.tags).isEmpty();
+    });
+
+    test('mixed case tags are normalized via fromJson', () {
+      final ticket = TicketData.fromJson({
+        'id': 1,
+        'title': 'T',
+        'body': '',
+        'author': 'zaf',
+        'isOpen': true,
+        'tags': ['URGENT', 'Bug', 'feature'],
+        'createdAt': now.toIso8601String(),
+        'updatedAt': now.toIso8601String(),
+      });
+
+      check(ticket.tags).deepEquals({'urgent', 'bug', 'feature'});
     });
 
     test('equality and hashCode', () {
