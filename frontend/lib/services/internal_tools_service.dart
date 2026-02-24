@@ -18,6 +18,7 @@ import '../state/bulk_proposal_state.dart';
 import '../state/orchestrator_state.dart';
 import '../state/selection_state.dart';
 import '../state/ticket_board_state.dart';
+import 'author_service.dart' show AuthorService;
 import 'backend_service.dart';
 import 'event_handler.dart';
 import 'git_service.dart';
@@ -90,20 +91,16 @@ class InternalToolsService extends ChangeNotifier {
         chatRegistry.register(tool);
       }
     }
-    // Replace create_ticket handler to inject the calling chat's identity,
-    // so ticket proposals appear in the correct conversation panel.
-    final proposalState = _bulkProposalState;
+    // Replace create_ticket handler to inject the calling chat's identity.
     final existingTool = chatRegistry['create_ticket'];
-    if (proposalState != null && existingTool != null) {
+    if (existingTool != null) {
       chatRegistry.register(
         InternalToolDefinition(
           name: existingTool.name,
           description: existingTool.description,
           inputSchema: existingTool.inputSchema,
           handler: (input) => _handleCreateTicket(
-            proposalState,
             input,
-            sourceChatId: chat.id,
             sourceChatName: chat.name,
           ),
         ),
@@ -200,9 +197,8 @@ class InternalToolsService extends ChangeNotifier {
 
   /// Register the create_ticket tool with the given bulk proposal state.
   ///
-  /// The tool handler parses ticket proposals from the input,
-  /// stages them for user review, and waits for
-  /// the review to complete via [BulkProposalState.onBulkReviewComplete] stream.
+  /// The tool handler parses ticket data from the input and creates tickets
+  /// directly via [TicketRepository.createTicket].
   void registerTicketTools(BulkProposalState proposalState) {
     _bulkProposalState = proposalState;
     _registry.register(
@@ -210,10 +206,9 @@ class InternalToolsService extends ChangeNotifier {
         name: 'create_ticket',
         description:
             'Create one or more tickets on the project board. '
-            'Each ticket has a title, description, kind '
-            '(feature/bugfix/research/question/test/docs/chore), '
-            'optional priority, effort, category, tags, '
-            'and dependency indices.',
+            'Each ticket has a title, optional body (markdown), '
+            'optional tags for categorization, '
+            'and optional dependency indices.',
         inputSchema: {
           'type': 'object',
           'properties': {
@@ -227,36 +222,9 @@ class InternalToolsService extends ChangeNotifier {
                     'type': 'string',
                     'description': 'Short title describing the ticket',
                   },
-                  'description': {
+                  'body': {
                     'type': 'string',
                     'description': 'Detailed description of the work',
-                  },
-                  'kind': {
-                    'type': 'string',
-                    'enum': [
-                      'feature',
-                      'bugfix',
-                      'research',
-                      'question',
-                      'test',
-                      'docs',
-                      'chore',
-                    ],
-                    'description': 'Type of work',
-                  },
-                  'priority': {
-                    'type': 'string',
-                    'enum': ['critical', 'high', 'medium', 'low'],
-                    'description': 'Priority level (defaults to medium)',
-                  },
-                  'effort': {
-                    'type': 'string',
-                    'enum': ['small', 'medium', 'large'],
-                    'description': 'Estimated effort (defaults to medium)',
-                  },
-                  'category': {
-                    'type': 'string',
-                    'description': 'Optional category for grouping',
                   },
                   'tags': {
                     'type': 'array',
@@ -271,18 +239,16 @@ class InternalToolsService extends ChangeNotifier {
                         'this ticket depends on',
                   },
                 },
-                'required': ['title', 'description', 'kind'],
+                'required': ['title'],
               },
             },
           },
           'required': ['tickets'],
         },
         handler: (input) => _handleCreateTicket(
-        proposalState,
-        input,
-        sourceChatId: 'mcp-tool',
-        sourceChatName: 'Agent',
-      ),
+          input,
+          sourceChatName: 'Agent',
+        ),
       ),
     );
   }
@@ -294,11 +260,17 @@ class InternalToolsService extends ChangeNotifier {
   }
 
   Future<InternalToolResult> _handleCreateTicket(
-    BulkProposalState proposalState,
     Map<String, dynamic> input, {
-    required String sourceChatId,
     required String sourceChatName,
   }) async {
+    final repo = _ticketBoard;
+    if (repo == null) {
+      return InternalToolResult.error(
+        'Ticket board not available. '
+        'Ensure a project is loaded.',
+      );
+    }
+
     // Parse tickets array
     final ticketsInput = input['tickets'];
     if (ticketsInput == null || ticketsInput is! List) {
@@ -314,13 +286,12 @@ class InternalToolsService extends ChangeNotifier {
 
     if (ticketsInput.length > maxProposalCount) {
       return InternalToolResult.error(
-        'Too many proposals '
+        'Too many tickets '
         '(${ticketsInput.length} > $maxProposalCount).',
       );
     }
 
-    // Parse proposals
-    final proposals = <TicketProposal>[];
+    // Validate all entries before creating any tickets
     for (var i = 0; i < ticketsInput.length; i++) {
       final json = ticketsInput[i];
       if (json is! Map<String, dynamic>) {
@@ -330,67 +301,65 @@ class InternalToolsService extends ChangeNotifier {
       }
 
       final title = json['title'] as String?;
-      final description = json['description'] as String?;
-      final kind = json['kind'] as String?;
-
       if (title == null || title.isEmpty) {
         return InternalToolResult.error(
           'Ticket at index $i missing required "title" field.',
         );
       }
-      if (description == null) {
-        return InternalToolResult.error(
-          'Ticket at index $i missing required "description" field.',
-        );
-      }
-      if (kind == null || kind.isEmpty) {
-        return InternalToolResult.error(
-          'Ticket at index $i missing required "kind" field.',
-        );
+    }
+
+    // First pass: create all tickets without dependencies
+    final author = AuthorService.agentAuthor(sourceChatName);
+    final createdTickets = <TicketData>[];
+    for (final json in ticketsInput) {
+      final map = json as Map<String, dynamic>;
+      final title = map['title'] as String;
+      final body = map['body'] as String? ?? '';
+      final rawTags = (map['tags'] as List?)?.cast<String>() ?? [];
+      final tags = rawTags.map((t) => t.toLowerCase()).toSet();
+
+      final ticket = repo.createTicket(
+        title: title,
+        body: body,
+        tags: tags,
+        author: author,
+        authorType: AuthorType.agent,
+      );
+      createdTickets.add(ticket);
+    }
+
+    // Second pass: resolve dependency indices to actual ticket IDs
+    for (var i = 0; i < ticketsInput.length; i++) {
+      final map = ticketsInput[i] as Map<String, dynamic>;
+      final depIndices =
+          (map['dependsOnIndices'] as List?)?.cast<int>() ?? [];
+      if (depIndices.isEmpty) continue;
+
+      final resolvedDeps = <int>[];
+      for (final index in depIndices) {
+        if (index >= 0 && index < createdTickets.length) {
+          resolvedDeps.add(createdTickets[index].id);
+        }
       }
 
-      try {
-        proposals.add(TicketProposal.fromJson(json));
-      } catch (e) {
-        return InternalToolResult.error(
-          'Failed to parse ticket at index $i: $e',
-        );
+      if (resolvedDeps.isNotEmpty) {
+        for (final depId in resolvedDeps) {
+          repo.addDependency(createdTickets[i].id, depId);
+        }
       }
     }
 
-    // Listen for the next bulk review completion event
-    final resultFuture = proposalState.onBulkReviewComplete.first.then((
-      result,
-    ) {
-      final total = result.approvedCount + result.rejectedCount;
-      final String resultText;
-      if (result.approvedCount == 0) {
-        resultText = 'All $total ticket proposals were rejected by the user.';
-      } else if (result.rejectedCount == 0) {
-        resultText =
-            'All ${result.approvedCount} ticket proposals were approved '
-            'and created.';
-      } else {
-        resultText =
-            '${result.approvedCount} of $total ticket proposals were approved '
-            'and created. ${result.rejectedCount} were rejected.';
-      }
-      return InternalToolResult.text(resultText);
-    });
-
-    // Stage proposals
-    proposalState.proposeBulk(
-      proposals,
-      sourceChatId: sourceChatId,
-      sourceChatName: sourceChatName,
-    );
-
     developer.log(
-      'create_ticket: staged ${proposals.length} proposals for bulk review',
+      'create_ticket: created ${createdTickets.length} tickets',
       name: 'InternalToolsService',
     );
 
-    return resultFuture;
+    // Build response with created ticket IDs
+    final ids = createdTickets.map((t) => t.id).toList();
+    return InternalToolResult.text(
+      'Created ${createdTickets.length} ticket(s): '
+      '${ids.map((id) => '#$id').join(', ')}.',
+    );
   }
 
   // ===========================================================================
