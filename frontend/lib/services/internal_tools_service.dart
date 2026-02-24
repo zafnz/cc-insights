@@ -960,7 +960,24 @@ class InternalToolsService extends ChangeNotifier {
         'properties': {
           'status': {
             'type': 'array',
-            'items': {'type': 'string'},
+            'items': {
+              'type': 'string',
+              'enum': [
+                'draft',
+                'ready',
+                'active',
+                'blocked',
+                'needsInput',
+                'inReview',
+                'completed',
+                'cancelled',
+                'split',
+              ],
+            },
+            'description':
+                'Filter by ticket status. Valid values: draft, ready, '
+                'active, blocked, needsInput, inReview, completed, '
+                'cancelled, split.',
           },
           'category': {'type': 'string'},
           'depends_on': {'type': 'integer'},
@@ -1075,7 +1092,24 @@ class InternalToolsService extends ChangeNotifier {
         'type': 'object',
         'properties': {
           'ticket_id': {'type': 'integer'},
-          'status': {'type': 'string'},
+          'status': {
+            'type': 'string',
+            'enum': [
+              'draft',
+              'ready',
+              'active',
+              'blocked',
+              'needsInput',
+              'inReview',
+              'completed',
+              'cancelled',
+              'split',
+            ],
+            'description':
+                'New status for the ticket. Valid values: draft, ready, '
+                'active, blocked, needsInput, inReview, completed, '
+                'cancelled, split.',
+          },
           'comment': {'type': 'string'},
         },
         'required': ['ticket_id'],
