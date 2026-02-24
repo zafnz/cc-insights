@@ -6,6 +6,7 @@ import '../config/design_tokens.dart';
 import '../models/output_entry.dart';
 import '../services/runtime_config.dart';
 import 'click_to_scroll_container.dart';
+import 'tool_card_cci_orch.dart';
 import 'tool_card_git.dart';
 import 'tool_card_inputs.dart';
 import 'tool_card_results.dart';
@@ -27,6 +28,12 @@ String _formatToolName(String toolName) {
     return cciGitFriendlyName(gitName) ?? toolName;
   }
 
+  // Friendly names for internal CCI orchestrator tools
+  final orchName = cciOrchToolName(toolName);
+  if (orchName != null) {
+    return cciOrchFriendlyName(orchName) ?? toolName;
+  }
+
   final mcpMatch = _mcpNamePattern.firstMatch(toolName);
   if (mcpMatch != null) {
     final mcpName = mcpMatch.group(1)!;
@@ -40,6 +47,10 @@ IconData _getToolIcon(ToolKind toolKind, String toolName) {
   // Internal CCI git tools get their own icons
   final gitName = cciGitToolName(toolName);
   if (gitName != null) return cciGitIcon(gitName);
+
+  // Internal CCI orchestrator tools get their own icons
+  final orchName = cciOrchToolName(toolName);
+  if (orchName != null) return cciOrchIcon(orchName);
 
   return switch (toolKind) {
     ToolKind.execute => Icons.terminal,
@@ -71,6 +82,11 @@ Color _getToolColor(ToolKind toolKind, {String? toolName}) {
     return Colors.teal;
   }
 
+  // Internal CCI orchestrator tools use deepPurple
+  if (toolName != null && cciOrchToolName(toolName) != null) {
+    return cciOrchColor;
+  }
+
   return switch (toolKind) {
     ToolKind.execute => Colors.orange,
     ToolKind.read || ToolKind.edit => Colors.blue,
@@ -95,6 +111,12 @@ String _getToolSummary(
   if (toolName != null) {
     final gitName = cciGitToolName(toolName);
     if (gitName != null) return cciGitSummary(gitName, input);
+  }
+
+  // Internal CCI orchestrator tools
+  if (toolName != null) {
+    final orchName = cciOrchToolName(toolName);
+    if (orchName != null) return cciOrchSummary(orchName, input);
   }
 
   final config = RuntimeConfig.instance;
@@ -470,6 +492,10 @@ class _ToolInput extends StatelessWidget {
     if (gitName != null) {
       return GitToolInputWidget(gitToolName: gitName, input: entry.toolInput);
     }
+    final orchName = cciOrchToolName(entry.toolName);
+    if (orchName != null) {
+      return OrchToolInputWidget(orchToolName: orchName, input: entry.toolInput);
+    }
     return GenericInputWidget(input: entry.toolInput);
   }
 }
@@ -490,6 +516,15 @@ class _ToolResult extends StatelessWidget {
     if (gitName != null && !isError) {
       return GitToolResultWidget(
         gitToolName: gitName,
+        result: entry.result,
+      );
+    }
+
+    // Special rendering for CCI orchestrator tools
+    final orchName = cciOrchToolName(entry.toolName);
+    if (orchName != null && !isError) {
+      return OrchToolResultWidget(
+        orchToolName: orchName,
         result: entry.result,
       );
     }
