@@ -29,7 +29,7 @@ enum TicketDetailMode {
 
 /// State management for ticket view (selection, filtering, computed data).
 ///
-/// Manages UI view state like selection, filtering, grouping, and computed
+/// Manages UI view state like selection, filtering, sorting, and computed
 /// data for tickets. Depends on [TicketRepository] for the underlying ticket
 /// data. This class separates view concerns from data management.
 class TicketViewState extends ChangeNotifier {
@@ -66,20 +66,14 @@ class TicketViewState extends ChangeNotifier {
   /// The current search query.
   String _searchQuery = '';
 
-  /// The current status filter, if any.
-  TicketStatus? _statusFilter;
+  /// Filter by open/closed status.
+  bool _isOpenFilter = true;
 
-  /// The current kind filter, if any.
-  TicketKind? _kindFilter;
+  /// Tag filters (AND: ticket must have ALL selected tags).
+  final Set<String> _tagFilters = {};
 
-  /// The current priority filter, if any.
-  TicketPriority? _priorityFilter;
-
-  /// The current category filter, if any.
-  String? _categoryFilter;
-
-  /// The current grouping method.
-  TicketGroupBy _groupBy = TicketGroupBy.category;
+  /// The current sort order.
+  TicketSortOrder _sortOrder = TicketSortOrder.newest;
 
   /// Selected ticket IDs for orchestration launch.
   final Set<int> _selectedTicketIds = {};
@@ -88,12 +82,7 @@ class TicketViewState extends ChangeNotifier {
   // Cache fields
   // ===========================================================================
 
-  List<String>? _cachedAllCategories;
-  TicketData? _cachedNextReadyTicket;
-  bool _hasComputedNextReady = false;
   List<TicketData>? _cachedFilteredTickets;
-  Map<String, List<TicketData>>? _cachedGroupedTickets;
-  Map<String, ({int completed, int total})>? _cachedCategoryProgress;
 
   // ===========================================================================
   // Cache invalidation methods
@@ -101,23 +90,12 @@ class TicketViewState extends ChangeNotifier {
 
   /// Clears all cached computed values. Called when ticket data changes.
   void _invalidateTicketData() {
-    _cachedAllCategories = null;
-    _cachedNextReadyTicket = null;
-    _hasComputedNextReady = false;
     _cachedFilteredTickets = null;
-    _cachedGroupedTickets = null;
-    _cachedCategoryProgress = null;
   }
 
   /// Clears filter-dependent caches. Called when search/filter settings change.
   void _invalidateFilters() {
     _cachedFilteredTickets = null;
-    _cachedGroupedTickets = null;
-  }
-
-  /// Clears grouping-dependent cache. Called when groupBy setting changes.
-  void _invalidateGrouping() {
-    _cachedGroupedTickets = null;
   }
 
   // ===========================================================================
@@ -142,159 +120,70 @@ class TicketViewState extends ChangeNotifier {
   /// The current search query.
   String get searchQuery => _searchQuery;
 
-  /// The current status filter.
-  TicketStatus? get statusFilter => _statusFilter;
+  /// The current open/closed filter.
+  bool get isOpenFilter => _isOpenFilter;
 
-  /// The current kind filter.
-  TicketKind? get kindFilter => _kindFilter;
+  /// The current tag filters.
+  Set<String> get tagFilters => Set.unmodifiable(_tagFilters);
 
-  /// The current priority filter.
-  TicketPriority? get priorityFilter => _priorityFilter;
+  /// The current sort order.
+  TicketSortOrder get sortOrder => _sortOrder;
 
-  /// The current category filter.
-  String? get categoryFilter => _categoryFilter;
-
-  /// The current grouping method.
-  TicketGroupBy get groupBy => _groupBy;
+  /// Selected ticket IDs for orchestration launch.
   Set<int> get selectedTicketIds => Set.unmodifiable(_selectedTicketIds);
 
-  /// All unique categories from tickets, sorted alphabetically.
-  List<String> get allCategories {
-    if (_cachedAllCategories != null) return _cachedAllCategories!;
-    final categories = _repo.tickets
-        .where((t) => t.category != null)
-        .map((t) => t.category!)
-        .toSet()
-        .toList();
-    categories.sort();
-    _cachedAllCategories = categories;
-    return categories;
-  }
+  /// Count of open tickets (unfiltered).
+  int get openCount => _repo.tickets.where((t) => t.isOpen).length;
 
-  /// The highest-priority ready ticket, or null if none exist.
+  /// Count of closed tickets (unfiltered).
+  int get closedCount => _repo.tickets.where((t) => !t.isOpen).length;
+
+  /// Filtered and sorted tickets based on all active filters.
   ///
-  /// Priority order: critical > high > medium > low.
-  /// Ties are broken by ticket ID (lower first).
-  TicketData? get nextReadyTicket {
-    if (_hasComputedNextReady) return _cachedNextReadyTicket;
-
-    final ready = _repo.tickets
-        .where((t) => t.status == TicketStatus.ready)
-        .toList();
-    if (ready.isEmpty) {
-      _cachedNextReadyTicket = null;
-      _hasComputedNextReady = true;
-      return null;
-    }
-
-    ready.sort(TicketRepository.comparePriority);
-
-    _cachedNextReadyTicket = ready.first;
-    _hasComputedNextReady = true;
-    return ready.first;
-  }
-
-  /// Filtered tickets based on search and all active filters.
-  ///
-  /// Search matches displayId, title, and description (case-insensitive).
-  /// All filters are AND-combined.
+  /// Filtering order:
+  /// 1. isOpen matching _isOpenFilter
+  /// 2. Search query (title, body, comments text, tag names, #id)
+  /// 3. Tag filters (AND: ticket must have ALL selected tags)
+  /// 4. Sort by _sortOrder
   List<TicketData> get filteredTickets {
     if (_cachedFilteredTickets != null) return _cachedFilteredTickets!;
 
     var filtered = _repo.tickets.toList();
 
-    // Search filter
+    // 1. Filter by isOpen
+    filtered = filtered.where((t) => t.isOpen == _isOpenFilter).toList();
+
+    // 2. Search filter
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filtered = filtered.where((t) {
         return t.displayId.toLowerCase().contains(query) ||
             t.title.toLowerCase().contains(query) ||
-            t.description.toLowerCase().contains(query);
+            t.body.toLowerCase().contains(query) ||
+            t.comments.any((c) => c.text.toLowerCase().contains(query)) ||
+            t.tags.any((tag) => tag.toLowerCase().contains(query));
       }).toList();
     }
 
-    // Status filter
-    if (_statusFilter != null) {
-      filtered = filtered.where((t) => t.status == _statusFilter).toList();
+    // 3. Tag filters (AND)
+    if (_tagFilters.isNotEmpty) {
+      filtered = filtered.where((t) {
+        return _tagFilters.every((tag) => t.tags.contains(tag));
+      }).toList();
     }
 
-    // Kind filter
-    if (_kindFilter != null) {
-      filtered = filtered.where((t) => t.kind == _kindFilter).toList();
-    }
-
-    // Priority filter
-    if (_priorityFilter != null) {
-      filtered = filtered.where((t) => t.priority == _priorityFilter).toList();
-    }
-
-    // Category filter
-    if (_categoryFilter != null) {
-      filtered = filtered.where((t) => t.category == _categoryFilter).toList();
+    // 4. Sort
+    switch (_sortOrder) {
+      case TicketSortOrder.newest:
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      case TicketSortOrder.oldest:
+        filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      case TicketSortOrder.recentlyUpdated:
+        filtered.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     }
 
     _cachedFilteredTickets = filtered;
     return filtered;
-  }
-
-  /// Grouped tickets based on the current grouping method.
-  ///
-  /// Returns a map of group name to tickets in that group.
-  /// Within each group, tickets are sorted by priority (descending) then ID.
-  /// Tickets without a category are placed in an "Uncategorized" group.
-  Map<String, List<TicketData>> get groupedTickets {
-    if (_cachedGroupedTickets != null) return _cachedGroupedTickets!;
-
-    final filtered = filteredTickets;
-    final groups = <String, List<TicketData>>{};
-
-    for (final ticket in filtered) {
-      String groupKey;
-      switch (_groupBy) {
-        case TicketGroupBy.category:
-          groupKey = ticket.category ?? 'Uncategorized';
-        case TicketGroupBy.status:
-          groupKey = ticket.status.label;
-        case TicketGroupBy.kind:
-          groupKey = ticket.kind.label;
-        case TicketGroupBy.priority:
-          groupKey = ticket.priority.label;
-      }
-
-      groups.putIfAbsent(groupKey, () => <TicketData>[]);
-      groups[groupKey]!.add(ticket);
-    }
-
-    // Sort within each group by priority (descending) then ID
-    for (final group in groups.values) {
-      group.sort(TicketRepository.comparePriority);
-    }
-
-    _cachedGroupedTickets = groups;
-    return groups;
-  }
-
-  /// Progress by category: completed vs total tickets.
-  ///
-  /// Returns a map of category name to (completed: int, total: int).
-  Map<String, ({int completed, int total})> get categoryProgress {
-    if (_cachedCategoryProgress != null) return _cachedCategoryProgress!;
-
-    final progress = <String, ({int completed, int total})>{};
-
-    for (final ticket in _repo.tickets) {
-      final category = ticket.category ?? 'Uncategorized';
-      final current = progress[category] ?? (completed: 0, total: 0);
-      final isCompleted = ticket.status == TicketStatus.completed;
-
-      progress[category] = (
-        completed: current.completed + (isCompleted ? 1 : 0),
-        total: current.total + 1,
-      );
-    }
-
-    _cachedCategoryProgress = progress;
-    return progress;
   }
 
   // ===========================================================================
@@ -346,38 +235,41 @@ class TicketViewState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sets the status filter.
-  void setStatusFilter(TicketStatus? status) {
-    _statusFilter = status;
+  /// Sets the open/closed filter.
+  void setIsOpenFilter(bool isOpen) {
+    _isOpenFilter = isOpen;
     _invalidateFilters();
     notifyListeners();
   }
 
-  /// Sets the kind filter.
-  void setKindFilter(TicketKind? kind) {
-    _kindFilter = kind;
+  /// Adds a tag filter.
+  void addTagFilter(String tag) {
+    if (_tagFilters.add(tag)) {
+      _invalidateFilters();
+      notifyListeners();
+    }
+  }
+
+  /// Removes a tag filter.
+  void removeTagFilter(String tag) {
+    if (_tagFilters.remove(tag)) {
+      _invalidateFilters();
+      notifyListeners();
+    }
+  }
+
+  /// Clears all tag filters.
+  void clearTagFilters() {
+    if (_tagFilters.isEmpty) return;
+    _tagFilters.clear();
     _invalidateFilters();
     notifyListeners();
   }
 
-  /// Sets the priority filter.
-  void setPriorityFilter(TicketPriority? priority) {
-    _priorityFilter = priority;
+  /// Sets the sort order.
+  void setSortOrder(TicketSortOrder order) {
+    _sortOrder = order;
     _invalidateFilters();
-    notifyListeners();
-  }
-
-  /// Sets the category filter.
-  void setCategoryFilter(String? category) {
-    _categoryFilter = category;
-    _invalidateFilters();
-    notifyListeners();
-  }
-
-  /// Sets the grouping method.
-  void setGroupBy(TicketGroupBy groupBy) {
-    _groupBy = groupBy;
-    _invalidateGrouping();
     notifyListeners();
   }
 
