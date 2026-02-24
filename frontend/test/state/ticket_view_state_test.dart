@@ -246,7 +246,7 @@ void main() {
       final repo = createRepo();
       repo.createTicket(title: 'Ticket 1');
       repo.createTicket(title: 'Ticket 2');
-      repo.addComment(1, 'This needs a database index');
+      repo.addComment(1, 'This needs a database index', 'testuser', AuthorType.user);
       final view = createViewState(repo);
 
       view.setSearchQuery('database index');
