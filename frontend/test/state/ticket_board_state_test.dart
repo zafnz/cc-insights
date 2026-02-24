@@ -767,11 +767,11 @@ void main() {
   });
 
   group('TicketRepository - addComment', () {
-    test('adds comment with default author', () {
+    test('adds comment with user author', () {
       final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test');
 
-      state.addComment(ticket.id, 'A comment');
+      state.addComment(ticket.id, 'A comment', 'testuser', AuthorType.user);
 
       final updated = state.getTicket(ticket.id)!;
       expect(updated.comments.length, 1);
@@ -781,15 +781,15 @@ void main() {
       expect(updated.comments.first.id, isNotEmpty);
     });
 
-    test('adds comment with explicit author', () {
+    test('adds comment with agent author', () {
       final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test');
 
       state.addComment(
         ticket.id,
         'Agent note',
-        author: 'agent refactor',
-        authorType: AuthorType.agent,
+        'agent refactor',
+        AuthorType.agent,
       );
 
       final updated = state.getTicket(ticket.id)!;
@@ -797,12 +797,39 @@ void main() {
       expect(updated.comments.first.authorType, AuthorType.agent);
     });
 
+    test('adds comment with images', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      final images = [
+        TicketImage(
+          id: 'img-1',
+          fileName: 'screenshot.png',
+          relativePath: 'images/screenshot.png',
+          mimeType: 'image/png',
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      state.addComment(
+        ticket.id,
+        'See attached',
+        'testuser',
+        AuthorType.user,
+        images: images,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.comments.first.images.length, 1);
+      expect(updated.comments.first.images.first.fileName, 'screenshot.png');
+    });
+
     test('adds multiple comments in order', () {
       final state = resources.track(TicketRepository('test-project'));
       final ticket = state.createTicket(title: 'Test');
 
-      state.addComment(ticket.id, 'First');
-      state.addComment(ticket.id, 'Second');
+      state.addComment(ticket.id, 'First', 'testuser', AuthorType.user);
+      state.addComment(ticket.id, 'Second', 'testuser', AuthorType.user);
 
       final updated = state.getTicket(ticket.id)!;
       expect(updated.comments.length, 2);
@@ -816,17 +843,27 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      state.addComment(ticket.id, 'A comment');
+      state.addComment(ticket.id, 'A comment', 'testuser', AuthorType.user);
 
       final updated = state.getTicket(ticket.id)!;
       expect(updated.updatedAt.isAfter(ticket.updatedAt), isTrue);
+    });
+
+    test('addComment does not generate activity events', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addComment(ticket.id, 'A comment', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.activityLog, isEmpty);
     });
 
     test('addComment on non-existent ticket does nothing', () {
       final state = resources.track(TicketRepository('test-project'));
 
       // Should not throw
-      state.addComment(999, 'Orphan comment');
+      state.addComment(999, 'Orphan comment', 'testuser', AuthorType.user);
       expect(state.tickets, isEmpty);
     });
   });
@@ -1422,6 +1459,311 @@ void main() {
       // Should be able to listen multiple times without error
       state.onTicketReady.listen((_) {});
       state.onTicketReady.listen((_) {});
+    });
+  });
+
+  group('TicketRepository - addTag', () {
+    test('adds tag to ticket and records activity event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'feature'});
+      expect(updated.activityLog.length, 1);
+
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.tagAdded);
+      expect(event.actor, 'testuser');
+      expect(event.actorType, AuthorType.user);
+      expect(event.data['tag'], 'feature');
+    });
+
+    test('normalizes tag to lowercase', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addTag(ticket.id, 'HIGH-PRIORITY', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'high-priority'});
+      expect(updated.activityLog.first.data['tag'], 'high-priority');
+    });
+
+    test('adding duplicate tag is a no-op', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test', tags: {'feature'});
+
+      state.addTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'feature'});
+      expect(updated.activityLog, isEmpty);
+    });
+
+    test('updates updatedAt', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      state.addTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.updatedAt.isAfter(ticket.updatedAt), isTrue);
+    });
+
+    test('adds tag to registry', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.addTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      expect(state.tagRegistry.length, 1);
+      expect(state.tagRegistry.first.name, 'feature');
+    });
+
+    test('does not duplicate registry entries', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final t1 = state.createTicket(title: 'T1');
+      final t2 = state.createTicket(title: 'T2');
+
+      state.addTag(t1.id, 'feature', 'testuser', AuthorType.user);
+      state.addTag(t2.id, 'feature', 'testuser', AuthorType.user);
+
+      expect(state.tagRegistry.length, 1);
+    });
+
+    test('addTag on non-existent ticket does nothing', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.addTag(999, 'feature', 'testuser', AuthorType.user);
+      expect(state.tagRegistry, isEmpty);
+    });
+
+    test('notifies listeners', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      var notified = false;
+      state.addListener(() => notified = true);
+
+      state.addTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      expect(notified, isTrue);
+    });
+  });
+
+  group('TicketRepository - removeTag', () {
+    test('removes tag from ticket and records activity event', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test', tags: {'feature', 'bug'});
+
+      state.removeTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'bug'});
+      expect(updated.activityLog.length, 1);
+
+      final event = updated.activityLog.first;
+      expect(event.type, ActivityEventType.tagRemoved);
+      expect(event.actor, 'testuser');
+      expect(event.actorType, AuthorType.user);
+      expect(event.data['tag'], 'feature');
+    });
+
+    test('normalizes tag to lowercase', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test', tags: {'feature'});
+
+      state.removeTag(ticket.id, 'FEATURE', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, isEmpty);
+    });
+
+    test('removing non-existent tag is a no-op', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test', tags: {'feature'});
+
+      state.removeTag(ticket.id, 'bug', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'feature'});
+      expect(updated.activityLog, isEmpty);
+    });
+
+    test('updates updatedAt', () async {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test', tags: {'feature'});
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      state.removeTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.updatedAt.isAfter(ticket.updatedAt), isTrue);
+    });
+
+    test('removeTag on non-existent ticket does nothing', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.removeTag(999, 'feature', 'testuser', AuthorType.user);
+    });
+
+    test('notifies listeners', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test', tags: {'feature'});
+
+      var notified = false;
+      state.addListener(() => notified = true);
+
+      state.removeTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+
+      expect(notified, isTrue);
+    });
+  });
+
+  group('TicketRepository - setTags', () {
+    test('replaces tags and generates events for differences', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(
+        title: 'Test',
+        tags: {'feature', 'bug'},
+      );
+
+      state.setTags(
+        ticket.id,
+        {'bug', 'urgent'},
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'bug', 'urgent'});
+
+      // Should have tagRemoved for 'feature' and tagAdded for 'urgent'
+      expect(updated.activityLog.length, 2);
+
+      final addedEvents = updated.activityLog
+          .where((e) => e.type == ActivityEventType.tagAdded)
+          .toList();
+      final removedEvents = updated.activityLog
+          .where((e) => e.type == ActivityEventType.tagRemoved)
+          .toList();
+
+      expect(addedEvents.length, 1);
+      expect(addedEvents.first.data['tag'], 'urgent');
+      expect(removedEvents.length, 1);
+      expect(removedEvents.first.data['tag'], 'feature');
+    });
+
+    test('normalizes all tags to lowercase', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.setTags(
+        ticket.id,
+        {'Feature', 'BUG', 'High-Priority'},
+        'testuser',
+        AuthorType.user,
+      );
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, {'feature', 'bug', 'high-priority'});
+    });
+
+    test('no-op when tags are identical', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(
+        title: 'Test',
+        tags: {'feature', 'bug'},
+      );
+
+      var notified = false;
+      state.addListener(() => notified = true);
+
+      state.setTags(
+        ticket.id,
+        {'feature', 'bug'},
+        'testuser',
+        AuthorType.user,
+      );
+
+      expect(notified, isFalse);
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.activityLog, isEmpty);
+    });
+
+    test('adds new tags to registry', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(title: 'Test');
+
+      state.setTags(
+        ticket.id,
+        {'feature', 'bug'},
+        'testuser',
+        AuthorType.user,
+      );
+
+      expect(state.tagRegistry.length, 2);
+      final names = state.tagRegistry.map((t) => t.name).toSet();
+      expect(names, {'feature', 'bug'});
+    });
+
+    test('setTags on non-existent ticket does nothing', () {
+      final state = resources.track(TicketRepository('test-project'));
+
+      state.setTags(999, {'feature'}, 'testuser', AuthorType.user);
+      expect(state.tagRegistry, isEmpty);
+    });
+
+    test('clearing all tags generates remove events', () {
+      final state = resources.track(TicketRepository('test-project'));
+      final ticket = state.createTicket(
+        title: 'Test',
+        tags: {'feature', 'bug'},
+      );
+
+      state.setTags(ticket.id, {}, 'testuser', AuthorType.user);
+
+      final updated = state.getTicket(ticket.id)!;
+      expect(updated.tags, isEmpty);
+      expect(updated.activityLog.length, 2);
+      expect(
+        updated.activityLog.every(
+          (e) => e.type == ActivityEventType.tagRemoved,
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('TicketRepository - tag registry persistence', () {
+    test('tag registry is saved and loaded', () async {
+      final testProjectId =
+          'test-project-tagregistry-${DateTime.now().millisecondsSinceEpoch}';
+      final storage = TicketStorageService();
+      final state = resources.track(
+        TicketRepository(testProjectId, storage: storage),
+      );
+
+      final ticket = state.createTicket(title: 'Test');
+      state.addTag(ticket.id, 'feature', 'testuser', AuthorType.user);
+      state.addTag(ticket.id, 'bug', 'testuser', AuthorType.user);
+
+      await state.save();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final state2 = resources.track(
+        TicketRepository(testProjectId, storage: storage),
+      );
+      await state2.load();
+
+      expect(state2.tagRegistry.length, 2);
+      final names = state2.tagRegistry.map((t) => t.name).toSet();
+      expect(names, {'feature', 'bug'});
     });
   });
 }

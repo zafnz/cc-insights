@@ -24,6 +24,9 @@ class TicketRepository extends ChangeNotifier {
   /// Internal ticket storage.
   List<TicketData> _tickets = [];
 
+  /// Tag registry tracking all known tags.
+  List<TagDefinition> _tagRegistry = [];
+
   /// The next ID to assign when creating a ticket.
   int _nextId = 1;
 
@@ -44,6 +47,9 @@ class TicketRepository extends ChangeNotifier {
 
   /// Unmodifiable view of all tickets.
   List<TicketData> get tickets => List.unmodifiable(_tickets);
+
+  /// Unmodifiable view of the tag registry.
+  List<TagDefinition> get tagRegistry => List.unmodifiable(_tagRegistry);
 
   /// Count of open tickets.
   int get openCount => _tickets.where((t) => t.isOpen).length;
@@ -377,6 +383,131 @@ class TicketRepository extends ChangeNotifier {
   }
 
   // ===========================================================================
+  // Tag Methods
+  // ===========================================================================
+
+  /// Adds a tag to a ticket.
+  ///
+  /// The tag is normalized to lowercase. Records a [ActivityEventType.tagAdded]
+  /// activity event and ensures the tag appears in the tag registry.
+  void addTag(int id, String tag, String actor, AuthorType actorType) {
+    final index = _tickets.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+
+    final ticket = _tickets[index];
+    final normalized = tag.toLowerCase();
+
+    if (ticket.tags.contains(normalized)) return;
+
+    final now = DateTime.now();
+    _tickets[index] = ticket.copyWith(
+      tags: {...ticket.tags, normalized},
+      activityLog: [
+        ...ticket.activityLog,
+        ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.tagAdded,
+          actor: actor,
+          actorType: actorType,
+          timestamp: now,
+          data: {'tag': normalized},
+        ),
+      ],
+      updatedAt: now,
+    );
+
+    _ensureTagInRegistry(normalized);
+    notifyListeners();
+    _autoSave();
+  }
+
+  /// Removes a tag from a ticket.
+  ///
+  /// Records a [ActivityEventType.tagRemoved] activity event.
+  void removeTag(int id, String tag, String actor, AuthorType actorType) {
+    final index = _tickets.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+
+    final ticket = _tickets[index];
+    final normalized = tag.toLowerCase();
+
+    if (!ticket.tags.contains(normalized)) return;
+
+    final now = DateTime.now();
+    _tickets[index] = ticket.copyWith(
+      tags: ticket.tags.where((t) => t != normalized).toSet(),
+      activityLog: [
+        ...ticket.activityLog,
+        ActivityEvent(
+          id: _uuid.v4(),
+          type: ActivityEventType.tagRemoved,
+          actor: actor,
+          actorType: actorType,
+          timestamp: now,
+          data: {'tag': normalized},
+        ),
+      ],
+      updatedAt: now,
+    );
+
+    notifyListeners();
+    _autoSave();
+  }
+
+  /// Bulk tag operation.
+  ///
+  /// Compares old vs new tags and generates [ActivityEventType.tagAdded] /
+  /// [ActivityEventType.tagRemoved] events for each difference. All tags are
+  /// normalized to lowercase.
+  void setTags(int id, Set<String> newTags, String actor, AuthorType actorType) {
+    final index = _tickets.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+
+    final ticket = _tickets[index];
+    final normalizedNew = newTags.map((t) => t.toLowerCase()).toSet();
+    final oldTags = ticket.tags;
+
+    if (setEquals(normalizedNew, oldTags)) return;
+
+    final now = DateTime.now();
+    final events = <ActivityEvent>[];
+
+    // Tags that were added
+    for (final tag in normalizedNew.difference(oldTags)) {
+      events.add(ActivityEvent(
+        id: _uuid.v4(),
+        type: ActivityEventType.tagAdded,
+        actor: actor,
+        actorType: actorType,
+        timestamp: now,
+        data: {'tag': tag},
+      ));
+      _ensureTagInRegistry(tag);
+    }
+
+    // Tags that were removed
+    for (final tag in oldTags.difference(normalizedNew)) {
+      events.add(ActivityEvent(
+        id: _uuid.v4(),
+        type: ActivityEventType.tagRemoved,
+        actor: actor,
+        actorType: actorType,
+        timestamp: now,
+        data: {'tag': tag},
+      ));
+    }
+
+    _tickets[index] = ticket.copyWith(
+      tags: normalizedNew,
+      activityLog: [...ticket.activityLog, ...events],
+      updatedAt: now,
+    );
+
+    notifyListeners();
+    _autoSave();
+  }
+
+  // ===========================================================================
   // Linking Methods
   // ===========================================================================
 
@@ -581,18 +712,23 @@ class TicketRepository extends ChangeNotifier {
   }
 
   /// Adds a comment to a ticket.
+  ///
+  /// Creates a new [TicketComment] with a uuid. Comments do NOT generate
+  /// activity events.
   void addComment(
-    int ticketId,
-    String text, {
-    String? author,
-    AuthorType authorType = AuthorType.user,
+    int id,
+    String text,
+    String author,
+    AuthorType authorType, {
+    List<TicketImage> images = const [],
   }) {
-    _applyUpdate(ticketId, (ticket) {
+    _applyUpdate(id, (ticket) {
       final comment = TicketComment(
         id: _uuid.v4(),
         text: text,
-        author: author ?? AuthorService.currentUser,
+        author: author,
         authorType: authorType,
+        images: images,
         createdAt: DateTime.now(),
       );
       return ticket.copyWith(comments: [...ticket.comments, comment]);
@@ -627,6 +763,12 @@ class TicketRepository extends ChangeNotifier {
       final ticketsList = data['tickets'] as List<dynamic>? ?? [];
       _tickets = ticketsList
           .map((json) => TicketData.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      // Restore tag registry
+      final tagRegistryList = data['tagRegistry'] as List<dynamic>? ?? [];
+      _tagRegistry = tagRegistryList
+          .map((json) => TagDefinition.fromJson(json as Map<String, dynamic>))
           .toList();
 
       // Restore nextId, or compute from existing tickets
@@ -666,6 +808,7 @@ class TicketRepository extends ChangeNotifier {
       try {
         final data = {
           'tickets': _tickets.map((t) => t.toJson()).toList(),
+          'tagRegistry': _tagRegistry.map((t) => t.toJson()).toList(),
           'nextId': _nextId,
         };
 
@@ -692,6 +835,14 @@ class TicketRepository extends ChangeNotifier {
   // ===========================================================================
   // Private Helpers
   // ===========================================================================
+
+  /// Ensures a tag exists in the tag registry.
+  void _ensureTagInRegistry(String tag) {
+    final normalized = tag.toLowerCase();
+    if (!_tagRegistry.any((t) => t.name == normalized)) {
+      _tagRegistry.add(TagDefinition(name: normalized));
+    }
+  }
 
   /// Applies an updater function to a ticket.
   ///
