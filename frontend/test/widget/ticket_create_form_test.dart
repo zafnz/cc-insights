@@ -1,6 +1,8 @@
 import 'dart:ui';
 
+import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/panels/ticket_create_form.dart';
+import 'package:cc_insights_v2/services/author_service.dart' hide AuthorType;
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/ticket_view_state.dart';
 import 'package:flutter/material.dart';
@@ -257,6 +259,95 @@ void main() {
       final created = repo.tickets.last;
       expect(created.title, 'Dependent ticket');
       expect(created.dependsOn, contains(1));
+    });
+
+    testWidgets('tag input shows autocomplete suggestions', (tester) async {
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      // Seed the tag registry via setTags (createTicket doesn't register tags)
+      final seed = repo.createTicket(title: 'Seed');
+      repo.setTags(seed.id, {'backend', 'bugfix', 'ui'}, 'test', AuthorType.user);
+      // Delete the seed ticket so the form starts clean, but tagRegistry persists
+      repo.deleteTicket(seed.id);
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // Find the TagPicker TextField
+      final tagTextField = find.descendant(
+        of: find.byKey(TicketCreateFormKeys.tagPicker),
+        matching: find.byType(TextField),
+      );
+
+      // Type a partial filter
+      await tester.enterText(tagTextField, 'bu');
+      await tester.pump();
+
+      // Should show matching suggestions from the registry
+      expect(find.text('bugfix'), findsOneWidget);
+      expect(find.text('backend'), findsNothing); // 'bu' doesn't match 'backend'
+      expect(find.text('ui'), findsNothing); // 'bu' doesn't match 'ui'
+    });
+
+    testWidgets('tags are lowercased on submission', (tester) async {
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // Enter a title
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.titleField), 'Lowercase tags test');
+
+      // Find the TagPicker TextField
+      final tagTextField = find.descendant(
+        of: find.byKey(TicketCreateFormKeys.tagPicker),
+        matching: find.byType(TextField),
+      );
+
+      // Type an UPPERCASE tag and submit
+      await tester.enterText(tagTextField, 'URGENT');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Tag chip should appear lowercased
+      expect(find.text('urgent'), findsOneWidget);
+
+      // Create and verify
+      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
+      await tester.pump();
+
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.tags, contains('urgent'));
+      expect(repo.tickets.first.tags, isNot(contains('URGENT')));
+    });
+
+    testWidgets('create button passes correct author', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // Enter title
+      await tester.enterText(
+          find.byKey(TicketCreateFormKeys.titleField), 'Author test');
+
+      // Tap Create
+      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
+      await tester.pump();
+
+      // Ticket author should match AuthorService.currentUser
+      expect(repo.tickets.length, 1);
+      expect(repo.tickets.first.author, AuthorService.currentUser);
     });
   });
 }

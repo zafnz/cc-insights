@@ -1,30 +1,25 @@
 import 'dart:ui';
 
 import 'package:cc_insights_v2/models/ticket.dart';
-import 'package:cc_insights_v2/panels/ticket_create_form.dart';
-import 'package:cc_insights_v2/panels/ticket_detail_panel.dart';
-import 'package:cc_insights_v2/screens/ticket_screen.dart';
-import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
-import 'package:cc_insights_v2/state/ticket_view_state.dart';
+import 'package:cc_insights_v2/widgets/ticket_edit_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
 import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
   late TicketRepository repo;
-  late TicketViewState viewState;
-  late BulkProposalState bulkState;
   late Future<void> Function() cleanupConfig;
+  late bool saveCalled;
+  late bool cancelCalled;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
     repo = resources.track(TicketRepository('test-edit'));
-    viewState = resources.track(TicketViewState(repo));
-    bulkState = resources.track(BulkProposalState(repo));
+    saveCalled = false;
+    cancelCalled = false;
   });
 
   tearDown(() async {
@@ -32,172 +27,324 @@ void main() {
     await cleanupConfig();
   });
 
-  /// Creates a test app with the full TicketScreen for end-to-end edit flows.
-  Widget createScreenTestApp() {
-    return MaterialApp(
-      home: MultiProvider(
-        providers: [
-          ChangeNotifierProvider<TicketRepository>.value(value: repo),
-          ChangeNotifierProvider<TicketViewState>.value(value: viewState),
-          ChangeNotifierProvider<BulkProposalState>.value(value: bulkState),
-        ],
-        child: const Scaffold(body: TicketScreen()),
-      ),
-    );
-  }
-
-  /// Creates a test app with just the TicketCreateForm for isolated edit tests.
-  Widget createEditFormTestApp(TicketData ticket) {
+  Widget createEditTestApp(TicketData ticket) {
     return MaterialApp(
       home: Scaffold(
-        body: MultiProvider(
-          providers: [
-            ChangeNotifierProvider<TicketRepository>.value(value: repo),
-            ChangeNotifierProvider<TicketViewState>.value(value: viewState),
-          ],
-          child: TicketCreateForm(editingTicket: ticket),
+        body: TicketEditForm(
+          ticket: ticket,
+          repository: repo,
+          onSave: () => saveCalled = true,
+          onCancel: () => cancelCalled = true,
         ),
       ),
     );
   }
 
-  group('Ticket Editing', () {
+  group('TicketEditForm', () {
     // -------------------------------------------------------------------------
-    // 1. Edit button switches to edit mode
+    // 1. Form pre-populates with current ticket data
     // -------------------------------------------------------------------------
-    testWidgets('edit button switches to edit mode', (tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-      addTearDown(() => tester.view.resetDevicePixelRatio());
-
-      repo.createTicket(
-        title: 'Test ticket for editing',
-        kind: TicketKind.feature,
-        priority: TicketPriority.high,
-      );
-      viewState.selectTicket(1);
-
-      await tester.pumpWidget(createScreenTestApp());
-      await safePumpAndSettle(tester);
-
-      // Detail panel should be showing
-      expect(find.byType(TicketDetailPanel), findsOneWidget);
-      expect(find.text('Test ticket for editing'), findsWidgets);
-
-      // Tap the edit button
-      await tester.tap(find.byKey(TicketDetailPanelKeys.editButton));
-      await safePumpAndSettle(tester);
-
-      // Should switch to edit mode, showing the form
-      expect(viewState.detailMode, TicketDetailMode.edit);
-      expect(find.byType(TicketCreateForm), findsOneWidget);
-      expect(find.text('Edit Ticket'), findsOneWidget);
-
-      // Detail panel should no longer be visible
-      expect(find.byType(TicketDetailPanel), findsNothing);
-    });
-
-    // -------------------------------------------------------------------------
-    // 2. Fields are pre-populated
-    // -------------------------------------------------------------------------
-    testWidgets('fields are pre-populated with ticket values', (tester) async {
+    testWidgets('form pre-populates with current ticket data', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
+      // Create a ticket with dep so we can test all pre-populated fields
+      final dep = repo.createTicket(title: 'Dependency');
       final ticket = repo.createTicket(
         title: 'Pre-populated title',
-        kind: TicketKind.bugfix,
-        priority: TicketPriority.critical,
-        effort: TicketEffort.large,
-        category: 'Backend',
-        description: 'A detailed description of the bug.',
+        body: 'Some **markdown** body',
         tags: {'urgent', 'backend'},
+        dependsOn: [dep.id],
       );
 
-      await tester.pumpWidget(createEditFormTestApp(ticket));
+      await tester.pumpWidget(createEditTestApp(ticket));
       await safePumpAndSettle(tester);
 
-      // Title
-      final titleField = tester.widget<TextField>(find.byKey(TicketCreateFormKeys.titleField));
+      // Title is pre-populated
+      final titleFields = find.byType(TextField);
+      final titleField = tester.widget<TextField>(titleFields.first);
       expect(titleField.controller?.text, 'Pre-populated title');
 
-      // Description
-      final descField = tester.widget<TextField>(find.byKey(TicketCreateFormKeys.descriptionField));
-      expect(descField.controller?.text, 'A detailed description of the bug.');
-
-      // Kind dropdown shows Bug Fix
-      expect(find.text('Bug Fix'), findsOneWidget);
-
-      // Priority dropdown shows Critical
-      expect(find.text('Critical'), findsOneWidget);
-
-      // Status dropdown is visible in edit mode
-      expect(find.byKey(TicketCreateFormKeys.statusDropdown), findsOneWidget);
+      // Body is pre-populated
+      final bodyField = tester.widget<TextField>(titleFields.at(1));
+      expect(bodyField.controller?.text, 'Some **markdown** body');
 
       // Tags are shown as chips
       expect(find.text('urgent'), findsOneWidget);
       expect(find.text('backend'), findsOneWidget);
 
-      // Header says Edit Ticket
-      expect(find.text('Edit Ticket'), findsOneWidget);
+      // Dependency is shown as chip
+      expect(find.text('#${dep.id}'), findsOneWidget);
 
-      // Button says Save Changes
-      expect(find.text('Save Changes'), findsOneWidget);
+      // Action buttons are present
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
     });
 
     // -------------------------------------------------------------------------
-    // 3. Save applies changes
+    // 2. Changing title generates titleEdited activity event
     // -------------------------------------------------------------------------
-    testWidgets('save applies changes to the ticket', (tester) async {
+    testWidgets('changing title and saving generates titleEdited event',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      final ticket = repo.createTicket(title: 'Original title');
+
+      await tester.pumpWidget(createEditTestApp(ticket));
+      await safePumpAndSettle(tester);
+
+      // Find title field (first TextField with 'Ticket title' hint)
+      final titleField =
+          find.widgetWithText(TextField, 'Original title');
+      await tester.enterText(titleField, 'Updated title');
+
+      // Tap Save
+      await tester.tap(find.text('Save'));
+      await safePumpAndSettle(tester);
+
+      // Verify activity event
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.title, 'Updated title');
+      expect(
+        updated.activityLog
+            .any((e) => e.type == ActivityEventType.titleEdited),
+        isTrue,
+      );
+      final event = updated.activityLog
+          .firstWhere((e) => e.type == ActivityEventType.titleEdited);
+      expect(event.data['oldTitle'], 'Original title');
+      expect(event.data['newTitle'], 'Updated title');
+      expect(saveCalled, isTrue);
+    });
+
+    // -------------------------------------------------------------------------
+    // 3. Changing body generates bodyEdited activity event
+    // -------------------------------------------------------------------------
+    testWidgets('changing body and saving generates bodyEdited event',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
       final ticket = repo.createTicket(
-        title: 'Original title',
-        kind: TicketKind.feature,
-        priority: TicketPriority.medium,
-        description: 'Original description',
+        title: 'Body test',
+        body: 'Original body',
       );
 
-      await tester.pumpWidget(createEditFormTestApp(ticket));
+      await tester.pumpWidget(createEditTestApp(ticket));
       await safePumpAndSettle(tester);
 
-      // Clear and change the title
-      await tester.enterText(
-        find.byKey(TicketCreateFormKeys.titleField),
-        'Updated title',
-      );
+      // Find body field (second TextField, has 'Markdown body...' hint)
+      final bodyField = find.widgetWithText(TextField, 'Original body');
+      await tester.enterText(bodyField, 'Updated **markdown** body');
 
-      // Clear and change the description
-      await tester.enterText(
-        find.byKey(TicketCreateFormKeys.descriptionField),
-        'Updated description',
-      );
-
-      // Tap Save Changes
-      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
+      // Tap Save
+      await tester.tap(find.text('Save'));
       await safePumpAndSettle(tester);
 
-      // Verify the ticket was updated
-      final updated = repo.getTicket(ticket.id);
-      expect(updated, isNotNull);
-      expect(updated!.title, 'Updated title');
-      expect(updated.description, 'Updated description');
-
-      // Should have selected the ticket and returned to detail mode
-      expect(viewState.selectedTicket?.id, ticket.id);
-      expect(viewState.detailMode, TicketDetailMode.detail);
+      // Verify activity event
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.body, 'Updated **markdown** body');
+      expect(
+        updated.activityLog
+            .any((e) => e.type == ActivityEventType.bodyEdited),
+        isTrue,
+      );
+      expect(saveCalled, isTrue);
     });
 
     // -------------------------------------------------------------------------
-    // 4. Cancel reverts without saving
+    // 4. Adding a tag generates tagAdded event
     // -------------------------------------------------------------------------
-    testWidgets('cancel returns to detail mode without saving', (tester) async {
+    testWidgets('adding a tag generates tagAdded event', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      final ticket = repo.createTicket(title: 'Tag test');
+
+      await tester.pumpWidget(createEditTestApp(ticket));
+      await safePumpAndSettle(tester);
+
+      // Find the tag input field (has 'Add a tag...' hint)
+      final tagInput = find.widgetWithText(TextField, 'Add a tag...');
+      await tester.enterText(tagInput, 'newtag');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Tag chip should appear in the form
+      expect(find.text('newtag'), findsOneWidget);
+
+      // Tap Save
+      await tester.tap(find.text('Save'));
+      await safePumpAndSettle(tester);
+
+      // Verify tag and activity event
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.tags, contains('newtag'));
+      expect(
+        updated.activityLog
+            .any((e) => e.type == ActivityEventType.tagAdded),
+        isTrue,
+      );
+      expect(saveCalled, isTrue);
+    });
+
+    // -------------------------------------------------------------------------
+    // 5. Removing a tag generates tagRemoved event
+    // -------------------------------------------------------------------------
+    testWidgets('removing a tag generates tagRemoved event', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      final ticket = repo.createTicket(
+        title: 'Remove tag test',
+        tags: {'existing'},
+      );
+
+      await tester.pumpWidget(createEditTestApp(ticket));
+      await safePumpAndSettle(tester);
+
+      // Verify the tag chip is shown
+      expect(find.text('existing'), findsOneWidget);
+
+      // Tap the close icon on the tag chip to remove it.
+      // TicketTagChip renders a close Icon for removable chips.
+      final closeIcons = find.descendant(
+        of: find.ancestor(
+          of: find.text('existing'),
+          matching: find.byType(Row),
+        ),
+        matching: find.byIcon(Icons.close),
+      );
+      await tester.tap(closeIcons.first);
+      await tester.pump();
+
+      // Tag should be gone from the form
+      expect(find.text('existing'), findsNothing);
+
+      // Tap Save
+      await tester.tap(find.text('Save'));
+      await safePumpAndSettle(tester);
+
+      // Verify
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.tags, isNot(contains('existing')));
+      expect(
+        updated.activityLog
+            .any((e) => e.type == ActivityEventType.tagRemoved),
+        isTrue,
+      );
+      expect(saveCalled, isTrue);
+    });
+
+    // -------------------------------------------------------------------------
+    // 6. Adding a dependency generates dependencyAdded event
+    // -------------------------------------------------------------------------
+    testWidgets('adding a dependency generates dependencyAdded event',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      final dep = repo.createTicket(title: 'Dep ticket');
+      final ticket = repo.createTicket(title: 'Dep test');
+
+      await tester.pumpWidget(createEditTestApp(ticket));
+      await safePumpAndSettle(tester);
+
+      // Find the dependency input field and type the dep ID
+      final depInput =
+          find.widgetWithText(TextField, 'Ticket # to depend on...');
+      await tester.enterText(depInput, '${dep.id}');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Dependency chip should appear
+      expect(find.text('#${dep.id}'), findsOneWidget);
+
+      // Tap Save
+      await tester.tap(find.text('Save'));
+      await safePumpAndSettle(tester);
+
+      // Verify
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.dependsOn, contains(dep.id));
+      expect(
+        updated.activityLog
+            .any((e) => e.type == ActivityEventType.dependencyAdded),
+        isTrue,
+      );
+      expect(saveCalled, isTrue);
+    });
+
+    // -------------------------------------------------------------------------
+    // 7. Save button applies all changes
+    // -------------------------------------------------------------------------
+    testWidgets('save button applies all changes', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+      addTearDown(() => tester.view.resetDevicePixelRatio());
+
+      final dep = repo.createTicket(title: 'A dependency');
+      final ticket = repo.createTicket(
+        title: 'Multi change',
+        body: 'Old body',
+        tags: {'oldtag'},
+      );
+
+      await tester.pumpWidget(createEditTestApp(ticket));
+      await safePumpAndSettle(tester);
+
+      // Change title
+      final titleField = find.widgetWithText(TextField, 'Multi change');
+      await tester.enterText(titleField, 'New title');
+
+      // Change body
+      final bodyField = find.widgetWithText(TextField, 'Old body');
+      await tester.enterText(bodyField, 'New body');
+
+      // Add a tag
+      final tagInput = find.widgetWithText(TextField, 'Add a tag...');
+      await tester.enterText(tagInput, 'newtag');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Add a dependency
+      final depInput =
+          find.widgetWithText(TextField, 'Ticket # to depend on...');
+      await tester.enterText(depInput, '${dep.id}');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Save
+      await tester.tap(find.text('Save'));
+      await safePumpAndSettle(tester);
+
+      // Verify all changes applied
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.title, 'New title');
+      expect(updated.body, 'New body');
+      expect(updated.tags, containsAll(['oldtag', 'newtag']));
+      expect(updated.dependsOn, contains(dep.id));
+      expect(saveCalled, isTrue);
+    });
+
+    // -------------------------------------------------------------------------
+    // 8. Cancel returns without saving
+    // -------------------------------------------------------------------------
+    testWidgets('cancel returns without changes', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -205,152 +352,59 @@ void main() {
 
       final ticket = repo.createTicket(
         title: 'Unchanged title',
-        kind: TicketKind.feature,
-        priority: TicketPriority.medium,
+        body: 'Unchanged body',
       );
 
-      // Switch to edit mode so we can verify the cancel reverts
-      viewState.selectTicket(ticket.id);
-      viewState.setDetailMode(TicketDetailMode.edit);
-
-      await tester.pumpWidget(createEditFormTestApp(ticket));
+      await tester.pumpWidget(createEditTestApp(ticket));
       await safePumpAndSettle(tester);
 
-      // Change the title in the form
-      await tester.enterText(
-        find.byKey(TicketCreateFormKeys.titleField),
-        'Changed but not saved',
-      );
+      // Change the title
+      final titleField = find.widgetWithText(TextField, 'Unchanged title');
+      await tester.enterText(titleField, 'Changed but not saved');
 
       // Tap Cancel
-      await tester.tap(find.byKey(TicketCreateFormKeys.cancelButton));
+      await tester.tap(find.text('Cancel'));
       await safePumpAndSettle(tester);
 
-      // Detail mode should be restored
-      expect(viewState.detailMode, TicketDetailMode.detail);
-
-      // Ticket should NOT have been updated
-      final unchanged = repo.getTicket(ticket.id);
-      expect(unchanged!.title, 'Unchanged title');
+      // Ticket should NOT be updated
+      final unchanged = repo.getTicket(ticket.id)!;
+      expect(unchanged.title, 'Unchanged title');
+      expect(unchanged.body, 'Unchanged body');
+      expect(cancelCalled, isTrue);
+      expect(saveCalled, isFalse);
     });
 
     // -------------------------------------------------------------------------
-    // 5. Status change persists
+    // 9. No activity events if nothing changed
     // -------------------------------------------------------------------------
-    testWidgets('changing status in edit mode persists', (tester) async {
+    testWidgets('no activity events generated if nothing changed',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
       final ticket = repo.createTicket(
-        title: 'Status change test',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
+        title: 'No changes',
+        body: 'Same body',
+        tags: {'existing'},
       );
+      final initialEventCount = repo.getTicket(ticket.id)!.activityLog.length;
 
-      await tester.pumpWidget(createEditFormTestApp(ticket));
+      await tester.pumpWidget(createEditTestApp(ticket));
       await safePumpAndSettle(tester);
 
-      // Status dropdown should show Ready
-      expect(find.text('Ready'), findsOneWidget);
-
-      // Tap the status dropdown
-      await tester.tap(find.byKey(TicketCreateFormKeys.statusDropdown));
-      await tester.pump();
-
-      // Select Active
-      await tester.tap(find.text('Active').last);
+      // Tap Save without changing anything
+      await tester.tap(find.text('Save'));
       await safePumpAndSettle(tester);
 
-      // Tap Save Changes
-      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
-      await safePumpAndSettle(tester);
-
-      // Verify the status was updated
-      final updated = repo.getTicket(ticket.id);
-      expect(updated!.status, TicketStatus.active);
-    });
-
-    // -------------------------------------------------------------------------
-    // 6. End-to-end: detail -> edit -> save -> detail
-    // -------------------------------------------------------------------------
-    testWidgets('end-to-end: detail to edit to save to detail', (tester) async {
-      tester.view.physicalSize = const Size(1200, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-      addTearDown(() => tester.view.resetDevicePixelRatio());
-
-      repo.createTicket(
-        title: 'E2E edit test',
-        kind: TicketKind.feature,
-        priority: TicketPriority.low,
-      );
-      viewState.selectTicket(1);
-
-      await tester.pumpWidget(createScreenTestApp());
-      await safePumpAndSettle(tester);
-
-      // Start in detail mode
-      expect(find.byType(TicketDetailPanel), findsOneWidget);
-
-      // Tap Edit button
-      await tester.tap(find.byKey(TicketDetailPanelKeys.editButton));
-      await safePumpAndSettle(tester);
-
-      // Should be in edit mode
-      expect(find.byType(TicketCreateForm), findsOneWidget);
-      expect(find.text('Edit Ticket'), findsOneWidget);
-
-      // Change the title
-      await tester.enterText(
-        find.byKey(TicketCreateFormKeys.titleField),
-        'E2E edit updated',
-      );
-
-      // Tap Save Changes
-      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
-      await safePumpAndSettle(tester);
-
-      // Should be back in detail mode
-      expect(find.byType(TicketDetailPanel), findsOneWidget);
-      expect(find.byType(TicketCreateForm), findsNothing);
-
-      // The updated title should show in the detail panel
-      expect(find.text('E2E edit updated'), findsWidgets);
-
-      // Verify state
-      expect(repo.getTicket(1)!.title, 'E2E edit updated');
-    });
-
-    // -------------------------------------------------------------------------
-    // 7. Status dropdown is NOT visible in create mode
-    // -------------------------------------------------------------------------
-    testWidgets('status dropdown not visible in create mode', (tester) async {
-      tester.view.physicalSize = const Size(800, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() => tester.view.resetPhysicalSize());
-      addTearDown(() => tester.view.resetDevicePixelRatio());
-
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: MultiProvider(
-            providers: [
-              ChangeNotifierProvider<TicketRepository>.value(value: repo),
-              ChangeNotifierProvider<TicketViewState>.value(value: viewState),
-            ],
-            child: const TicketCreateForm(),
-          ),
-        ),
-      ));
-      await safePumpAndSettle(tester);
-
-      // Status dropdown should NOT be visible
-      expect(find.byKey(TicketCreateFormKeys.statusDropdown), findsNothing);
-
-      // Create Ticket header and button
-      expect(find.text('Create Ticket'), findsWidgets);
-      expect(find.text('Save Changes'), findsNothing);
+      // No new activity events should be generated
+      final updated = repo.getTicket(ticket.id)!;
+      expect(updated.activityLog.length, initialEventCount);
+      expect(updated.title, 'No changes');
+      expect(updated.body, 'Same body');
+      expect(updated.tags, {'existing'});
+      expect(saveCalled, isTrue);
     });
   });
 }
