@@ -15,6 +15,9 @@ class OrchestratorState extends ChangeNotifier {
     required String baseWorktreePath,
     Chat? orchestratorChat,
     DateTime? startTime,
+    this.agentId,
+    this.modelId,
+    this.permissionMode,
   }) : _ticketBoard = ticketBoard,
        _ticketIds = {...ticketIds},
        _baseWorktreePath = baseWorktreePath,
@@ -33,6 +36,15 @@ class OrchestratorState extends ChangeNotifier {
   final Set<int> _ticketIds;
   final String _baseWorktreePath;
   final DateTime _orchestrationStartTime;
+
+  /// Default agent ID for worker chats launched by the orchestrator.
+  final String? agentId;
+
+  /// Default model ID for worker chats launched by the orchestrator.
+  final String? modelId;
+
+  /// Default permission mode for worker chats launched by the orchestrator.
+  final String? permissionMode;
 
   Map<String, ManagedAgent> get agents => Map.unmodifiable(_agents);
   Set<int> get ticketIds => Set.unmodifiable(_ticketIds);
@@ -126,6 +138,9 @@ class OrchestratorState extends ChangeNotifier {
       'baseWorktreePath': _baseWorktreePath,
       'startTime': _orchestrationStartTime.toUtc().toIso8601String(),
       'agents': _agents.values.map((a) => a.toSnapshot()).toList(),
+      if (agentId != null) 'agentId': agentId,
+      if (modelId != null) 'modelId': modelId,
+      if (permissionMode != null) 'permissionMode': permissionMode,
     };
   }
 

@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'package:claude_sdk/claude_sdk.dart';
+import 'package:claude_sdk/claude_sdk.dart' hide PermissionMode;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../models/chat.dart';
+import '../models/chat_model.dart';
 import '../models/managed_agent.dart';
 import '../models/output_entry.dart';
 import '../models/project.dart';
@@ -23,6 +24,7 @@ import 'git_service.dart';
 import '../instructions/instructions.dart';
 import 'persistence_service.dart';
 import 'project_restore_service.dart';
+import 'runtime_config.dart';
 import 'settings_service.dart';
 import 'worktree_service.dart';
 
@@ -449,6 +451,9 @@ class InternalToolsService extends ChangeNotifier {
       ticketIds: ticketIds,
       baseWorktreePath: basePath,
       startTime: startTime != null ? DateTime.tryParse(startTime) : null,
+      agentId: snapshot['agentId'] as String?,
+      modelId: snapshot['modelId'] as String?,
+      permissionMode: snapshot['permissionMode'] as String?,
     );
     // Attach without notifying synchronously — this is called during build
     // via getOrchestratorState(). Defer the notification to avoid
@@ -530,13 +535,36 @@ class InternalToolsService extends ChangeNotifier {
     }
 
     try {
+      final state = getOrchestratorState(orchestratorChat);
+
       final chat = await _createWorkerChat(
         context: context,
         worktree: worktree,
         worktreePath: worktreePath,
         ticketId: ticketId,
         name: name,
+        agentId: state?.agentId,
       );
+
+      // Apply model/permission overrides from orchestrator state.
+      if (state?.modelId != null) {
+        final agentConfig = state!.agentId != null
+            ? RuntimeConfig.instance.agentById(state.agentId!)
+            : null;
+        final backendType =
+            agentConfig?.backendType ?? BackendType.directCli;
+        final model = ChatModelCatalog.defaultForBackend(
+          backendType,
+          state.modelId,
+        );
+        chat.settings.setModel(model);
+      }
+      if (state?.permissionMode != null) {
+        chat.settings.setPermissionMode(
+          PermissionMode.fromApiName(state!.permissionMode!),
+        );
+      }
+
       chat.conversations.addEntry(
         SystemInstructionEntry(
           timestamp: DateTime.now(),
@@ -559,8 +587,6 @@ class InternalToolsService extends ChangeNotifier {
           message: instructions,
         );
       }
-
-      final state = getOrchestratorState(orchestratorChat);
       if (state == null) {
         return InternalToolResult.error('Orchestrator state is not available.');
       }
@@ -592,11 +618,13 @@ class InternalToolsService extends ChangeNotifier {
     required String worktreePath,
     required int? ticketId,
     required String? name,
+    String? agentId,
   }) async {
     final chat = Chat.create(
       name:
           name ?? (ticketId != null ? 'TKT-$ticketId Worker' : 'Worker Agent'),
       worktreeRoot: worktreePath,
+      agentId: agentId,
     );
     await context.restoreService.addChatToWorktree(
       context.project.data.repoRoot,

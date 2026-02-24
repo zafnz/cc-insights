@@ -1,8 +1,11 @@
 import 'package:agent_sdk_core/agent_sdk_core.dart'
     show BackendCapabilities, BackendType, PermissionMode;
+import 'package:cc_insights_v2/models/agent_config.dart';
 import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
+import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/testing/mock_backend.dart';
@@ -120,6 +123,12 @@ void main() {
       backendType: backendType,
     ));
 
+    if (RuntimeConfig.instance.agents.isEmpty) {
+      RuntimeConfig.instance.agents = AgentConfig.defaults;
+    }
+    final cliAvailability = resources.track(CliAvailabilityService());
+    cliAvailability.markAllAvailable(RuntimeConfig.instance.agents);
+
     final project = projectOverride ?? createTestProject();
 
     return MaterialApp(
@@ -129,6 +138,9 @@ void main() {
             ChangeNotifierProvider<TicketRepository>.value(value: repo),
             ChangeNotifierProvider<BackendService>.value(value: backend),
             ChangeNotifierProvider<ProjectState>.value(value: project),
+            ChangeNotifierProvider<CliAvailabilityService>.value(
+              value: cliAvailability,
+            ),
           ],
           child: Builder(
             builder: (context) => OrchestrationConfigDialog(
@@ -261,6 +273,12 @@ void main() {
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
+        // Scroll to model dropdown (may be off-screen due to agent dropdown)
+        await tester.ensureVisible(
+          find.byKey(ModelPermissionSelectorKeys.modelDropdown),
+        );
+        await tester.pump();
+
         // Open model dropdown
         await tester.tap(
           find.byKey(ModelPermissionSelectorKeys.modelDropdown),
@@ -277,6 +295,12 @@ void main() {
       testWidgets('allows changing model selection', (tester) async {
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
+
+        // Scroll to model dropdown
+        await tester.ensureVisible(
+          find.byKey(ModelPermissionSelectorKeys.modelDropdown),
+        );
+        await tester.pump();
 
         // Open model dropdown
         await tester.tap(
@@ -296,6 +320,12 @@ void main() {
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
 
+        // Scroll to permission dropdown
+        await tester.ensureVisible(
+          find.byKey(ModelPermissionSelectorKeys.permissionDropdown),
+        );
+        await tester.pump();
+
         // Open permission dropdown
         await tester.tap(
           find.byKey(ModelPermissionSelectorKeys.permissionDropdown),
@@ -311,6 +341,12 @@ void main() {
       testWidgets('allows changing permission mode', (tester) async {
         await tester.pumpWidget(createTestApp());
         await safePumpAndSettle(tester);
+
+        // Scroll to permission dropdown
+        await tester.ensureVisible(
+          find.byKey(ModelPermissionSelectorKeys.permissionDropdown),
+        );
+        await tester.pump();
 
         // Open permission dropdown
         await tester.tap(
@@ -375,6 +411,12 @@ void main() {
           findsOneWidget,
         );
 
+        // Scroll to model dropdown
+        await tester.ensureVisible(
+          find.byKey(ModelPermissionSelectorKeys.modelDropdown),
+        );
+        await tester.pump();
+
         // Open model dropdown to verify fallback models
         await tester.tap(
           find.byKey(ModelPermissionSelectorKeys.modelDropdown),
@@ -396,6 +438,11 @@ void main() {
           backendType: BackendType.directCli,
         ));
         final project = createTestProject();
+        if (RuntimeConfig.instance.agents.isEmpty) {
+          RuntimeConfig.instance.agents = AgentConfig.defaults;
+        }
+        final cliAvailability = resources.track(CliAvailabilityService());
+        cliAvailability.markAllAvailable(RuntimeConfig.instance.agents);
 
         await tester.pumpWidget(MaterialApp(
           home: MultiProvider(
@@ -403,6 +450,9 @@ void main() {
               ChangeNotifierProvider<TicketRepository>.value(value: repo),
               ChangeNotifierProvider<BackendService>.value(value: backend),
               ChangeNotifierProvider<ProjectState>.value(value: project),
+              ChangeNotifierProvider<CliAvailabilityService>.value(
+                value: cliAvailability,
+              ),
             ],
             child: Builder(
               builder: (context) => Scaffold(
@@ -419,6 +469,9 @@ void main() {
                         ),
                         ChangeNotifierProvider<ProjectState>.value(
                           value: project,
+                        ),
+                        ChangeNotifierProvider<CliAvailabilityService>.value(
+                          value: cliAvailability,
                         ),
                       ],
                       child: OrchestrationConfigDialog(ticketIds: ids),
@@ -514,6 +567,78 @@ void main() {
 
         // Verify selection updated
         expect(find.text('develop'), findsOneWidget);
+      });
+    });
+
+    group('agent selector', () {
+      testWidgets('renders agent dropdown when multiple agents available',
+          (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        expect(
+          find.byKey(OrchestrationConfigDialogKeys.agentDropdown),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('hides agent dropdown when only one agent available',
+          (tester) async {
+        final singleAgent = [AgentConfig.defaults.first];
+        RuntimeConfig.instance.agents = singleAgent;
+
+        final cliAvailability = resources.track(CliAvailabilityService());
+        cliAvailability.markAllAvailable(singleAgent);
+
+        final (repo, ids) = createRepoWithTickets(2);
+        final backend = resources.track(_TestBackendService(
+          capabilities: const BackendCapabilities(
+            supportsModelChange: true,
+            supportsPermissionModeChange: true,
+          ),
+          backendType: BackendType.directCli,
+        ));
+        final project = createTestProject();
+
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: MultiProvider(
+              providers: [
+                ChangeNotifierProvider<TicketRepository>.value(value: repo),
+                ChangeNotifierProvider<BackendService>.value(value: backend),
+                ChangeNotifierProvider<ProjectState>.value(value: project),
+                ChangeNotifierProvider<CliAvailabilityService>.value(
+                  value: cliAvailability,
+                ),
+              ],
+              child: Builder(
+                builder: (context) => OrchestrationConfigDialog(
+                  ticketIds: ids,
+                ),
+              ),
+            ),
+          ),
+        ));
+        await safePumpAndSettle(tester);
+
+        expect(
+          find.byKey(OrchestrationConfigDialogKeys.agentDropdown),
+          findsNothing,
+        );
+      });
+
+      testWidgets('shows available agents in dropdown', (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await safePumpAndSettle(tester);
+
+        // Open agent dropdown
+        await tester.tap(
+          find.byKey(OrchestrationConfigDialogKeys.agentDropdown),
+        );
+        await tester.pump();
+
+        // Should show default agent names
+        expect(find.text('Claude'), findsWidgets);
       });
     });
   });

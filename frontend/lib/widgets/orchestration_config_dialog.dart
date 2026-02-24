@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../instructions/instructions.dart';
+import '../models/agent_config.dart';
 import '../models/chat.dart' show PermissionMode;
 import '../models/chat_model.dart';
 import '../models/ticket.dart';
 import '../models/project.dart';
 import '../services/backend_service.dart';
+import '../services/cli_availability_service.dart';
+import '../services/runtime_config.dart';
 import '../services/ticket_dispatch_factory.dart';
 import '../services/worktree_name_generator.dart';
 import '../services/worktree_service.dart';
@@ -29,6 +32,7 @@ class OrchestrationConfigDialogKeys {
       Key('orchestration_config_model_permission');
   static const baseWorktreeDropdown =
       Key('orchestration_config_base_worktree');
+  static const agentDropdown = Key('orchestration_config_agent');
   static const regenerateNameButton =
       Key('orchestration_config_regenerate_name');
 }
@@ -49,12 +53,24 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
   bool _launching = false;
 
   WorktreeState? _selectedBaseWorktree;
+  late String _selectedAgentId;
   String _selectedModelId = 'default';
   PermissionMode _selectedPermissionMode = PermissionMode.defaultMode;
 
   @override
   void initState() {
     super.initState();
+    _selectedAgentId = RuntimeConfig.instance.defaultAgentId;
+    final defaultAgent = RuntimeConfig.instance.defaultAgent;
+    if (defaultAgent != null) {
+      _selectedModelId = defaultAgent.defaultModel.isEmpty
+          ? 'default'
+          : defaultAgent.defaultModel;
+      final perms = defaultAgent.defaultPermissions;
+      if (perms.isNotEmpty) {
+        _selectedPermissionMode = PermissionMode.fromApiName(perms);
+      }
+    }
     final project = context.read<ProjectState>();
     final existingBranches =
         project.allWorktrees.map((wt) => wt.data.branch).toSet();
@@ -65,6 +81,21 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
           'Run tickets ${widget.ticketIds.join(', ')}. '
           '$defaultOrchestrationInstructions',
     );
+  }
+
+  void _onAgentChanged(String agentId) {
+    final agent = RuntimeConfig.instance.agentById(agentId);
+    if (agent == null) return;
+    setState(() {
+      _selectedAgentId = agentId;
+      _selectedModelId = agent.defaultModel.isEmpty
+          ? 'default'
+          : agent.defaultModel;
+      final perms = agent.defaultPermissions;
+      _selectedPermissionMode = perms.isNotEmpty
+          ? PermissionMode.fromApiName(perms)
+          : PermissionMode.defaultMode;
+    });
   }
 
   void _regenerateName() {
@@ -97,12 +128,19 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         : project.primaryWorktree;
 
     final backend = context.watch<BackendService>();
-    final backendType = backend.backendType;
-    final capabilities = backendType != null
-        ? backend.capabilitiesFor(backendType)
+    final cliAvailability = context.watch<CliAvailabilityService>();
+    final allAgents = RuntimeConfig.instance.agents;
+    final availableAgents = allAgents
+        .where((agent) => cliAvailability.isAgentAvailable(agent.id))
+        .toList();
+    final selectedAgent = RuntimeConfig.instance.agentById(_selectedAgentId);
+    final effectiveBackendType = selectedAgent?.backendType ??
+        backend.backendType;
+    final capabilities = effectiveBackendType != null
+        ? backend.capabilitiesFor(effectiveBackendType)
         : const sdk.BackendCapabilities();
-    final models = backendType != null
-        ? ChatModelCatalog.forBackend(backendType)
+    final models = effectiveBackendType != null
+        ? ChatModelCatalog.forBackend(effectiveBackendType)
         : ChatModelCatalog.claudeModels;
 
     return AlertDialog(
@@ -175,6 +213,29 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
                 ),
               ),
             ),
+            if (availableAgents.length > 1) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: OrchestrationConfigDialogKeys.agentDropdown,
+                value: availableAgents.any((a) => a.id == _selectedAgentId)
+                    ? _selectedAgentId
+                    : availableAgents.first.id,
+                decoration: const InputDecoration(
+                  labelText: 'Agent',
+                  border: OutlineInputBorder(),
+                ),
+                isExpanded: true,
+                items: availableAgents.map((agent) {
+                  return DropdownMenuItem<String>(
+                    value: agent.id,
+                    child: Text(agent.name, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) _onAgentChanged(value);
+                },
+              ),
+            ],
             const SizedBox(height: 12),
             ModelPermissionSelector(
               key: OrchestrationConfigDialogKeys.modelPermissionSelector,
@@ -243,11 +304,13 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
 
       final dispatch = createTicketDispatchService(context);
 
-      // Resolve selected model to a ChatModel object.
-      final backend = context.read<BackendService>();
-      final backendType = backend.backendType;
-      final selectedModel = backendType != null
-          ? ChatModelCatalog.defaultForBackend(backendType, _selectedModelId)
+      // Resolve selected model using the selected agent's backend type.
+      final agent = RuntimeConfig.instance.agentById(_selectedAgentId);
+      final resolvedBackendType = agent?.backendType ??
+          context.read<BackendService>().backendType;
+      final selectedModel = resolvedBackendType != null
+          ? ChatModelCatalog.defaultForBackend(
+              resolvedBackendType, _selectedModelId)
           : null;
 
       final instructions = buildOrchestrationLaunchMessage(
@@ -264,6 +327,7 @@ class _OrchestrationConfigDialogState extends State<OrchestrationConfigDialog> {
         model: selectedModel,
         permissionMode: sdk.PermissionMode.fromString(
             _selectedPermissionMode.apiName),
+        agentId: _selectedAgentId,
       );
 
       if (mounted) {

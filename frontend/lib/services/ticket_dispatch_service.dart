@@ -241,18 +241,21 @@ class TicketDispatchService {
 
   /// Creates and launches an orchestrator chat in the given worktree.
   ///
-  /// Optionally accepts a [model] and [permissionMode] to configure the chat
-  /// before starting the session.
+  /// Optionally accepts a [model], [permissionMode], and [agentId] to
+  /// configure the chat before starting the session. These settings are also
+  /// stored in [OrchestratorState] so that worker agents inherit them.
   Future<Chat> createOrchestratorChat({
     required WorktreeState worktreeState,
     required List<int> ticketIds,
     required String initialInstructions,
     ChatModel? model,
     sdk.PermissionMode? permissionMode,
+    String? agentId,
   }) async {
     final chat = Chat.create(
       name: 'Orchestrator',
       worktreeRoot: worktreeState.data.worktreeRoot,
+      agentId: agentId,
     );
     chat.settings.setIsOrchestratorChat(true);
     chat.settings.setOrchestrationToolsEnabled(true);
@@ -271,6 +274,9 @@ class TicketDispatchService {
         ticketBoard: _ticketBoard,
         ticketIds: ticketIds,
         baseWorktreePath: worktreeState.data.worktreeRoot,
+        agentId: agentId,
+        modelId: model?.id,
+        permissionMode: permissionMode?.value,
       );
       internalTools.attachOrchestratorState(chat, state);
     }
