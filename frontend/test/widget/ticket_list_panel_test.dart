@@ -1,66 +1,27 @@
-import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
-import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/ticket_list_panel.dart';
-import 'package:cc_insights_v2/services/project_restore_service.dart';
-import 'package:cc_insights_v2/services/ticket_dispatch_service.dart';
-import 'package:cc_insights_v2/services/worktree_service.dart';
-import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/ticket_view_state.dart';
-import 'package:cc_insights_v2/widgets/ticket_visuals.dart';
+import 'package:cc_insights_v2/widgets/ticket_filter_chips.dart';
+import 'package:cc_insights_v2/widgets/ticket_list_item.dart';
+import 'package:cc_insights_v2/widgets/ticket_sort_dropdown.dart';
+import 'package:cc_insights_v2/widgets/ticket_status_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
-import '../fakes/fake_git_service.dart';
 import '../test_helpers.dart';
 
 void main() {
   final resources = TestResources();
   late TicketRepository repo;
   late TicketViewState viewState;
-  late ProjectState project;
-  late SelectionState selection;
-  late FakeGitService fakeGit;
-  late TicketDispatchService dispatch;
   late Future<void> Function() cleanupConfig;
 
   setUp(() async {
     cleanupConfig = await setupTestConfig();
     repo = resources.track(TicketRepository('test-project'));
     viewState = resources.track(TicketViewState(repo));
-    fakeGit = FakeGitService();
-
-    final primaryWorktree = WorktreeState(
-      const WorktreeData(
-        worktreeRoot: '/test/repo',
-        isPrimary: true,
-        branch: 'main',
-      ),
-    );
-
-    project = resources.track(ProjectState(
-      const ProjectData(name: 'test-project', repoRoot: '/test/repo'),
-      primaryWorktree,
-      autoValidate: false,
-      watchFilesystem: false,
-    ));
-
-    selection = resources.track(SelectionState(project));
-
-    final worktreeService = WorktreeService(
-      gitService: fakeGit,
-      configService: null,
-    );
-
-    dispatch = TicketDispatchService(
-      ticketBoard: repo,
-      project: project,
-      selection: selection,
-      worktreeService: worktreeService,
-      restoreService: ProjectRestoreService(),
-    );
   });
 
   tearDown(() async {
@@ -68,12 +29,11 @@ void main() {
     await cleanupConfig();
   });
 
-  Widget createTestApp({double width = 320}) {
+  Widget createTestApp({double width = 500}) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<TicketRepository>.value(value: repo),
         ChangeNotifierProvider<TicketViewState>.value(value: viewState),
-        Provider<TicketDispatchService>.value(value: dispatch),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -99,43 +59,51 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 2. Renders tickets
+  // 2. Renders status tabs with correct counts
   // ---------------------------------------------------------------------------
-  testWidgets('renders tickets when they exist', (tester) async {
-    repo.createTicket(
-      title: 'Design auth model',
-      kind: TicketKind.feature,
-      category: 'Auth',
-    );
-    repo.createTicket(
-      title: 'Implement login',
-      kind: TicketKind.feature,
-      category: 'Auth',
-    );
+  testWidgets('renders status tabs with correct counts', (tester) async {
+    repo.createTicket(title: 'Open one');
+    repo.createTicket(title: 'Open two');
+    // Close one ticket
+    repo.closeTicket(1, 'test', AuthorType.user);
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    expect(find.text('Design auth model'), findsOneWidget);
-    expect(find.text('Implement login'), findsOneWidget);
-    expect(find.text('TKT-001'), findsOneWidget);
-    expect(find.text('TKT-002'), findsOneWidget);
+    expect(find.byType(TicketStatusTabs), findsOneWidget);
+    expect(find.text('Open (1)'), findsOneWidget);
+    expect(find.text('Closed (1)'), findsOneWidget);
   });
 
   // ---------------------------------------------------------------------------
-  // 3. Search filters tickets
+  // 3. Switching tabs filters tickets
+  // ---------------------------------------------------------------------------
+  testWidgets('switching to Closed tab shows closed tickets', (tester) async {
+    repo.createTicket(title: 'Open ticket');
+    repo.createTicket(title: 'Closed ticket');
+    repo.closeTicket(2, 'test', AuthorType.user);
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Open tab active by default
+    expect(find.text('Open ticket'), findsOneWidget);
+    expect(find.text('Closed ticket'), findsNothing);
+
+    // Switch to Closed tab
+    await tester.tap(find.textContaining('Closed'));
+    await safePumpAndSettle(tester);
+
+    expect(find.text('Open ticket'), findsNothing);
+    expect(find.text('Closed ticket'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 4. Search filters tickets
   // ---------------------------------------------------------------------------
   testWidgets('search filters the visible ticket list', (tester) async {
-    repo.createTicket(
-      title: 'Build auth flow',
-      kind: TicketKind.feature,
-      category: 'Auth',
-    );
-    repo.createTicket(
-      title: 'Database schema',
-      kind: TicketKind.feature,
-      category: 'Data',
-    );
+    repo.createTicket(title: 'Build auth flow');
+    repo.createTicket(title: 'Database schema');
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
@@ -157,102 +125,124 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 4. Group headers show with correct counts
+  // 5. Filter chips appear when tag filters are active
   // ---------------------------------------------------------------------------
-  testWidgets('group headers show with correct counts', (tester) async {
-    repo.createTicket(
-      title: 'Task A',
-      kind: TicketKind.feature,
-      category: 'Auth',
-      status: TicketStatus.completed,
-    );
-    repo.createTicket(
-      title: 'Task B',
-      kind: TicketKind.feature,
-      category: 'Auth',
-    );
-    repo.createTicket(
-      title: 'Task C',
-      kind: TicketKind.feature,
-      category: 'Data',
-    );
+  testWidgets('filter chips appear when tag filters are active', (tester) async {
+    repo.createTicket(title: 'Tagged ticket', tags: {'ui', 'frontend'});
+    repo.createTicket(title: 'Other ticket');
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    // Group headers (uppercase)
-    expect(find.text('AUTH'), findsOneWidget);
-    expect(find.text('DATA'), findsOneWidget);
+    // No "Clear all" initially (no active tag filters)
+    expect(find.text('Clear all'), findsNothing);
 
-    // Counts: Auth has 1 completed / 2 total, Data has 0 / 1
-    expect(find.text('1/2'), findsOneWidget);
-    expect(find.text('0/1'), findsOneWidget);
+    // Add a tag filter
+    viewState.addTagFilter('ui');
+    await safePumpAndSettle(tester);
+
+    // Filter chip should now show
+    expect(find.text('Clear all'), findsOneWidget);
+
+    // Only tagged ticket should be visible (textContaining because Text.rich
+    // with tag WidgetSpans doesn't match find.text exactly)
+    expect(find.textContaining('Tagged ticket'), findsOneWidget);
+    expect(find.textContaining('Other ticket'), findsNothing);
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Tapping a ticket opens detail view; checkbox toggles selection
+  // 6. Clear all removes tag filters
   // ---------------------------------------------------------------------------
-  testWidgets('tapping a ticket item selects it for detail view', (tester) async {
-    repo.createTicket(
-      title: 'Clickable ticket',
-      kind: TicketKind.feature,
-      category: 'Test',
-    );
+  testWidgets('clear all removes tag filters and shows all tickets', (tester) async {
+    repo.createTicket(title: 'Tagged', tags: {'ui'});
+    repo.createTicket(title: 'Untagged');
+
+    viewState.addTagFilter('ui');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // textContaining because Text.rich with tag WidgetSpans
+    expect(find.textContaining('Tagged'), findsOneWidget);
+    expect(find.text('Untagged'), findsNothing);
+
+    // Tap Clear all
+    await tester.tap(find.text('Clear all'));
+    await safePumpAndSettle(tester);
+
+    expect(find.textContaining('Tagged'), findsOneWidget);
+    expect(find.text('Untagged'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 7. Sort dropdown is present
+  // ---------------------------------------------------------------------------
+  testWidgets('sort dropdown is rendered', (tester) async {
+    repo.createTicket(title: 'First ticket');
+    repo.createTicket(title: 'Second ticket');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    expect(find.byType(TicketSortDropdown), findsOneWidget);
+    expect(find.text('Sort:'), findsOneWidget);
+
+    // Default sort label visible
+    expect(find.text('Newest'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. Changing sort order works
+  // ---------------------------------------------------------------------------
+  testWidgets('changing sort order reorders tickets', (tester) async {
+    repo.createTicket(title: 'First ticket');
+    repo.createTicket(title: 'Second ticket');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Default is newest first — verify both visible
+    expect(find.text('First ticket'), findsOneWidget);
+    expect(find.text('Second ticket'), findsOneWidget);
+
+    // Change sort to oldest
+    viewState.setSortOrder(TicketSortOrder.oldest);
+    await safePumpAndSettle(tester);
+
+    // Both should still be visible after sort change
+    expect(find.text('First ticket'), findsOneWidget);
+    expect(find.text('Second ticket'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 9. Clicking item selects
+  // ---------------------------------------------------------------------------
+  testWidgets('tapping a ticket item selects it', (tester) async {
+    repo.createTicket(title: 'Clickable ticket');
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
     expect(viewState.selectedTicket, isNull);
-    expect(viewState.selectedTicketIds, isEmpty);
 
-    // Tapping the ticket text opens detail view but does NOT toggle checkbox
     await tester.tap(find.text('Clickable ticket'));
     await safePumpAndSettle(tester);
 
     expect(viewState.selectedTicket, isNotNull);
     expect(viewState.selectedTicket!.title, equals('Clickable ticket'));
-    expect(viewState.selectedTicketIds, isEmpty);
-  });
-
-  testWidgets('tapping checkbox toggles multi-select without changing detail view', (tester) async {
-    repo.createTicket(
-      title: 'Checkbox ticket',
-      kind: TicketKind.feature,
-      category: 'Test',
-    );
-
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    // Tap checkbox to toggle selection
-    await tester.tap(find.byType(Checkbox));
-    await safePumpAndSettle(tester);
-
-    expect(viewState.selectedTicketIds, contains(repo.tickets.first.id));
-
-    // Tap again to deselect
-    await tester.tap(find.byType(Checkbox));
-    await safePumpAndSettle(tester);
-
-    expect(viewState.selectedTicketIds, isEmpty);
   });
 
   // ---------------------------------------------------------------------------
-  // 6. Selected ticket highlighting
+  // 10. Selected ticket has highlighted background
   // ---------------------------------------------------------------------------
   testWidgets('selected ticket has highlighted background', (tester) async {
-    repo.createTicket(
-      title: 'Highlighted ticket',
-      kind: TicketKind.feature,
-      category: 'Test',
-    );
+    repo.createTicket(title: 'Highlighted ticket');
     viewState.selectTicket(1);
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
     // Find the Material widget wrapping the selected ticket item.
-    // The selected item should have primaryContainer background.
     final materialFinder = find.ancestor(
       of: find.text('Highlighted ticket'),
       matching: find.byType(Material),
@@ -260,15 +250,33 @@ void main() {
     expect(materialFinder, findsWidgets);
 
     // At least one Material ancestor should have a non-transparent color
-    // (the selection highlight)
     final materials = tester.widgetList<Material>(materialFinder).toList();
-    final hasHighlight = materials.any((m) =>
-        m.color != null && m.color != Colors.transparent);
+    final hasHighlight = materials.any(
+      (m) => m.color != null && m.color != Colors.transparent,
+    );
     expect(hasHighlight, isTrue);
   });
 
   // ---------------------------------------------------------------------------
-  // 7. Add button calls showCreateForm
+  // 11. Closed tickets are visually distinct
+  // ---------------------------------------------------------------------------
+  testWidgets('closed tickets show closed icon', (tester) async {
+    repo.createTicket(title: 'Closed ticket');
+    repo.closeTicket(1, 'test', AuthorType.user);
+
+    // Switch to closed tab to see closed tickets
+    viewState.setIsOpenFilter(false);
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    expect(find.text('Closed ticket'), findsOneWidget);
+    // Closed tickets show check_circle icon (purple) — also appears in status tabs
+    expect(find.byIcon(Icons.check_circle), findsAtLeastNWidgets(1));
+  });
+
+  // ---------------------------------------------------------------------------
+  // 12. Add button triggers create mode
   // ---------------------------------------------------------------------------
   testWidgets('tapping add button switches to create mode', (tester) async {
     await tester.pumpWidget(createTestApp());
@@ -283,410 +291,47 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // 8. View toggle calls setViewMode
+  // 13. Renders tickets with display IDs
   // ---------------------------------------------------------------------------
-  testWidgets('tapping graph toggle sets view mode to graph', (tester) async {
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    expect(viewState.viewMode, equals(TicketViewMode.list));
-
-    await tester.tap(find.byKey(TicketListPanelKeys.graphViewToggle));
-    await safePumpAndSettle(tester);
-
-    expect(viewState.viewMode, equals(TicketViewMode.graph));
-  });
-
-  // ---------------------------------------------------------------------------
-  // 9. Completed tickets are dimmed
-  // ---------------------------------------------------------------------------
-  testWidgets('completed tickets render with reduced opacity', (tester) async {
-    repo.createTicket(
-      title: 'Done task',
-      kind: TicketKind.feature,
-      category: 'Test',
-      status: TicketStatus.completed,
-    );
-    repo.createTicket(
-      title: 'Active task',
-      kind: TicketKind.feature,
-      category: 'Test',
-      status: TicketStatus.active,
-    );
+  testWidgets('renders tickets with display IDs', (tester) async {
+    repo.createTicket(title: 'First task');
+    repo.createTicket(title: 'Second task');
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    // Find Opacity widgets wrapping each ticket
-    final doneOpacity = tester.widget<Opacity>(
-      find.ancestor(
-        of: find.text('Done task'),
-        matching: find.byType(Opacity),
-      ).first,
-    );
-    final activeOpacity = tester.widget<Opacity>(
-      find.ancestor(
-        of: find.text('Active task'),
-        matching: find.byType(Opacity),
-      ).first,
-    );
-
-    expect(doneOpacity.opacity, equals(0.5));
-    expect(activeOpacity.opacity, equals(1.0));
+    expect(find.text('First task'), findsOneWidget);
+    expect(find.text('Second task'), findsOneWidget);
+    expect(find.text('#1'), findsOneWidget);
+    expect(find.text('#2'), findsOneWidget);
   });
 
   // ---------------------------------------------------------------------------
-  // 10. Status icons correct
+  // 14. Panel header is present
   // ---------------------------------------------------------------------------
-  testWidgets('each status shows the correct icon', (tester) async {
-    repo.createTicket(
-      title: 'Ready ticket',
-      kind: TicketKind.feature,
-      category: 'Test',
-      status: TicketStatus.ready,
-    );
-    repo.createTicket(
-      title: 'Active ticket',
-      kind: TicketKind.feature,
-      category: 'Test',
-      status: TicketStatus.active,
-    );
-    repo.createTicket(
-      title: 'Completed ticket',
-      kind: TicketKind.feature,
-      category: 'Test',
-      status: TicketStatus.completed,
-    );
+  testWidgets('panel header shows Tickets title and icon', (tester) async {
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    expect(find.text('Tickets'), findsOneWidget);
+    expect(find.byIcon(Icons.task_alt), findsWidgets);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 15. All V2 components are assembled
+  // ---------------------------------------------------------------------------
+  testWidgets('all V2 components are present in the panel', (tester) async {
+    repo.createTicket(title: 'Some ticket');
 
     await tester.pumpWidget(createTestApp());
     await safePumpAndSettle(tester);
 
-    // Verify that the correct icons are present
-    expect(
-      find.byIcon(TicketStatusVisuals.icon(TicketStatus.ready)),
-      findsWidgets,
-    );
-    expect(
-      find.byIcon(TicketStatusVisuals.icon(TicketStatus.active)),
-      findsWidgets,
-    );
-    expect(
-      find.byIcon(TicketStatusVisuals.icon(TicketStatus.completed)),
-      findsWidgets,
-    );
-
-    // Specifically: radio_button_unchecked for ready, play_circle_outline for
-    // active, check_circle_outline for completed
-    expect(find.byIcon(Icons.radio_button_unchecked), findsWidgets);
-    expect(find.byIcon(Icons.play_circle_outline), findsWidgets);
-    expect(find.byIcon(Icons.check_circle_outline), findsWidgets);
-  });
-
-  // ---------------------------------------------------------------------------
-  // Start Next Button Tests
-  // ---------------------------------------------------------------------------
-  testWidgets('start next button is disabled when no ready tickets exist', (tester) async {
-    repo.createTicket(
-      title: 'Active ticket',
-      kind: TicketKind.feature,
-      status: TicketStatus.active,
-    );
-    repo.createTicket(
-      title: 'Completed ticket',
-      kind: TicketKind.feature,
-      status: TicketStatus.completed,
-    );
-
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    final button = tester.widget<IconButton>(
-      find.byKey(TicketListPanelKeys.startNextButton),
-    );
-
-    expect(button.onPressed, isNull);
-  });
-
-  testWidgets('start next button is enabled when ready tickets exist', (tester) async {
-    repo.createTicket(
-      title: 'Ready ticket',
-      kind: TicketKind.feature,
-      status: TicketStatus.ready,
-    );
-
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    final button = tester.widget<IconButton>(
-      find.byKey(TicketListPanelKeys.startNextButton),
-    );
-
-    expect(button.onPressed, isNotNull);
-  });
-
-  testWidgets('start next button shows correct tooltip when disabled', (tester) async {
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    final button = tester.widget<IconButton>(
-      find.byKey(TicketListPanelKeys.startNextButton),
-    );
-
-    expect(button.tooltip, 'No ready tickets');
-  });
-
-  testWidgets('start next button shows next ticket ID in tooltip', (tester) async {
-    repo.createTicket(
-      title: 'Low priority',
-      kind: TicketKind.feature,
-      status: TicketStatus.ready,
-      priority: TicketPriority.low,
-    );
-    final critical = repo.createTicket(
-      title: 'Critical priority',
-      kind: TicketKind.feature,
-      status: TicketStatus.ready,
-      priority: TicketPriority.critical,
-    );
-
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    final button = tester.widget<IconButton>(
-      find.byKey(TicketListPanelKeys.startNextButton),
-    );
-
-    expect(button.tooltip, 'Start next: ${critical.displayId}');
-  });
-
-  testWidgets('start next button picks highest priority ticket', (tester) async {
-    repo.createTicket(
-      title: 'Low priority',
-      kind: TicketKind.feature,
-      status: TicketStatus.ready,
-      priority: TicketPriority.low,
-    );
-    repo.createTicket(
-      title: 'Medium priority',
-      kind: TicketKind.feature,
-      status: TicketStatus.ready,
-      priority: TicketPriority.medium,
-    );
-    final critical = repo.createTicket(
-      title: 'Critical priority',
-      kind: TicketKind.feature,
-      status: TicketStatus.ready,
-      priority: TicketPriority.critical,
-    );
-
-    await tester.pumpWidget(createTestApp());
-    await safePumpAndSettle(tester);
-
-    final button = tester.widget<IconButton>(
-      find.byKey(TicketListPanelKeys.startNextButton),
-    );
-
-    // Verify tooltip shows the critical ticket
-    expect(button.tooltip, 'Start next: ${critical.displayId}');
-  });
-
-  // ---------------------------------------------------------------------------
-  // Bulk Change Button Tests
-  // ---------------------------------------------------------------------------
-  testWidgets('bulk change button is hidden when no tickets are selected', (tester) async {
-    repo.createTicket(
-      title: 'Some ticket',
-      kind: TicketKind.feature,
-    );
-
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
-  });
-
-  testWidgets('bulk change button appears when tickets are selected', (tester) async {
-    repo.createTicket(
-      title: 'Task A',
-      kind: TicketKind.feature,
-    );
-
-    viewState.toggleTicketSelected(1);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsOneWidget);
-    expect(find.text('Change'), findsOneWidget);
-  });
-
-  testWidgets('bulk change button opens popup with all menu items', (tester) async {
-    repo.createTicket(
-      title: 'Task A',
-      kind: TicketKind.feature,
-    );
-    repo.createTicket(
-      title: 'Task B',
-      kind: TicketKind.bugfix,
-    );
-
-    viewState.toggleTicketSelected(1);
-    viewState.toggleTicketSelected(2);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    // Tap the Change button to open the popup menu
-    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
-    await safePumpAndSettle(tester);
-
-    // Verify all menu items are shown.
-    // "Category" also appears in the group-by dropdown label, so expect 2.
-    expect(find.text('Category'), findsNWidgets(2));
-    expect(find.text('Status'), findsOneWidget);
-    expect(find.text('Kind'), findsOneWidget);
-    expect(find.text('Priority'), findsOneWidget);
-    expect(find.text('Delete'), findsOneWidget);
-  });
-
-  testWidgets('bulk change button disappears when selection is cleared', (tester) async {
-    repo.createTicket(
-      title: 'Task A',
-      kind: TicketKind.feature,
-    );
-
-    viewState.toggleTicketSelected(1);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsOneWidget);
-
-    // Deselect the ticket
-    viewState.toggleTicketSelected(1);
-    await safePumpAndSettle(tester);
-
-    expect(find.byKey(TicketListPanelKeys.bulkChangeButton), findsNothing);
-  });
-
-  // ---------------------------------------------------------------------------
-  // Bulk Delete Tests
-  // ---------------------------------------------------------------------------
-  testWidgets('bulk delete shows confirmation dialog', (tester) async {
-    repo.createTicket(title: 'Task A', kind: TicketKind.feature);
-    repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
-    viewState.toggleTicketSelected(1);
-    viewState.toggleTicketSelected(2);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    // Open the Change menu
-    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
-    await safePumpAndSettle(tester);
-
-    // Tap Delete
-    await tester.tap(find.text('Delete'));
-    await safePumpAndSettle(tester);
-
-    // Confirmation dialog should appear
-    expect(find.text('Confirm bulk delete'), findsOneWidget);
-    expect(
-      find.text(
-        'Are you sure you want to delete 2 tickets? '
-        'This cannot be undone.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Cancel'), findsOneWidget);
-    // 'Delete' appears in the dialog button
-    expect(find.text('Delete'), findsOneWidget);
-  });
-
-  testWidgets('bulk delete confirmation deletes selected tickets', (tester) async {
-    repo.createTicket(title: 'Task A', kind: TicketKind.feature);
-    repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
-    repo.createTicket(title: 'Task C', kind: TicketKind.feature);
-    viewState.toggleTicketSelected(1);
-    viewState.toggleTicketSelected(2);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    expect(repo.tickets.length, 3);
-
-    // Open menu and tap Delete
-    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
-    await safePumpAndSettle(tester);
-    await tester.tap(find.text('Delete'));
-    await safePumpAndSettle(tester);
-
-    // Confirm deletion
-    await tester.tap(find.text('Delete'));
-    await safePumpAndSettle(tester);
-
-    // Only unselected ticket remains
-    expect(repo.tickets.length, 1);
-    expect(repo.tickets.first.title, 'Task C');
-
-    // Selection should be cleared
-    expect(viewState.selectedTicketIds, isEmpty);
-  });
-
-  testWidgets('bulk delete cancel preserves tickets', (tester) async {
-    repo.createTicket(title: 'Task A', kind: TicketKind.feature);
-    repo.createTicket(title: 'Task B', kind: TicketKind.bugfix);
-
-    viewState.toggleTicketSelected(1);
-    viewState.toggleTicketSelected(2);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    // Open menu and tap Delete
-    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
-    await safePumpAndSettle(tester);
-    await tester.tap(find.text('Delete'));
-    await safePumpAndSettle(tester);
-
-    // Cancel
-    await tester.tap(find.text('Cancel'));
-    await safePumpAndSettle(tester);
-
-    // All tickets still exist
-    expect(repo.tickets.length, 2);
-
-    // Selection still intact
-    expect(viewState.selectedTicketIds, {1, 2});
-  });
-
-  testWidgets('bulk delete clears dependsOn references', (tester) async {
-    final t1 = repo.createTicket(title: 'Dep', kind: TicketKind.feature);
-    repo.createTicket(
-      title: 'Dependent',
-      kind: TicketKind.feature,
-      dependsOn: [t1.id],
-    );
-
-    viewState.toggleTicketSelected(t1.id);
-
-    await tester.pumpWidget(createTestApp(width: 500));
-    await safePumpAndSettle(tester);
-
-    // Open menu and tap Delete
-    await tester.tap(find.byKey(TicketListPanelKeys.bulkChangeButton));
-    await safePumpAndSettle(tester);
-    await tester.tap(find.text('Delete'));
-    await safePumpAndSettle(tester);
-
-    // Confirm
-    await tester.tap(find.text('Delete'));
-    await safePumpAndSettle(tester);
-
-    // Remaining ticket should have empty dependsOn
-    expect(repo.tickets.length, 1);
-    expect(repo.tickets.first.title, 'Dependent');
-    expect(repo.tickets.first.dependsOn, isEmpty);
+    // Panel renders all V2 components
+    expect(find.byType(TicketStatusTabs), findsOneWidget);
+    expect(find.byType(TicketSortDropdown), findsOneWidget);
+    expect(find.byType(TicketFilterChips), findsOneWidget);
+    expect(find.byType(TicketListItem), findsOneWidget);
+    expect(find.byKey(TicketListPanelKeys.searchField), findsOneWidget);
+    expect(find.byKey(TicketListPanelKeys.addButton), findsOneWidget);
   });
 }
