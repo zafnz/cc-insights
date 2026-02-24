@@ -381,11 +381,11 @@ class InternalToolsService extends ChangeNotifier {
       _checkAgentsTool(orchestratorChat),
       _listTicketsTool(),
       _getTicketTool(),
-      _updateTicketTool(),
+      _updateTicketTool(orchestratorChat),
       _createWorktreeTool(orchestratorChat),
       _rebaseAndMergeTool(orchestratorChat),
       // _deleteWorktreeTool(), // Disabled: finished worktrees should be left as-is
-      _setTagsTool(),
+      _setTagsTool(orchestratorChat),
       _listTagsTool(),
     ];
   }
@@ -1010,28 +1010,16 @@ class InternalToolsService extends ChangeNotifier {
       inputSchema: {
         'type': 'object',
         'properties': {
-          'status': {
-            'type': 'array',
-            'items': {
-              'type': 'string',
-              'enum': [
-                'draft',
-                'ready',
-                'active',
-                'blocked',
-                'needsInput',
-                'inReview',
-                'completed',
-                'cancelled',
-                'split',
-              ],
-            },
-            'description':
-                'Filter by ticket status. Valid values: draft, ready, '
-                'active, blocked, needsInput, inReview, completed, '
-                'cancelled, split.',
+          'is_open': {
+            'type': 'boolean',
+            'description': 'Filter by open/closed state.',
           },
-          'category': {'type': 'string'},
+          'tags': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description':
+                'Filter to tickets that have ALL of the specified tags.',
+          },
           'depends_on': {'type': 'integer'},
           'dependency_of': {'type': 'integer'},
           'ids': {
@@ -1052,15 +1040,16 @@ class InternalToolsService extends ChangeNotifier {
       return InternalToolResult.error('Ticket board not available');
     }
     var tickets = ticketBoard.tickets.toList();
-    final statuses = (input['status'] as List<dynamic>?)
-        ?.map((e) => e.toString())
-        .toSet();
-    if (statuses != null && statuses.isNotEmpty) {
-      tickets = tickets.where((t) => statuses.contains(t.status.name)).toList();
+    final isOpen = input['is_open'] as bool?;
+    if (isOpen != null) {
+      tickets = tickets.where((t) => t.isOpen == isOpen).toList();
     }
-    final category = input['category'] as String?;
-    if (category != null && category.isNotEmpty) {
-      tickets = tickets.where((t) => t.category == category).toList();
+    final tags = (input['tags'] as List<dynamic>?)
+        ?.map((e) => e.toString().toLowerCase())
+        .toSet();
+    if (tags != null && tags.isNotEmpty) {
+      tickets =
+          tickets.where((t) => tags.every((tag) => t.tags.contains(tag))).toList();
     }
     final dependsOn = (input['depends_on'] as num?)?.toInt();
     if (dependsOn != null) {
@@ -1090,9 +1079,8 @@ class InternalToolsService extends ChangeNotifier {
             'id': t.id,
             'display_id': t.displayId,
             'title': t.title,
-            'status': t.status.name,
-            'kind': t.kind.name,
-            'priority': t.priority.name,
+            'is_open': t.isOpen,
+            'tags': t.tags.toList(),
             'depends_on': t.dependsOn,
           },
         )
@@ -1125,52 +1113,47 @@ class InternalToolsService extends ChangeNotifier {
     final id = (input['ticket_id'] as num?)?.toInt();
     if (id == null) return InternalToolResult.error('Missing "ticket_id"');
     final ticket = ticketBoard.getTicket(id);
-    if (ticket == null)
+    if (ticket == null) {
       return InternalToolResult.error('ticket_not_found: $id');
-    final unblockedBy = ticket.dependsOn.where((depId) {
-      final dep = ticketBoard.getTicket(depId);
-      return dep?.status == TicketStatus.completed;
-    }).toList();
-    return InternalToolResult.text(
-      jsonEncode({'ticket': ticket.toJson(), 'unblocked_by': unblockedBy}),
-    );
+    }
+    return InternalToolResult.text(jsonEncode({'ticket': ticket.toJson()}));
   }
 
-  InternalToolDefinition _updateTicketTool() {
+  InternalToolDefinition _updateTicketTool(Chat orchestratorChat) {
     return InternalToolDefinition(
       name: 'update_ticket',
-      description: 'Updates ticket status and/or appends a comment.',
+      description: 'Updates a ticket: open/close, comment, add/remove tags.',
       inputSchema: {
         'type': 'object',
         'properties': {
           'ticket_id': {'type': 'integer'},
-          'status': {
-            'type': 'string',
-            'enum': [
-              'draft',
-              'ready',
-              'active',
-              'blocked',
-              'needsInput',
-              'inReview',
-              'completed',
-              'cancelled',
-              'split',
-            ],
-            'description':
-                'New status for the ticket. Valid values: draft, ready, '
-                'active, blocked, needsInput, inReview, completed, '
-                'cancelled, split.',
+          'is_open': {
+            'type': 'boolean',
+            'description': 'Set to true to reopen or false to close.',
           },
-          'comment': {'type': 'string'},
+          'comment': {
+            'type': 'string',
+            'description': 'Text to append as a comment.',
+          },
+          'add_tags': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description': 'Tags to add to the ticket.',
+          },
+          'remove_tags': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description': 'Tags to remove from the ticket.',
+          },
         },
         'required': ['ticket_id'],
       },
-      handler: _handleUpdateTicket,
+      handler: (input) => _handleUpdateTicket(orchestratorChat, input),
     );
   }
 
   Future<InternalToolResult> _handleUpdateTicket(
+    Chat orchestratorChat,
     Map<String, dynamic> input,
   ) async {
     final ticketBoard = _ticketBoard;
@@ -1178,39 +1161,55 @@ class InternalToolsService extends ChangeNotifier {
       return InternalToolResult.error('Ticket board not available');
     }
     final ticketId = (input['ticket_id'] as num?)?.toInt();
-    if (ticketId == null)
+    if (ticketId == null) {
       return InternalToolResult.error('Missing "ticket_id"');
+    }
     final ticket = ticketBoard.getTicket(ticketId);
-    if (ticket == null)
+    if (ticket == null) {
       return InternalToolResult.error('ticket_not_found: $ticketId');
+    }
 
-    final previousStatus = ticket.status.name;
-    TicketStatus? nextStatus;
-    final rawStatus = input['status'] as String?;
-    if (rawStatus != null) {
-      nextStatus = _parseTicketStatus(rawStatus);
-      if (nextStatus == null) {
-        return InternalToolResult.error('invalid_status: $rawStatus');
+    final author = AuthorService.agentAuthor(orchestratorChat.name);
+    const authorType = AuthorType.agent;
+
+    final isOpen = input['is_open'] as bool?;
+    if (isOpen != null) {
+      if (isOpen && !ticket.isOpen) {
+        ticketBoard.reopenTicket(ticketId, author, authorType);
+      } else if (!isOpen && ticket.isOpen) {
+        ticketBoard.closeTicket(ticketId, author, authorType);
       }
-      ticketBoard.setStatus(ticketId, nextStatus);
     }
 
     final comment = input['comment'] as String?;
     if (comment != null && comment.trim().isNotEmpty) {
-      ticketBoard.addComment(ticketId, comment.trim());
+      ticketBoard.addComment(ticketId, comment.trim(), author, authorType);
     }
 
-    final unblocked = ticketBoard
-        .getBlockedBy(ticketId)
-        .where((id) => ticketBoard.getTicket(id)?.status == TicketStatus.ready)
+    final addTags = (input['add_tags'] as List<dynamic>?)
+        ?.map((e) => e.toString())
         .toList();
+    if (addTags != null) {
+      for (final tag in addTags) {
+        ticketBoard.addTag(ticketId, tag, author, authorType);
+      }
+    }
 
+    final removeTags = (input['remove_tags'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toList();
+    if (removeTags != null) {
+      for (final tag in removeTags) {
+        ticketBoard.removeTag(ticketId, tag, author, authorType);
+      }
+    }
+
+    final updated = ticketBoard.getTicket(ticketId);
     return InternalToolResult.text(
       jsonEncode({
         'success': true,
-        'previous_status': previousStatus,
-        'new_status': (nextStatus ?? ticket.status).name,
-        'unblocked_tickets': unblocked,
+        'is_open': updated?.isOpen ?? ticket.isOpen,
+        'tags': (updated?.tags ?? ticket.tags).toList(),
       }),
     );
   }
@@ -1424,35 +1423,41 @@ class InternalToolsService extends ChangeNotifier {
     }
   }
 
-  InternalToolDefinition _setTagsTool() {
+  InternalToolDefinition _setTagsTool(Chat orchestratorChat) {
     return InternalToolDefinition(
       name: 'set_tags',
-      description: 'Sets the tags for a given worktree.',
+      description: 'Replaces all tags on a ticket with the given set.',
       inputSchema: {
         'type': 'object',
         'properties': {
-          'worktree': {
-            'type': 'string',
-            'description': 'Absolute path to the worktree',
-          },
+          'ticket_id': {'type': 'integer'},
           'tags': {
             'type': 'array',
             'items': {'type': 'string'},
-            'description': 'List of tag names to assign to the worktree',
+            'description': 'Full set of tags to assign to the ticket.',
           },
         },
-        'required': ['worktree', 'tags'],
+        'required': ['ticket_id', 'tags'],
       },
-      handler: _handleSetTags,
+      handler: (input) => _handleSetTags(orchestratorChat, input),
     );
   }
 
   Future<InternalToolResult> _handleSetTags(
+    Chat orchestratorChat,
     Map<String, dynamic> input,
   ) async {
-    final worktreePath = input['worktree'] as String?;
-    if (worktreePath == null || worktreePath.isEmpty) {
-      return InternalToolResult.error('Missing required "worktree"');
+    final ticketBoard = _ticketBoard;
+    if (ticketBoard == null) {
+      return InternalToolResult.error('Ticket board not available');
+    }
+    final ticketId = (input['ticket_id'] as num?)?.toInt();
+    if (ticketId == null) {
+      return InternalToolResult.error('Missing "ticket_id"');
+    }
+    final ticket = ticketBoard.getTicket(ticketId);
+    if (ticket == null) {
+      return InternalToolResult.error('ticket_not_found: $ticketId');
     }
     final tagsInput = input['tags'];
     if (tagsInput == null || tagsInput is! List) {
@@ -1460,37 +1465,17 @@ class InternalToolsService extends ChangeNotifier {
         'Missing or invalid "tags" field. Expected an array of strings.',
       );
     }
-    final tags = tagsInput.map((e) => e.toString()).toList();
+    final tags = tagsInput.map((e) => e.toString()).toSet();
 
-    final worktree = _findWorktreeByPath(worktreePath);
-    if (worktree == null) {
-      return InternalToolResult.error('worktree_not_found: $worktreePath');
-    }
+    final author = AuthorService.agentAuthor(orchestratorChat.name);
+    ticketBoard.setTags(ticketId, tags, author, AuthorType.agent);
 
-    worktree.setTags(tags);
-
-    final project = _project;
-    final persistence = _persistenceService;
-    if (project != null && persistence != null) {
-      try {
-        await persistence.updateWorktreeTags(
-          projectRoot: project.data.repoRoot,
-          worktreePath: worktreePath,
-          tags: tags,
-        );
-      } catch (e) {
-        developer.log(
-          'set_tags: failed to persist tags: $e',
-          name: 'InternalToolsService',
-        );
-      }
-    }
-
+    final updated = ticketBoard.getTicket(ticketId);
     return InternalToolResult.text(
       jsonEncode({
         'success': true,
-        'worktree': worktreePath,
-        'tags': tags,
+        'ticket_id': ticketId,
+        'tags': (updated?.tags ?? tags).toList(),
       }),
     );
   }
@@ -1622,15 +1607,6 @@ class InternalToolsService extends ChangeNotifier {
     }
     final seconds = raw.clamp(1, _maxWaitTimeoutSeconds);
     return Duration(seconds: seconds);
-  }
-
-  TicketStatus? _parseTicketStatus(String statusName) {
-    for (final status in TicketStatus.values) {
-      if (status.name == statusName) {
-        return status;
-      }
-    }
-    return null;
   }
 
   String? _mergePromptText(List<String?> parts) {
