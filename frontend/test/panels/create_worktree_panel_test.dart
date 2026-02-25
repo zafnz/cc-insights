@@ -1,4 +1,5 @@
 import 'package:cc_insights_v2/models/project.dart';
+import 'package:cc_insights_v2/models/project_config.dart';
 import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/content_panel.dart';
 // ignore: library_prefixes, implementation_imports
@@ -8,6 +9,7 @@ import 'package:cc_insights_v2/services/backend_service.dart';
 import 'package:cc_insights_v2/services/cli_availability_service.dart';
 import 'package:cc_insights_v2/services/git_service.dart';
 import 'package:cc_insights_v2/services/log_service.dart';
+import 'package:cc_insights_v2/services/project_config_service.dart';
 import 'package:cc_insights_v2/services/settings_service.dart';
 import 'package:cc_insights_v2/state/selection_state.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import '../fakes/fake_cli_availability_service.dart';
+import '../fakes/fake_project_config_service.dart';
 import '../test_helpers.dart';
 
 /// Helper to pump a widget with async operations that need real I/O.
@@ -446,10 +449,12 @@ void main() {
     late SelectionState selectionState;
     late BackendService backendService;
     late FakeCliAvailabilityService fakeCliAvailability;
+    late FakeProjectConfigService fakeConfigService;
 
     setUp(() {
       testGitService = TestGitService();
       fakeCliAvailability = FakeCliAvailabilityService();
+      fakeConfigService = FakeProjectConfigService();
 
       // Set up a test repository with branches and worktrees
       testGitService.setupSimpleRepo('/test/project', branch: 'main');
@@ -504,6 +509,9 @@ void main() {
           ChangeNotifierProvider<BackendService>.value(value: backendService),
           ChangeNotifierProvider<CliAvailabilityService>.value(
             value: fakeCliAvailability,
+          ),
+          ChangeNotifierProvider<ProjectConfigService>.value(
+            value: fakeConfigService,
           ),
         ],
         child: MaterialApp(
@@ -760,6 +768,86 @@ void main() {
 
         // Should have a string dropdown for selecting branches
         expect(find.byType(DropdownButton<String>), findsOneWidget);
+      });
+    });
+
+    group('project default base', () {
+      testWidgets('prepopulates origin/main from project config',
+          (tester) async {
+        fakeConfigService.configs['/test/project'] = const ProjectConfig(
+          defaultBase: 'origin/main',
+        );
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // The dropdown should show origin/main selected
+        final dropdown = tester.widget<DropdownButton<BranchFromOption>>(
+          find.byType(DropdownButton<BranchFromOption>),
+        );
+        expect(dropdown.value, BranchFromOption.originMain);
+      });
+
+      testWidgets('prepopulates main from project config', (tester) async {
+        fakeConfigService.configs['/test/project'] = const ProjectConfig(
+          defaultBase: 'main',
+        );
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        final dropdown = tester.widget<DropdownButton<BranchFromOption>>(
+          find.byType(DropdownButton<BranchFromOption>),
+        );
+        expect(dropdown.value, BranchFromOption.main);
+      });
+
+      testWidgets('prepopulates custom branch from project config',
+          (tester) async {
+        fakeConfigService.configs['/test/project'] = const ProjectConfig(
+          defaultBase: 'develop',
+        );
+        testGitService.branchLists['/test/project'] = [
+          'main',
+          'develop',
+        ];
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // When "other" is selected, the UI switches to the full branch
+        // dropdown view with "Branch from:" label (note the colon)
+        expect(find.text('Branch from:'), findsOneWidget);
+        // The selected branch should be shown in a string dropdown
+        expect(find.byType(DropdownButton<String>), findsOneWidget);
+      });
+
+      testWidgets('does not apply default when auto is set', (tester) async {
+        fakeConfigService.configs['/test/project'] = const ProjectConfig(
+          defaultBase: 'auto',
+        );
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Should remain at the default (main)
+        final dropdown = tester.widget<DropdownButton<BranchFromOption>>(
+          find.byType(DropdownButton<BranchFromOption>),
+        );
+        expect(dropdown.value, BranchFromOption.main);
+      });
+
+      testWidgets('explicit base branch overrides project default',
+          (tester) async {
+        fakeConfigService.configs['/test/project'] = const ProjectConfig(
+          defaultBase: 'origin/main',
+        );
+        // Set explicit base via SelectionState
+        selectionState.showCreateWorktreePanel(baseBranch: 'main');
+
+        await pumpWidgetWithRealAsync(tester, buildTestWidget());
+
+        // Explicit "main" should win over config's "origin/main"
+        final dropdown = tester.widget<DropdownButton<BranchFromOption>>(
+          find.byType(DropdownButton<BranchFromOption>),
+        );
+        expect(dropdown.value, BranchFromOption.main);
       });
     });
 
@@ -1071,10 +1159,12 @@ void main() {
     late SelectionState selectionState;
     late BackendService backendService;
     late FakeCliAvailabilityService fakeCliAvailability;
+    late FakeProjectConfigService fakeConfigService;
 
     setUp(() {
       testGitService = TestGitService();
       fakeCliAvailability = FakeCliAvailabilityService();
+      fakeConfigService = FakeProjectConfigService();
       testGitService.setupSimpleRepo('/test/project', branch: 'main');
 
       final worktree = WorktreeState(
@@ -1118,6 +1208,9 @@ void main() {
           ChangeNotifierProvider<BackendService>.value(value: backendService),
           ChangeNotifierProvider<CliAvailabilityService>.value(
             value: fakeCliAvailability,
+          ),
+          ChangeNotifierProvider<ProjectConfigService>.value(
+            value: fakeConfigService,
           ),
         ],
         child: const MaterialApp(

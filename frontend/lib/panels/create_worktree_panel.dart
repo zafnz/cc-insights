@@ -7,6 +7,7 @@ import '../models/project.dart';
 import '../models/worktree.dart';
 import '../services/git_service.dart';
 import '../services/persistence_service.dart';
+import '../services/project_config_service.dart';
 import '../services/project_restore_service.dart';
 import '../services/worktree_service.dart';
 import '../state/selection_state.dart';
@@ -77,6 +78,9 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
   BranchFromOption _branchFromOption = BranchFromOption.main;
   String? _selectedOtherBranch;
 
+  /// Whether an explicit base branch was provided via SelectionState.
+  bool _hasExplicitBaseBranch = false;
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +94,12 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
         context.read<SelectionState>().consumeCreateWorktreeBaseBranch();
     if (baseBranch == null) return;
 
+    _hasExplicitBaseBranch = true;
+    _applyBaseBranch(baseBranch);
+  }
+
+  /// Sets the branch-from selection from a branch name string.
+  void _applyBaseBranch(String baseBranch) {
     if (baseBranch == 'main') {
       _branchFromOption = BranchFromOption.main;
     } else if (baseBranch == 'origin/main') {
@@ -133,6 +143,15 @@ class _CreateWorktreePanelState extends State<CreateWorktreePanel> {
 
       // Compute default worktree root
       final defaultRoot = await _computeDefaultWorktreeRoot(project, repoRoot);
+
+      // Apply project default base if no explicit base was provided
+      if (!_hasExplicitBaseBranch) {
+        final configService = context.read<ProjectConfigService>();
+        final config = await configService.loadConfig(repoRoot);
+        if (config.defaultBase != null && config.defaultBase != 'auto') {
+          _applyBaseBranch(config.defaultBase!);
+        }
+      }
 
       if (mounted) {
         setState(() {
