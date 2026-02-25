@@ -975,6 +975,9 @@ enum SessionMarkerType {
 
   /// Indicates the app quit while the session was active.
   quit,
+
+  /// Indicates the session was terminated due to inactivity.
+  idleTimeout,
 }
 
 /// A session marker entry shown when a session is resumed or the app quits.

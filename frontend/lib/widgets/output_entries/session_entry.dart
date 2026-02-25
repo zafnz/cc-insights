@@ -34,6 +34,10 @@ class SessionMarkerEntryWidget extends StatelessWidget {
         label = 'Session Ended';
         accentColor = Colors.orange;
         subtitle = formattedDate;
+      case SessionMarkerType.idleTimeout:
+        label = 'Session Paused — Idle';
+        accentColor = Colors.blue;
+        subtitle = 'Send a message to resume automatically';
     }
 
     return Padding(
@@ -49,9 +53,13 @@ class SessionMarkerEntryWidget extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      entry.markerType == SessionMarkerType.resumed
-                          ? Icons.play_circle_outline
-                          : Icons.stop_circle_outlined,
+                      switch (entry.markerType) {
+                        SessionMarkerType.resumed =>
+                          Icons.play_circle_outline,
+                        SessionMarkerType.quit => Icons.stop_circle_outlined,
+                        SessionMarkerType.idleTimeout =>
+                          Icons.pause_circle_outline,
+                      },
                       size: 16,
                       color: accentColor.withValues(alpha: 0.8),
                     ),

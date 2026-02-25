@@ -50,6 +50,9 @@ class SettingsService extends ChangeNotifier {
   /// Key for the available tags list in settings.
   static const tagsKey = 'tags.available';
 
+  /// Key for multi-select tags toggle.
+  static const tagsMultiSelectKey = 'tags.multiSelect';
+
   /// Key for the available agents list in settings.
   static const agentsKey = 'agents.available';
 
@@ -78,7 +81,17 @@ class SettingsService extends ChangeNotifier {
     label: 'Tags',
     description: 'Manage worktree tags and their colors',
     icon: Icons.label_outlined,
-    settings: [],
+    settings: [
+      SettingDefinition(
+        key: tagsMultiSelectKey,
+        title: 'Worktrees can have more than one tag',
+        description:
+            'If true then you can add more than one tag to a worktree, '
+            'otherwise selecting one tag deselects another.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+    ],
   );
 
   static const _agentsCategory = SettingCategory(
@@ -287,6 +300,26 @@ class SettingsService extends ChangeNotifier {
             'it\'s done. Applies to new chats only.',
         type: SettingType.toggle,
         defaultValue: true,
+      ),
+      SettingDefinition(
+        key: 'session.idleSessionTimeout',
+        title: 'Terminate Idle Sessions',
+        description:
+            'Automatically terminate backend processes for sessions that '
+            'have been idle. The session can be resumed by sending a message.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+      SettingDefinition(
+        key: 'session.idleSessionTimeoutMinutes',
+        title: 'Idle Session Timeout (minutes)',
+        description:
+            'Number of minutes of inactivity before a session is '
+            'terminated. Only applies when idle session timeout is enabled.',
+        type: SettingType.number,
+        defaultValue: 120,
+        min: 5,
+        max: 1440,
       ),
     ],
   );
@@ -856,6 +889,10 @@ class SettingsService extends ChangeNotifier {
         config.archiveChats = value as bool;
       case 'behavior.deleteBranchWithWorktree':
         config.deleteBranchWithWorktree = value as bool;
+      case 'session.idleSessionTimeout':
+        config.idleSessionTimeout = value as bool;
+      case 'session.idleSessionTimeoutMinutes':
+        config.idleSessionTimeoutMinutes = (value as num).toInt();
       case 'appearance.showWorktreeCost':
         config.showWorktreeCost = value as bool;
       case 'session.streamOfThought':
@@ -880,6 +917,8 @@ class SettingsService extends ChangeNotifier {
         config.agentTicketToolsEnabled = value as bool;
       case 'git.agentGitTools':
         config.agentGitToolsEnabled = value as bool;
+      case 'tags.multiSelect':
+        config.tagsMultiSelect = value as bool;
     }
   }
 

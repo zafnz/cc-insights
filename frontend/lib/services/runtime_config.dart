@@ -131,6 +131,15 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether agents can access git tools (commit, diff, log, status MCP tools).
   bool _agentGitToolsEnabled = true;
 
+  /// Whether worktrees can have more than one tag at a time.
+  bool _tagsMultiSelect = true;
+
+  /// Whether to automatically terminate idle sessions after a timeout.
+  bool _idleSessionTimeout = true;
+
+  /// Number of minutes of inactivity before a session is terminated.
+  int _idleSessionTimeoutMinutes = 120;
+
   // defaultModel and defaultBackend are now derived from the default agent.
   // See the getters below.
 
@@ -532,6 +541,26 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether to automatically terminate idle sessions after a timeout.
+  bool get idleSessionTimeout => _idleSessionTimeout;
+
+  set idleSessionTimeout(bool value) {
+    if (_idleSessionTimeout != value) {
+      _idleSessionTimeout = value;
+      notifyListeners();
+    }
+  }
+
+  /// Number of minutes of inactivity before a session is terminated.
+  int get idleSessionTimeoutMinutes => _idleSessionTimeoutMinutes;
+
+  set idleSessionTimeoutMinutes(int value) {
+    if (_idleSessionTimeoutMinutes != value) {
+      _idleSessionTimeoutMinutes = value;
+      notifyListeners();
+    }
+  }
+
   /// Whether agents can access ticket tools.
   bool get agentTicketToolsEnabled => _agentTicketToolsEnabled;
 
@@ -548,6 +577,16 @@ class RuntimeConfig extends ChangeNotifier {
   set agentGitToolsEnabled(bool value) {
     if (_agentGitToolsEnabled != value) {
       _agentGitToolsEnabled = value;
+      notifyListeners();
+    }
+  }
+
+  /// Whether worktrees can have more than one tag at a time.
+  bool get tagsMultiSelect => _tagsMultiSelect;
+
+  set tagsMultiSelect(bool value) {
+    if (_tagsMultiSelect != value) {
+      _tagsMultiSelect = value;
       notifyListeners();
     }
   }
@@ -835,6 +874,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;
     _instance._agentGitToolsEnabled = true;
+    _instance._tagsMultiSelect = true;
     _instance._agents = [];
     _instance._defaultAgentId = 'claude-default';
   }
