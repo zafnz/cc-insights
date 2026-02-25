@@ -50,6 +50,9 @@ class SettingsService extends ChangeNotifier {
   /// Key for the available tags list in settings.
   static const tagsKey = 'tags.available';
 
+  /// Key for multi-select tags toggle.
+  static const tagsMultiSelectKey = 'tags.multiSelect';
+
   /// Key for the available agents list in settings.
   static const agentsKey = 'agents.available';
 
@@ -78,7 +81,17 @@ class SettingsService extends ChangeNotifier {
     label: 'Tags',
     description: 'Manage worktree tags and their colors',
     icon: Icons.label_outlined,
-    settings: [],
+    settings: [
+      SettingDefinition(
+        key: tagsMultiSelectKey,
+        title: 'Worktrees can have more than one tag',
+        description:
+            'If true then you can add more than one tag to a worktree, '
+            'otherwise selecting one tag deselects another.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+    ],
   );
 
   static const _agentsCategory = SettingCategory(
@@ -904,6 +917,8 @@ class SettingsService extends ChangeNotifier {
         config.agentTicketToolsEnabled = value as bool;
       case 'git.agentGitTools':
         config.agentGitToolsEnabled = value as bool;
+      case 'tags.multiSelect':
+        config.tagsMultiSelect = value as bool;
     }
   }
 

@@ -687,6 +687,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
         builder: (BuildContext menuContext) {
           final settings = menuContext.read<SettingsService>();
           final availableTags = settings.availableTags;
+          final multiSelect = RuntimeConfig.instance.tagsMultiSelect;
           final project = menuContext.read<ProjectState>();
           final persistence = menuContext.read<PersistenceService>();
 
@@ -700,7 +701,17 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
               final isChecked = worktree.tags.contains(tag.name);
               return MenuItemButton(
                 onPressed: () {
-                  worktree.toggleTag(tag.name);
+                  final previousTags = List<String>.of(worktree.tags);
+                  if (multiSelect) {
+                    worktree.toggleTag(tag.name);
+                  } else {
+                    // Single-select: set to this tag, or clear if already set
+                    if (isChecked) {
+                      worktree.setTags([]);
+                    } else {
+                      worktree.setTags([tag.name]);
+                    }
+                  }
                   persistence
                       .updateWorktreeTags(
                         projectRoot: project.data.repoRoot,
@@ -709,7 +720,7 @@ class _WorktreeListItemState extends State<_WorktreeListItem> {
                       )
                       .catchError((Object e, StackTrace stack) {
                         LogService.instance.logUnhandledException(e, stack);
-                        worktree.toggleTag(tag.name); // revert
+                        worktree.setTags(previousTags); // revert
                       });
                   setState(() {});
                 },

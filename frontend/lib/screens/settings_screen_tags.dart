@@ -62,6 +62,52 @@ class _TagsSettingsContentState extends State<_TagsSettingsContent> {
                 ),
               ),
               const SizedBox(height: 24),
+              // Multi-select toggle
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Worktrees can have more than one tag',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'If true then you can add more than one tag to a '
+                          'worktree, otherwise selecting one tag deselects '
+                          'another.',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Switch(
+                    value: widget.settings.getEffectiveValue<bool>(
+                      SettingsService.tagsMultiSelectKey,
+                    ),
+                    onChanged: (value) {
+                      widget.settings.setValue(
+                        SettingsService.tagsMultiSelectKey,
+                        value,
+                      );
+                    },
+                  ),
+                ],
+              ),
+              Divider(
+                height: 32,
+                color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+              ),
               // Existing tags
               for (final tag in tags) ...[
                 _TagRow(

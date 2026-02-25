@@ -131,6 +131,9 @@ class RuntimeConfig extends ChangeNotifier {
   /// Whether agents can access git tools (commit, diff, log, status MCP tools).
   bool _agentGitToolsEnabled = true;
 
+  /// Whether worktrees can have more than one tag at a time.
+  bool _tagsMultiSelect = true;
+
   /// Whether to automatically terminate idle sessions after a timeout.
   bool _idleSessionTimeout = true;
 
@@ -578,6 +581,16 @@ class RuntimeConfig extends ChangeNotifier {
     }
   }
 
+  /// Whether worktrees can have more than one tag at a time.
+  bool get tagsMultiSelect => _tagsMultiSelect;
+
+  set tagsMultiSelect(bool value) {
+    if (_tagsMultiSelect != value) {
+      _tagsMultiSelect = value;
+      notifyListeners();
+    }
+  }
+
   /// Default model for new chats, derived from the default agent.
   ///
   /// Returns a composite value like `"claude:opus"` built from
@@ -861,6 +874,7 @@ class RuntimeConfig extends ChangeNotifier {
     _instance._acpAvailable = true;
     _instance._agentTicketToolsEnabled = true;
     _instance._agentGitToolsEnabled = true;
+    _instance._tagsMultiSelect = true;
     _instance._agents = [];
     _instance._defaultAgentId = 'claude-default';
   }
