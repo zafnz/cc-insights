@@ -262,7 +262,7 @@ class BackendService extends ChangeNotifier {
     if (existing != null) {
       _t('BackendService', 'Backend already exists for agent $agentId, refreshing models');
       unawaited(_refreshModelsForAgent(agentId, type, existing));
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return;
     }
 
@@ -274,7 +274,7 @@ class BackendService extends ChangeNotifier {
     _agentStarting.add(agentId);
     _agentErrors[agentId] = null;
     _agentErrorIsAgent.remove(agentId);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     try {
       _t('BackendService', 'Creating backend for agent $agentId (${type.name})...');
@@ -284,12 +284,14 @@ class BackendService extends ChangeNotifier {
         arguments: arguments,
         workingDirectory: effectiveCwd,
       );
+      if (_disposed) return;
       _agentBackends[agentId] = backend;
       _t('BackendService', 'Backend created for agent $agentId, capabilities: ${backend.capabilities}');
 
       // Monitor backend errors
       _agentErrorSubscriptions[agentId] = backend.errors.listen((error) {
         _t('BackendService', 'Backend error (agent $agentId): $error');
+        if (_disposed) return;
         _agentErrors[agentId] = error.toString();
         _agentErrorIsAgent[agentId] = true;
         notifyListeners();
@@ -306,13 +308,15 @@ class BackendService extends ChangeNotifier {
       unawaited(_refreshModelsForAgent(agentId, type, backend));
     } catch (e) {
       _t('BackendService', 'ERROR starting backend for agent $agentId: $e');
-      _agentErrors[agentId] = e.toString();
-      _agentErrorIsAgent[agentId] = false;
+      if (!_disposed) {
+        _agentErrors[agentId] = e.toString();
+        _agentErrorIsAgent[agentId] = false;
+      }
       _agentBackends.remove(agentId);
     } finally {
       _agentStarting.remove(agentId);
       _t('BackendService', 'startAgent() complete for $agentId, isReady=${isReadyForAgent(agentId)}, error=${_agentErrors[agentId]}');
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -381,14 +385,14 @@ class BackendService extends ChangeNotifier {
     if (_activeAgentId == agentId) {
       _activeAgentId = null;
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Registers a backend for a specific agent in testing.
   @visibleForTesting
   void registerAgentBackendForTesting(String agentId, AgentBackend backend) {
     _agentBackends[agentId] = backend;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   /// Fetches models from [backend] and updates the [ChatModelCatalog].
@@ -525,7 +529,7 @@ class BackendService extends ChangeNotifier {
   @visibleForTesting
   void registerBackendForTesting(BackendType type, AgentBackend backend) {
     _backends[type] = backend;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   String _resolveWorkingDirectory(String? workingDirectory) {
@@ -605,7 +609,7 @@ class BackendService extends ChangeNotifier {
     if (existing != null) {
       _t('BackendService', 'Backend already exists for ${type.name}, refreshing models');
       unawaited(_refreshModelsIfSupported(type, existing));
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return;
     }
 
@@ -617,7 +621,7 @@ class BackendService extends ChangeNotifier {
     _starting.add(type);
     _errors[type] = null;
     _errorIsAgent.remove(type);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     try {
       _t('BackendService', 'Creating backend for ${type.name}...');
@@ -626,12 +630,14 @@ class BackendService extends ChangeNotifier {
         executablePath: executablePath,
         workingDirectory: effectiveCwd,
       );
+      if (_disposed) return;
       _backends[type] = backend;
       _t('BackendService', 'Backend created for ${type.name}, capabilities: ${backend.capabilities}');
 
       // Monitor backend errors
       _errorSubscriptions[type] = backend.errors.listen((error) {
         _t('BackendService', 'Backend error (${type.name}): $error');
+        if (_disposed) return;
         _errors[type] = error.toString();
         _errorIsAgent[type] = true;
         notifyListeners();
@@ -652,13 +658,15 @@ class BackendService extends ChangeNotifier {
       unawaited(_refreshModelsIfSupported(type, backend));
     } catch (e) {
       _t('BackendService', 'ERROR starting backend ${type.name}: $e');
-      _errors[type] = e.toString();
-      _errorIsAgent[type] = false;
+      if (!_disposed) {
+        _errors[type] = e.toString();
+        _errorIsAgent[type] = false;
+      }
       _backends.remove(type);
     } finally {
       _starting.remove(type);
       _t('BackendService', 'start() complete for ${type.name}, isReady=$isReady, error=${_errors[type]}');
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -857,6 +865,7 @@ class BackendService extends ChangeNotifier {
   /// the backend process is properly terminated.
   @override
   void dispose() {
+    if (_disposed) return; // Guard against double-disposal (e.g. hot restart safety + widget dispose)
     _disposed = true;
     // Synchronously send SIGTERM to all processes as a safety net.
     // The async dispose() calls below may not complete before the Dart

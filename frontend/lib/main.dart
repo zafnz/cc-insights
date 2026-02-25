@@ -470,12 +470,15 @@ class _CCInsightsAppState extends State<CCInsightsApp>
     _settingsService = SettingsService();
     _windowLayoutService = WindowLayoutService();
     _settingsService!.load().then((_) async {
+      if (!mounted) return;
+
       // Load window/layout service, migrating from config.json if needed
       await _windowLayoutService!.load(
         migrationSource: _settingsService!.valuesSnapshot,
       );
       // Clean legacy keys from config.json after migration
       await _settingsService!.removeLegacyWindowLayoutKeys();
+      if (!mounted) return;
 
       // If onboarding is needed, show it immediately — it does its own
       // scanning. Skip the legacy CLI probe so we don't block the UI.
@@ -491,6 +494,7 @@ class _CCInsightsAppState extends State<CCInsightsApp>
         _cliAvailability!.markAllAvailable(RuntimeConfig.instance.agents);
       } else {
         await _cliAvailability!.checkAgents(RuntimeConfig.instance.agents);
+        if (!mounted) return;
 
         if (_cliAvailability!.claudeAvailable) {
           _backend?.discoverModelsForAllAgents();
