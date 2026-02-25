@@ -282,26 +282,6 @@ class SettingsService extends ChangeNotifier {
         type: SettingType.toggle,
         defaultValue: true,
       ),
-      SettingDefinition(
-        key: 'behavior.idleSessionTimeout',
-        title: 'Terminate Idle Sessions',
-        description:
-            'Automatically terminate backend processes for sessions that '
-            'have been idle. The session can be resumed by sending a message.',
-        type: SettingType.toggle,
-        defaultValue: true,
-      ),
-      SettingDefinition(
-        key: 'behavior.idleSessionTimeoutMinutes',
-        title: 'Idle Session Timeout (minutes)',
-        description:
-            'Number of minutes of inactivity before a session is '
-            'terminated. Only applies when idle session timeout is enabled.',
-        type: SettingType.number,
-        defaultValue: 120,
-        min: 5,
-        max: 1440,
-      ),
     ],
   );
 
@@ -320,6 +300,26 @@ class SettingsService extends ChangeNotifier {
             'it\'s done. Applies to new chats only.',
         type: SettingType.toggle,
         defaultValue: true,
+      ),
+      SettingDefinition(
+        key: 'session.idleSessionTimeout',
+        title: 'Terminate Idle Sessions',
+        description:
+            'Automatically terminate backend processes for sessions that '
+            'have been idle. The session can be resumed by sending a message.',
+        type: SettingType.toggle,
+        defaultValue: true,
+      ),
+      SettingDefinition(
+        key: 'session.idleSessionTimeoutMinutes',
+        title: 'Idle Session Timeout (minutes)',
+        description:
+            'Number of minutes of inactivity before a session is '
+            'terminated. Only applies when idle session timeout is enabled.',
+        type: SettingType.number,
+        defaultValue: 120,
+        min: 5,
+        max: 1440,
       ),
     ],
   );
@@ -889,9 +889,9 @@ class SettingsService extends ChangeNotifier {
         config.archiveChats = value as bool;
       case 'behavior.deleteBranchWithWorktree':
         config.deleteBranchWithWorktree = value as bool;
-      case 'behavior.idleSessionTimeout':
+      case 'session.idleSessionTimeout':
         config.idleSessionTimeout = value as bool;
-      case 'behavior.idleSessionTimeoutMinutes':
+      case 'session.idleSessionTimeoutMinutes':
         config.idleSessionTimeoutMinutes = (value as num).toInt();
       case 'appearance.showWorktreeCost':
         config.showWorktreeCost = value as bool;
