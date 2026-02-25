@@ -201,5 +201,60 @@ void main() {
       // The comment input has the "Comment" button.
       expect(find.text('Comment'), findsOneWidget);
     });
+
+    testWidgets('launch worktree button is visible in ticket detail',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      repo.createTicket(title: 'Worktree ticket', body: 'Some work');
+      viewState.selectTicket(1);
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // The Launch Worktree button is visible in the issue header.
+      expect(
+        find.byKey(TicketIssueHeaderKeys.launchWorktreeButton),
+        findsOneWidget,
+      );
+      expect(find.text('Launch Worktree'), findsOneWidget);
+      expect(find.byIcon(Icons.account_tree), findsOneWidget);
+    });
+
+    testWidgets('launch worktree button triggers worktree creation',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        TicketDetailPanel.launchWorktreeOverride = null;
+      });
+
+      int? launchedTicketId;
+      TicketDetailPanel.launchWorktreeOverride = (_, ticketId) async {
+        launchedTicketId = ticketId;
+      };
+
+      repo.createTicket(title: 'Dispatch ticket', body: 'Ready to go');
+      viewState.selectTicket(1);
+
+      await tester.pumpWidget(createTestApp());
+      await safePumpAndSettle(tester);
+
+      // Tap the Launch Worktree button.
+      await tester.tap(
+        find.byKey(TicketIssueHeaderKeys.launchWorktreeButton),
+      );
+      await safePumpAndSettle(tester);
+
+      // The override was called with the correct ticket ID.
+      expect(launchedTicketId, equals(1));
+    });
   });
 }

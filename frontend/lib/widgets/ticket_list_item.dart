@@ -33,8 +33,11 @@ class TicketListItem extends StatelessWidget {
   /// The ticket to display.
   final TicketData ticket;
 
-  /// Whether this item is currently selected.
+  /// Whether this item is currently selected (viewed in detail panel).
   final bool isSelected;
+
+  /// Whether this item is part of the multi-selection set.
+  final bool isMultiSelected;
 
   /// Called when the item is tapped.
   final VoidCallback? onTap;
@@ -43,6 +46,7 @@ class TicketListItem extends StatelessWidget {
     super.key,
     required this.ticket,
     this.isSelected = false,
+    this.isMultiSelected = false,
     this.onTap,
   });
 
@@ -57,10 +61,17 @@ class TicketListItem extends StatelessWidget {
 
     final subtitleColor = colorScheme.onSurfaceVariant;
 
+    Color backgroundColor;
+    if (isSelected) {
+      backgroundColor = colorScheme.primaryContainer.withValues(alpha: 0.4);
+    } else if (isMultiSelected) {
+      backgroundColor = colorScheme.tertiaryContainer.withValues(alpha: 0.3);
+    } else {
+      backgroundColor = Colors.transparent;
+    }
+
     return Material(
-      color: isSelected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.4)
-          : Colors.transparent,
+      color: backgroundColor,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -68,19 +79,29 @@ class TicketListItem extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Status icon
-              Padding(
-                padding: const EdgeInsets.only(top: 2, right: 8),
-                child: Icon(
-                  ticket.isOpen
-                      ? Icons.radio_button_checked
-                      : Icons.check_circle,
-                  size: 16,
-                  color: ticket.isOpen
-                      ? Colors.green
-                      : Colors.purple,
+              // Multi-select checkbox or status icon
+              if (isMultiSelected)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, right: 8),
+                  child: Icon(
+                    Icons.check_box,
+                    size: 16,
+                    color: colorScheme.tertiary,
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, right: 8),
+                  child: Icon(
+                    ticket.isOpen
+                        ? Icons.radio_button_checked
+                        : Icons.check_circle,
+                    size: 16,
+                    color: ticket.isOpen
+                        ? Colors.green
+                        : Colors.purple,
+                  ),
                 ),
-              ),
               // Content area
               Expanded(
                 child: Column(

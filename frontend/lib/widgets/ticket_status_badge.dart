@@ -3,6 +3,13 @@ import 'package:intl/intl.dart';
 
 import '../models/ticket.dart';
 
+/// Test keys for the [TicketIssueHeader].
+class TicketIssueHeaderKeys {
+  TicketIssueHeaderKeys._();
+
+  static const Key launchWorktreeButton = Key('ticket-header-launch-worktree');
+}
+
 /// Pill-shaped status badge showing Open (green) or Closed (purple).
 class TicketStatusBadge extends StatelessWidget {
   final bool isOpen;
@@ -48,12 +55,16 @@ class TicketIssueHeader extends StatelessWidget {
   final TicketData ticket;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onLaunchWorktree;
+  final bool isLaunchingWorktree;
 
   const TicketIssueHeader({
     super.key,
     required this.ticket,
     this.onEdit,
     this.onDelete,
+    this.onLaunchWorktree,
+    this.isLaunchingWorktree = false,
   });
 
   @override
@@ -76,6 +87,25 @@ class TicketIssueHeader extends StatelessWidget {
             children: [
               TicketStatusBadge(isOpen: ticket.isOpen),
               const Spacer(),
+              if (onLaunchWorktree != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: OutlinedButton.icon(
+                    key: TicketIssueHeaderKeys.launchWorktreeButton,
+                    onPressed:
+                        isLaunchingWorktree ? null : onLaunchWorktree,
+                    icon: isLaunchingWorktree
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.account_tree, size: 16),
+                    label: const Text('Launch Worktree'),
+                  ),
+                ),
               if (onEdit != null)
                 OutlinedButton(
                   onPressed: onEdit,

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../config/fonts.dart';
 import '../state/ticket_view_state.dart';
+import '../widgets/orchestration_config_dialog.dart';
 import '../widgets/ticket_filter_chips.dart';
 import '../widgets/ticket_list_item.dart';
 import '../widgets/ticket_sort_dropdown.dart';
@@ -14,6 +16,9 @@ class TicketListPanelKeys {
   TicketListPanelKeys._();
   static const Key searchField = Key('ticket-list-search');
   static const Key addButton = Key('ticket-list-add');
+  static const Key selectionBar = Key('ticket-list-selection-bar');
+  static const Key selectionClearButton = Key('ticket-list-selection-clear');
+  static const Key runButton = Key('ticket-list-run-button');
 }
 
 /// Left sidebar panel showing a searchable, filterable ticket list.
@@ -51,6 +56,7 @@ class _TicketListContent extends StatelessWidget {
         _SortRow(),
         TicketFilterChips(),
         Expanded(child: _TicketList()),
+        _SelectionBar(),
       ],
     );
   }
@@ -206,13 +212,35 @@ class _SortRow extends StatelessWidget {
 }
 
 /// The scrollable ticket list using TicketListItem widgets.
+///
+/// Handles modifier-key clicks for multi-selection:
+/// - Plain click: select ticket for viewing (existing behavior)
+/// - Cmd/Meta + Click: toggle multi-selection
+/// - Shift + Click: range-select from last-clicked to current
 class _TicketList extends StatelessWidget {
   const _TicketList();
+
+  void _handleTap(TicketViewState viewState, int ticketId) {
+    final keys = HardwareKeyboard.instance;
+    final isMetaPressed = keys.isMetaPressed || keys.isControlPressed;
+    final isShiftPressed = keys.isShiftPressed;
+
+    if (isShiftPressed) {
+      viewState.selectTicketRange(ticketId);
+    } else if (isMetaPressed) {
+      viewState.toggleTicketSelected(ticketId);
+      viewState.setLastClickedTicketId(ticketId);
+    } else {
+      viewState.selectTicket(ticketId);
+      viewState.setLastClickedTicketId(ticketId);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final viewState = context.watch<TicketViewState>();
     final tickets = viewState.filteredTickets;
+    final selectedIds = viewState.selectedTicketIds;
 
     if (tickets.isEmpty) {
       return const _EmptyTicketList();
@@ -223,13 +251,100 @@ class _TicketList extends StatelessWidget {
       itemCount: tickets.length,
       itemBuilder: (context, index) {
         final ticket = tickets[index];
-        final isSelected = viewState.selectedTicketId == ticket.id;
+        final isViewed = viewState.selectedTicketId == ticket.id;
+        final isMultiSelected = selectedIds.contains(ticket.id);
         return TicketListItem(
           ticket: ticket,
-          isSelected: isSelected,
-          onTap: () => viewState.selectTicket(ticket.id),
+          isSelected: isViewed,
+          isMultiSelected: isMultiSelected,
+          onTap: () => _handleTap(viewState, ticket.id),
         );
       },
+    );
+  }
+}
+
+/// Bar shown at the bottom of the list when tickets are multi-selected.
+class _SelectionBar extends StatelessWidget {
+  const _SelectionBar();
+
+  Future<void> _showOrchestrationDialog(
+    BuildContext context,
+    TicketViewState viewState,
+  ) async {
+    final ids = viewState.selectedTicketIds.toList();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => ChangeNotifierProvider<TicketViewState>.value(
+        value: viewState,
+        child: OrchestrationConfigDialog(ticketIds: ids),
+      ),
+    );
+    if (result == true) {
+      viewState.clearTicketSelection();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewState = context.watch<TicketViewState>();
+    final count = viewState.selectedTicketIds.length;
+
+    if (count == 0) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      key: TicketListPanelKeys.selectionBar,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer.withValues(alpha: 0.4),
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_box, size: 14, color: colorScheme.tertiary),
+          const SizedBox(width: 6),
+          Text(
+            '$count selected',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            key: TicketListPanelKeys.runButton,
+            onPressed: () => _showOrchestrationDialog(context, viewState),
+            icon: Icon(Icons.play_arrow, size: 16, color: colorScheme.primary),
+            iconSize: 16,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            padding: EdgeInsets.zero,
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            tooltip: 'Run orchestration',
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            key: TicketListPanelKeys.selectionClearButton,
+            onTap: () => viewState.clearTicketSelection(),
+            child: Text(
+              'Clear',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

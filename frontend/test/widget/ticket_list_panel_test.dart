@@ -1,12 +1,21 @@
+import 'package:cc_insights_v2/models/agent_config.dart';
+import 'package:cc_insights_v2/models/project.dart';
 import 'package:cc_insights_v2/models/ticket.dart';
+import 'package:cc_insights_v2/models/worktree.dart';
 import 'package:cc_insights_v2/panels/ticket_list_panel.dart';
+import 'package:cc_insights_v2/services/backend_service.dart';
+import 'package:cc_insights_v2/services/cli_availability_service.dart';
+import 'package:cc_insights_v2/services/runtime_config.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/ticket_view_state.dart';
+import 'package:cc_insights_v2/testing/mock_backend.dart';
+import 'package:cc_insights_v2/widgets/orchestration_config_dialog.dart';
 import 'package:cc_insights_v2/widgets/ticket_filter_chips.dart';
 import 'package:cc_insights_v2/widgets/ticket_list_item.dart';
 import 'package:cc_insights_v2/widgets/ticket_sort_dropdown.dart';
 import 'package:cc_insights_v2/widgets/ticket_status_tabs.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -333,5 +342,271 @@ void main() {
     expect(find.byType(TicketListItem), findsOneWidget);
     expect(find.byKey(TicketListPanelKeys.searchField), findsOneWidget);
     expect(find.byKey(TicketListPanelKeys.addButton), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 16. Cmd+Click toggles multi-selection
+  // ---------------------------------------------------------------------------
+  testWidgets('cmd+click toggles individual ticket multi-selection',
+      (tester) async {
+    repo.createTicket(title: 'Ticket A');
+    repo.createTicket(title: 'Ticket B');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // No multi-selection initially
+    expect(viewState.selectedTicketIds, isEmpty);
+
+    // Cmd+Click on Ticket A
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.tap(find.text('Ticket A'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketIds, contains(1));
+    expect(viewState.selectedTicketIds.length, 1);
+
+    // Cmd+Click on Ticket B
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.tap(find.text('Ticket B'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketIds, containsAll([1, 2]));
+    expect(viewState.selectedTicketIds.length, 2);
+
+    // Cmd+Click on Ticket A again to deselect
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.tap(find.text('Ticket A'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketIds, contains(2));
+    expect(viewState.selectedTicketIds.length, 1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 17. Shift+Click selects range
+  // ---------------------------------------------------------------------------
+  testWidgets('shift+click selects range of tickets', (tester) async {
+    repo.createTicket(title: 'Ticket 1');
+    repo.createTicket(title: 'Ticket 2');
+    repo.createTicket(title: 'Ticket 3');
+    repo.createTicket(title: 'Ticket 4');
+
+    // Default sort is newest first, so order is: 4, 3, 2, 1
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Click on Ticket 4 (first in the list) to set anchor
+    await tester.tap(find.text('Ticket 4'));
+    await safePumpAndSettle(tester);
+
+    // Shift+Click on Ticket 2 (third in the list) to select range
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+    await tester.tap(find.text('Ticket 2'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+    await safePumpAndSettle(tester);
+
+    // Should select tickets 4, 3, 2 (the range in list order)
+    expect(viewState.selectedTicketIds, containsAll([2, 3, 4]));
+    expect(viewState.selectedTicketIds.length, 3);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 18. Selection bar shows correct count
+  // ---------------------------------------------------------------------------
+  testWidgets('selection bar shows count and appears when tickets selected',
+      (tester) async {
+    repo.createTicket(title: 'Ticket X');
+    repo.createTicket(title: 'Ticket Y');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // No selection bar initially
+    expect(find.byKey(TicketListPanelKeys.selectionBar), findsNothing);
+
+    // Multi-select two tickets
+    viewState.toggleTicketSelected(1);
+    viewState.toggleTicketSelected(2);
+    await safePumpAndSettle(tester);
+
+    // Selection bar should show
+    expect(find.byKey(TicketListPanelKeys.selectionBar), findsOneWidget);
+    expect(find.text('2 selected'), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 19. Clear button clears multi-selection
+  // ---------------------------------------------------------------------------
+  testWidgets('clear button in selection bar clears multi-selection',
+      (tester) async {
+    repo.createTicket(title: 'Ticket Z');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Select a ticket
+    viewState.toggleTicketSelected(1);
+    await safePumpAndSettle(tester);
+
+    expect(find.text('1 selected'), findsOneWidget);
+
+    // Tap clear
+    await tester.tap(find.byKey(TicketListPanelKeys.selectionClearButton));
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketIds, isEmpty);
+    expect(find.byKey(TicketListPanelKeys.selectionBar), findsNothing);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 20. Multi-selected tickets show checkbox icon
+  // ---------------------------------------------------------------------------
+  testWidgets('multi-selected tickets show check_box icon', (tester) async {
+    repo.createTicket(title: 'Checkbox ticket');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // No check_box icon initially
+    expect(find.byIcon(Icons.check_box), findsNothing);
+
+    // Multi-select the ticket
+    viewState.toggleTicketSelected(1);
+    await safePumpAndSettle(tester);
+
+    // Should show check_box icon (in both the item and the selection bar)
+    expect(find.byIcon(Icons.check_box), findsWidgets);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 21. Plain click does not affect multi-selection
+  // ---------------------------------------------------------------------------
+  testWidgets('plain click selects for viewing without affecting multi-selection',
+      (tester) async {
+    repo.createTicket(title: 'View ticket');
+    repo.createTicket(title: 'Other ticket');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Plain click selects for viewing
+    await tester.tap(find.text('View ticket'));
+    await safePumpAndSettle(tester);
+
+    expect(viewState.selectedTicketId, 1);
+    // Multi-selection should remain empty
+    expect(viewState.selectedTicketIds, isEmpty);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 22. Run button appears when tickets are selected
+  // ---------------------------------------------------------------------------
+  testWidgets('run button appears when tickets are multi-selected',
+      (tester) async {
+    repo.createTicket(title: 'Ticket R1');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // No run button initially
+    expect(find.byKey(TicketListPanelKeys.runButton), findsNothing);
+
+    // Multi-select a ticket
+    viewState.toggleTicketSelected(1);
+    await safePumpAndSettle(tester);
+
+    // Run button should appear in the selection bar
+    expect(find.byKey(TicketListPanelKeys.runButton), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 23. Run button is not visible when no tickets are selected
+  // ---------------------------------------------------------------------------
+  testWidgets('run button disappears when selection is cleared',
+      (tester) async {
+    repo.createTicket(title: 'Ticket R2');
+
+    await tester.pumpWidget(createTestApp());
+    await safePumpAndSettle(tester);
+
+    // Select then clear
+    viewState.toggleTicketSelected(1);
+    await safePumpAndSettle(tester);
+    expect(find.byKey(TicketListPanelKeys.runButton), findsOneWidget);
+
+    viewState.clearTicketSelection();
+    await safePumpAndSettle(tester);
+    expect(find.byKey(TicketListPanelKeys.runButton), findsNothing);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 24. Tapping Run button opens orchestration config dialog
+  // ---------------------------------------------------------------------------
+  testWidgets('tapping run button opens orchestration config dialog',
+      (tester) async {
+    repo.createTicket(title: 'Orchestrate me');
+
+    // The dialog requires additional providers beyond the basic test setup.
+    if (RuntimeConfig.instance.agents.isEmpty) {
+      RuntimeConfig.instance.agents = AgentConfig.defaults;
+    }
+    final cliAvailability = resources.track(CliAvailabilityService());
+    cliAvailability.markAllAvailable(RuntimeConfig.instance.agents);
+    final primaryWorktree = WorktreeState(
+      const WorktreeData(
+        worktreeRoot: '/test/repo',
+        isPrimary: true,
+        branch: 'main',
+      ),
+    );
+    final project = resources.track(ProjectState(
+      const ProjectData(name: 'Test', repoRoot: '/test/repo'),
+      primaryWorktree,
+      autoValidate: false,
+      watchFilesystem: false,
+    ));
+    final backend = resources.track(MockBackendService());
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TicketRepository>.value(value: repo),
+          ChangeNotifierProvider<TicketViewState>.value(value: viewState),
+          ChangeNotifierProvider<ProjectState>.value(value: project),
+          ChangeNotifierProvider<BackendService>.value(value: backend),
+          ChangeNotifierProvider<CliAvailabilityService>.value(
+            value: cliAvailability,
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              height: 600,
+              child: const TicketListPanel(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await safePumpAndSettle(tester);
+
+    // Multi-select a ticket
+    viewState.toggleTicketSelected(1);
+    await safePumpAndSettle(tester);
+
+    // Tap the run button
+    await tester.tap(find.byKey(TicketListPanelKeys.runButton));
+    await safePumpAndSettle(tester);
+
+    // The orchestration config dialog should be open
+    expect(
+      find.byKey(OrchestrationConfigDialogKeys.dialog),
+      findsOneWidget,
+    );
   });
 }

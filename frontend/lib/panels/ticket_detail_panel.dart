@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/ticket.dart';
 import '../services/author_service.dart' hide AuthorType;
+import '../services/ticket_dispatch_factory.dart';
 import '../state/ticket_board_state.dart';
 import '../state/ticket_view_state.dart';
 import '../widgets/ticket_comment_input.dart';
@@ -28,6 +30,10 @@ class TicketDetailPanelKeys {
 ///
 /// Shows "Select a ticket to view details" when no ticket is selected.
 class TicketDetailPanel extends StatelessWidget {
+  /// Override for the launch-worktree action in tests.
+  @visibleForTesting
+  static Future<void> Function(BuildContext, int)? launchWorktreeOverride;
+
   const TicketDetailPanel({super.key});
 
   @override
@@ -78,10 +84,38 @@ class _EmptyState extends StatelessWidget {
 }
 
 /// Full detail layout: header + two-column body (timeline | sidebar).
-class _DetailContent extends StatelessWidget {
+class _DetailContent extends StatefulWidget {
   final TicketData ticket;
 
   const _DetailContent({required this.ticket});
+
+  @override
+  State<_DetailContent> createState() => _DetailContentState();
+}
+
+class _DetailContentState extends State<_DetailContent> {
+  bool _isLaunching = false;
+
+  Future<void> _handleLaunchWorktree() async {
+    setState(() => _isLaunching = true);
+    try {
+      final factory = TicketDetailPanel.launchWorktreeOverride;
+      if (factory != null) {
+        await factory(context, widget.ticket.id);
+      } else {
+        final dispatch = createTicketDispatchService(context);
+        await dispatch.beginInNewWorktree(widget.ticket.id);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to launch worktree: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLaunching = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,9 +129,11 @@ class _DetailContent extends StatelessWidget {
         children: [
           // Issue header at top.
           TicketIssueHeader(
-            ticket: ticket,
+            ticket: widget.ticket,
             onEdit: () =>
                 viewState.setDetailMode(TicketDetailMode.edit),
+            onLaunchWorktree: _handleLaunchWorktree,
+            isLaunchingWorktree: _isLaunching,
           ),
           const SizedBox(height: 12),
           // Two-column layout below header.
@@ -110,27 +146,27 @@ class _DetailContent extends StatelessWidget {
                   child: Column(
                     children: [
                       Expanded(
-                        child: TicketTimeline(ticket: ticket),
+                        child: TicketTimeline(ticket: widget.ticket),
                       ),
                       const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.only(left: 34),
                         child: TicketCommentInput(
-                          ticket: ticket,
+                          ticket: widget.ticket,
                           onComment: (text) => repo.addComment(
-                            ticket.id,
+                            widget.ticket.id,
                             text,
                             AuthorService.currentUser,
                             AuthorType.user,
                           ),
                           onToggleStatus: () {
                             final actor = AuthorService.currentUser;
-                            if (ticket.isOpen) {
+                            if (widget.ticket.isOpen) {
                               repo.closeTicket(
-                                  ticket.id, actor, AuthorType.user);
+                                  widget.ticket.id, actor, AuthorType.user);
                             } else {
                               repo.reopenTicket(
-                                  ticket.id, actor, AuthorType.user);
+                                  widget.ticket.id, actor, AuthorType.user);
                             }
                           },
                         ),
@@ -140,7 +176,7 @@ class _DetailContent extends StatelessWidget {
                 ),
                 // Sidebar column (right, fixed ~200px).
                 TicketSidebar(
-                  ticket: ticket,
+                  ticket: widget.ticket,
                   allTickets: repo.tickets,
                   repo: repo,
                   onTicketTap: (id) => viewState.selectTicket(id),

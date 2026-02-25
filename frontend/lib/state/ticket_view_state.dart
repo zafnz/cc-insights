@@ -78,6 +78,9 @@ class TicketViewState extends ChangeNotifier {
   /// Selected ticket IDs for orchestration launch.
   final Set<int> _selectedTicketIds = {};
 
+  /// The last ticket ID that was clicked (for shift-click range selection).
+  int? _lastClickedTicketId;
+
   // ===========================================================================
   // Cache fields
   // ===========================================================================
@@ -131,6 +134,9 @@ class TicketViewState extends ChangeNotifier {
 
   /// Selected ticket IDs for orchestration launch.
   Set<int> get selectedTicketIds => Set.unmodifiable(_selectedTicketIds);
+
+  /// The last ticket ID that was clicked (for shift-click range selection).
+  int? get lastClickedTicketId => _lastClickedTicketId;
 
   /// Count of open tickets (unfiltered).
   int get openCount => _repo.tickets.where((t) => t.isOpen).length;
@@ -293,5 +299,43 @@ class TicketViewState extends ChangeNotifier {
     if (_selectedTicketIds.isEmpty) return;
     _selectedTicketIds.clear();
     notifyListeners();
+  }
+
+  /// Selects a range of tickets from [lastClickedTicketId] to [ticketId]
+  /// (inclusive) based on the current [filteredTickets] order.
+  ///
+  /// If there is no previous anchor, just toggles the single ticket.
+  void selectTicketRange(int ticketId) {
+    if (_lastClickedTicketId == null) {
+      toggleTicketSelected(ticketId);
+      _lastClickedTicketId = ticketId;
+      return;
+    }
+
+    final tickets = filteredTickets;
+    final anchorIndex =
+        tickets.indexWhere((t) => t.id == _lastClickedTicketId);
+    final targetIndex = tickets.indexWhere((t) => t.id == ticketId);
+
+    if (anchorIndex == -1 || targetIndex == -1) {
+      toggleTicketSelected(ticketId);
+      _lastClickedTicketId = ticketId;
+      return;
+    }
+
+    final start =
+        anchorIndex < targetIndex ? anchorIndex : targetIndex;
+    final end =
+        anchorIndex < targetIndex ? targetIndex : anchorIndex;
+
+    for (var i = start; i <= end; i++) {
+      _selectedTicketIds.add(tickets[i].id);
+    }
+    notifyListeners();
+  }
+
+  /// Updates the last-clicked ticket ID anchor for shift-click range selection.
+  void setLastClickedTicketId(int? id) {
+    _lastClickedTicketId = id;
   }
 }
