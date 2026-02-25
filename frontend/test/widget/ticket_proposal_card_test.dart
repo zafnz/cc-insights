@@ -47,8 +47,7 @@ void main() {
     for (var i = 0; i < count; i++) {
       proposals.add(TicketProposal(
         title: 'Ticket ${i + 1}',
-        kind: TicketKind.feature,
-        description: 'Description for ticket ${i + 1}.',
+        body: 'Description for ticket ${i + 1}.',
       ));
     }
     bulkState.proposeBulk(
@@ -152,9 +151,10 @@ void main() {
 
       // After approval, proposal is cleared
       expect(bulkState.hasActiveProposal, isFalse);
-      // Tickets should be promoted to ready
+      // Approved tickets remain open in the repository
       final tickets = repo.tickets;
-      expect(tickets.every((t) => t.status == TicketStatus.ready), isTrue);
+      expect(tickets, isNotEmpty);
+      expect(tickets.every((t) => t.isOpen), isTrue);
     });
 
     testWidgets('reject button calls rejectAll', (tester) async {

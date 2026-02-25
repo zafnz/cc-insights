@@ -782,8 +782,7 @@ void main() {
           [
             TicketProposal(
               title: 'Test Ticket',
-              kind: TicketKind.feature,
-              description: 'A test ticket.',
+              body: 'A test ticket.',
             ),
           ],
           sourceChatId: testChat.data.id,
@@ -808,8 +807,7 @@ void main() {
           [
             TicketProposal(
               title: 'Other Ticket',
-              kind: TicketKind.feature,
-              description: 'A ticket for another chat.',
+              body: 'A ticket for another chat.',
             ),
           ],
           sourceChatId: 'different-chat-id',
@@ -832,8 +830,7 @@ void main() {
           [
             TicketProposal(
               title: 'Test Ticket',
-              kind: TicketKind.feature,
-              description: 'A test ticket.',
+              body: 'A test ticket.',
             ),
           ],
           sourceChatId: testChat.data.id,
@@ -869,8 +866,7 @@ void main() {
           [
             TicketProposal(
               title: 'Test Ticket',
-              kind: TicketKind.feature,
-              description: 'A test ticket.',
+              body: 'A test ticket.',
             ),
           ],
           sourceChatId: testChat.data.id,
@@ -902,8 +898,7 @@ void main() {
           [
             TicketProposal(
               title: 'Test Ticket',
-              kind: TicketKind.feature,
-              description: 'A test ticket.',
+              body: 'A test ticket.',
             ),
           ],
           sourceChatId: testChat.data.id,
@@ -932,8 +927,7 @@ void main() {
           [
             TicketProposal(
               title: 'Test Ticket',
-              kind: TicketKind.feature,
-              description: 'A test ticket.',
+              body: 'A test ticket.',
             ),
           ],
           sourceChatId: testChat.data.id,

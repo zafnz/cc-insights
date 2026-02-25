@@ -9,6 +9,7 @@ import 'package:cc_insights_v2/services/ticket_storage_service.dart';
 import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:cc_insights_v2/state/ticket_view_state.dart';
+import 'package:cc_insights_v2/widgets/ticket_edit_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -63,9 +64,9 @@ void main() {
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      // Initially: empty list and detail empty state
-      expect(find.text('No tickets'), findsOneWidget);
-      expect(find.text('Select a ticket to view details'), findsOneWidget);
+      // Initially: empty list (both panels show "No tickets")
+      expect(find.text('No tickets'), findsWidgets);
+      expect(find.text('Select a ticket to view details'), findsNothing);
 
       // Click (+) add button in list panel
       await tester.tap(find.byKey(TicketListPanelKeys.addButton));
@@ -80,17 +81,11 @@ void main() {
         'Test Ticket',
       );
 
-      // Fill in the description
+      // Fill in the body
       await tester.enterText(
-        find.byKey(TicketCreateFormKeys.descriptionField),
-        'A test ticket description',
+        find.byKey(TicketCreateFormKeys.bodyField),
+        'A test ticket body',
       );
-
-      // Change kind to bugfix by tapping the dropdown
-      await tester.tap(find.byKey(TicketCreateFormKeys.kindDropdown));
-      await tester.pump();
-      await tester.tap(find.text('Bug Fix').last);
-      await safePumpAndSettle(tester);
 
       // Tap Create Ticket button
       await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
@@ -99,9 +94,7 @@ void main() {
       // Ticket should have been created
       expect(repo.tickets.length, 1);
       expect(repo.tickets.first.title, 'Test Ticket');
-      expect(repo.tickets.first.kind, TicketKind.bugfix);
-      expect(repo.tickets.first.description,
-          'A test ticket description');
+      expect(repo.tickets.first.body, 'A test ticket body');
 
       // After creation, selectTicket is called which sets detail mode
       expect(viewState.detailMode, TicketDetailMode.detail);
@@ -112,11 +105,11 @@ void main() {
       expect(find.byType(TicketDetailPanel), findsOneWidget);
       expect(find.byType(TicketCreateForm), findsNothing);
 
-      // The ticket title should appear in both the list and the detail panel
-      expect(find.text('Test Ticket'), findsWidgets);
+      // The ticket title should appear in the detail panel header
+      expect(find.textContaining('Test Ticket'), findsWidgets);
 
-      // The ticket ID should appear
-      expect(find.text('TKT-001'), findsWidgets);
+      // The ticket ID should appear in the list subtitle (#1 as plain text)
+      expect(find.text('#1'), findsWidgets);
     });
   });
 
@@ -132,30 +125,18 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      // Create 3 tickets with different titles
-      repo.createTicket(
-        title: 'Implement auth login',
-        kind: TicketKind.feature,
-        category: 'Auth',
-      );
-      repo.createTicket(
-        title: 'Fix database migration',
-        kind: TicketKind.bugfix,
-        category: 'Data',
-      );
-      repo.createTicket(
-        title: 'Auth token refresh',
-        kind: TicketKind.feature,
-        category: 'Auth',
-      );
+      // Create 3 tickets without tags so find.text() can match title text
+      repo.createTicket(title: 'Implement auth login');
+      repo.createTicket(title: 'Fix database migration');
+      repo.createTicket(title: 'Auth token refresh');
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
       // All 3 tickets should be visible
-      expect(find.text('Implement auth login'), findsOneWidget);
-      expect(find.text('Fix database migration'), findsOneWidget);
-      expect(find.text('Auth token refresh'), findsOneWidget);
+      expect(find.textContaining('Implement auth login'), findsWidgets);
+      expect(find.textContaining('Fix database migration'), findsWidgets);
+      expect(find.textContaining('Auth token refresh'), findsWidgets);
 
       // Type search query
       await tester.enterText(
@@ -165,9 +146,9 @@ void main() {
       await safePumpAndSettle(tester);
 
       // Only matching tickets should be visible
-      expect(find.text('Implement auth login'), findsOneWidget);
-      expect(find.text('Fix database migration'), findsNothing);
-      expect(find.text('Auth token refresh'), findsOneWidget);
+      expect(find.textContaining('Implement auth login'), findsWidgets);
+      expect(find.textContaining('Fix database migration'), findsNothing);
+      expect(find.textContaining('Auth token refresh'), findsWidgets);
 
       // Clear search by entering empty text
       await tester.enterText(
@@ -177,115 +158,96 @@ void main() {
       await safePumpAndSettle(tester);
 
       // All tickets visible again
-      expect(find.text('Implement auth login'), findsOneWidget);
-      expect(find.text('Fix database migration'), findsOneWidget);
-      expect(find.text('Auth token refresh'), findsOneWidget);
+      expect(find.textContaining('Implement auth login'), findsWidgets);
+      expect(find.textContaining('Fix database migration'), findsWidgets);
+      expect(find.textContaining('Auth token refresh'), findsWidgets);
     });
   });
 
   // ===========================================================================
-  // 3. Filter flow
+  // 3. Filter flow (open/closed)
   // ===========================================================================
   group('Filter flow', () {
     testWidgets(
-        'create tickets with different statuses -> filter by status -> verify',
+        'create open and closed tickets -> filter by isOpen -> verify',
         (tester) async {
       tester.view.physicalSize = const Size(1200, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      // Create tickets with different statuses
-      repo.createTicket(
-        title: 'Active task',
-        kind: TicketKind.feature,
-        status: TicketStatus.active,
-        category: 'Work',
-      );
-      repo.createTicket(
-        title: 'Completed task',
-        kind: TicketKind.feature,
-        status: TicketStatus.completed,
-        category: 'Work',
-      );
-      repo.createTicket(
-        title: 'Ready task',
-        kind: TicketKind.feature,
-        status: TicketStatus.ready,
-        category: 'Work',
-      );
+      // Create open and closed tickets (no tags so find.textContaining works)
+      repo.createTicket(title: 'Open task');
+      repo.createTicket(title: 'Closed task');
+      repo.createTicket(title: 'Another open task');
 
-      // Apply status filter programmatically (UI filter via popup menu is
-      // complex to test; we verify state integration instead)
-      viewState.setStatusFilter(TicketStatus.active);
+      // Close the second ticket
+      repo.closeTicket(2, 'test-user', AuthorType.user);
 
+      // Default filter shows open tickets
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      // Only the active task should be visible
-      expect(find.text('Active task'), findsOneWidget);
-      expect(find.text('Completed task'), findsNothing);
-      expect(find.text('Ready task'), findsNothing);
+      // Only open tickets should be visible (default isOpenFilter = true)
+      expect(find.textContaining('Open task'), findsWidgets);
+      expect(find.textContaining('Closed task'), findsNothing);
+      expect(find.textContaining('Another open task'), findsWidgets);
 
-      // Clear the filter
-      viewState.setStatusFilter(null);
+      // Switch to showing closed tickets
+      viewState.setIsOpenFilter(false);
       await safePumpAndSettle(tester);
 
-      // All tasks should be visible again
-      expect(find.text('Active task'), findsOneWidget);
-      expect(find.text('Completed task'), findsOneWidget);
-      expect(find.text('Ready task'), findsOneWidget);
+      // Only closed ticket should be visible
+      expect(find.textContaining('Open task'), findsNothing);
+      expect(find.textContaining('Closed task'), findsWidgets);
+      expect(find.textContaining('Another open task'), findsNothing);
+
+      // Switch back to open tickets
+      viewState.setIsOpenFilter(true);
+      await safePumpAndSettle(tester);
+
+      // Open tasks should be visible again
+      expect(find.textContaining('Open task'), findsWidgets);
+      expect(find.textContaining('Closed task'), findsNothing);
+      expect(find.textContaining('Another open task'), findsWidgets);
     });
   });
 
   // ===========================================================================
-  // 4. Group-by switching
+  // 4. Tag filter flow
   // ===========================================================================
-  group('Group-by switching', () {
+  group('Tag filter flow', () {
     testWidgets(
-        'create tickets in different categories -> verify category groups -> '
-        'switch to status -> verify groups change', (tester) async {
+        'create tickets with different tags -> filter by tag -> verify',
+        (tester) async {
       tester.view.physicalSize = const Size(1200, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
-      // Create tickets in different categories
-      repo.createTicket(
-        title: 'Auth flow',
-        kind: TicketKind.feature,
-        category: 'Auth',
-        status: TicketStatus.active,
-      );
-      repo.createTicket(
-        title: 'DB schema',
-        kind: TicketKind.feature,
-        category: 'Data',
-        status: TicketStatus.ready,
-      );
-      repo.createTicket(
-        title: 'Auth tests',
-        kind: TicketKind.test,
-        category: 'Auth',
-        status: TicketStatus.ready,
-      );
+      repo.createTicket(title: 'Auth flow', tags: {'auth', 'feature'});
+      repo.createTicket(title: 'DB schema', tags: {'data', 'feature'});
+      repo.createTicket(title: 'Auth tests', tags: {'auth', 'test'});
+
+      // Apply tag filter programmatically
+      viewState.addTagFilter('auth');
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      // Default groupBy is category - verify category group headers (uppercase)
-      expect(find.text('AUTH'), findsOneWidget);
-      expect(find.text('DATA'), findsOneWidget);
+      // Only auth-tagged tickets should be visible
+      expect(find.textContaining('Auth flow'), findsWidgets);
+      expect(find.textContaining('DB schema'), findsNothing);
+      expect(find.textContaining('Auth tests'), findsWidgets);
 
-      // Switch group-by to status programmatically
-      viewState.setGroupBy(TicketGroupBy.status);
+      // Clear the tag filter
+      viewState.clearTagFilters();
       await safePumpAndSettle(tester);
 
-      // Category headers should be gone, status headers should appear
-      expect(find.text('AUTH'), findsNothing);
-      expect(find.text('DATA'), findsNothing);
-      expect(find.text('ACTIVE'), findsOneWidget);
-      expect(find.text('READY'), findsOneWidget);
+      // All tasks should be visible again
+      expect(find.textContaining('Auth flow'), findsWidgets);
+      expect(find.textContaining('DB schema'), findsWidgets);
+      expect(find.textContaining('Auth tests'), findsWidgets);
     });
   });
 
@@ -302,11 +264,7 @@ void main() {
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
       // Create a ticket
-      repo.createTicket(
-        title: 'Original Title',
-        kind: TicketKind.feature,
-        category: 'Frontend',
-      );
+      repo.createTicket(title: 'Original Title');
       viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
@@ -314,36 +272,36 @@ void main() {
 
       // Detail panel should be showing the ticket
       expect(find.byType(TicketDetailPanel), findsOneWidget);
-      expect(find.text('Original Title'), findsWidgets);
+      expect(find.textContaining('Original Title'), findsWidgets);
 
-      // Tap the edit button
-      await tester.tap(find.byKey(TicketDetailPanelKeys.editButton));
+      // Tap the Edit button shown in the issue header
+      await tester.tap(find.text('Edit'));
       await safePumpAndSettle(tester);
 
-      // Should now be in edit mode
-      expect(find.byType(TicketCreateForm), findsOneWidget);
-      expect(find.text('Edit Ticket'), findsOneWidget);
+      // Should now be in edit mode (TicketEditForm is shown inside TicketDetailPanel)
+      expect(find.byType(TicketEditForm), findsOneWidget);
 
-      // Change the title
+      // Change the title (TicketEditForm has no key on the title field;
+      // use the first TextField in the form, which is the title input)
       await tester.enterText(
-        find.byKey(TicketCreateFormKeys.titleField),
+        find.byType(TextField).first,
         'Updated Title',
       );
 
-      // Tap Save Changes
-      await tester.tap(find.byKey(TicketCreateFormKeys.createButton));
+      // Tap Save to commit changes
+      await tester.tap(find.text('Save'));
       await safePumpAndSettle(tester);
 
       // Should be back in detail mode
       expect(find.byType(TicketDetailPanel), findsOneWidget);
-      expect(find.byType(TicketCreateForm), findsNothing);
+      expect(find.byType(TicketEditForm), findsNothing);
 
       // Verify the title is updated in the state
       expect(repo.getTicket(1)!.title, 'Updated Title');
 
       // The updated title should appear in the UI
-      expect(find.text('Updated Title'), findsWidgets);
-      expect(find.text('Original Title'), findsNothing);
+      expect(find.textContaining('Updated Title'), findsWidgets);
+      expect(find.textContaining('Original Title'), findsNothing);
     });
   });
 
@@ -359,18 +317,14 @@ void main() {
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
       // Create a ticket
-      repo.createTicket(
-        title: 'Ticket to delete',
-        kind: TicketKind.feature,
-        category: 'Cleanup',
-      );
+      repo.createTicket(title: 'Ticket to delete');
       viewState.selectTicket(1);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
       // Verify ticket is visible in the list
-      expect(find.text('Ticket to delete'), findsWidgets);
+      expect(find.textContaining('Ticket to delete'), findsWidgets);
       expect(repo.tickets.length, 1);
 
       // Delete via state (deleteTicket method)
@@ -382,10 +336,10 @@ void main() {
       expect(viewState.selectedTicket, isNull);
 
       // Ticket should no longer appear in the list
-      expect(find.text('Ticket to delete'), findsNothing);
+      expect(find.textContaining('Ticket to delete'), findsNothing);
 
       // Empty state should be shown
-      expect(find.text('No tickets'), findsOneWidget);
+      expect(find.text('No tickets'), findsWidgets);
     });
   });
 
@@ -394,7 +348,7 @@ void main() {
   // ===========================================================================
   group('Dependency management', () {
     testWidgets(
-        'create TKT-001 and TKT-002 -> add dependency -> '
+        'create #1 and #2 -> add dependency -> '
         'verify in detail and getBlockedBy', (tester) async {
       tester.view.physicalSize = const Size(1200, 1200);
       tester.view.devicePixelRatio = 1.0;
@@ -402,45 +356,38 @@ void main() {
       addTearDown(() => tester.view.resetDevicePixelRatio());
 
       // Create two tickets
-      repo.createTicket(
-        title: 'Foundation work',
-        kind: TicketKind.feature,
-        category: 'Core',
-      );
-      repo.createTicket(
-        title: 'Feature that depends on foundation',
-        kind: TicketKind.feature,
-        category: 'Core',
-      );
+      repo.createTicket(title: 'Foundation work');
+      repo.createTicket(title: 'Feature that depends on foundation');
 
-      // TKT-002 depends on TKT-001
+      // #2 depends on #1
       repo.addDependency(2, 1);
 
-      // Verify TKT-002 has the dependency
+      // Verify #2 has the dependency
       final ticket2 = repo.getTicket(2);
       expect(ticket2!.dependsOn, [1]);
 
-      // Verify TKT-001's getBlockedBy shows TKT-002
+      // Verify #1's getBlockedBy shows #2
       final blockedBy = repo.getBlockedBy(1);
       expect(blockedBy, [2]);
 
-      // Select TKT-002 and render the screen
+      // Select #2 and render the screen
       viewState.selectTicket(2);
 
       await tester.pumpWidget(createTestApp());
       await safePumpAndSettle(tester);
 
-      // The detail panel should show the dependency section with TKT-001
-      expect(find.text('Depends on'), findsOneWidget);
-      expect(find.text('TKT-001'), findsWidgets);
+      // The detail panel should show the "DEPENDS ON" section header
+      expect(find.text('DEPENDS ON'), findsOneWidget);
+      // The dependency tile shows '#1' as plain text
+      expect(find.text('#1'), findsWidgets);
 
-      // Now select TKT-001 to check its "Blocks" section
+      // Now select #1 to check its "BLOCKS" section
       viewState.selectTicket(1);
       await safePumpAndSettle(tester);
 
-      // TKT-001's detail should show "Blocks" with TKT-002
-      expect(find.text('Blocks'), findsOneWidget);
-      expect(find.text('TKT-002'), findsWidgets);
+      // #1's detail should show "BLOCKS" with #2
+      expect(find.text('BLOCKS'), findsOneWidget);
+      expect(find.text('#2'), findsWidgets);
     });
   });
 
@@ -451,9 +398,9 @@ void main() {
     test('A -> B -> C, then C -> A is rejected', () {
       final testRepo = resources.track(TicketRepository('test-cycle'));
 
-      final a = testRepo.createTicket(title: 'A', kind: TicketKind.feature);
-      final b = testRepo.createTicket(title: 'B', kind: TicketKind.feature);
-      final c = testRepo.createTicket(title: 'C', kind: TicketKind.feature);
+      final a = testRepo.createTicket(title: 'A');
+      final b = testRepo.createTicket(title: 'B');
+      final c = testRepo.createTicket(title: 'C');
 
       // A depends on B
       testRepo.addDependency(a.id, b.id);
@@ -473,8 +420,8 @@ void main() {
     test('direct cycle A -> B, B -> A is rejected', () {
       final testRepo = resources.track(TicketRepository('test-cycle-direct'));
 
-      final a = testRepo.createTicket(title: 'A', kind: TicketKind.feature);
-      final b = testRepo.createTicket(title: 'B', kind: TicketKind.feature);
+      final a = testRepo.createTicket(title: 'A');
+      final b = testRepo.createTicket(title: 'B');
 
       testRepo.addDependency(a.id, b.id);
 
@@ -487,7 +434,7 @@ void main() {
     test('self-reference is rejected', () {
       final testRepo = resources.track(TicketRepository('test-cycle-self'));
 
-      final a = testRepo.createTicket(title: 'A', kind: TicketKind.feature);
+      final a = testRepo.createTicket(title: 'A');
 
       expect(
         () => testRepo.addDependency(a.id, a.id),
@@ -511,28 +458,21 @@ void main() {
       // Create tickets with varying fields
       testRepo.createTicket(
         title: 'Ticket Alpha',
-        kind: TicketKind.feature,
-        priority: TicketPriority.high,
-        effort: TicketEffort.large,
-        category: 'Frontend',
-        description: 'Alpha description',
+        body: 'Alpha body',
         tags: {'ui', 'critical'},
       );
       testRepo.createTicket(
         title: 'Ticket Beta',
-        kind: TicketKind.bugfix,
-        status: TicketStatus.active,
-        priority: TicketPriority.low,
-        effort: TicketEffort.small,
-        category: 'Backend',
-        description: 'Beta description',
+        body: 'Beta body',
+        tags: {'backend'},
       );
       testRepo.createTicket(
         title: 'Ticket Gamma',
-        kind: TicketKind.research,
-        priority: TicketPriority.medium,
-        effort: TicketEffort.medium,
+        tags: {'research'},
       );
+
+      // Close Ticket Beta to verify open/closed state round-trips
+      testRepo.closeTicket(2, 'test-user', AuthorType.user);
 
       // Add a dependency: Gamma depends on Alpha
       testRepo.addDependency(3, 1);
@@ -556,35 +496,27 @@ void main() {
       final alpha = testRepo2.getTicket(1);
       expect(alpha, isNotNull);
       expect(alpha!.title, 'Ticket Alpha');
-      expect(alpha.kind, TicketKind.feature);
-      expect(alpha.priority, TicketPriority.high);
-      expect(alpha.effort, TicketEffort.large);
-      expect(alpha.category, 'Frontend');
-      expect(alpha.description, 'Alpha description');
+      expect(alpha.body, 'Alpha body');
+      expect(alpha.isOpen, isTrue);
       expect(alpha.tags, containsAll(['ui', 'critical']));
 
       // Verify Ticket Beta
       final beta = testRepo2.getTicket(2);
       expect(beta, isNotNull);
       expect(beta!.title, 'Ticket Beta');
-      expect(beta.kind, TicketKind.bugfix);
-      expect(beta.status, TicketStatus.active);
-      expect(beta.priority, TicketPriority.low);
-      expect(beta.effort, TicketEffort.small);
-      expect(beta.category, 'Backend');
+      expect(beta.body, 'Beta body');
+      expect(beta.isOpen, isFalse);
+      expect(beta.tags, containsAll(['backend']));
 
       // Verify Ticket Gamma with dependency
       final gamma = testRepo2.getTicket(3);
       expect(gamma, isNotNull);
       expect(gamma!.title, 'Ticket Gamma');
-      expect(gamma.kind, TicketKind.research);
+      expect(gamma.tags, containsAll(['research']));
       expect(gamma.dependsOn, [1]);
 
       // Verify nextId is preserved (next ticket should be ID 4)
-      final newTicket = testRepo2.createTicket(
-        title: 'Ticket Delta',
-        kind: TicketKind.feature,
-      );
+      final newTicket = testRepo2.createTicket(title: 'Ticket Delta');
       expect(newTicket.id, 4);
     });
   });
