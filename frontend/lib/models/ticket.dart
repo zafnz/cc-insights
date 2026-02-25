@@ -902,7 +902,9 @@ class TicketProposal {
       body: json['description'] as String? ?? json['body'] as String? ?? '',
       tags: tags,
       dependsOnIndices:
-          ((json['depends_on_indices'] as List<dynamic>?) ?? [])
+          ((json['dependsOnIndices'] as List<dynamic>?) ??
+                  (json['depends_on_indices'] as List<dynamic>?) ??
+                  [])
               .map((e) => (e as num).toInt())
               .toList(),
     );

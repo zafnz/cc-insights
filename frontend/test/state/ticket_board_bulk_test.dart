@@ -1,3 +1,4 @@
+import 'package:cc_insights_v2/models/ticket.dart';
 import 'package:cc_insights_v2/state/bulk_proposal_state.dart';
 import 'package:cc_insights_v2/state/ticket_board_state.dart';
 import 'package:flutter_test/flutter_test.dart';

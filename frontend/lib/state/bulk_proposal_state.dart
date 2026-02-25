@@ -8,51 +8,6 @@ import 'ticket_board_state.dart';
 /// Result emitted when a bulk review completes.
 typedef BulkReviewResult = ({int approvedCount, int rejectedCount});
 
-/// A ticket proposal submitted by an agent for bulk review.
-///
-/// Contains the fields needed to create a ticket. Dependency indices refer to
-/// other proposals in the same batch (0-based).
-@immutable
-class TicketProposal {
-  /// Short title describing the ticket.
-  final String title;
-
-  /// Markdown body content.
-  final String body;
-
-  /// Free-form tags for categorization.
-  final Set<String> tags;
-
-  /// Indices of other proposals in the same batch that this ticket depends on.
-  final List<int> dependsOnIndices;
-
-  /// Creates a [TicketProposal].
-  const TicketProposal({
-    required this.title,
-    this.body = '',
-    this.tags = const {},
-    this.dependsOnIndices = const [],
-  });
-
-  /// Deserializes a [TicketProposal] from a JSON map.
-  ///
-  /// Accepts both `body` and `description` keys for backwards compatibility
-  /// with the MCP tool schema.
-  factory TicketProposal.fromJson(Map<String, dynamic> json) {
-    final tagsList = json['tags'] as List<dynamic>? ?? [];
-    final depsList = json['dependsOnIndices'] as List<dynamic>? ?? [];
-
-    return TicketProposal(
-      title: json['title'] as String? ?? '',
-      body: (json['body'] as String?) ??
-          (json['description'] as String?) ??
-          '',
-      tags: Set<String>.from(tagsList.map((e) => e.toString())),
-      dependsOnIndices: depsList.map((e) => e as int).toList(),
-    );
-  }
-}
-
 /// State management for the bulk proposal review workflow.
 ///
 /// Manages the lifecycle of bulk ticket proposals: receiving them from an
