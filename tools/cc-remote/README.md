@@ -79,7 +79,9 @@ mounts your folder at its **real host path** (not `/workspace`), so the absolute
 paths git bakes into each worktree are valid on the host *and* in the container —
 you can `cd` into a worktree and run git from the host directly.
 
-* Set `SPAWN=same-dir` in `.env` for a non-git folder or to share one directory.
+* **Non-git folders work fine** — the wrapper detects no repo and writes
+  `SPAWN=same-dir` (worktrees off); everything else is unaffected. Override
+  `SPAWN` in `.env` any time.
 * Add `.claude/worktrees/` to your repo's `.gitignore`.
 * If you blank out `HOST_PATH` (falling back to `/workspace`), worktrees still
   work *inside* the container but their absolute paths won't resolve on the host.

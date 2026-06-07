@@ -205,9 +205,9 @@ PROJECT_NAME={project_name}
 # Session spawn mode for app-initiated sessions:
 #   worktree  - each new session gets its own git worktree (matches the desktop
 #               app's default behavior). Requires a git repository.
-#   same-dir  - all sessions share this directory.
+#   same-dir  - all sessions share this directory (use for non-git folders).
 #   session   - exactly one session, reject extra connections.
-SPAWN=worktree
+SPAWN={spawn}
 
 # Host uid/gid — keeps bind-mounted file ownership / git sane. Set by the wrapper.
 USER_UID={uid}
@@ -316,8 +316,8 @@ persists across restarts and across projects, so you only do this once.
 The desktop app creates a git worktree per session under `.claude/worktrees/`.
 This setup runs `claude remote-control --spawn worktree` to match that, and
 mounts the folder at its real host path so those worktrees are usable from the
-host too. Set `SPAWN=same-dir` in `.env` for a non-git folder or to share one
-directory. Add `.claude/worktrees/` to your repo's `.gitignore`.
+host too. Non-git folders work fine — the wrapper auto-sets `SPAWN=same-dir`
+(worktrees off) when there's no repo. Add `.claude/worktrees/` to `.gitignore`.
 
 ## Firewall
 
@@ -364,6 +364,18 @@ def slugify(name: str) -> str:
     return slug or "app"
 
 
+def is_git_repo(folder: Path) -> bool:
+    """True if 'folder' is inside a git work tree. Worktree spawn needs this."""
+    if shutil.which("git") is None:
+        return False
+    try:
+        out = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"],
+                             cwd=folder, capture_output=True, text=True)
+        return out.returncode == 0 and out.stdout.strip() == "true"
+    except OSError:
+        return False
+
+
 def require_docker():
     if shutil.which("docker") is None:
         die("docker not found on PATH. Install Docker Desktop / Engine first.")
@@ -389,13 +401,18 @@ def scaffold(devc: Path, project_name: str):
         print(f"[cc-remote] setup files already present in {devc}")
 
 
-def ensure_env(devc: Path, project_name: str, uid: int, gid: int, host_path: str):
+def ensure_env(devc: Path, project_name: str, uid: int, gid: int, host_path: str,
+               git: bool):
     env = devc / ".env"
     if env.exists():
         return
+    # Worktree spawn needs a git repo; fall back to same-dir for non-git folders.
+    spawn = "worktree" if git else "same-dir"
     content = ENV_EXAMPLE.format(host_path=host_path, project_name=project_name,
-                                 uid=uid, gid=gid)
+                                 uid=uid, gid=gid, spawn=spawn)
     env.write_text(content)
+    if not git:
+        print("[cc-remote] no git repo here — set SPAWN=same-dir (worktrees disabled)")
     print("[cc-remote] created .env — first time? run the `login` command to "
           "authenticate (Remote Control needs a full-scope /login, not a token)")
 
@@ -514,7 +531,7 @@ def main():
 
     # Always make sure scaffolding + host-specific files are current.
     scaffold(devc, project_name)
-    ensure_env(devc, project_name, uid, gid, str(folder))
+    ensure_env(devc, project_name, uid, gid, str(folder), is_git_repo(folder))
     write_override(devc)
 
     if args.command == "init":
