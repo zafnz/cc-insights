@@ -22,8 +22,8 @@ run inside the container against the mounted folder.
 
 ```
 Claude app (phone/desktop/web)  ──►  api.anthropic.com  ──►  container: `claude remote-control`
-                                                               └─ /workspace = your folder (bind mount)
-                                                               └─ ~/.claude   = shared docker volume
+                                                               └─ your folder, mounted at its real host path
+                                                               └─ ~/.claude  = shared docker volume (login)
                                                                └─ egress firewall (Anthropic-only)
 ```
 
@@ -44,10 +44,10 @@ Claude app (phone/desktop/web)  ──►  api.anthropic.com  ──►  contain
 * **Claude home:** the container has its **own** `~/.claude` stored in a *shared*
   docker volume (`cc-remote-claude-home`). Log in once; every project reuses it.
   The host's real `~/.claude` is never touched.
-* **Auth:** generate a token on the host with `claude setup-token` and put it in
-  `<folder>/.devcontainer/.env` as `CLAUDE_CODE_OAUTH_TOKEN` (or export it before
-  running — the wrapper picks it up). Or use the `login` command. The login
-  persists in the shared volume across restarts.
+* **Auth:** Remote Control requires a **full-scope claude.ai login**. Run
+  `cc-remote.py <folder> login` once and complete `/login`. `claude setup-token`
+  / `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` are inference-only and do
+  **not** work for Remote Control. The login persists in the shared volume.
 * **Firewall:** an iptables/ipset egress allowlist (needs `NET_ADMIN`/`NET_RAW`,
   already wired up). Default = Anthropic only. Widen via `allowed-domains.txt`,
   `EXTRA_ALLOWED_DOMAINS=` in `.env`, or `ALLOW_ALL=true` for full internet.
@@ -68,9 +68,21 @@ runs as your host uid/gid (set automatically) to avoid "dubious ownership".
 Caveats:
 * Don't run *mutating* git commands on the host and in the container at the exact
   same time (index.lock races).
-* `git worktree` stores absolute paths, so the wrapper uses
-  `claude remote-control --spawn same-dir` (no auto-worktrees) by default.
 * On macOS, large repos are faster with VirtioFS enabled in Docker Desktop.
+
+## Worktrees (desktop app)
+
+The Claude desktop app creates a **git worktree per session**, placed at
+`<repo>/.claude/worktrees/<name>/`. This setup runs
+`claude remote-control --spawn worktree` to match it. Crucially, the wrapper
+mounts your folder at its **real host path** (not `/workspace`), so the absolute
+paths git bakes into each worktree are valid on the host *and* in the container —
+you can `cd` into a worktree and run git from the host directly.
+
+* Set `SPAWN=same-dir` in `.env` for a non-git folder or to share one directory.
+* Add `.claude/worktrees/` to your repo's `.gitignore`.
+* If you blank out `HOST_PATH` (falling back to `/workspace`), worktrees still
+  work *inside* the container but their absolute paths won't resolve on the host.
 
 ## Requirements
 

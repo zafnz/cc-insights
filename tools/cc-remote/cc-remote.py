@@ -23,9 +23,10 @@ Usage:
     cc-remote.py <folder> rebuild   # rebuild the image and restart
     cc-remote.py <folder> init      # only scaffold .devcontainer/, do not start
 
-Authentication (recommended): on the HOST run `claude setup-token`, then either
-export CLAUDE_CODE_OAUTH_TOKEN before running this, or paste it into
-<folder>/.devcontainer/.env. Alternatively use `cc-remote.py <folder> login`.
+Authentication: Remote Control needs a full-scope claude.ai login. Run
+`cc-remote.py <folder> login` once and complete `/login`. (setup-token /
+CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_API_KEY are inference-only and do NOT work
+for Remote Control.) The login persists in a shared docker volume.
 """
 
 import argparse
@@ -71,10 +72,10 @@ COPY init-firewall.sh /usr/local/bin/init-firewall.sh
 COPY entrypoint.sh    /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/init-firewall.sh /usr/local/bin/entrypoint.sh
 
-WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-# Default: start the remote-control server. PROJECT_NAME comes from .env.
-CMD ["sh", "-c", "exec claude remote-control --name \"${PROJECT_NAME:-cc-remote}\" --spawn same-dir"]
+# Default: start the remote-control server. PROJECT_NAME / SPAWN come from .env.
+# SPAWN defaults to 'worktree' to match the desktop app (a worktree per session).
+CMD ["sh", "-c", "exec claude remote-control --name \"${PROJECT_NAME:-cc-remote}\" --spawn \"${SPAWN:-worktree}\""]
 """
 
 ENTRYPOINT = r"""#!/usr/bin/env bash
@@ -99,7 +100,7 @@ chown -R claude:claude /home/claude/.claude 2>/dev/null || true
 git config --system --add safe.directory /workspace 2>/dev/null || true
 git config --system --add safe.directory '*' 2>/dev/null || true
 
-cd /workspace
+cd "${HOST_PATH:-/workspace}"
 exec gosu claude "$@"
 """
 
@@ -184,16 +185,29 @@ console.anthropic.com
 # files.pythonhosted.org
 """
 
-# {token} is substituted by the wrapper; everything else is literal.
-ENV_EXAMPLE = """# cc-remote configuration. Copy to .env (this file is the template).
-# .env is git-ignored — safe place for your token.
+ENV_EXAMPLE = """# cc-remote configuration. Copy from .env.example; .env is git-ignored.
+#
+# AUTH: Remote Control needs a full-scope claude.ai login. `claude setup-token`
+# / CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_API_KEY are inference-only and do NOT
+# work for Remote Control. Authenticate once with `cc-remote <folder> login`
+# (it runs /login); the login is saved in the shared volume. Do not set
+# ANTHROPIC_API_KEY here.
 
-# Full-scope OAuth token from `claude setup-token` on the HOST.
-# Leave blank to instead authenticate interactively with `cc-remote <folder> login`.
-CLAUDE_CODE_OAUTH_TOKEN={token}
+# Absolute host path of this project. The folder is mounted at the SAME path
+# inside the container so git worktrees the desktop app creates (under
+# .claude/worktrees/) have matching absolute paths on host and container —
+# letting you use them from the host too. Set by the wrapper; blank => /workspace.
+HOST_PATH={host_path}
 
 # Display name shown in claude.ai/code and the mobile app.
 PROJECT_NAME={project_name}
+
+# Session spawn mode for app-initiated sessions:
+#   worktree  - each new session gets its own git worktree (matches the desktop
+#               app's default behavior). Requires a git repository.
+#   same-dir  - all sessions share this directory.
+#   session   - exactly one session, reject extra connections.
+SPAWN=worktree
 
 # Host uid/gid — keeps bind-mounted file ownership / git sane. Set by the wrapper.
 USER_UID={uid}
@@ -209,8 +223,7 @@ EXTRA_ALLOWED_DOMAINS=
 # (each maps host:container 1:1). Used by the wrapper to build the override file.
 PORTS=
 
-# Reduce non-essential outbound traffic / disable the auto-updater.
-CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+# Disable the auto-updater (reduces egress; safe for Remote Control).
 DISABLE_AUTOUPDATER=1
 """
 
@@ -231,12 +244,15 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      # The project folder (parent of .devcontainer) -> /workspace.
-      - ..:/workspace:cached
+      # The project folder. With HOST_PATH set (by the wrapper) it is mounted at
+      # the SAME absolute path inside the container, so git worktrees created at
+      # <repo>/.claude/worktrees/ resolve on host AND container. Without it,
+      # falls back to mounting the parent of .devcontainer at /workspace.
+      - ${HOST_PATH:-..}:${HOST_PATH:-/workspace}:cached
       # SHARED, persistent Claude home: log in once, reused by every project.
       - claude-home:/home/claude/.claude
       - ./allowed-domains.txt:/etc/cc-remote/allowed-domains.txt:ro
-    working_dir: /workspace
+    working_dir: ${HOST_PATH:-/workspace}
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -286,13 +302,22 @@ Then watch the logs for a session URL + QR code and open it in the Claude app
 
 ## Authentication
 
-Recommended: on the **host**, run `claude setup-token`, put the value in
-`.env` as `CLAUDE_CODE_OAUTH_TOKEN`. Otherwise authenticate interactively:
+Remote Control requires a **full-scope claude.ai login**. `claude setup-token`,
+`CLAUDE_CODE_OAUTH_TOKEN`, and `ANTHROPIC_API_KEY` are inference-only and will
+NOT work. Authenticate once:
 
     cc-remote.py /path/to/folder login   # then type: /login
 
 The login is stored in a shared docker volume (`cc-remote-claude-home`) and
-persists across restarts and across projects.
+persists across restarts and across projects, so you only do this once.
+
+## Worktrees
+
+The desktop app creates a git worktree per session under `.claude/worktrees/`.
+This setup runs `claude remote-control --spawn worktree` to match that, and
+mounts the folder at its real host path so those worktrees are usable from the
+host too. Set `SPAWN=same-dir` in `.env` for a non-git folder or to share one
+directory. Add `.claude/worktrees/` to your repo's `.gitignore`.
 
 ## Firewall
 
@@ -364,19 +389,15 @@ def scaffold(devc: Path, project_name: str):
         print(f"[cc-remote] setup files already present in {devc}")
 
 
-def ensure_env(devc: Path, project_name: str, uid: int, gid: int):
+def ensure_env(devc: Path, project_name: str, uid: int, gid: int, host_path: str):
     env = devc / ".env"
     if env.exists():
         return
-    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
-    content = ENV_EXAMPLE.format(token=token, project_name=project_name, uid=uid, gid=gid)
+    content = ENV_EXAMPLE.format(host_path=host_path, project_name=project_name,
+                                 uid=uid, gid=gid)
     env.write_text(content)
-    msg = "[cc-remote] created .env"
-    if token:
-        msg += " (picked up CLAUDE_CODE_OAUTH_TOKEN from environment)"
-    else:
-        msg += " — add CLAUDE_CODE_OAUTH_TOKEN or run the `login` command"
-    print(msg)
+    print("[cc-remote] created .env — first time? run the `login` command to "
+          "authenticate (Remote Control needs a full-scope /login, not a token)")
 
 
 def read_env(devc: Path) -> dict:
@@ -394,21 +415,25 @@ def read_env(devc: Path) -> dict:
     return env
 
 
-def write_override(devc: Path, uid: int, gid: int):
-    """Host-specific bits (uid/gid + published ports) live in the override file."""
+def write_override(devc: Path):
+    """Published ports (from PORTS in .env) go in the generated override file.
+
+    uid/gid and HOST_PATH are interpolated straight from .env by compose, so the
+    override is only needed to expand the PORTS list into a ports: block."""
+    override = devc / "docker-compose.override.yml"
     env = read_env(devc)
     ports = [p.strip() for p in env.get("PORTS", "").replace(",", " ").split() if p.strip()]
+    if not ports:
+        if override.exists():
+            override.unlink()
+        return
     lines = ["# Generated by cc-remote — host-specific overrides. Do not commit.",
-             "services:", "  claude:", "    build:", "      args:",
-             f"        USER_UID: \"{uid}\"", f"        USER_GID: \"{gid}\""]
-    if ports:
-        lines.append("    ports:")
-        for p in ports:
-            mapping = p if ":" in p else f"{p}:{p}"
-            lines.append(f'      - "{mapping}"')
-    (devc / "docker-compose.override.yml").write_text("\n".join(lines) + "\n")
-    if ports:
-        print(f"[cc-remote] publishing ports: {', '.join(ports)}")
+             "services:", "  claude:", "    ports:"]
+    for p in ports:
+        mapping = p if ":" in p else f"{p}:{p}"
+        lines.append(f'      - "{mapping}"')
+    override.write_text("\n".join(lines) + "\n")
+    print(f"[cc-remote] publishing ports: {', '.join(ports)}")
 
 
 def compose_cmd(devc: Path, project_slug: str, *args: str) -> list:
@@ -436,7 +461,9 @@ def cmd_up(devc: Path, slug: str, build: bool):
     if run(compose_cmd(devc, slug, *args)) != 0:
         die("failed to start the container.")
     print("\n[cc-remote] container is up. Following logs (Ctrl-C to detach)...")
-    print("[cc-remote] Look for the session URL / QR code below, then open it in the Claude app.\n")
+    print("[cc-remote] Look for the session URL / QR code below, then open it in the Claude app.")
+    print("[cc-remote] First time / 'requires a claude.ai subscription' in the logs?")
+    print(f"[cc-remote]   run:  cc-remote.py <folder> login   then  up  again.\n")
     run(compose_cmd(devc, slug, "logs", "-f"))
 
 
@@ -453,12 +480,13 @@ def cmd_shell(devc: Path, slug: str):
 
 
 def cmd_login(devc: Path, slug: str):
-    print("[cc-remote] opening Claude interactively — type /login, finish auth, then /exit.")
-    # Run an interactive claude session as the claude user; bypass the default
-    # remote-control CMD so you land in a normal prompt.
-    rc = run(compose_cmd(devc, slug, "exec", "claude", "gosu", "claude", "claude"))
-    if rc != 0:
-        print("[cc-remote] is the container running? Try the `up` command first.")
+    print("[cc-remote] opening Claude interactively in a one-off container.")
+    print("[cc-remote] Type  /login , complete the claude.ai browser flow, then /exit.")
+    print("[cc-remote] (The login is saved to the shared volume and reused everywhere.)\n")
+    # A one-off container (not exec) so this works even before `up`, and even if
+    # the server exited for lack of auth. Shares the same volumes, so the login
+    # persists. The entrypoint applies the firewall then drops to the claude user.
+    run(compose_cmd(devc, slug, "run", "--rm", "claude", "claude"))
 
 
 def main():
@@ -486,8 +514,8 @@ def main():
 
     # Always make sure scaffolding + host-specific files are current.
     scaffold(devc, project_name)
-    ensure_env(devc, project_name, uid, gid)
-    write_override(devc, uid, gid)
+    ensure_env(devc, project_name, uid, gid, str(folder))
+    write_override(devc)
 
     if args.command == "init":
         print(f"[cc-remote] ready. Next: cc-remote.py {folder} up")
